@@ -59,6 +59,7 @@ MIDDLEWARE = [
 
 # FRONTEND_LOGIN_URL = "https://app.eglise.com"
 # FRONTEND_LOGIN_URL = "http://localhost:5173/login"
+FRONTEND_LOGIN_URL = "http://demo1.appziatec.in/login"
 
 
 
