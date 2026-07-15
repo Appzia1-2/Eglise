@@ -1,0 +1,1377 @@
+from django.db import models
+from datetime import date
+from datetime import timedelta
+from django.forms import ValidationError
+from dateutil.relativedelta import relativedelta
+from django.utils import timezone
+from django.utils.timezone import now
+from accounts.utils import create_family_head_user
+class Church(models.Model):
+    name = models.CharField(max_length=200)
+    address = models.TextField()
+    city = models.CharField(max_length=100)
+
+    vicar = models.CharField(max_length=150)
+    asst_vicar1 = models.CharField(max_length=150, blank=True)
+    asst_vicar2 = models.CharField(max_length=150, blank=True)
+    asst_vicar3 = models.CharField(max_length=150, blank=True)
+
+    diocese_name = models.CharField(max_length=150)
+
+    logo = models.ImageField(
+        upload_to="church_logos/",
+        null=True,
+        blank=True
+    )
+
+    email = models.EmailField(unique=True)
+    phone_number = models.CharField(max_length=15)
+
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_deleted = models.BooleanField(default=False)  # 🔥 NEW
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return self.name
+    
+
+class Package(models.Model):
+    name = models.CharField(max_length=100)
+    member_limit = models.PositiveIntegerField(null=True, blank=True)
+    is_trial = models.BooleanField(default=False)
+    trial_member_limit = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        default=5,
+        help_text="Max members allowed for trial package"
+    )
+    rate_per_member_monthly = models.DecimalField(max_digits=8, decimal_places=2)
+    rate_per_member_yearly = models.DecimalField(max_digits=8, decimal_places=2)
+
+    upgrade_rate_monthly = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True
+    )
+    upgrade_rate_yearly = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True
+    )
+
+    is_custom = models.BooleanField(default=False)  # Contact Sales
+
+    def clean(self):
+        # Trial package rules
+        if self.is_trial:
+            if self.trial_member_limit is None:
+                raise ValidationError(
+                    "Trial package must have trial_member_limit"
+                )
+
+            # Trial must not have pricing
+            if (
+                self.rate_per_member_monthly or
+                self.rate_per_member_yearly or
+                self.upgrade_rate_monthly or
+                self.upgrade_rate_yearly
+            ):
+                raise ValidationError(
+                    "Trial package must not have pricing or upgrade rates"
+                )
+
+        # Custom package rules
+        if self.is_custom and self.is_trial:
+            raise ValidationError(
+                "Package cannot be both trial and custom"
+            )
+
+    def can_upgrade(self):
+        # Trial packages are never upgradable
+        if self.is_trial:
+            return False
+
+        return (
+            self.upgrade_rate_monthly is not None or
+            self.upgrade_rate_yearly is not None
+        )
+
+    def __str__(self):
+        return self.name
+
+
+class ChurchSubscription(models.Model):
+    church = models.OneToOneField(Church, on_delete=models.CASCADE)
+    package = models.ForeignKey(Package, on_delete=models.PROTECT)
+
+    billing_cycle = models.CharField(
+        max_length=10,
+        choices=(("MONTHLY", "Monthly"), ("YEARLY", "Yearly"))
+    )
+    payment_status = models.CharField(
+        max_length=10,
+        choices=(("PAID", "Paid"), ("UNPAID", "Unpaid")),
+        default="UNPAID"
+    )
+    duration_months = models.PositiveIntegerField(
+        help_text="Number of months purchased (e.g. 3, 5, 12)"
+    )
+    start_date = models.DateField(auto_now_add=True)
+    end_date = models.DateField(null=True, blank=True)
+    custom_capacity = models.PositiveIntegerField(null=True, blank=True)
+    is_active = models.BooleanField(default=False)
+    credit_balance = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0
+    )
+    PRICING_ORIGIN_CHOICES = (
+        ("BASE", "Base Purchase"),
+        ("UPGRADE", "Upgrade Purchase"),
+    )
+
+    pricing_origin = models.CharField(
+        max_length=10,
+        choices=PRICING_ORIGIN_CHOICES,
+        default="BASE",
+        help_text="How this subscription tier was acquired"
+    )
+
+    # -----------------------------
+    # AUTO-CALCULATE END DATE
+    # -----------------------------
+    def save(self, *args, **kwargs):
+        if self.start_date and self.duration_months:
+            self.end_date = self.start_date + relativedelta(
+                months=self.duration_months
+            )
+        super().save(*args, **kwargs)
+
+    # -----------------------------
+    # EXPIRY CHECK
+    # -----------------------------
+    def is_expired(self):
+        if not self.end_date:
+            return False
+        return self.end_date < date.today()
+
+    def expires_in_days(self):
+        if not self.end_date:
+            return None
+        return (self.end_date - date.today()).days
+
+    def __str__(self):
+        return f"{self.church.name} - {self.package.name}"
+
+
+
+class Ward(models.Model):
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="wards"
+    )
+    ward_name = models.CharField(max_length=100)
+    ward_number = models.PositiveIntegerField()
+    place = models.CharField(max_length=150)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("church", "ward_number")
+        ordering = ["ward_number"]
+
+    def __str__(self):
+        return f"{self.ward_name} ({self.church.name})"
+
+
+
+class Family(models.Model):
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="families"
+    )
+
+    family_name = models.CharField(max_length=150)
+    history = models.TextField(blank=True)
+    origin = models.CharField(max_length=150, blank=True)
+    def get_active_head(self):
+        return self.members.filter(
+            is_family_head=True,
+            expired=False,
+            is_active=True
+        ).first()
+
+    def __str__(self):
+        return self.family_name
+
+
+class Relationship(models.Model):
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.PROTECT,
+        related_name="relationships"
+    )
+
+    name = models.CharField(max_length=50)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("church", "name")
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.church.name})"
+
+
+
+class Grade(models.Model):
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.PROTECT,
+        related_name="grades"
+    )
+
+    name = models.CharField(max_length=50)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("church", "name")
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.church.name})"
+
+class TombType(models.Model):
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="tomb_type"
+    )
+    name = models.CharField(max_length=150)
+    class Meta:
+        unique_together = ["church", "name"]
+
+    def __str__(self):
+        return self.name
+    
+class TombFee(models.Model):
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="tomb_fees"
+    )
+    tomb_type = models.ForeignKey(
+        TombType,
+        on_delete=models.CASCADE,
+        related_name="fees"
+    )
+    tomb_fees = models.DecimalField(max_digits=15, decimal_places=3)
+    indication = models.CharField(max_length=255)
+    specification = models.TextField(blank=True)
+    class Meta:
+        unique_together = ["church", "tomb_type", "indication"]
+
+    def __str__(self):
+        return f"{self.tomb_type.name} - {self.tomb_fees}"
+
+class Designation(models.Model):
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="designation"
+    )
+    designation_name = models.CharField(max_length=150)
+    class Meta:
+        unique_together = ["church", "designation_name"]
+
+    def __str__(self):
+        return self.designation_name
+
+class Diocese(models.Model):
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="dioces"
+    )
+    name = models.CharField(max_length=200)
+    address = models.TextField()
+    phone_number = models.CharField(max_length=20)
+    mail_id = models.EmailField()
+    metropolitan = models.CharField(max_length=200)
+
+    def __str__(self):
+        return self.name
+    
+class Priest(models.Model):
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="priests"
+    )
+    name = models.CharField(max_length=200)
+    house_name = models.CharField(max_length=200)
+    address = models.TextField()
+
+    def __str__(self):
+        return self.name
+
+class PriestChange(models.Model):
+
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="priest_changes"
+    )
+
+    priest = models.ForeignKey(
+        Priest,
+        on_delete=models.CASCADE,
+        related_name="designation_history"
+    )
+
+    designation = models.ForeignKey(
+        Designation,
+        on_delete=models.CASCADE
+    )
+
+    date_from = models.DateField()
+    date_to = models.DateField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.priest.name} - {self.designation.designation_name}"
+
+
+class Member(models.Model):
+    register_number = models.CharField(
+    max_length=50,
+    blank=True,
+    null=True
+    )
+
+    folio_number = models.CharField(
+    max_length=50,
+    blank=True,
+    null=True
+    )
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="members"
+    )
+    family = models.ForeignKey(
+        Family,
+        on_delete=models.CASCADE,
+        related_name="members"
+    )
+
+    name = models.CharField(max_length=150)
+    baptismal_name = models.CharField(max_length=150, blank=True)
+
+    gender = models.CharField(
+        max_length=10,
+        choices=(("MALE", "Male"), ("FEMALE", "Female"))
+    )
+    email = models.EmailField(
+        unique=True,
+        null=True,
+        blank=True
+    )
+    marital_status = models.CharField(
+        max_length=20,
+        choices=(
+            ("SINGLE", "Single"),
+            ("MARRIED", "Married"),
+            ("WIDOWED", "Widowed"),
+        )
+    )
+    house_name = models.CharField(max_length=150)
+    spouse = models.OneToOneField(
+    "self",
+    null=True,
+    blank=True,
+    on_delete=models.SET_NULL,
+    related_name="partner"
+)
+    spouse_name = models.CharField(max_length=150, blank=True)
+
+    dob = models.DateField(null=True, blank=True)
+    age = models.PositiveIntegerField(editable=False)
+
+    mobile_no = models.CharField(max_length=15,blank=True)
+    phone_no = models.CharField(max_length=15, blank=True)
+
+    blood_group = models.CharField(max_length=5, blank=True)
+    expired = models.BooleanField(default=False)
+
+    father_name = models.CharField(max_length=150, blank=True)
+    mother_name = models.CharField(max_length=150, blank=True)
+
+    date_of_baptism = models.DateField(null=True, blank=True)
+    parish_of_baptism = models.CharField(max_length=150, blank=True)
+
+    educational_qualification = models.CharField(max_length=150, blank=True)
+    sunday_school_qualification = models.CharField(max_length=150, blank=True)
+
+    profession = models.CharField(max_length=150, blank=True)
+
+    relationship = models.ForeignKey(
+        Relationship,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True
+    )
+    ward = models.ForeignKey(
+    Ward,
+    on_delete=models.PROTECT,
+    null=True,
+    blank=True,
+    related_name="members"
+    )
+
+    family_image = models.ImageField(
+    upload_to="family_images/",
+    null=True,
+    blank=True
+    )
+
+
+    grade = models.ForeignKey(
+        Grade,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True
+    )
+
+    joining_date = models.DateField(null=True, blank=True)
+    transferred_from = models.CharField(max_length=150, blank=True)
+    address = models.TextField(blank=True)
+    is_family_head = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    inactive_reason = models.CharField(
+        max_length=100,
+        blank=True
+        )
+    inactive_date = models.DateField(
+        null=True,
+        blank=True
+    )
+    def save(self, *args, **kwargs):
+
+        was_head = None
+        if self.pk:
+            was_head = Member.objects.filter(
+                pk=self.pk
+            ).values_list("is_family_head", flat=True).first()
+
+    # 🔥 Enforce single active head per (family + house_name)
+        if self.is_family_head:
+            Member.objects.filter(
+            family=self.family,
+            house_name=self.house_name,
+            is_family_head=True,
+            is_active=True
+        ).exclude(pk=self.pk).update(is_family_head=False)
+
+    # 🔢 Age calculation
+        if self.dob:
+            today = date.today()
+            self.age = today.year - self.dob.year - (
+                (today.month, today.day) < (self.dob.month, self.dob.day)
+        )
+
+        super().save(*args, **kwargs)
+
+    # 👤 Auto create login for new head
+        if self.is_family_head and self.is_active:
+            if was_head is False or was_head is None:
+                if not self.email:
+                    raise ValidationError(
+                    "Family head must have an email address."
+                    )
+
+                create_family_head_user(self)
+
+
+
+    def __str__(self):
+        return self.name
+
+
+class Bill(models.Model):
+    BILL_TYPE_CHOICES = (
+    ("NEW", "New Subscription"),
+    ("UPGRADE", "Upgrade"),
+    ("EXTENSION", "Extension"),
+    ("RENEW", "Renewal"),
+    )
+
+    STATUS_CHOICES = (
+        ("UNPAID", "Unpaid"),
+        ("PAID", "Paid"),
+        ("CANCELLED", "Cancelled"),
+    )
+
+    bill_number = models.CharField(
+        max_length=30,
+        unique=True,
+        blank=True,
+        null=True
+    )
+
+    invoice_number = models.CharField(
+        max_length=30,
+        unique=True,
+        blank=True,
+        null=True
+    )
+
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="bills"
+    )
+    subscription = models.ForeignKey(
+        ChurchSubscription,
+        on_delete=models.CASCADE,
+        related_name="bills"
+    )
+
+    bill_type = models.CharField(
+        max_length=20,
+        choices=BILL_TYPE_CHOICES
+    )
+
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+
+    billing_cycle = models.CharField(
+        max_length=10,
+        choices=(("MONTHLY", "Monthly"), ("YEARLY", "Yearly")),
+        null=True,
+        blank=True
+    )
+
+    duration_months = models.PositiveIntegerField(null=True, blank=True)
+
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default="UNPAID"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    breakdown = models.JSONField(null=True, blank=True)
+
+    def save(self, *args, **kwargs):
+        if not self.bill_number:
+            self.bill_number = f"EGLS-BILL-{timezone.now().year}-{self.pk or 'NEW'}"
+
+        if not self.invoice_number:
+            self.invoice_number = f"EGLS-INV-{timezone.now().year}-{self.pk or 'NEW'}"
+
+        super().save(*args, **kwargs)
+
+    # Fix NEW placeholder after first save
+        if "NEW" in self.bill_number or "NEW" in self.invoice_number:
+            self.bill_number = f"EGLS-BILL-{timezone.now().year}-{self.pk}"
+            self.invoice_number = f"EGLS-INV-{timezone.now().year}-{self.pk}"
+            super().save(update_fields=["bill_number", "invoice_number"])
+
+
+    def __str__(self):
+        return f"Bill #{self.id} - {self.church.name}"
+
+
+
+class UpgradeRequest(models.Model):
+    STATUS_CHOICES = (
+        ("PENDING", "Pending"),
+        ("APPROVED", "Approved"),
+        ("REJECTED", "Rejected"),
+    )
+
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="upgrade_requests"
+    )
+
+    current_package = models.ForeignKey(
+        Package,
+        on_delete=models.PROTECT,
+        related_name="+"
+    )
+
+    requested_package = models.ForeignKey(
+        Package,
+        on_delete=models.PROTECT,
+        related_name="+"
+    )
+
+    requested_capacity = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Only for custom or higher member request"
+    )
+
+    reason = models.TextField(blank=True)
+
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default="PENDING"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.church.name} → {self.requested_package.name}"
+
+
+#Baptism
+class Baptism(models.Model):
+    BAPTISM_CATEGORY_CHOICES = (
+        ("PARISH", "Parish (Church Member)"),
+        ("OTHER", "Other (Outsider)"),
+    )
+
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="baptisms"
+    )
+
+    baptism_category = models.CharField(
+        max_length=10,
+        choices=BAPTISM_CATEGORY_CHOICES
+    )
+
+    # ---------- COMMON FIELDS ----------
+    date_of_baptism = models.DateField()
+    register_number = models.CharField(max_length=50)
+    place_of_birth = models.CharField(max_length=150)
+
+    name = models.CharField(max_length=150)
+    baptismal_name = models.CharField(max_length=150)
+
+    gender = models.CharField(
+        max_length=10,
+        choices=(("MALE", "Male"), ("FEMALE", "Female"))
+    )
+
+    dob = models.DateField(null=True, blank=True)
+    address = models.TextField()
+
+    parish_of_baptism = models.CharField(max_length=150)
+    panchayath = models.CharField(max_length=150,blank=True,null=True)
+    priest_name = models.CharField(max_length=150,blank=True,null=True)
+
+    god_father = models.CharField(max_length=150)
+    god_mother = models.CharField(max_length=150)
+
+    father_name = models.CharField(max_length=150)
+    mother_name = models.CharField(max_length=150)
+
+    remarks = models.TextField(blank=True)
+
+    # ---------- PARISH ONLY ----------
+    family = models.ForeignKey(
+        Family,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True
+    )
+
+    main_member = models.ForeignKey(
+        Member,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="as_main_member_in_baptisms"
+    )
+
+    relation_with_main_member = models.ForeignKey(
+        Relationship,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="baptism_record"
+        )
+    
+    member = models.OneToOneField(
+        Member,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="baptism"
+        )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("church", "register_number")
+
+    def __str__(self):
+        return f"{self.name} ({self.register_number})"
+    
+    def save(self, *args, **kwargs):
+
+        if not self.register_number:
+
+            from registry.services import generate_register_number
+
+            self.register_number = generate_register_number(
+            self.church,
+            "BAPTISM"
+            )
+
+        super().save(*args, **kwargs)
+
+
+#Pre-Announcement
+class VilichCholluKuri(models.Model):
+
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="vilich_chollu_kuris"
+    )
+
+    # Optional link later
+    marriage = models.OneToOneField(
+        "Marriage",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="vilich_chollu_kuri"
+    )
+
+    marriage_date = models.DateField()
+
+    # -------------------------
+    # GROOM DETAILS
+    # -------------------------
+    groom_name = models.CharField(max_length=150)
+    groom_dob = models.DateField(null=True, blank=True)
+    groom_age = models.PositiveIntegerField(null=True, blank=True)
+    groom_house_name = models.CharField(max_length=150)
+    groom_family_name = models.CharField(max_length=150)
+    groom_father = models.CharField(max_length=150)
+    groom_mother = models.CharField(max_length=150)
+    groom_place = models.CharField(max_length=150)
+    groom_marriage_count = models.PositiveIntegerField(default=1)
+
+    # -------------------------
+    # BRIDE DETAILS
+    # -------------------------
+    bride_name = models.CharField(max_length=150)
+    bride_dob = models.DateField(null=True, blank=True)
+    bride_age = models.PositiveIntegerField(null=True, blank=True)
+    bride_house_name = models.CharField(max_length=150)
+    bride_family_name = models.CharField(max_length=150)
+    bride_father = models.CharField(max_length=150)
+    bride_mother = models.CharField(max_length=150)
+    bride_place = models.CharField(max_length=150)
+    bride_marriage_count = models.PositiveIntegerField(default=1)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("church", "marriage")
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Vilich Chollu Kuri - {self.groom_name} & {self.bride_name}"
+
+#marriage register
+class Marriage(models.Model):
+    MARRIAGE_TYPE_CHOICES = (
+        ("ADD_BRIDE", "Add Bride to Parish"),
+        ("TRANSFER_BRIDE", "Transfer Bride from Parish"),
+    )
+
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="marriages"
+    )
+
+    family = models.ForeignKey(
+        Family,
+        on_delete=models.PROTECT,
+        related_name="marriages"
+    )
+
+    marriage_type = models.CharField(
+        max_length=20,
+        choices=MARRIAGE_TYPE_CHOICES
+    )
+
+    date = models.DateField()
+    register_number = models.CharField(max_length=50)
+    bride_dob = models.DateField(null=True, blank=True)
+    # -------------------------
+    # GROOM (internal or external)
+    # -------------------------
+    groom_member = models.ForeignKey(
+        Member,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="marriages_as_groom"
+    )
+
+    groom_name = models.CharField(max_length=150, blank=True)
+
+    relation_of_groom_with_main_member = models.ForeignKey(
+        Relationship,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="groom_marriages"
+    )
+
+    # -------------------------
+    # BRIDE (internal or external)
+    # -------------------------
+    bride_member = models.ForeignKey(
+        Member,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="marriages_as_bride"
+    )
+
+    bride_name = models.CharField(max_length=150, blank=True)
+    bride_address = models.TextField(blank=True)
+
+    relation_of_bride_with_main_member = models.ForeignKey(
+        Relationship,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="bride_marriages"
+    )
+
+    # -------------------------
+    # PARENTS
+    # -------------------------
+    groom_father = models.CharField(max_length=150, blank=True)
+    groom_mother = models.CharField(max_length=150, blank=True)
+    bride_father = models.CharField(max_length=150, blank=True)
+    bride_mother = models.CharField(max_length=150, blank=True)
+
+    nationality_of_groom = models.CharField(max_length=100)
+    nationality_of_bride = models.CharField(max_length=100)
+
+    # -------------------------
+    # WITNESSES
+    # -------------------------
+    witness_bride_side = models.CharField(max_length=150)
+    witness_groom_side = models.CharField(max_length=150)
+
+    # -------------------------
+    # MINISTERS
+    # -------------------------
+    minister_of_marriage = models.CharField(max_length=150)
+    other_priests = models.TextField(blank=True)
+
+    # -------------------------
+    # TRANSFER INFO (only for transfer type)
+    # -------------------------
+    transfer_to = models.CharField(max_length=150, blank=True)
+
+    remarks = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    groom_name = models.CharField(max_length=150, blank=True)
+
+    groom_dob = models.DateField(blank=True, null=True)
+
+    groom_house_name = models.CharField(max_length=150, blank=True)
+
+    groom_family_name = models.CharField(max_length=150, blank=True)
+
+    groom_address = models.TextField(blank=True)
+    class Meta:
+        unique_together = ("church", "register_number")
+
+    def save(self, *args, **kwargs):
+
+        if not self.register_number:
+
+            from registry.services import generate_register_number
+
+            self.register_number = generate_register_number(
+            self.church,
+            "MARRIAGE"
+            )
+
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        groom_display = (
+            self.groom_member.name
+            if self.groom_member
+            else self.groom_name
+        )
+        return f"{self.register_number} - {groom_display}"
+
+
+#dhesha kuri
+class DheshaKuri(models.Model):
+
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="dhesha_kuris"
+    )
+
+    marriage = models.OneToOneField(
+        Marriage,
+        on_delete=models.CASCADE,
+        related_name="dhesha_kuri"
+    )
+
+    groom_confession_date = models.DateField()
+    bride_confession_date = models.DateField()
+
+    # -------------------------
+    # GROOM SNAPSHOT
+    # -------------------------
+    groom_name = models.CharField(max_length=150)
+    groom_dob = models.DateField(null=True, blank=True)
+    groom_age = models.PositiveIntegerField(null=True, blank=True)
+    groom_house_name = models.CharField(max_length=150, blank=True)
+    groom_family_name = models.CharField(max_length=150, blank=True)
+    groom_father = models.CharField(max_length=150)
+    groom_mother = models.CharField(max_length=150)
+    groom_place = models.CharField(max_length=200, blank=True)
+
+    # -------------------------
+    # BRIDE SNAPSHOT
+    # -------------------------
+    bride_name = models.CharField(max_length=150)
+    bride_dob = models.DateField(null=True, blank=True)
+    bride_age = models.PositiveIntegerField(null=True, blank=True)
+    bride_house_name = models.CharField(max_length=150)
+    bride_family_name = models.CharField(max_length=150)
+    bride_father = models.CharField(max_length=150)
+    bride_mother = models.CharField(max_length=150)
+    bride_place = models.CharField(max_length=200, blank=True)
+
+    transfer_to = models.CharField(max_length=200)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("church", "marriage")
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Dhesha Kuri - {self.bride_name}"
+
+#Death Register Model
+class DeathRegister(models.Model):
+    STATUS_CHOICES = (
+        ("PENDING", "Pending"),
+        ("COMPLETED", "Completed"),
+    )
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="death_registers"
+    )
+
+    reg_no = models.CharField(max_length=50,blank=True,null=True)
+
+    member = models.OneToOneField(
+        Member,
+        on_delete=models.PROTECT,
+        related_name="death_record"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="PENDING"
+    )
+    died_on = models.DateField(null=True, blank=True)
+    funeral_on = models.DateField(null=True, blank=True)
+    
+    tomb_type = models.ForeignKey(
+        TombType,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+    tomb_charge = models.DecimalField(max_digits=10, decimal_places=2,null=True, blank=True)
+    tomb_idn = models.CharField(max_length=100, blank=True)
+
+    reason_of_death = models.TextField(blank=True)
+    remarks = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("church", "reg_no")
+
+    def save(self, *args, **kwargs):
+
+        if self.status == "COMPLETED" and not self.reg_no:
+            from registry.services import generate_register_number
+
+            self.reg_no = generate_register_number(
+                self.church,
+                "DEATH"
+            )
+
+        super().save(*args, **kwargs)
+
+
+class RegisterSetting(models.Model):
+
+    REGISTER_TYPES = (
+        ("HEAD", "Family Head Register"),
+        ("BAPTISM", "Baptism Register"),
+        ("MARRIAGE", "Marriage Register"),
+        ("DEATH", "Death Register"),
+        ("CERTIFICATE", "Certificate"),
+    )
+
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="register_settings"
+    )
+
+    register_type = models.CharField(
+        max_length=20,
+        choices=REGISTER_TYPES
+    )
+
+    # ---------- REGISTER NUMBER ----------
+    register_prefix = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True
+    )
+
+    register_suffix = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True
+    )
+
+    next_register_number = models.PositiveIntegerField(
+        default=1
+    )
+
+    register_padding = models.PositiveIntegerField(
+        default=4,
+        help_text="Example: 0001"
+    )
+
+    # ---------- FOLIO NUMBER (for HEAD register) ----------
+    folio_prefix = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True
+    )
+
+    folio_suffix = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True
+    )
+
+    next_folio_number = models.PositiveIntegerField(
+        default=1
+    )
+
+    folio_padding = models.PositiveIntegerField(
+        default=4
+    )
+
+    # ---------- FINANCIAL YEAR ----------
+    use_financial_year = models.BooleanField(
+        default=False
+    )
+
+    financial_year = models.PositiveIntegerField(
+    null=True,
+    blank=True,
+    help_text="Example: 2025 for FY 2025-26"
+    )
+
+    financial_year_start_month = models.PositiveIntegerField(
+    null=True,
+    blank=True,
+    help_text="Start month (1-12)"
+    )
+
+    financial_year_end_month = models.PositiveIntegerField(
+    null=True,
+    blank=True,
+    help_text="End month (1-12)"
+    )
+
+    financial_year_format = models.CharField(
+        max_length=20,
+        default="YYYY-YY",
+        help_text="Example: 2025-26"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("church", "register_type")
+
+    def __str__(self):
+        return f"{self.church.name} - {self.register_type}"
+
+class Events(models.Model):
+
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="events"
+    )
+
+    name = models.CharField(max_length=200)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name}"
+    
+class Offering(models.Model):
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="offerings"
+    )
+    event = models.ForeignKey(
+        Events,
+        on_delete=models.PROTECT,
+        related_name="offerings"
+    )
+    member = models.ForeignKey(
+        Member,
+        on_delete=models.PROTECT,
+        related_name="offerings"
+    )
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    narration = models.TextField(blank=True)
+
+    is_cancelled = models.BooleanField(default=False)
+    cancel_reason = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.member.name} - {self.amount} ({self.event.name})"
+    
+class VisitorMaster(models.Model):
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="visitors"
+    )
+
+    visitor_name = models.CharField(max_length=100)
+    visitor_date = models.DateField()
+    visitor_address = models.CharField(max_length=300, blank=True, null=True)
+    remarks = models.CharField(max_length=300, blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.visitor_name} ({self.visitor_date})"
+    
+
+class Subscription(models.Model):
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="subscriptions"
+    )
+    grade = models.ForeignKey(
+        Grade,
+        on_delete=models.PROTECT,
+        related_name="subscriptions"
+    )
+
+    term = models.CharField(max_length=50)
+    start_date = models.DateField()
+    end_date = models.DateField()
+
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+
+    is_cancelled = models.BooleanField(default=False)
+    cancel_reason = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.grade.name} - {self.term} ({self.amount})"
+    
+class AccountGroupMaster(models.Model):
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="account_groups"
+    )
+
+    account_code = models.IntegerField(null=True, blank=True)
+
+    group_name = models.CharField(max_length=100)
+
+    alias = models.CharField(max_length=300, null=True, blank=True)
+
+    under_group = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sub_groups"
+    )
+
+    status = models.BooleanField(default=True)
+    reserved = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.group_name
+    
+class AccountLedgerMaster(models.Model):
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="account_ledgers"
+    )
+
+    ledger_code = models.IntegerField(null=True, blank=True)
+
+    ledger_name = models.CharField(max_length=100)
+
+    alias = models.CharField(max_length=300, null=True, blank=True)
+
+    account_group = models.ForeignKey(
+        AccountGroupMaster,
+        on_delete=models.PROTECT,
+        related_name="ledgers"
+    )
+
+    status = models.BooleanField(default=True)
+    reserved = models.BooleanField(default=False)
+
+    op_balance = models.FloatField(null=True, blank=True)
+
+    def __str__(self):
+        return self.ledger_name
+    
+class PaymentMaster(models.Model):
+    PAYMENT_MODE_CHOICES = (
+        ("CASH", "Cash"),
+        ("UPI", "UPI"),
+        ("CARD", "Card"),
+        ("CHEQUE", "Cheque"),
+    )
+
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="payments"
+    )
+
+    voucher_number = models.IntegerField()
+    ref_no = models.IntegerField(null=True, blank=True)
+    payment_date = models.DateField()
+    party_name = models.CharField(max_length=100)
+
+    payment_mode = models.CharField(
+        max_length=10,
+        choices=PAYMENT_MODE_CHOICES
+    )
+
+    account_ledger = models.ForeignKey(
+        AccountLedgerMaster,
+        on_delete=models.PROTECT,
+        related_name="payments"
+    )
+
+    amount = models.FloatField()
+    narration = models.CharField(max_length=300, null=True, blank=True)
+
+    is_cancelled = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Voucher #{self.voucher_number} - {self.party_name} ({self.amount})"
+    
+class QurbanaReceipts(models.Model):
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="qurbana_receipts"
+    )
+    name = models.CharField(max_length=100)
+    category = models.CharField(max_length=20)
+    qurbana_date = models.DateField()
+    narration = models.CharField(max_length=300, null=True, blank=True)
+
+    created_at = models.DateTimeField(null=True, blank=True, auto_now_add=True)
+    updated_at = models.DateTimeField(null=True, blank=True, auto_now=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.qurbana_date})"
+
+
+class CommitteeMaster(models.Model):
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="committees"
+    )
+
+    committee_code = models.IntegerField()
+    committee_name = models.CharField(max_length=50)
+    committee_from_date = models.DateField()
+    committee_to_date = models.DateField()
+
+    created_at = models.DateTimeField(null=True, blank=True, auto_now_add=True)
+    updated_at = models.DateTimeField(null=True, blank=True, auto_now=True)
+
+    def __str__(self):
+        return self.committee_name
+
+
+class CommitteeMember(models.Model):
+    member = models.ForeignKey(
+        Member,
+        on_delete=models.CASCADE,
+        related_name="committee_memberships"
+    )
+    designation = models.ForeignKey(
+        Designation,
+        on_delete=models.PROTECT,
+        related_name="committee_members"
+    )
+    committee = models.ForeignKey(
+        CommitteeMaster,
+        on_delete=models.CASCADE,
+        related_name="members"
+    )
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="committee_members"
+    )
+    
+    created_at = models.DateTimeField(null=True, blank=True, auto_now_add=True)
+    updated_at = models.DateTimeField(null=True, blank=True, auto_now=True)
+
+    def __str__(self):
+        return f"{self.member.name} - {self.designation.designation_name} ({self.committee.committee_name})"

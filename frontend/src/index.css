@@ -1,0 +1,14 @@
+:root {
+  --primary-maroon: #ae2050;
+  --primary-gold: #e6b566;
+  --light-gray: #718096;
+  --white: #ffffff;
+  --light-bg: #f8f9fa;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--white);
+  color: #333; 
+}
