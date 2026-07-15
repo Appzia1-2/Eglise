@@ -76,7 +76,7 @@ const MembersPage = () => {
         { value: "OTHER", label: "Other" },
       ],
     },
-    { name: "email", label: "Email", type: "email" },
+    { name: "email", label: "Email", type: "email", required: true },
     {
       name: "marital_status",
       label: "Marital Status",
@@ -86,7 +86,7 @@ const MembersPage = () => {
         { value: "MARRIED", label: "Married" },
         { value: "WIDOWED", label: "Widowed" },
         { value: "DIVORCED", label: "Divorced" },
-      ],
+      ],required: true 
     },
     {
       name: "spouse_name",
@@ -104,7 +104,7 @@ const MembersPage = () => {
         })),
       required: false,
     },
-    { name: "dob", label: "Date of Birth", type: "date" },
+    { name: "dob", label: "Date of Birth", type: "date",required: true  },
     { name: "mobile_no", label: "Mobile No", required: true },
     { name: "phone_no", label: "Phone No" },
     { name: "blood_group", label: "Blood Group" },

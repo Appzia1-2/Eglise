@@ -110,16 +110,30 @@ const BaptismFormModal = ({ isOpen, onClose, onSave, itemData, isLoading }) => {
   }, [itemData, isOpen]);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+  const { name, value } = e.target;
 
-    // Clear error for this field
-    setErrors((prev) => {
-      const newErrors = { ...prev };
-      delete newErrors[name];
-      return newErrors;
-    });
-  };
+  const nameFields = [
+    "name",
+    "baptismal_name",
+    "father_name",
+    "mother_name",
+    "god_father",
+    "god_mother",
+    "priest_name",
+  ];
+
+  if (nameFields.includes(name) && /\d/.test(value)) {
+    return;
+  }
+
+  setFormData((prev) => ({ ...prev, [name]: value }));
+
+  setErrors((prev) => {
+    const newErrors = { ...prev };
+    delete newErrors[name];
+    return newErrors;
+  });
+};
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -130,10 +144,17 @@ const BaptismFormModal = ({ isOpen, onClose, onSave, itemData, isLoading }) => {
       "date_of_baptism",
       "place_of_birth",
       "name",
+      "baptismal_name",
       "gender",
       "dob",
+      "address",
+      "parish_of_baptism",
+      "priest_name",
+      "god_father",
+      "god_mother",
       "father_name",
       "mother_name",
+      "panchayath",
     ];
     if (formData.baptism_category === "PARISH") {
       requiredFields.push("family", "main_member", "relation_with_main_member");
@@ -165,6 +186,19 @@ const BaptismFormModal = ({ isOpen, onClose, onSave, itemData, isLoading }) => {
       }
       return;
     }
+
+    if (formData.dob && formData.date_of_baptism) {
+  if (new Date(formData.date_of_baptism) < new Date(formData.dob)) {
+    window.alert("Date of Baptism cannot be before the Date of Birth.");
+    setErrors((prev) => ({ ...prev, date_of_baptism: true }));
+    const element = document.getElementsByName("date_of_baptism")[0];
+    if (element) {
+      element.focus();
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    return;
+  }
+}
 
     // Process and coerce
     const submissionData = { ...formData };
@@ -459,7 +493,7 @@ const BaptismFormModal = ({ isOpen, onClose, onSave, itemData, isLoading }) => {
                   true,
                 )}
                 {renderField("name", "Name", "text", null, false, true)}
-                {renderField("baptismal_name", "Baptismal Name")}
+                {renderField("baptismal_name", "Baptismal Name", "text", null, false, true)}
                 {renderField(
                   "gender",
                   "Gender",
@@ -473,11 +507,11 @@ const BaptismFormModal = ({ isOpen, onClose, onSave, itemData, isLoading }) => {
                   true,
                 )}
                 {renderField("dob", "Date of Birth", "date", null, false, true)}
-                {renderField("parish_of_baptism", "Parish of Baptism")}
-                {renderField("priest_name", "Priest Name")}
-                {renderField("panchayath", "Panchayath")}
-                {renderField("god_father", "God Father")}
-                {renderField("god_mother", "God Mother")}
+                {renderField("parish_of_baptism", "Parish of Baptism", "text", null, false, true)}
+                {renderField("priest_name", "Priest Name", "text", null, false, true)}
+                {renderField("panchayath", "Panchayath", "text", null, false, true)}
+                {renderField("god_father", "God Father", "text", null, false, true)}
+                {renderField("god_mother", "God Mother", "text", null, false, true)}
                 {renderField(
                   "father_name",
                   "Father Name",
@@ -544,7 +578,7 @@ const BaptismFormModal = ({ isOpen, onClose, onSave, itemData, isLoading }) => {
                   </>
                 )}
 
-                {renderField("address", "Address", "textarea", null, true)}
+                {renderField("address", "Address", "textarea", null, true, true)}
                 {isParish &&
                   renderField("remarks", "Remarks", "textarea", null, true)}
               </SimpleGrid>

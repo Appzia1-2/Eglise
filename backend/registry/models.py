@@ -399,7 +399,7 @@ class Member(models.Model):
     spouse_name = models.CharField(max_length=150, blank=True)
 
     dob = models.DateField(null=True, blank=True)
-    age = models.PositiveIntegerField(editable=False)
+    age = models.PositiveIntegerField(editable=False, null=True, blank=True)
 
     mobile_no = models.CharField(max_length=15,blank=True)
     phone_no = models.CharField(max_length=15, blank=True)
