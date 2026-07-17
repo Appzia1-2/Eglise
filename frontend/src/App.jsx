@@ -37,6 +37,9 @@ import QurbanaReceiptsPage from "./pages/QurbanaReceiptsPage";
 import CommitteePage from "./pages/CommitteePage";
 import CommitteeMemberPage from "./pages/CommitteeMemberPage";
 import CommitteeListReportPage from "./pages/CommitteeListReportPage";
+import MemberDirectoryPage from "./pages/MemberDirectoryPage";
+import MemberAgeWisePage from "./pages/MemberAgeWisePage";
+import MemberPhoneDirectoryPage from "./pages/MemberPhoneDirectoryPage";
 
 const ProtectedRoute = ({ children }) => {
   if (!authService.isAuthenticated()) {
@@ -263,6 +266,30 @@ function App() {
 <Route path="/qurbana-receipts" element={<ProtectedRoute><QurbanaReceiptsPage /></ProtectedRoute>} />
 <Route path="/committees" element={<ProtectedRoute><CommitteePage /></ProtectedRoute>} />
 <Route path="/committee-members" element={<ProtectedRoute><CommitteeMemberPage /></ProtectedRoute>} />
+<Route
+  path="/member-directory"
+  element={
+    <ProtectedRoute>
+      <MemberDirectoryPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/age-wise-list"
+  element={
+    <ProtectedRoute>
+      <MemberAgeWisePage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/phone-directory"
+  element={
+    <ProtectedRoute>
+      <MemberPhoneDirectoryPage />
+    </ProtectedRoute>
+  }
+/>
 <Route
   path="/committee-list-report"
   element={

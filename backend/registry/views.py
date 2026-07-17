@@ -11,7 +11,7 @@ from accounts.permissions import IsChurchAuthenticated,IsChurchUser, IsMemberUse
 from accounts.utils import create_family_head_user
 from registry.services import calculate_new_bill_amount, calculate_prorated_upgrade_amount, generate_folio_number, get_next_subscription_action, handle_member_death
 from .models import Baptism, Bill, Church, DeathRegister, Designation, DheshaKuri, Diocese, Events, Grade, Marriage, Priest, PriestChange, RegisterSetting, Relationship, TombFee, TombType, UpgradeRequest, VilichCholluKuri, Ward, Family, Member, Package, Offering, VisitorMaster, Subscription, AccountGroupMaster, AccountLedgerMaster, PaymentMaster, QurbanaReceipts, CommitteeMaster, CommitteeMember
-from .serializers import BaptismSerializer, BillDetailSerializer, BillListSerializer, ChurchDetailSerializer, ChurchListSerializer, DeathRegisterSerializer, DesignationSerializer, DheshaKuriSerializer, DioceseSerializer, EventSerializer, FamilyHeadCreateSerializer, FamilyHeadUpdateSerializer, FamilyMemberSerializer, GradeSerializer, InactiveMemberSerializer, MarriageCertificateSerializer, MarriageSerializer, MemberProfileSerializer, MobileFamilyBaptismSerializer, MobileFamilyDetailSerializer, MobileFamilyListSerializer, MobileFamilyMemberSerializer, PriestChangeSerializer, PriestNameSerializer,PriestSerializer, RegisterSettingSerializer, RelationshipSerializer, SubscriptionExpirySerializer, TombFeeSerializer, TombTypeSerializer, UpgradeSerializer, VilichCholluKuriSerializer, WardSerializer, FamilySerializer, MemberSerializer,PackageSerializer, WardWithFamilyCountSerializer, OfferingSerializer, VisitorMasterSerializer, SubscriptionSerializer, AccountGroupMasterSerializer, AccountLedgerMasterSerializer, PaymentMasterSerializer, QurbanaReceiptsSerializer, CommitteeMasterSerializer, CommitteeMemberSerializer
+from .serializers import BaptismSerializer, BillDetailSerializer, BillListSerializer, ChurchDetailSerializer, ChurchListSerializer, DeathRegisterSerializer, DesignationSerializer, DheshaKuriSerializer, DioceseSerializer, EventSerializer, FamilyHeadCreateSerializer, FamilyHeadUpdateSerializer, FamilyMemberSerializer, GradeSerializer, InactiveMemberSerializer, MarriageCertificateSerializer, MarriageSerializer, MemberProfileSerializer, MobileFamilyBaptismSerializer, MobileFamilyDetailSerializer, MobileFamilyListSerializer, MobileFamilyMemberSerializer, PriestChangeSerializer, PriestNameSerializer,PriestSerializer, RegisterSettingSerializer, RelationshipSerializer, SubscriptionExpirySerializer, TombFeeSerializer, TombTypeSerializer, UpgradeSerializer, VilichCholluKuriSerializer, WardSerializer, FamilySerializer, MemberSerializer,PackageSerializer, WardWithFamilyCountSerializer, OfferingSerializer, VisitorMasterSerializer, SubscriptionSerializer, AccountGroupMasterSerializer, AccountLedgerMasterSerializer, PaymentMasterSerializer, QurbanaReceiptsSerializer, CommitteeMasterSerializer, CommitteeMemberSerializer, MemberDirectorySerializer
 from rest_framework.generics import ListAPIView
 from .models import ChurchSubscription
 from .serializers import SubscribeSerializer,UpgradeRequestSerializer
@@ -2479,3 +2479,188 @@ class CommitteeMemberDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return CommitteeMember.objects.filter(church=self.request.user.church)
+    
+class MemberDirectoryAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsChurchUser]
+
+    def get(self, request):
+        church = request.user.church
+
+        members = Member.objects.filter(
+            church=church,
+            is_active=True,
+            expired=False,
+        ).select_related("family", "ward", "grade", "relationship")
+
+        # -------------------------
+        # Filters
+        # -------------------------
+        name = request.query_params.get("name")
+        if name:
+            members = members.filter(name__icontains=name)
+
+        house = request.query_params.get("house")
+        if house:
+            members = members.filter(house_name__icontains=house)
+
+        family_name = request.query_params.get("family")
+        if family_name:
+            members = members.filter(family__family_name__icontains=family_name)
+
+        phone = request.query_params.get("phone")
+        if phone:
+            members = members.filter(
+                Q(mobile_no__icontains=phone) | Q(phone_no__icontains=phone)
+            )
+
+        age_min = request.query_params.get("age_min")
+        if age_min:
+            members = members.filter(age__gte=age_min)
+
+        age_max = request.query_params.get("age_max")
+        if age_max:
+            members = members.filter(age__lte=age_max)
+
+        # -------------------------
+        # Order: family A-Z, house A-Z, name A-Z
+        # -------------------------
+        members = members.order_by("family__family_name", "house_name", "name")
+
+        # -------------------------
+        # Group by (family_name, house_name)
+        # -------------------------
+        groups = {}
+        for member in members:
+            fam_name = member.family.family_name if member.family else "Unassigned"
+            key = (fam_name, member.house_name)
+            groups.setdefault(key, []).append(member)
+
+        serialized_groups = []
+        for (fam_name, house_name) in sorted(
+            groups.keys(), key=lambda k: (k[0].lower(), k[1].lower())
+        ):
+            member_list = groups[(fam_name, house_name)]
+            serialized_groups.append({
+                "family_name": fam_name,
+                "house_name": house_name,
+                "member_count": len(member_list),
+                "members": MemberDirectorySerializer(
+                    member_list, many=True
+                ).data,
+            })
+
+        return Response({
+            "total_members": members.count(),
+            "total_households": len(groups),
+            "households": serialized_groups,
+        })
+    
+class MemberAgeWiseListAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsChurchUser]
+
+    def get(self, request):
+        church = request.user.church
+
+        members = Member.objects.filter(
+            church=church,
+            is_active=True,
+            expired=False,
+        ).select_related("family", "ward", "grade", "relationship")
+
+        # -------------------------
+        # Filters
+        # -------------------------
+        name = request.query_params.get("name")
+        if name:
+            members = members.filter(name__icontains=name)
+
+        house = request.query_params.get("house")
+        if house:
+            members = members.filter(house_name__icontains=house)
+
+        family_name = request.query_params.get("family")
+        if family_name:
+            members = members.filter(family__family_name__icontains=family_name)
+
+        phone = request.query_params.get("phone")
+        if phone:
+            members = members.filter(
+                Q(mobile_no__icontains=phone) | Q(phone_no__icontains=phone)
+            )
+
+        age_min = request.query_params.get("age_min")
+        if age_min:
+            members = members.filter(age__gte=age_min)
+
+        age_max = request.query_params.get("age_max")
+        if age_max:
+            members = members.filter(age__lte=age_max)
+
+        # -------------------------
+        # Sort: oldest first (age descending), nulls last
+        # -------------------------
+        order = request.query_params.get("order", "desc")
+        if order == "asc":
+            members = members.order_by(F("age").asc(nulls_last=True), "name")
+        else:
+            members = members.order_by(F("age").desc(nulls_last=True), "name")
+
+        serializer = MemberDirectorySerializer(members, many=True)
+
+        return Response({
+            "total_members": members.count(),
+            "members": serializer.data,
+        })
+    
+class MemberPhoneDirectoryAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsChurchUser]
+
+    def get(self, request):
+        church = request.user.church
+
+        members = Member.objects.filter(
+            church=church,
+            is_active=True,
+            expired=False,
+        ).select_related("family", "ward", "grade", "relationship")
+
+        # -------------------------
+        # Filters
+        # -------------------------
+        name = request.query_params.get("name")
+        if name:
+            members = members.filter(name__icontains=name)
+
+        house = request.query_params.get("house")
+        if house:
+            members = members.filter(house_name__icontains=house)
+
+        family_name = request.query_params.get("family")
+        if family_name:
+            members = members.filter(family__family_name__icontains=family_name)
+
+        phone = request.query_params.get("phone")
+        if phone:
+            members = members.filter(
+                Q(mobile_no__icontains=phone) | Q(phone_no__icontains=phone)
+            )
+
+        age_min = request.query_params.get("age_min")
+        if age_min:
+            members = members.filter(age__gte=age_min)
+
+        age_max = request.query_params.get("age_max")
+        if age_max:
+            members = members.filter(age__lte=age_max)
+
+        # -------------------------
+        # Sort: alphabetical by name
+        # -------------------------
+        members = members.order_by("name")
+
+        serializer = MemberDirectorySerializer(members, many=True)
+
+        return Response({
+            "total_members": members.count(),
+            "members": serializer.data,
+        })

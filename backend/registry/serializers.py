@@ -1933,3 +1933,34 @@ class CommitteeMemberSerializer(serializers.ModelSerializer):
         model = CommitteeMember
         fields = "__all__"
         read_only_fields = ("church")
+
+class MemberDirectorySerializer(serializers.ModelSerializer):
+    relationship = serializers.CharField(source="relationship.name", read_only=True)
+    family_name = serializers.CharField(source="family.family_name", read_only=True)
+    ward_name = serializers.CharField(source="ward.ward_name", read_only=True)
+    grade = serializers.CharField(source="grade.name", read_only=True)
+
+    class Meta:
+        model = Member
+        fields = [
+            "id",
+            "name",
+            "gender",
+            "age",
+            "email",
+            "mobile_no",
+            "phone_no",
+            "marital_status",
+            "spouse_name",
+            "relationship",
+            "is_family_head",
+            "family_name",
+            "ward_name",
+            "grade",
+            "profession",
+            "blood_group",
+            "father_name",
+            "mother_name",
+            "house_name",
+            "address",
+        ]

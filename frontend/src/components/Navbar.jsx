@@ -45,6 +45,9 @@ const ROUTE_MAP = {
   Committee: "/committees",
   "Committee Members": "/committee-members",
   "List of Committee": "/committee-list-report",
+  "Member List": "/member-directory",
+  "Age Wise List": "/age-wise-list",
+  "Phone Directory": "/phone-directory",
 };
 
 // ─── Menu data ────────────────────────────────────────────────────────────────

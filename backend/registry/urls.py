@@ -71,7 +71,7 @@ from .views import (
     VisitorMasterDetailView,SubscriptionListCreateView,AccountGroupMasterListCreateView, AccountGroupMasterDetailView,
     SubscriptionDetailView,AccountLedgerMasterListCreateView,PaymentMasterListCreateView,QurbanaReceiptsListCreateView,
     QurbanaReceiptsDetailView, CommitteeMasterListCreateView, CommitteeMasterDetailView, CommitteeMemberListCreateView,
-    CommitteeMemberDetailView, PaymentMasterDetailView, AccountLedgerMasterDetailView,
+    CommitteeMemberDetailView, PaymentMasterDetailView, AccountLedgerMasterDetailView, MemberDirectoryAPIView,  MemberAgeWiseListAPIView, MemberPhoneDirectoryAPIView,
 )
 
 urlpatterns = [
@@ -204,4 +204,8 @@ urlpatterns = [
 
     path("committee-members/", CommitteeMemberListCreateView.as_view(), name="committee-member-list-create"),
     path("committee-members/<int:pk>/", CommitteeMemberDetailView.as_view(), name="committee-member-detail"),
+
+    path("members/directory/", MemberDirectoryAPIView.as_view(), name="member-directory"),
+    path("members/age-wise/", MemberAgeWiseListAPIView.as_view(), name="member-age-wise"),
+    path("members/phone-directory/", MemberPhoneDirectoryAPIView.as_view(), name="member-phone-directory"),
 ]

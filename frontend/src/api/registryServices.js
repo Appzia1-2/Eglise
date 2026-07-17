@@ -287,3 +287,12 @@ export const updateCommitteeMember = (id, data) =>
   apiClient.patch(`/api/registry/committee-members/${id}/`, data);
 export const deleteCommitteeMember = (id) =>
   apiClient.delete(`/api/registry/committee-members/${id}/`); 
+
+export const listMemberDirectory = (params = {}) =>
+  apiClient.get("/api/registry/members/directory/", { params });
+
+export const listMemberAgeWise = (params = {}) =>
+  apiClient.get("/api/registry/members/age-wise/", { params });
+
+export const listMemberPhoneDirectory = (params = {}) =>
+  apiClient.get("/api/registry/members/phone-directory/", { params });
