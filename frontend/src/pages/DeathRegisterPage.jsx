@@ -19,7 +19,7 @@ const DEATH_COLUMNS = [
 const DeathRegisterPage = () => {
   const [tombTypes, setTombTypes] = useState([]);
   const [families, setFamilies] = useState([]);
-  const [filterStatus, setFilterStatus] = useState(null); // null for ALL, 'pending' for Pending
+  const [filterStatus, setFilterStatus] = useState(null);
 
   useEffect(() => {
     const fetchOptions = async () => {
@@ -38,12 +38,18 @@ const DeathRegisterPage = () => {
   }, []);
 
   const deathFields = [
-    { name: "died_on", label: "Date of Death", type: "date" },
-    { name: "funeral_on", label: "Date of Funeral", type: "date" },
+    { name: "died_on", label: "Date of Death", type: "date", required: true },
+    {
+      name: "funeral_on",
+      label: "Date of Funeral",
+      type: "date",
+      required: true,
+    },
     {
       name: "tomb_type",
       label: "Tomb Type",
       type: "select",
+      required: true,
       options: tombTypes.map((t) => ({ label: t.name, value: t.id })),
       coerce: Number,
     },
@@ -51,10 +57,15 @@ const DeathRegisterPage = () => {
       name: "tomb_charge",
       label: "Tomb Charge",
       type: "number",
+      required: true,
       coerce: Number,
     },
     { name: "tomb_idn", label: "Tomb IDN" },
-    { name: "reason_of_death", label: "Reason of Death" },
+    {
+      name: "reason_of_death",
+      label: "Reason of Death",
+      required: true,
+    },
     { name: "remarks", label: "Remarks", type: "textarea", fullWidth: true },
   ];
 
@@ -63,7 +74,6 @@ const DeathRegisterPage = () => {
       const res = await listDeaths(filterStatus);
       if (res.data) {
         const mapped = res.data.map((d) => {
-          // Find family by object ID or direct ID
           const famId = d.family?.id || d.family;
           const famObj = families.find((f) => f.id === famId);
 
@@ -114,9 +124,8 @@ const DeathRegisterPage = () => {
 
   return (
     <RegistryTable
-      key={`${filterStatus}-${families.length}`} // Force re-fetch when filter OR families load
+      key={`${filterStatus}-${families.length}`}
       title="Death Register"
-      addLabel="Add Record"
       nameKey="member_name"
       columns={DEATH_COLUMNS}
       columnLabel="Deceased Name"

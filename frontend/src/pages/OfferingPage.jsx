@@ -41,6 +41,7 @@ const OfferingPage = () => {
       required: true,
       options: events.map((e) => ({ value: e.id, label: e.name })),
       coerce: Number,
+      placeholder: "Select event"
     },
     {
       name: "member",
@@ -49,6 +50,7 @@ const OfferingPage = () => {
       required: true,
       options: members.map((m) => ({ value: m.id, label: m.name })),
       coerce: Number,
+      placeholder: "Select member"
     },
     {
       name: "amount",
@@ -56,14 +58,31 @@ const OfferingPage = () => {
       type: "number",
       required: true,
       coerce: Number,
+      min: 0,
+      step: 0.01,
+      placeholder: "0.00"
     },
-    { name: "narration", label: "Narration", type: "textarea", fullWidth: true },
-    { name: "is_cancelled", label: "Cancelled", type: "checkbox" },
+    { 
+      name: "narration", 
+      label: "Narration", 
+      type: "textarea", 
+      fullWidth: true,
+      rows: 3,
+      placeholder: "Add narration (optional)"
+    },
+    { 
+      name: "is_cancelled", 
+      label: "Cancelled", 
+      type: "checkbox" 
+    },
     {
       name: "cancel_reason",
       label: "Cancel Reason",
       type: "textarea",
       fullWidth: true,
+      rows: 2,
+      required: true,  // 👈 Made mandatory
+      placeholder: "Reason for cancellation",
       showIf: (formData) => formData.is_cancelled,
     },
   ];

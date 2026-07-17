@@ -96,9 +96,11 @@ const MarriageFormModal = ({
     label: `${p.groom_name} & ${p.bride_name} (${p.marriage_date})`,
   }));
 
-  // Define dynamic fields
+  // Define dynamic fields with mandatory markers
   const getFields = (formData) => {
-    const type = formData.marriage_type;
+    const type = formData?.marriage_type || "ADD_BRIDE";
+    
+    // Base fields - always required
     const isBase = [
       {
         name: "marriage_type",
@@ -109,6 +111,7 @@ const MarriageFormModal = ({
           { value: "ADD_BRIDE", label: "Add Bride" },
           { value: "TRANSFER_BRIDE", label: "Transfer Bride" },
         ],
+        placeholder: "Select marriage type"
       },
       {
         name: "family",
@@ -117,8 +120,14 @@ const MarriageFormModal = ({
         required: true,
         options: familiesOptions,
         coerce: Number,
+        placeholder: "Select family"
       },
-      { name: "date", label: "Marriage Date", type: "date", required: true },
+      { 
+        name: "date", 
+        label: "Marriage Date", 
+        type: "date", 
+        required: true 
+      },
     ];
 
     let dynamic = [];
@@ -132,6 +141,7 @@ const MarriageFormModal = ({
           required: true,
           options: membersOptions,
           coerce: Number,
+          placeholder: "Select groom"
         },
         {
           name: "relation_of_bride_with_main_member",
@@ -139,6 +149,7 @@ const MarriageFormModal = ({
           type: "select",
           options: relOptions,
           coerce: Number,
+          placeholder: "Select relation"
         },
         {
           name: "vilich_chollu_kuri",
@@ -146,9 +157,20 @@ const MarriageFormModal = ({
           type: "select",
           options: preAnnOptions,
           coerce: Number,
+          placeholder: "Select pre-announcement"
         },
-        { name: "nationality_of_groom", label: "Groom Nationality" },
-        { name: "nationality_of_bride", label: "Bride Nationality" },
+        { 
+          name: "nationality_of_groom", 
+          label: "Groom Nationality",
+          required: true,  // 👈 Made mandatory
+          placeholder: "Enter groom's nationality"
+        },
+        { 
+          name: "nationality_of_bride", 
+          label: "Bride Nationality",
+          required: true,  // 👈 Made mandatory
+          placeholder: "Enter bride's nationality"
+        },
       ];
     } else if (type === "TRANSFER_BRIDE") {
       dynamic = [
@@ -159,63 +181,149 @@ const MarriageFormModal = ({
           required: true,
           options: membersOptions,
           coerce: Number,
+          placeholder: "Select bride"
         },
         {
           name: "groom_is_internal",
           label: "Groom is Internal?",
           type: "select",
+          required: true,
           options: [
             { value: "true", label: "Yes (Select Member)" },
             { value: "false", label: "No (External Groom)" },
           ],
+          placeholder: "Select groom type"
         },
       ];
 
-      if (formData.groom_is_internal === "true") {
+      if (formData?.groom_is_internal === "true") {
         dynamic.push({
           name: "groom_member",
           label: "Groom (Member)",
           type: "select",
+          required: true,
           options: membersOptions,
           coerce: Number,
+          placeholder: "Select groom"
         });
       } else {
         dynamic.push(
-          { name: "groom_name", label: "Groom Name" },
-          { name: "groom_dob", label: "Groom DOB", type: "date" },
-          { name: "groom_house_name", label: "Groom House Name" },
-          { name: "groom_family_name", label: "Groom Family Name" },
-          { name: "groom_place", label: "Groom Place" },
+          { 
+            name: "groom_name", 
+            label: "Groom Name",
+            required: true,
+            placeholder: "Enter groom's full name"
+          },
+          { 
+            name: "groom_dob", 
+            label: "Groom DOB", 
+            type: "date",
+            placeholder: "Select date of birth"
+          },
+          { 
+            name: "groom_house_name", 
+            label: "Groom House Name",
+            placeholder: "Enter house name"
+          },
+          { 
+            name: "groom_family_name", 
+            label: "Groom Family Name",
+            placeholder: "Enter family name"
+          },
+          { 
+            name: "groom_place", 
+            label: "Groom Place",
+            placeholder: "Enter place"
+          },
         );
       }
 
       dynamic.push(
-        { name: "groom_father", label: "Groom Father" },
-        { name: "groom_mother", label: "Groom Mother" },
-        { name: "bride_father", label: "Bride Father" },
-        { name: "bride_mother", label: "Bride Mother" },
-        { name: "transfer_to", label: "Transfer To (Church/Place)" },
+        { 
+          name: "groom_father", 
+          label: "Groom Father",
+          placeholder: "Enter father's name"
+        },
+        { 
+          name: "groom_mother", 
+          label: "Groom Mother",
+          placeholder: "Enter mother's name"
+        },
+        { 
+          name: "bride_father", 
+          label: "Bride Father",
+          placeholder: "Enter father's name"
+        },
+        { 
+          name: "bride_mother", 
+          label: "Bride Mother",
+          placeholder: "Enter mother's name"
+        },
+        { 
+          name: "transfer_to", 
+          label: "Transfer To (Church/Place)",
+          required: true,
+          placeholder: "Enter transfer destination"
+        },
         {
           name: "groom_confession_date",
           label: "Groom Confession Date",
           type: "date",
+          placeholder: "Select confession date"
         },
         {
           name: "bride_confession_date",
           label: "Bride Confession Date",
           type: "date",
+          placeholder: "Select confession date"
         },
-        { name: "nationality_of_groom", label: "Groom Nationality" },
-        { name: "nationality_of_bride", label: "Bride Nationality" },
+        { 
+          name: "nationality_of_groom", 
+          label: "Groom Nationality",
+          required: true,  // 👈 Made mandatory
+          placeholder: "Enter groom's nationality"
+        },
+        { 
+          name: "nationality_of_bride", 
+          label: "Bride Nationality",
+          required: true,  // 👈 Made mandatory
+          placeholder: "Enter bride's nationality"
+        },
       );
     }
 
     const common = [
-      { name: "witness_groom_side", label: "Groom Side Witness" },
-      { name: "witness_bride_side", label: "Bride Side Witness" },
-      { name: "minister_of_marriage", label: "Minister" },
-      { name: "other_priests", label: "Other Priests" },
-      { name: "remarks", label: "Remarks", type: "textarea", fullWidth: true },
+      { 
+        name: "witness_groom_side", 
+        label: "Groom Side Witness",
+        required: true,  // 👈 Made mandatory
+        placeholder: "Enter witness name"
+      },
+      { 
+        name: "witness_bride_side", 
+        label: "Bride Side Witness",
+        required: true,  // 👈 Made mandatory
+        placeholder: "Enter witness name"
+      },
+      { 
+        name: "minister_of_marriage", 
+        label: "Minister",
+        required: true,  // 👈 Made mandatory
+        placeholder: "Enter minister's name"
+      },
+      { 
+        name: "other_priests", 
+        label: "Other Priests",
+        placeholder: "Enter other priests' names"
+      },
+      { 
+        name: "remarks", 
+        label: "Remarks", 
+        type: "textarea", 
+        fullWidth: true,
+        rows: 3,
+        placeholder: "Additional remarks (optional)"
+      },
     ];
 
     return [...isBase, ...dynamic, ...common];
@@ -231,21 +339,316 @@ const MarriageFormModal = ({
       itemData={itemData}
       isLoading={isLoading}
       title="Marriage Register"
-      fields={getFields} // GenericFormModal needs to support function for fields or we handle it here
+      fields={getFields}
       customFieldsLogic={getFields}
     />
   );
 };
 
-// Simplified dynamic field support for GenericFormModal by passing fields directly if it doesn't support fns
-// Wait, GenericFormModal is a component I can't easily change to support a function for fields without editing it.
-// Let's just manage the field array in state here.
+// Custom Marriage Form with local state management
+const CustomMarriageForm = (props) => {
+  const [families, setFamilies] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [relationships, setRelationships] = useState([]);
+  const [preAnnouncements, setPreAnnouncements] = useState([]);
+  const [localItemData, setLocalItemData] = useState(props.itemData);
+  const location = useLocation();
+  const preAnnouncement = location.state?.preAnnouncement;
+
+  useEffect(() => {
+    if (!props.itemData && preAnnouncement) {
+      setLocalItemData({
+        marriage_type: "ADD_BRIDE",
+        vilich_chollu_kuri: preAnnouncement.id,
+        date: preAnnouncement.marriage_date,
+        groom_name: preAnnouncement.groom_name,
+        bride_name: preAnnouncement.bride_name,
+      });
+    }
+  }, [preAnnouncement, props.itemData]);
+
+  useEffect(() => {
+    const fetchOptions = async () => {
+      try {
+        const [fRes, mRes, rRes, pRes] = await Promise.all([
+          listFamilies(),
+          listMembers(),
+          listRelationships(),
+          listPreAnnouncements(),
+        ]);
+        setFamilies(fRes.data || []);
+        setMembers(mRes.data || []);
+        setRelationships(rRes.data || []);
+        setPreAnnouncements(pRes.data || []);
+      } catch (error) {
+        console.error("Error fetching options:", error);
+      }
+    };
+    if (props.isOpen) fetchOptions();
+  }, [props.isOpen]);
+
+  const getDynamicFields = (currentFormData) => {
+    const familiesOptions = families.map((f) => ({
+      value: f.id,
+      label: `${f.family_name} (${f.reg_no || f.id})`,
+    }));
+    const membersOptions = members
+      .filter((m) => m.is_active !== false && m.expire !== true)
+      .map((m) => ({
+        value: m.id,
+        label: `${m.name} (${m.family?.family_name || "N/A"})`,
+      }));
+    const relOptions = relationships.map((r) => ({
+      value: r.id,
+      label: r.name,
+    }));
+    const preAnnOptions = preAnnouncements.map((p) => ({
+      value: p.id,
+      label: `${p.groom_name} & ${p.bride_name} (${p.marriage_date})`,
+    }));
+
+    const type = currentFormData?.marriage_type || "ADD_BRIDE";
+
+    let fields = [
+      {
+        name: "marriage_type",
+        label: "Marriage Type",
+        type: "select",
+        required: true,
+        options: [
+          { value: "ADD_BRIDE", label: "Add Bride" },
+          { value: "TRANSFER_BRIDE", label: "Transfer Bride" },
+        ],
+        placeholder: "Select marriage type"
+      },
+      {
+        name: "family",
+        label: "Family",
+        type: "select",
+        required: true,
+        options: familiesOptions,
+        coerce: Number,
+        placeholder: "Select family"
+      },
+      { 
+        name: "date", 
+        label: "Marriage Date", 
+        type: "date", 
+        required: true 
+      },
+    ];
+
+    if (type === "ADD_BRIDE") {
+      fields.push(
+        {
+          name: "groom_member",
+          label: "Groom (Member)",
+          type: "select",
+          options: membersOptions,
+          coerce: Number,
+          required: true,
+          placeholder: "Select groom"
+        },
+        {
+          name: "relation_of_bride_with_main_member",
+          label: "Bride's Relation",
+          type: "select",
+          options: relOptions,
+          coerce: Number,
+          placeholder: "Select relation"
+        },
+        {
+          name: "vilich_chollu_kuri",
+          label: "Pre-Announcement",
+          type: "select",
+          options: preAnnOptions,
+          coerce: Number,
+          placeholder: "Select pre-announcement"
+        },
+        { 
+          name: "nationality_of_groom", 
+          label: "Groom Nationality",
+          required: true,  // 👈 Made mandatory
+          placeholder: "Enter groom's nationality"
+        },
+        { 
+          name: "nationality_of_bride", 
+          label: "Bride Nationality",
+          required: true,  // 👈 Made mandatory
+          placeholder: "Enter bride's nationality"
+        },
+      );
+    } else {
+      fields.push(
+        {
+          name: "bride_member",
+          label: "Bride (Member)",
+          type: "select",
+          options: membersOptions,
+          coerce: Number,
+          required: true,
+          placeholder: "Select bride"
+        },
+        {
+          name: "groom_is_internal",
+          label: "Groom Type",
+          type: "select",
+          required: true,
+          options: [
+            { value: "true", label: "Church Member" },
+            { value: "false", label: "External / Non-Member" },
+          ],
+          placeholder: "Select groom type"
+        },
+      );
+
+      if (currentFormData?.groom_is_internal === "true") {
+        fields.push({
+          name: "groom_member",
+          label: "Groom (Member)",
+          type: "select",
+          required: true,
+          options: membersOptions,
+          coerce: Number,
+          placeholder: "Select groom"
+        });
+      } else {
+        fields.push(
+          { 
+            name: "groom_name", 
+            label: "Groom Name",
+            required: true,
+            placeholder: "Enter groom's full name"
+          },
+          { 
+            name: "groom_dob", 
+            label: "Groom DOB", 
+            type: "date",
+            placeholder: "Select date of birth"
+          },
+          { 
+            name: "groom_house_name", 
+            label: "Groom House Name",
+            placeholder: "Enter house name"
+          },
+          { 
+            name: "groom_family_name", 
+            label: "Groom Family Name",
+            placeholder: "Enter family name"
+          },
+          { 
+            name: "groom_place", 
+            label: "Groom Place",
+            placeholder: "Enter place"
+          },
+        );
+      }
+
+      fields.push(
+        { 
+          name: "groom_father", 
+          label: "Groom Father",
+          placeholder: "Enter father's name"
+        },
+        { 
+          name: "groom_mother", 
+          label: "Groom Mother",
+          placeholder: "Enter mother's name"
+        },
+        { 
+          name: "bride_father", 
+          label: "Bride Father",
+          placeholder: "Enter father's name"
+        },
+        { 
+          name: "bride_mother", 
+          label: "Bride Mother",
+          placeholder: "Enter mother's name"
+        },
+        { 
+          name: "transfer_to", 
+          label: "Transfer To",
+          required: true,
+          placeholder: "Enter transfer destination"
+        },
+        {
+          name: "groom_confession_date",
+          label: "Groom Confession Date",
+          type: "date",
+          placeholder: "Select confession date"
+        },
+        {
+          name: "bride_confession_date",
+          label: "Bride Confession Date",
+          type: "date",
+          placeholder: "Select confession date"
+        },
+        { 
+          name: "nationality_of_groom", 
+          label: "Groom Nationality",
+          required: true,  // 👈 Made mandatory
+          placeholder: "Enter groom's nationality"
+        },
+        { 
+          name: "nationality_of_bride", 
+          label: "Bride Nationality",
+          required: true,  // 👈 Made mandatory
+          placeholder: "Enter bride's nationality"
+        },
+      );
+    }
+
+    fields.push(
+      { 
+        name: "witness_groom_side", 
+        label: "Groom Witness",
+        required: true,  // 👈 Made mandatory
+        placeholder: "Enter witness name"
+      },
+      { 
+        name: "witness_bride_side", 
+        label: "Bride Witness",
+        required: true,  // 👈 Made mandatory
+        placeholder: "Enter witness name"
+      },
+      { 
+        name: "minister_of_marriage", 
+        label: "Minister",
+        required: true,  // 👈 Made mandatory
+        placeholder: "Enter minister's name"
+      },
+      { 
+        name: "other_priests", 
+        label: "Other Priests",
+        placeholder: "Enter other priests' names"
+      },
+      {
+        name: "remarks",
+        label: "Remarks",
+        type: "textarea",
+        fullWidth: true,
+        rows: 3,
+        placeholder: "Additional remarks (optional)"
+      },
+    );
+
+    return fields;
+  };
+
+  return (
+    <GenericFormModal
+      {...props}
+      itemData={localItemData}
+      title="Marriage Register"
+      fields={getDynamicFields(props.itemData || localItemData || {})}
+    />
+  );
+};
 
 const MarriagePage = () => {
   const location = useLocation();
   const preAnnouncement = location.state?.preAnnouncement;
 
-  // Dhesha Kuri State
   const [isDheshaKuriOpen, setIsDheshaKuriOpen] = useState(false);
   const [dheshaKuriData, setDheshaKuriData] = useState(null);
   const [isDheshaKuriLoading, setIsDheshaKuriLoading] = useState(false);
@@ -300,215 +703,6 @@ const MarriagePage = () => {
       console.error("Error fetching and enriching marriages:", error);
       return listMarriages();
     }
-  };
-
-  // Improved MarriageFormModal that handles state itself
-  const CustomMarriageForm = (props) => {
-    const [families, setFamilies] = useState([]);
-    const [members, setMembers] = useState([]);
-    const [relationships, setRelationships] = useState([]);
-    const [preAnnouncements, setPreAnnouncements] = useState([]);
-    const [localItemData, setLocalItemData] = useState(props.itemData);
-
-    useEffect(() => {
-      if (!props.itemData && preAnnouncement) {
-        // Pre-fill from pre-announcement
-        setLocalItemData({
-          marriage_type: "ADD_BRIDE",
-          vilich_chollu_kuri: preAnnouncement.id,
-          date: preAnnouncement.marriage_date,
-          groom_name: preAnnouncement.groom_name,
-          bride_name: preAnnouncement.bride_name,
-          // Add more mappings if needed
-        });
-      }
-    }, [preAnnouncement, props.itemData]);
-
-    useEffect(() => {
-      const fetchOptions = async () => {
-        try {
-          const [fRes, mRes, rRes, pRes] = await Promise.all([
-            listFamilies(),
-            listMembers(),
-            listRelationships(),
-            listPreAnnouncements(),
-          ]);
-          setFamilies(fRes.data || []);
-          setMembers(mRes.data || []);
-          setRelationships(rRes.data || []);
-          setPreAnnouncements(pRes.data || []);
-        } catch (error) {
-          console.error("Error fetching options:", error);
-        }
-      };
-      if (props.isOpen) fetchOptions();
-    }, [props.isOpen]);
-
-    const getDynamicFields = (currentFormData) => {
-      const familiesOptions = families.map((f) => ({
-        value: f.id,
-        label: `${f.family_name} (${f.reg_no || f.id})`,
-      }));
-      const membersOptions = members
-        .filter((m) => m.is_active !== false && m.expire !== true)
-        .map((m) => ({
-          value: m.id,
-          label: `${m.name} (${m.family?.family_name || "N/A"})`,
-        }));
-      const relOptions = relationships.map((r) => ({
-        value: r.id,
-        label: r.name,
-      }));
-      const preAnnOptions = preAnnouncements.map((p) => ({
-        value: p.id,
-        label: `${p.groom_name} & ${p.bride_name} (${p.marriage_date})`,
-      }));
-
-      const type = currentFormData?.marriage_type || "ADD_BRIDE";
-
-      let fields = [
-        {
-          name: "marriage_type",
-          label: "Marriage Type",
-          type: "select",
-          required: true,
-          options: [
-            { value: "ADD_BRIDE", label: "Add Bride" },
-            { value: "TRANSFER_BRIDE", label: "Transfer Bride" },
-          ],
-        },
-        {
-          name: "family",
-          label: "Family",
-          type: "select",
-          required: true,
-          options: familiesOptions,
-          coerce: Number,
-        },
-        { name: "date", label: "Marriage Date", type: "date", required: true },
-      ];
-
-      if (type === "ADD_BRIDE") {
-        fields.push(
-          {
-            name: "groom_member",
-            label: "Groom (Member)",
-            type: "select",
-            options: membersOptions,
-            coerce: Number,
-            required: true,
-          },
-          {
-            name: "relation_of_bride_with_main_member",
-            label: "Bride's Relation",
-            type: "select",
-            options: relOptions,
-            coerce: Number,
-          },
-          {
-            name: "vilich_chollu_kuri",
-            label: "Pre-Announcement",
-            type: "select",
-            options: preAnnOptions,
-            coerce: Number,
-          },
-          { name: "nationality_of_groom", label: "Groom Nationality" },
-          { name: "nationality_of_bride", label: "Bride Nationality" },
-        );
-      } else {
-        fields.push(
-          {
-            name: "bride_member",
-            label: "Bride (Member)",
-            type: "select",
-            options: membersOptions,
-            coerce: Number,
-            required: true,
-          },
-          {
-            name: "groom_is_internal",
-            label: "Groom Type",
-            type: "select",
-            options: [
-              { value: "true", label: "Church Member" },
-              { value: "false", label: "External / Non-Member" },
-            ],
-          },
-        );
-
-        if (currentFormData.groom_is_internal === "true") {
-          fields.push({
-            name: "groom_member",
-            label: "Groom (Member)",
-            type: "select",
-            options: membersOptions,
-            coerce: Number,
-          });
-        } else {
-          fields.push(
-            { name: "groom_name", label: "Groom Name" },
-            { name: "groom_dob", label: "Groom DOB", type: "date" },
-            { name: "groom_house_name", label: "Groom House Name" },
-            { name: "groom_family_name", label: "Groom Family Name" },
-            { name: "groom_place", label: "Groom Place" },
-          );
-        }
-
-        fields.push(
-          { name: "groom_father", label: "Groom Father" },
-          { name: "groom_mother", label: "Groom Mother" },
-          { name: "bride_father", label: "Bride Father" },
-          { name: "bride_mother", label: "Bride Mother" },
-          { name: "transfer_to", label: "Transfer To" },
-          {
-            name: "groom_confession_date",
-            label: "Groom Confession Date",
-            type: "date",
-          },
-          {
-            name: "bride_confession_date",
-            label: "Bride Confession Date",
-            type: "date",
-          },
-          { name: "nationality_of_groom", label: "Groom Nationality" },
-          { name: "nationality_of_bride", label: "Bride Nationality" },
-        );
-      }
-
-      fields.push(
-        { name: "witness_groom_side", label: "Groom Witness" },
-        { name: "witness_bride_side", label: "Bride Witness" },
-        { name: "minister_of_marriage", label: "Minister" },
-        { name: "other_priests", label: "Other Priests" },
-        {
-          name: "remarks",
-          label: "Remarks",
-          type: "textarea",
-          fullWidth: true,
-        },
-      );
-
-      return fields;
-    };
-
-    // We need to pass a wrapping component that updates GenericFormModal on state changes
-    // But RegistryTable just instantiates it.
-    // Let's modify GenericFormModal slightly if needed, or better,
-    // handle the fields internally in a way that respects the current form data.
-
-    // Actually, GenericFormModal is already built. To make it truly dynamic,
-    // I need it to call a function or I need to manage its 'fields' prop based on its internal state.
-    // Since GenericFormModal doesn't expose its state to the fields prop easily,
-    // I'll create a slightly more tailored modal here.
-
-    return (
-      <GenericFormModal
-        {...props}
-        itemData={localItemData}
-        title="Marriage Register"
-        fields={getDynamicFields(props.itemData || localItemData || {})}
-      />
-    );
   };
 
   return (

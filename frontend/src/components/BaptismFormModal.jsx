@@ -126,7 +126,16 @@ const BaptismFormModal = ({ isOpen, onClose, onSave, itemData, isLoading }) => {
     return;
   }
 
-  setFormData((prev) => ({ ...prev, [name]: value }));
+  setFormData((prev) => {
+    const updated = { ...prev, [name]: value };
+
+    // Clear main_member if family changes, since options depend on it
+    if (name === "family") {
+      updated.main_member = "";
+    }
+
+    return updated;
+  });
 
   setErrors((prev) => {
     const newErrors = { ...prev };
@@ -546,24 +555,30 @@ const BaptismFormModal = ({ isOpen, onClose, onSave, itemData, isLoading }) => {
                       Parish Details
                     </Text>
                     {renderField(
-                      "family",
-                      "Family",
-                      "select",
-                      families.map((f) => ({
-                        value: f.id,
-                        label: `${f.family_name} (${f.reg_no || f.id})`,
-                      })),
-                      false,
-                      true,
-                    )}
-                    {renderField(
-                      "main_member",
-                      "Main Member",
-                      "select",
-                      members.map((m) => ({ value: m.id, label: m.name })),
-                      false,
-                      true,
-                    )}
+  "family",
+  "Family",
+  "select",
+  families.map((f) => ({
+    value: f.id,
+    label: `${f.family_name} (${f.reg_no || f.id})`,
+  })),
+  false,
+  true,
+)}
+{renderField(
+  "main_member",
+  "Main Member",
+  "select",
+  members
+    .filter(
+      (m) =>
+        formData.family &&
+        (m.family?.id || m.family) === Number(formData.family),
+    )
+    .map((m) => ({ value: m.id, label: m.name })),
+  false,
+  true,
+)}
                     {renderField(
                       "relation_with_main_member",
                       "Relationship",

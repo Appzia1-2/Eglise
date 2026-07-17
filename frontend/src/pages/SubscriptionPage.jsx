@@ -40,8 +40,14 @@ const SubscriptionPage = () => {
       required: true,
       options: grades.map((g) => ({ value: g.id, label: g.name })),
       coerce: Number,
+      placeholder: "Select grade"
     },
-    { name: "term", label: "Term", required: true },
+    { 
+      name: "term", 
+      label: "Term", 
+      required: true,
+      placeholder: "Enter term (e.g., 2024-1)"
+    },
     {
       name: "start_date",
       label: "Start Date",
@@ -60,13 +66,23 @@ const SubscriptionPage = () => {
       type: "number",
       required: true,
       coerce: Number,
+      min: 0,
+      step: 0.01,
+      placeholder: "0.00"
     },
-    { name: "is_cancelled", label: "Cancelled", type: "checkbox" },
+    { 
+      name: "is_cancelled", 
+      label: "Cancelled", 
+      type: "checkbox" 
+    },
     {
       name: "cancel_reason",
       label: "Cancel Reason",
       type: "textarea",
       fullWidth: true,
+      rows: 2,
+      required: true,  // 👈 Made mandatory
+      placeholder: "Reason for cancellation",
       showIf: (formData) => formData.is_cancelled,
     },
   ];

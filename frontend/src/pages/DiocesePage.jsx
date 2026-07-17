@@ -15,11 +15,32 @@ const DIOCESE_COLUMNS = [
 ];
 
 const dioceseFields = [
-  { name: "name", label: "Diocese Name" },
-  { name: "address", label: "Address", type: "textarea", fullWidth: true },
-  { name: "phone_number", label: "Phone Number" },
-  { name: "mail_id", label: "Email", type: "email" },
-  { name: "metropolitan", label: "Metropolitan" },
+  { 
+    name: "name", 
+    label: "Diocese Name", 
+    required: true 
+  },
+  { 
+    name: "address", 
+    label: "Address", 
+    type: "textarea", 
+    fullWidth: true 
+  },
+  { 
+    name: "phone_number", 
+    label: "Phone Number", 
+    required: true 
+  },
+  { 
+    name: "mail_id", 
+    label: "Email", 
+    type: "email", 
+    required: true 
+  },
+  { 
+    name: "metropolitan", 
+    label: "Metropolitan" 
+  },
 ];
 
 const DiocesePage = () => {

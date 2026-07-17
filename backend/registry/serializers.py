@@ -398,9 +398,12 @@ class RelationshipSerializer(serializers.ModelSerializer):
         model = Relationship
         fields = "__all__"
         read_only_fields = ("church",)
-        
+
     def validate_name(self, value):
-        return value.strip().title()
+        cleaned = value.strip().title()
+        if any(char.isdigit() for char in cleaned):
+            raise serializers.ValidationError("Relationship name should not contain numbers.")
+        return cleaned
 
 
 

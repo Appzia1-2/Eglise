@@ -8,7 +8,13 @@ import {
 } from "../api/registryServices";
 
 const RELATIONSHIP_FIELDS = [
-  { name: "name", label: "Relationship Name", type: "text", required: true },
+  {
+    name: "name",
+    label: "Relationship Name",
+    type: "text",
+    required: true,
+    blockNumbers: true,
+  },
 ];
 
 const RelationshipPage = () => (
