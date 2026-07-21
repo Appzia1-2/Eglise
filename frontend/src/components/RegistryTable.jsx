@@ -367,30 +367,32 @@ const RegistryTable = ({
                 </Box>
               </Box>
             </HStack>
-            <Button
-              bg={primaryMaroon}
-              color="white"
-              px={2}
-              py={1}
-              h="30px"
-              borderRadius="md"
-              fontWeight="bold"
-              fontSize="xs"
-              _hover={{
-                bg: "#6b0f1a",
-                transform: "translateY(-1px)",
-                boxShadow: "md",
-              }}
-              _active={{ transform: "translateY(0)" }}
-              onClick={handleAddNew}
-              display="flex"
-              alignItems="center"
-              gap={1.5}
-              transition="all 0.2s"
-            >
-              <Icon as={LuPlus} fontSize="16px" />
-              {addLabel}
-            </Button>
+            {createFn && (
+              <Button
+                bg={primaryMaroon}
+                color="white"
+                px={2}
+                py={1}
+                h="30px"
+                borderRadius="md"
+                fontWeight="bold"
+                fontSize="xs"
+                _hover={{
+                  bg: "#6b0f1a",
+                  transform: "translateY(-1px)",
+                  boxShadow: "md",
+                }}
+                _active={{ transform: "translateY(0)" }}
+                onClick={handleAddNew}
+                display="flex"
+                alignItems="center"
+                gap={1.5}
+                transition="all 0.2s"
+              >
+                <Icon as={LuPlus} fontSize="16px" />
+                {addLabel}
+              </Button>
+            )}
           </Flex>
 
           {/* Card Grid Container */}
@@ -772,7 +774,7 @@ const RegistryTable = ({
                       ? `No results for "${searchQuery}".`
                       : emptyMessage}
                   </Text>
-                  {!searchQuery.trim() && (
+                  {!searchQuery.trim() && createFn && (
                     <Button
                       variant="solid"
                       bg={primaryMaroon}

@@ -286,30 +286,64 @@ const MemberPhoneDirectoryPage = () => {
             <Text fontSize="12px" color="gray.600">
               Phone Directory
             </Text>
+            <Text fontSize="10px" color="gray.500" mt={1}>
+              Printed: {new Date().toLocaleString()}
+            </Text>
           </Box>
 
           <table
-            style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}
+            style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}
           >
             <thead>
               <tr style={{ borderBottom: "2px solid black" }}>
-                <th style={{ textAlign: "left", padding: "6px 4px" }}>Name</th>
-                <th style={{ textAlign: "left", padding: "6px 4px" }}>Family</th>
-                <th style={{ textAlign: "left", padding: "6px 4px" }}>Mobile</th>
-                <th style={{ textAlign: "left", padding: "6px 4px" }}>Phone</th>
+                <th style={{ textAlign: "left", padding: "8px 6px", fontSize: "16px", fontWeight: "bold" }}>Name</th>
+                <th style={{ textAlign: "left", padding: "8px 6px", fontSize: "16px", fontWeight: "bold" }}>Family</th>
+                <th style={{ textAlign: "left", padding: "8px 6px", fontSize: "16px", fontWeight: "bold" }}>Mobile</th>
+                <th style={{ textAlign: "left", padding: "8px 6px", fontSize: "16px", fontWeight: "bold" }}>Phone</th>
               </tr>
             </thead>
             <tbody>
-              {members.map((m) => (
-                <tr key={m.id} style={{ borderBottom: "1px solid #eee" }}>
-                  <td style={{ padding: "4px" }}>{m.name}</td>
-                  <td style={{ padding: "4px" }}>{m.family_name || "—"}</td>
-                  <td style={{ padding: "4px" }}>{m.mobile_no || "—"}</td>
-                  <td style={{ padding: "4px" }}>{m.phone_no || "—"}</td>
+              {members.map((m, index) => (
+                <tr 
+                  key={m.id} 
+                  style={{ 
+                    borderBottom: index === members.length - 1 ? "2px solid #ddd" : "1px solid #eee",
+                    backgroundColor: index % 2 === 0 ? "white" : "#f8f8f8"
+                  }}
+                >
+                  <td style={{ padding: "8px 6px", fontSize: "14px", fontWeight: "500" }}>
+                    {m.name}
+                    {m.is_family_head && (
+                      <span style={{ 
+                        backgroundColor: "#7b0d1e", 
+                        color: "white", 
+                        padding: "1px 6px", 
+                        borderRadius: "3px",
+                        fontSize: "9px",
+                        fontWeight: "bold",
+                        marginLeft: "6px"
+                      }}>
+                        HEAD
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ padding: "8px 6px", fontSize: "14px" }}>{m.family_name || "—"}</td>
+                  <td style={{ padding: "8px 6px", fontSize: "14px" }}>{m.mobile_no || "—"}</td>
+                  <td style={{ padding: "8px 6px", fontSize: "14px" }}>{m.phone_no || "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+
+          {/* Footer */}
+          <Box mt={4} pt={2} borderTop="1px solid #ddd" textAlign="center">
+            <Text fontSize="10px" color="gray.500">
+              Total Members: {members.length} | Page 1 of 1
+            </Text>
+            <Text fontSize="9px" color="gray.400" mt={1}>
+              Printed from {churchName || "Church"} Phone Directory
+            </Text>
+          </Box>
         </Box>
       </Container>
 

@@ -1911,7 +1911,7 @@ class CommitteeMasterSerializer(serializers.ModelSerializer):
     class Meta:
         model = CommitteeMaster
         fields = "__all__"
-        read_only_fields = ("church")
+        read_only_fields = ("church",)
 
     def validate(self, data):
         from_date = data.get("committee_from_date", getattr(self.instance, "committee_from_date", None))
@@ -1935,7 +1935,7 @@ class CommitteeMemberSerializer(serializers.ModelSerializer):
     class Meta:
         model = CommitteeMember
         fields = "__all__"
-        read_only_fields = ("church")
+        read_only_fields = ("church",)
 
 class MemberDirectorySerializer(serializers.ModelSerializer):
     relationship = serializers.CharField(source="relationship.name", read_only=True)

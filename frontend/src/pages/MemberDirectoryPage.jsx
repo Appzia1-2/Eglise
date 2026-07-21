@@ -282,11 +282,15 @@ const MemberDirectoryPage = () => {
                       borderColor="gray.100"
                     >
                       <Box>
-                        <Text fontWeight="700" fontSize="15px" color="gray.800">
+                        <Text 
+                          fontWeight="800" 
+                          fontSize="16px"
+                          color="gray.800"
+                        >
                           {household.family_name}
                         </Text>
                         <Text fontSize="11px" color="gray.400" fontWeight="500">
-                          
+                          {/* House name removed */}
                         </Text>
                       </Box>
                       <Text fontSize="xs" color="gray.400" fontWeight="500">
@@ -331,6 +335,8 @@ const MemberDirectoryPage = () => {
                             </Text>
                           </Box>
                         </HStack>
+                        {/* Family name below head */}
+                        
                         <Text fontSize="xs" color="gray.500">
                           {head?.age ? `${head.age} yrs` : "Age N/A"}
                         </Text>
@@ -365,6 +371,7 @@ const MemberDirectoryPage = () => {
                               >
                                 {m.name}
                               </Text>
+                            
                               <Text fontSize="xs" color="gray.400">
                                 {m.age ? `${m.age} yrs` : "Age N/A"}
                               </Text>
@@ -409,6 +416,9 @@ const MemberDirectoryPage = () => {
             <Text fontSize="12px" color="gray.600">
               Member Directory
             </Text>
+            <Text fontSize="10px" color="gray.500" mt={1}>
+              Printed: {new Date().toLocaleString()}
+            </Text>
           </Box>
 
           <table
@@ -416,11 +426,11 @@ const MemberDirectoryPage = () => {
           >
             <thead>
               <tr style={{ borderBottom: "2px solid black" }}>
-                <th style={{ textAlign: "left", padding: "6px 4px" }}>Family</th>
-                <th style={{ textAlign: "left", padding: "6px 4px" }}>Name</th>
-                <th style={{ textAlign: "left", padding: "6px 4px" }}>Age</th>
-                <th style={{ textAlign: "left", padding: "6px 4px" }}>Relation</th>
-                <th style={{ textAlign: "left", padding: "6px 4px" }}>Phone</th>
+                <th style={{ textAlign: "left", padding: "6px 4px", width: "15%", fontSize: "16px", fontWeight: "bold" }}>Family</th>
+                <th style={{ textAlign: "left", padding: "6px 4px", width: "30%", fontSize: "16px", fontWeight: "bold" }}>Name</th>
+                <th style={{ textAlign: "left", padding: "6px 4px", width: "10%", fontSize: "16px", fontWeight: "bold" }}>Age</th>
+                <th style={{ textAlign: "left", padding: "6px 4px", width: "20%", fontSize: "16px", fontWeight: "bold" }}>Relation</th>
+                <th style={{ textAlign: "left", padding: "6px 4px", width: "25%", fontSize: "16px", fontWeight: "bold" }}>Phone</th>
               </tr>
             </thead>
             <tbody>
@@ -436,30 +446,55 @@ const MemberDirectoryPage = () => {
                   <React.Fragment
                     key={`${household.family_name}-${household.house_name}`}
                   >
-                    <tr style={{ borderBottom: "1px solid #ccc" }}>
-                      <td style={{ padding: "4px", fontWeight: "bold" }}>
+                    {/* Row 1: Family Name - No border line, just empty */}
+                    <tr style={{ borderBottom: "none" }}>
+                      <td style={{ padding: "6px 4px", fontWeight: "bold", fontSize: "14px" }}>
                         {household.family_name}
                       </td>
-                      <td style={{ padding: "4px", fontWeight: "bold" }}>
-                        {head?.name || "—"} (Head)
+                      <td style={{ padding: "6px 4px" }}></td>
+                      <td style={{ padding: "6px 4px" }}></td>
+                      <td style={{ padding: "6px 4px" }}></td>
+                      <td style={{ padding: "6px 4px" }}></td>
+                    </tr>
+
+                    {/* Row 2: Family Head */}
+                    <tr style={{ borderBottom: "1px solid #eee", backgroundColor: "#f8f8f8" }}>
+                      <td style={{ padding: "4px 4px" }}></td>
+                      <td style={{ padding: "4px 4px", fontWeight: "bold" }}>
+                        {head?.name || "—"}
                       </td>
-                      <td style={{ padding: "4px" }}>{head?.age ?? "—"}</td>
-                      <td style={{ padding: "4px" }}>—</td>
-                      <td style={{ padding: "4px" }}>
+                      <td style={{ padding: "4px 4px" }}>{head?.age ?? "—"}</td>
+                      <td style={{ padding: "4px 4px" }}>
+                        <span style={{ 
+                          backgroundColor: "#7b0d1e", 
+                          color: "white", 
+                          padding: "1px 6px", 
+                          borderRadius: "3px",
+                          fontSize: "9px",
+                          fontWeight: "bold"
+                        }}>
+                          HEAD
+                        </span>
+                      </td>
+                      <td style={{ padding: "4px 4px" }}>
                         {head?.mobile_no || head?.phone_no || "—"}
                       </td>
                     </tr>
-                    {otherMembers.map((m) => (
-                      <tr key={m.id} style={{ borderBottom: "1px solid #eee" }}>
-                        <td style={{ padding: "4px" }}></td>
-                        <td style={{ padding: "4px" }}>{m.name}</td>
-                        <td style={{ padding: "4px" }}>{m.age ?? "—"}</td>
-                        <td style={{ padding: "4px" }}>
-                          {m.relationship || "—"}
-                        </td>
-                        <td style={{ padding: "4px" }}>
-                          {m.mobile_no || m.phone_no || "—"}
-                        </td>
+
+                    {/* Row 3: Other Members */}
+                    {otherMembers.map((m, index) => (
+                      <tr 
+                        key={m.id} 
+                        style={{ 
+                          borderBottom: index === otherMembers.length - 1 ? "2px solid #ddd" : "1px solid #eee",
+                          backgroundColor: index % 2 === 0 ? "white" : "#fafafa"
+                        }}
+                      >
+                        <td style={{ padding: "4px 4px" }}></td>
+                        <td style={{ padding: "4px 4px" }}>{m.name}</td>
+                        <td style={{ padding: "4px 4px" }}>{m.age ?? "—"}</td>
+                        <td style={{ padding: "4px 4px" }}>{m.relationship || "—"}</td>
+                        <td style={{ padding: "4px 4px" }}>{m.mobile_no || m.phone_no || "—"}</td>
                       </tr>
                     ))}
                   </React.Fragment>
@@ -467,6 +502,17 @@ const MemberDirectoryPage = () => {
               })}
             </tbody>
           </table>
+
+          {/* Footer */}
+          <Box mt={4} pt={2} borderTop="1px solid #ddd" textAlign="center">
+            <Text fontSize="10px" color="gray.500">
+              Total Members: {households.reduce((sum, h) => sum + h.members.length, 0)} | 
+              Page 1 of 1
+            </Text>
+            <Text fontSize="9px" color="gray.400" mt={1}>
+              Printed from {churchName || "Church"} Member Directory
+            </Text>
+          </Box>
         </Box>
       </Container>
 

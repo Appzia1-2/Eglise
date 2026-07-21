@@ -2378,7 +2378,7 @@ class QurbanaReceiptsListCreateView(generics.ListCreateAPIView):
         ).order_by("-qurbana_date")
 
     def perform_create(self, serializer):
-        serializer.save(church=self.request.user.church, user=self.request.user)
+        serializer.save(church=self.request.user.church)
 
 
 class QurbanaReceiptsDetailView(generics.RetrieveUpdateDestroyAPIView):
