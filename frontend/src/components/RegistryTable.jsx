@@ -162,12 +162,42 @@ const RegistryTable = ({
     try {
       await deleteFn(itemToDelete);
       fetchItems();
-    } catch (error) {
-      console.error("Error deleting item:", error);
-    } finally {
-      setIsDeleting(false);
       setIsDeleteOpen(false);
       setItemToDelete(null);
+    } catch (error) {
+      console.error("Error deleting item:", error);
+      
+      // 🔥 FIX: Show the actual error message from the backend
+      let errorMessage = "Failed to delete member.";
+      
+      if (error.response?.data) {
+        // Check for different error response formats
+        if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data;
+        } else if (error.response.data.detail) {
+          errorMessage = error.response.data.detail;
+        } else if (error.response.data.error) {
+          errorMessage = error.response.data.error;
+        } else if (error.response.data.message) {
+          errorMessage = error.response.data.message;
+        } else if (typeof error.response.data === 'object') {
+          // Try to format the error object nicely
+          const errorObj = error.response.data;
+          if (errorObj.dependents) {
+            const dependentsList = errorObj.dependents.map(d => `${d.name} (ID: ${d.id})`).join('\n  ');
+            errorMessage = `${errorObj.detail || 'Cannot delete family head.'}\n\nDependents found:\n  ${dependentsList}`;
+          } else {
+            errorMessage = JSON.stringify(error.response.data, null, 2);
+          }
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      // Show the error in an alert
+      alert(errorMessage);
+    } finally {
+      setIsDeleting(false);
     }
   };
 

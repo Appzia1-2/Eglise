@@ -136,7 +136,7 @@ def church_create(request):
     church_form = ChurchForm(request.POST or None, request.FILES or None)
     sub_form = ChurchSubscriptionForm(request.POST or None)
 
-    package_pricing = json.dumps( {
+    package_pricing = json.dumps({
         str(pkg.id): {
             "is_custom": pkg.is_custom,
             "is_trial": pkg.is_trial,
@@ -156,7 +156,7 @@ def church_create(request):
             church.save()
 
             # 2️⃣ Create Church User
-            password = generate_password()
+            password = generate_password()  # Make sure this function exists
             User.objects.create_user(
                 username=church.email,
                 email=church.email,
@@ -173,7 +173,6 @@ def church_create(request):
             bill_created = False
 
             if package:
-
                 # 🟡 TRIAL PACKAGE
                 if package.is_trial:
                     ChurchSubscription.objects.create(
@@ -230,13 +229,13 @@ def church_create(request):
                         breakdown={
                             "line_items": [{
                                 "type": "NEW",
-                                "members": int(capacity),          # 🔥 bill-time snapshot
-            "rate": float(rate),               # 🔥 bill-time snapshot
-            "months": int(duration_months),    # 🔥 bill-time snapshot
-            "calculation": f"{rate} × {capacity} × {duration_months}",
-            "total": float(amount),
-        }],
-        "grand_total": float(amount),
+                                "members": int(capacity),
+                                "rate": float(rate),
+                                "months": int(duration_months),
+                                "calculation": f"{rate} × {capacity} × {duration_months}",
+                                "total": float(amount),
+                            }],
+                            "grand_total": float(amount),
                         }
                     )
 
@@ -248,6 +247,7 @@ def church_create(request):
             if package and package.is_trial:
                 message = (
                     f"Your church account has been created successfully.\n\n"
+                    f"Church: {church.name}\n"
                     f"Email: {church.email}\n"
                     f"Password: {password}\n\n"
                     f"Login here:\n{frontend_login_url}\n\n"
@@ -256,6 +256,7 @@ def church_create(request):
             elif bill_created:
                 message = (
                     f"Your church account has been created successfully.\n\n"
+                    f"Church: {church.name}\n"
                     f"Email: {church.email}\n"
                     f"Password: {password}\n\n"
                     f"Login here:\n{frontend_login_url}\n\n"
@@ -265,6 +266,7 @@ def church_create(request):
             else:
                 message = (
                     f"Your church account has been created successfully.\n\n"
+                    f"Church: {church.name}\n"
                     f"Email: {church.email}\n"
                     f"Password: {password}\n\n"
                     f"Login here:\n{frontend_login_url}\n\n"
@@ -279,7 +281,14 @@ def church_create(request):
                 fail_silently=False,
             )
 
+            messages.success(request, f"Church '{church.name}' created successfully!")
             return redirect("adminpanel:church_list")
+        else:
+            # Add form errors
+            if not church_form.is_valid():
+                messages.error(request, "Please correct the errors in the church form.")
+            if not sub_form.is_valid():
+                messages.error(request, "Please correct the errors in the subscription form.")
 
     return render(
         request,

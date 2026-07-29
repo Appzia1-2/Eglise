@@ -11,8 +11,9 @@ import {
   listRelationships,
   listGrades,
   listFamilies,
-  markMemberAsDeceased,
-  promoteToHead,
+  transferAndPromoteHead,
+  changeMemberHead,
+  getMember, // 🔥 ADD THIS - was missing!
 } from "../api/registryServices";
 import { LuTrendingUp } from "react-icons/lu";
 
@@ -63,17 +64,51 @@ const MemberDetailsPage = () => {
     fetchOptionsAndHead();
   }, [headId]);
 
+  // 🔥 Item 8: auto-fill father/mother name based on relationship + head's gender
+  const applyRelationshipDefaults = (relationshipId, formData, setFormData) => {
+    const rel = relationships.find((r) => Number(r.id) === Number(relationshipId));
+    if (!rel || !head) return;
+
+    if (rel.name === "Son" || rel.name === "Daughter") {
+      const headIsFather = head.gender === "MALE";
+      setFormData((prev) => ({
+        ...prev,
+        father_name: headIsFather ? head.name : head.spouse_name || "",
+        mother_name: headIsFather ? head.spouse_name || "" : head.name,
+      }));
+    }
+  };
+
+  // 🔥 Active heads available to reassign a dependent to (excludes the
+  // member being edited, in case they were ever somehow flagged as head)
+  const getActiveHeads = (itemData) =>
+    allMembers.filter(
+      (m) =>
+        m.is_family_head &&
+        m.is_active !== false &&
+        m.expired !== true &&
+        m.id !== itemData?.id,
+    );
+
   const getMemberFields = (formData, itemData) => [
-    {
-      name: "family",
-      label: "Family",
-      type: "select",
-      required: true,
-      options: families.map((f) => ({ value: f.id, label: f.family_name })),
-      coerce: Number,
-    },
     { name: "name", label: "Name", required: true },
     { name: "baptismal_name", label: "Baptismal Name" },
+    // 🔥 Only show the "Head" reassignment dropdown when EDITING an
+    // existing member (not when creating a new one)
+    ...(itemData
+      ? [
+          {
+            name: "head",
+            label: "Head",
+            type: "select",
+            options: getActiveHeads(itemData).map((h) => ({
+              value: h.id,
+              label: `${h.name} (${h.house_name})`,
+            })),
+            coerce: Number,
+          },
+        ]
+      : []),
     {
       name: "relationship",
       label: "Relationship",
@@ -84,6 +119,10 @@ const MemberDetailsPage = () => {
         label: r.name,
       })),
       coerce: Number,
+      onChange: (value, fd, setFd) => {
+        setFd((prev) => ({ ...prev, relationship: value }));
+        applyRelationshipDefaults(value, fd, setFd);
+      },
     },
     {
       name: "gender",
@@ -108,21 +147,7 @@ const MemberDetailsPage = () => {
         { value: "DIVORCED", label: "Divorced" },
       ],
     },
-    {
-      name: "spouse_name",
-      label: "Spouse",
-      type: "select",
-      options: allMembers
-        .filter(
-          (m) =>
-            (m.family?.id || m.family) === familyId && m.id !== itemData?.id,
-        )
-        .map((m) => ({
-          value: m.name,
-          label: `${m.name}`,
-        })),
-      required: false,
-    },
+    { name: "spouse_name", label: "Spouse", type: "text", required: false },
     { name: "dob", label: "Date of Birth", type: "date" },
     { name: "mobile_no", label: "Mobile No", required: true },
     { name: "phone_no", label: "Phone No" },
@@ -147,47 +172,35 @@ const MemberDetailsPage = () => {
     { name: "joining_date", label: "Joining Date", type: "date" },
     { name: "transferred_from", label: "Transferred From" },
     { name: "address", label: "Address", type: "textarea", fullWidth: true },
-    {
-      name: "is_deceased",
-      label: "Mark as Deceased",
-      type: "checkbox",
-      fullWidth: true,
-      showIf: (formData) => !formData.is_deceased,
-      onChange: async (checked, formData, setFormData, itemData) => {
-        if (checked && itemData?.id) {
-          if (
-            window.confirm(
-              "Are you sure you want to mark this member as deceased?",
-            )
-          ) {
-            try {
-              const res = await markMemberAsDeceased(itemData.id);
-              window.alert(res.data.message);
-              // Closing the modal or refreshing is usually handled by the user or onSave,
-              // but here we did an out-of-band action.
-            } catch (error) {
-              console.error("Error marking member as deceased:", error);
-              window.alert("Failed to mark member as deceased.");
-              // Revert checkbox
-              setFormData((prev) => ({ ...prev, is_deceased: false }));
-            }
-          } else {
-            // Revert checkbox
-            setFormData((prev) => ({ ...prev, is_deceased: false }));
-          }
-        }
-      },
-    },
   ];
 
+  // 🔥 FIXED: Include house_sequence when creating a member under this head
   const handleCreateMember = (formData) => {
     const data = {
       ...formData,
       family: familyId,
       house_name: head?.house_name,
+      house_sequence: head?.house_sequence || 1, // 🔥 CRITICAL FIX: Use head's sequence
       is_active: true,
     };
     return createMember(data);
+  };
+
+  // 🔥 If "head" was changed on an existing member, reassign their
+  // household via changeMemberHead first, then save any other edited
+  // fields normally.
+  const handleUpdateMember = async (id, formData) => {
+    const { head: newHeadId, ...rest } = formData;
+
+    if (newHeadId) {
+      await changeMemberHead(id, newHeadId);
+    }
+
+    if (Object.keys(rest).length > 0) {
+      return updateMember(id, rest);
+    }
+
+    return { data: { message: "Head updated successfully." } };
   };
 
   if (!isDataLoaded) return null;
@@ -207,10 +220,12 @@ const MemberDetailsPage = () => {
   const listFamilyMembersStrict = async () => {
     const res = await listMembersByHead(headId);
     if (res.data && Array.isArray(res.data)) {
-      // familyId is always a plain integer now
+      // 🔥 FIX: Use 'expired' not 'expire'
       const filtered = res.data.filter(
         (m) =>
-          m.id !== Number(headId) && m.is_active !== false && m.expire !== true,
+          m.id !== Number(headId) && 
+          m.is_active !== false && 
+          m.expired !== true, // 🔥 FIXED: was 'expire'
       );
 
       const mapped = filtered.map((m) => {
@@ -247,20 +262,27 @@ const MemberDetailsPage = () => {
       color: "blue.500",
       onClick: async (item) => {
         if (
-          window.confirm(
-            `Are you sure you want to promote ${item.name} to Head?`,
+          !window.confirm(
+            `Promote ${item.name} to head of a new household under "${head?.house_name}"?`,
           )
         ) {
-          try {
-            const res = await promoteToHead(item.id);
-            window.alert(res.data.message || "Member promoted to Head.");
-            // Refresh would be nice, but RegistryTable doesn't expose it easily
-            // except via re-fetch in listFn.
-            window.location.reload(); // Simple way to refresh the whole state
-          } catch (error) {
-            console.error("Error promoting to head:", error);
-            window.alert("Failed to promote member to Head.");
-          }
+          return;
+        }
+
+        try {
+          const res = await transferAndPromoteHead(item.id, {
+            family: familyId,
+            house_name: head?.house_name,
+          });
+          window.alert(res.data.message || "Member promoted to Head.");
+          window.location.reload();
+        } catch (error) {
+          console.error("Error promoting to head:", error);
+          const backendMessage =
+            error.response?.data?.error ||
+            error.response?.data?.detail ||
+            "Failed to promote member to Head.";
+          window.alert(backendMessage);
         }
       },
     },
@@ -275,7 +297,7 @@ const MemberDetailsPage = () => {
       emptyMessage="No family members found."
       listFn={listFamilyMembersStrict}
       createFn={handleCreateMember}
-      updateFn={updateMember}
+      updateFn={handleUpdateMember}
       deleteFn={deleteMember}
       fields={getMemberFields}
       columns={memberColumns}

@@ -6,6 +6,8 @@ import {
   updateDeath,
   deleteDeath,
   listFamilies,
+  listMembers,
+  createDeathRecord,
 } from "../api/registryServices";
 import { listTombTypes } from "../api/churchServices";
 
@@ -19,17 +21,23 @@ const DEATH_COLUMNS = [
 const DeathRegisterPage = () => {
   const [tombTypes, setTombTypes] = useState([]);
   const [families, setFamilies] = useState([]);
+  const [members, setMembers] = useState([]);
   const [filterStatus, setFilterStatus] = useState(null);
 
   useEffect(() => {
     const fetchOptions = async () => {
       try {
-        const [tRes, fRes] = await Promise.all([
+        const [tRes, fRes, mRes] = await Promise.all([
           listTombTypes(),
           listFamilies(),
+          listMembers(),
         ]);
         setTombTypes(tRes.data || []);
         setFamilies(fRes.data || []);
+        const activeMembers = (mRes.data || []).filter(
+          (m) => m.is_active !== false && m.expired !== true,
+        );
+        setMembers(activeMembers);
       } catch (error) {
         console.error("Error fetching options for DeathRegisterPage:", error);
       }
@@ -37,37 +45,66 @@ const DeathRegisterPage = () => {
     fetchOptions();
   }, []);
 
-  const deathFields = [
-    { name: "died_on", label: "Date of Death", type: "date", required: true },
-    {
-      name: "funeral_on",
-      label: "Date of Funeral",
-      type: "date",
-      required: true,
-    },
-    {
-      name: "tomb_type",
-      label: "Tomb Type",
-      type: "select",
-      required: true,
-      options: tombTypes.map((t) => ({ label: t.name, value: t.id })),
-      coerce: Number,
-    },
-    {
-      name: "tomb_charge",
-      label: "Tomb Charge",
-      type: "number",
-      required: true,
-      coerce: Number,
-    },
-    { name: "tomb_idn", label: "Tomb IDN" },
-    {
-      name: "reason_of_death",
-      label: "Reason of Death",
-      required: true,
-    },
-    { name: "remarks", label: "Remarks", type: "textarea", fullWidth: true },
-  ];
+  // 🔥 fields is now a function: "member" picker only shows when CREATING
+  // (itemData is null/undefined for a new record, present when editing)
+  const getDeathFields = (formData, itemData) => {
+    const fields = [];
+
+    if (!itemData) {
+      fields.push({
+        name: "member",
+        label: "Select Member",
+        type: "select",
+        required: true,
+        options: members.map((m) => ({
+          value: m.id,
+          label: `${m.name} (${m.family?.family_name || "N/A"} - ${m.house_name})`,
+        })),
+        coerce: Number,
+      });
+    }
+
+    fields.push(
+      { name: "died_on", label: "Date of Death", type: "date", required: true },
+      {
+        name: "funeral_on",
+        label: "Date of Funeral",
+        type: "date",
+        required: true,
+      },
+      {
+        name: "tomb_type",
+        label: "Tomb Type",
+        type: "select",
+        required: true,
+        options: tombTypes.map((t) => ({ label: t.name, value: t.id })),
+        coerce: Number,
+      },
+      {
+        name: "tomb_charge",
+        label: "Tomb Charge",
+        type: "number",
+        required: true,
+        coerce: Number,
+      },
+      { name: "tomb_idn", label: "Tomb IDN" },
+      {
+        name: "reason_of_death",
+        label: "Reason of Death",
+        required: true,
+      },
+      { name: "remarks", label: "Remarks", type: "textarea", fullWidth: true },
+    );
+
+    return fields;
+  };
+
+  // 🔥 Create now sends the FULL form (member + all death details) in one
+  // step. Backend marks the member deceased AND completes the record
+  // immediately — no separate pending/approval step anymore.
+  const handleCreateDeathRecord = (formData) => {
+    return createDeathRecord(formData);
+  };
 
   const listDeathsFiltered = async () => {
     try {
@@ -97,44 +134,20 @@ const DeathRegisterPage = () => {
     }
   };
 
-  const topContent = (
-    <HStack mb={4} spacing={4}>
-      <Button
-        size="sm"
-        variant={filterStatus === null ? "solid" : "outline"}
-        onClick={() => setFilterStatus(null)}
-        bg={filterStatus === null ? "var(--primary-maroon)" : "transparent"}
-        color={filterStatus === null ? "white" : "gray.600"}
-      >
-        All Records
-      </Button>
-      <Button
-        size="sm"
-        variant={filterStatus === "pending" ? "solid" : "outline"}
-        onClick={() => setFilterStatus("pending")}
-        bg={
-          filterStatus === "pending" ? "var(--primary-maroon)" : "transparent"
-        }
-        color={filterStatus === "pending" ? "white" : "gray.600"}
-      >
-        Pending Approval
-      </Button>
-    </HStack>
-  );
-
   return (
     <RegistryTable
-      key={`${filterStatus}-${families.length}`}
+      key={`${families.length}`}
       title="Death Register"
+      addLabel="Mark Member as Deceased"
       nameKey="member_name"
       columns={DEATH_COLUMNS}
       columnLabel="Deceased Name"
       emptyMessage="No death records found."
       listFn={listDeathsFiltered}
+      createFn={handleCreateDeathRecord}
       updateFn={updateDeath}
       deleteFn={deleteDeath}
-      fields={deathFields}
-      topContent={topContent}
+      fields={getDeathFields}
     />
   );
 };

@@ -23,6 +23,7 @@ import {
   listFamilies,
   listMembers,
   listRelationships,
+  listFamilyMembers,
 } from "../api/registryServices";
 
 const BaptismFormModal = ({ isOpen, onClose, onSave, itemData, isLoading }) => {
@@ -36,6 +37,8 @@ const BaptismFormModal = ({ isOpen, onClose, onSave, itemData, isLoading }) => {
   const [families, setFamilies] = useState([]);
   const [members, setMembers] = useState([]);
   const [relationships, setRelationships] = useState([]);
+  const [familyMembers, setFamilyMembers] = useState([]);
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     const fetchOptions = async () => {
@@ -57,8 +60,32 @@ const BaptismFormModal = ({ isOpen, onClose, onSave, itemData, isLoading }) => {
     }
   }, [isOpen]);
 
+  // Fetch family members when family changes
+  useEffect(() => {
+    const fetchFamilyMembers = async () => {
+      if (formData.family && formData.baptism_category === "PARISH") {
+        try {
+          // Get the family object to get house_name
+          const familyObj = families.find(f => f.id === Number(formData.family));
+          if (familyObj) {
+            // You might need to pass house_name here - adjust based on your API
+            const res = await listFamilyMembers(formData.family);
+            setFamilyMembers(res.data || []);
+          }
+        } catch (error) {
+          console.error("Error fetching family members:", error);
+          setFamilyMembers([]);
+        }
+      } else {
+        setFamilyMembers([]);
+      }
+    };
+    fetchFamilyMembers();
+  }, [formData.family, formData.baptism_category, families]);
+
   useEffect(() => {
     if (itemData) {
+      setIsEditing(true);
       // Create a copy and handle nested objects for select fields
       const cleanedData = {
         priest_name: "",
@@ -81,8 +108,12 @@ const BaptismFormModal = ({ isOpen, onClose, onSave, itemData, isLoading }) => {
         cleanedData.relation_with_main_member =
           cleanedData.relation_with_main_member.id;
       }
+      if (cleanedData.member && typeof cleanedData.member === "object") {
+        cleanedData.member = cleanedData.member.id;
+      }
       setFormData(cleanedData);
     } else {
+      setIsEditing(false);
       setFormData({
         baptism_category: "PARISH",
         gender: "MALE",
@@ -110,39 +141,39 @@ const BaptismFormModal = ({ isOpen, onClose, onSave, itemData, isLoading }) => {
   }, [itemData, isOpen]);
 
   const handleChange = (e) => {
-  const { name, value } = e.target;
+    const { name, value } = e.target;
 
-  const nameFields = [
-    "name",
-    "baptismal_name",
-    "father_name",
-    "mother_name",
-    "god_father",
-    "god_mother",
-    "priest_name",
-  ];
+    const nameFields = [
+      "name",
+      "baptismal_name",
+      "father_name",
+      "mother_name",
+      "god_father",
+      "god_mother",
+      "priest_name",
+    ];
 
-  if (nameFields.includes(name) && /\d/.test(value)) {
-    return;
-  }
-
-  setFormData((prev) => {
-    const updated = { ...prev, [name]: value };
-
-    // Clear main_member if family changes, since options depend on it
-    if (name === "family") {
-      updated.main_member = "";
+    if (nameFields.includes(name) && /\d/.test(value)) {
+      return;
     }
 
-    return updated;
-  });
+    setFormData((prev) => {
+      const updated = { ...prev, [name]: value };
 
-  setErrors((prev) => {
-    const newErrors = { ...prev };
-    delete newErrors[name];
-    return newErrors;
-  });
-};
+      // Clear main_member if family changes, since options depend on it
+      if (name === "family") {
+        updated.main_member = "";
+      }
+
+      return updated;
+    });
+
+    setErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors[name];
+      return newErrors;
+    });
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -197,17 +228,17 @@ const BaptismFormModal = ({ isOpen, onClose, onSave, itemData, isLoading }) => {
     }
 
     if (formData.dob && formData.date_of_baptism) {
-  if (new Date(formData.date_of_baptism) < new Date(formData.dob)) {
-    window.alert("Date of Baptism cannot be before the Date of Birth.");
-    setErrors((prev) => ({ ...prev, date_of_baptism: true }));
-    const element = document.getElementsByName("date_of_baptism")[0];
-    if (element) {
-      element.focus();
-      element.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (new Date(formData.date_of_baptism) < new Date(formData.dob)) {
+        window.alert("Date of Baptism cannot be before the Date of Birth.");
+        setErrors((prev) => ({ ...prev, date_of_baptism: true }));
+        const element = document.getElementsByName("date_of_baptism")[0];
+        if (element) {
+          element.focus();
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+        return;
+      }
     }
-    return;
-  }
-}
 
     // Process and coerce
     const submissionData = { ...formData };
@@ -264,7 +295,6 @@ const BaptismFormModal = ({ isOpen, onClose, onSave, itemData, isLoading }) => {
     onSave(submissionData);
   };
 
-  const isEditing = Boolean(itemData);
   const isParish = formData.baptism_category === "PARISH";
 
   const renderField = (
@@ -323,6 +353,7 @@ const BaptismFormModal = ({ isOpen, onClose, onSave, itemData, isLoading }) => {
             onFocus={() => setFocusedField(name)}
             onBlur={() => setFocusedField(null)}
             required={required}
+            disabled={isEditing && ["baptism_category", "family", "main_member", "relation_with_main_member"].includes(name)}
             style={{
               width: "100%",
               height: "38px",
@@ -336,8 +367,8 @@ const BaptismFormModal = ({ isOpen, onClose, onSave, itemData, isLoading }) => {
               paddingRight: "30px",
               display: "flex",
               alignItems: "center",
-              background: "white",
-              cursor: "pointer",
+              background: isEditing && ["baptism_category", "family", "main_member", "relation_with_main_member"].includes(name) ? "#f5f5f5" : "white",
+              cursor: isEditing && ["baptism_category", "family", "main_member", "relation_with_main_member"].includes(name) ? "not-allowed" : "pointer",
               position: "relative",
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -378,6 +409,7 @@ const BaptismFormModal = ({ isOpen, onClose, onSave, itemData, isLoading }) => {
             type={type}
             value={formData[name] || ""}
             onChange={handleChange}
+            onFocus={() => setFocusedField(name)}
             onBlur={() => setFocusedField(null)}
             required={required}
             borderRadius="8px"
@@ -555,30 +587,26 @@ const BaptismFormModal = ({ isOpen, onClose, onSave, itemData, isLoading }) => {
                       Parish Details
                     </Text>
                     {renderField(
-  "family",
-  "Family",
-  "select",
-  families.map((f) => ({
-    value: f.id,
-    label: `${f.family_name} (${f.reg_no || f.id})`,
-  })),
-  false,
-  true,
-)}
-{renderField(
-  "main_member",
-  "Main Member",
-  "select",
-  members
-    .filter(
-      (m) =>
-        formData.family &&
-        (m.family?.id || m.family) === Number(formData.family),
-    )
-    .map((m) => ({ value: m.id, label: m.name })),
-  false,
-  true,
-)}
+                      "family",
+                      "Family",
+                      "select",
+                      families.map((f) => ({
+                        value: f.id,
+                        label: `${f.family_name} (${f.reg_no || f.id})`,
+                      })),
+                      false,
+                      true,
+                    )}
+                    {renderField(
+                      "main_member",
+                      "Main Member (Head)",
+                      "select",
+                      familyMembers
+                        .filter((m) => m.is_family_head === true)
+                        .map((m) => ({ value: m.id, label: m.name })),
+                      false,
+                      true,
+                    )}
                     {renderField(
                       "relation_with_main_member",
                       "Relationship",
@@ -594,8 +622,7 @@ const BaptismFormModal = ({ isOpen, onClose, onSave, itemData, isLoading }) => {
                 )}
 
                 {renderField("address", "Address", "textarea", null, true, true)}
-                {isParish &&
-                  renderField("remarks", "Remarks", "textarea", null, true)}
+                {renderField("remarks", "Remarks", "textarea", null, true)}
               </SimpleGrid>
             </DialogBody>
 

@@ -115,26 +115,23 @@ const GenericFormModal = ({
   }, [itemData, isOpen]);
 
   const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    const newVal = type === "checkbox" ? checked : value;
+  const { name, value, type, checked } = e.target;
+  const newVal = type === "checkbox" ? checked : value;
+  const updated = { ...formData, [name]: newVal };
 
-    setFormData((prev) => {
-      const updated = { ...prev, [name]: newVal };
+  setFormData(updated);
 
-      const fieldConfig = activeFields.find((f) => f.name === name);
-      if (fieldConfig?.onChange) {
-        fieldConfig.onChange(newVal, updated, setFormData, itemData);
-      }
+  const fieldConfig = activeFields.find((f) => f.name === name);
+  if (fieldConfig?.onChange) {
+    fieldConfig.onChange(newVal, updated, setFormData, itemData);
+  }
 
-      return updated;
-    });
-
-    setErrors((prev) => {
-      const newErrors = { ...prev };
-      delete newErrors[name];
-      return newErrors;
-    });
-  };
+  setErrors((prev) => {
+    const newErrors = { ...prev };
+    delete newErrors[name];
+    return newErrors;
+  });
+};
 
   const activeFieldsSource = (
     typeof fields === "function" ? fields(formData, itemData) : fields

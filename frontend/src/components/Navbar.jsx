@@ -26,12 +26,12 @@ const ROUTE_MAP = {
   "Member Info": "/members",
   "Baptism Register": "/baptism",
   "Marriage Register": "/marriage",
-  "Pre-Announcement": "/pre-announcement",
+
   "Tomb Type": "/tomb-type",
   "Tomb Fees": "/tomb-fees",
   Designation: "/designation",
   "Priest Master": "/priest-master",
-  "Priest Change": "/priest-change",
+  
   "Death Register": "/death-register",
   Events: "/events",
   Diocese: "/dioceses",
@@ -94,7 +94,7 @@ const MENU_DATA = {
         "Member Info",
         "Baptism Register",
         "Marriage Register",
-        "Pre-Announcement",
+       
         "Death Register",
       ],
     },
@@ -104,7 +104,7 @@ const MENU_DATA = {
     },
     {
       title: "Miscellaneous",
-      items: ["Priest Change", "Visitor Management", "Committee"],
+      items: ["Visitor Management", "Committee"],
     },
     {
       title: "Sunday School",
@@ -121,7 +121,7 @@ const MENU_DATA = {
           items: [
             "Baptism Register",
             "Marriage Register",
-            "Pre-Announcement",
+            
             "Death Register",
           ],
         },

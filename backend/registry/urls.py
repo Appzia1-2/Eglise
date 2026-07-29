@@ -11,6 +11,7 @@ from .views import (
     DeathRegisterFinalizeView,
     DeathRegisterListAPIView,
     DeathRegisterUpdateAPIView,
+    DeathRegisterCreateAPIView,
     DesignationDetailView,
     DesignationListCreateView,
     DheshaKuriAPIView,
@@ -35,8 +36,7 @@ from .views import (
     MembersUnderHeadAPIView,
     MyChurchAPIView,
     PackageListAPIView,
-    PriestChangeDetailView,
-    PriestChangeListCreateView,
+   
     PriestDetailView,
     PriestDropdownAPIView,
     PriestListCreateView,
@@ -54,9 +54,7 @@ from .views import (
     UpgradeAPIView,
     UpgradeRequestAPIView,
     UserDheshaKuriAPIView,
-    UserVilichCholluKuriAPIView,
-    VilichCholluKuriCreateAPIView,
-    VilichCholluKuriDetailAPIView,
+   
     WardListCreateAPIView,
     WardDetailAPIView,
     FamilyListCreateAPIView,
@@ -64,13 +62,13 @@ from .views import (
     MemberListCreateAPIView,
     MemberDetailAPIView,
     ChurchList,
-    ChangeFamilyHeadAPIView,
+    ChangeFamilyHeadAPIView,ChangeMemberHeadAPIView,
     OfferingListCreateView,   
-    OfferingDetailView,
+    OfferingDetailView,HeadlessHousesGroupedAPIView,MembersByHouseAPIView,
     RelationshipdetailView,GradeListCreateview,GradeDetailview,WardListWithFamilyCountAPIView,WardFamiliesMobileAPIView, VisitorMasterListCreateView,
-    VisitorMasterDetailView,SubscriptionListCreateView,AccountGroupMasterListCreateView, AccountGroupMasterDetailView,
+    VisitorMasterDetailView,SubscriptionListCreateView,AccountGroupMasterListCreateView, AccountGroupMasterDetailView,TransferAndPromoteHeadAPIView,
     SubscriptionDetailView,AccountLedgerMasterListCreateView,PaymentMasterListCreateView,QurbanaReceiptsListCreateView,
-    QurbanaReceiptsDetailView, CommitteeMasterListCreateView, CommitteeMasterDetailView, CommitteeMemberListCreateView,
+    QurbanaReceiptsDetailView, CommitteeMasterListCreateView, CommitteeMasterDetailView, CommitteeMemberListCreateView,HeadlessHouseMembersAPIView,
     CommitteeMemberDetailView, PaymentMasterDetailView, AccountLedgerMasterDetailView, MemberDirectoryAPIView,  MemberAgeWiseListAPIView, MemberPhoneDirectoryAPIView,
 )
 
@@ -124,28 +122,30 @@ urlpatterns = [
     path("church/baptism-certificate/<int:pk>/",ChurchBaptismCertificateAPIView.as_view(),name="church-baptism-certificate"),
 
     #marriage
-    path("marriages/vilich-chollu-kuri/",VilichCholluKuriCreateAPIView.as_view()),
-    path("marriages/vilich-chollu-kuri/<int:pk>/detail/",VilichCholluKuriDetailAPIView.as_view()),
-    path("marriages/",MarriageListCreateAPIView.as_view(),name="marriage-list-create"),
-    path("marriages/<int:pk>/",MarriageDetailAPIView.as_view(),name="marriage-detail"),
-    path("marriages/<int:pk>/certificate/", MarriageCertificateAPIView.as_view()),
-    path("marriages/<int:pk>/dhesha-kuri/", DheshaKuriAPIView.as_view()),
-    path("mobile/families/marriages/",FamilyMarriagesMobileAPIView.as_view(),name="mobile-family-marriages"),
-    path("mobile/marriages/<int:pk>/certificate/",MarriageCertificateMobileAPIView.as_view(),name="mobile-marriage-certificate"),
-    path("mobile/marriage/vilich-chollu-kuri/", UserVilichCholluKuriAPIView.as_view()),
-    path("mobile/marriage/dhesha-kuri/", UserDheshaKuriAPIView.as_view()),
+    path("marriages/", MarriageListCreateAPIView.as_view(), name="marriage-list-create"),
+path("marriages/<int:pk>/", MarriageDetailAPIView.as_view(), name="marriage-detail"),
+path("marriages/<int:pk>/certificate/", MarriageCertificateAPIView.as_view()),
+path("marriages/<int:pk>/dhesha-kuri/", DheshaKuriAPIView.as_view()),
 
-    #inactive members 
-    path("members/inactive/",InactiveMembersAPIView.as_view(),name="inactive-members"),
+# Mobile URLs
+path("mobile/families/marriages/", FamilyMarriagesMobileAPIView.as_view(), name="mobile-family-marriages"),
+path("mobile/marriages/<int:pk>/certificate/", MarriageCertificateMobileAPIView.as_view(), name="mobile-marriage-certificate"),
+path("mobile/marriage/dhesha-kuri/", UserDheshaKuriAPIView.as_view()),
 
-    path("finalize/death/",DeathRegisterFinalizeView.as_view(),name="death-register-finalize"),
-    path("members/mark-dead/<int:pk>/",MarkMemberDeadAPIView.as_view(),name="mark-member-dead"),
-    path("death-registers/<int:pk>/",DeathRegisterUpdateAPIView.as_view(),name="death-register-update"),
+# Inactive Members & Death
+path("members/inactive/", InactiveMembersAPIView.as_view(), name="inactive-members"),
+path("finalize/death/", DeathRegisterFinalizeView.as_view(), name="death-register-finalize"),
+path("members/mark-dead/<int:pk>/", MarkMemberDeadAPIView.as_view(), name="mark-member-dead"),
+path("death-registers/<int:pk>/", DeathRegisterUpdateAPIView.as_view(), name="death-register-update"),
     path("members/promote-head/<int:pk>/",PromoteFamilyHeadAPIView.as_view(),name="promote-family-head"),
     path("death-register/",DeathRegisterListAPIView.as_view(),name="list-all-death"),
+    path("death-register/create/",DeathRegisterCreateAPIView.as_view(),name="death-register-create"),
 
     path("family-head/<int:pk>/",FamilyHeadUpdateAPIView.as_view(),name="family-head-edit"),
     path("church-members/",ChurchMembersAPIView.as_view(),name="church-members"),
+
+    path("members/headless-houses/", HeadlessHousesGroupedAPIView.as_view(), name="headless-houses"),
+    path("members/by-house/", MembersByHouseAPIView.as_view(), name="members-by-house"),
 
     #tomb
     path("tomb-types/",TombTypeListCreateView.as_view(),name="tombtype-list-create"),
@@ -161,11 +161,7 @@ urlpatterns = [
 
     #priest master
     path("priests/",PriestListCreateView.as_view(),name="priest-list-create"),
-    path("priests/<int:pk>/",PriestDetailView.as_view(),name="priest-detail"),
-
-    #priest change
-    path("priest-changes/",PriestChangeListCreateView.as_view(),name="priestchange-list-create"),
-    path("priest-changes/<int:pk>/",PriestChangeDetailView.as_view(),name="priestchange-detail"),
+    path("priests/<int:pk>/",PriestDetailView.as_view(),name="priest-detail"),    
 
     #settingsregister
     path("register-settings/",RegisterSettingListAPIView.as_view(),name="register-settings-list"),
@@ -176,6 +172,9 @@ urlpatterns = [
     path("events/", EventListCreateAPIView.as_view(), name="event-list-create"),
     path("events/<int:pk>/", EventDetailAPIView.as_view(), name="event-detail"),
     path("members/by-head/<int:pk>/",MembersUnderHeadAPIView.as_view(),name="members-under-head"),
+    path("members/waiting-list/", HeadlessHouseMembersAPIView.as_view(), name="member-waiting-list"),
+    path("members/transfer-promote/<int:pk>/", TransferAndPromoteHeadAPIView.as_view(), name="transfer-promote-head"),
+    path('members/change-head/<int:pk>/', ChangeMemberHeadAPIView.as_view(), name='change-member-head'),
 
 
     path("offerings/", OfferingListCreateView.as_view(), name="offering-list-create"),

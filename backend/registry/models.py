@@ -6,15 +6,17 @@ from dateutil.relativedelta import relativedelta
 from django.utils import timezone
 from django.utils.timezone import now
 from accounts.utils import create_family_head_user
+
 class Church(models.Model):
     name = models.CharField(max_length=200)
     address = models.TextField()
     city = models.CharField(max_length=100)
 
-    vicar = models.CharField(max_length=150)
-    asst_vicar1 = models.CharField(max_length=150, blank=True)
-    asst_vicar2 = models.CharField(max_length=150, blank=True)
-    asst_vicar3 = models.CharField(max_length=150, blank=True)
+    # Hidden for future use
+    # vicar = models.CharField(max_length=150)
+    # asst_vicar1 = models.CharField(max_length=150, blank=True)
+    # asst_vicar2 = models.CharField(max_length=150, blank=True)
+    # asst_vicar3 = models.CharField(max_length=150, blank=True)
 
     diocese_name = models.CharField(max_length=150)
 
@@ -30,7 +32,7 @@ class Church(models.Model):
     is_active = models.BooleanField(default=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
-    is_deleted = models.BooleanField(default=False)  # 🔥 NEW
+    is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
@@ -183,7 +185,6 @@ class Ward(models.Model):
         return f"{self.ward_name} ({self.church.name})"
 
 
-
 class Family(models.Model):
     church = models.ForeignKey(
         Church,
@@ -194,6 +195,15 @@ class Family(models.Model):
     family_name = models.CharField(max_length=150)
     history = models.TextField(blank=True)
     origin = models.CharField(max_length=150, blank=True)
+
+    class Meta:
+        unique_together = ['church', 'family_name']  # Unique per church
+
+    def save(self, *args, **kwargs):
+        if self.family_name:
+            self.family_name = self.family_name.strip().capitalize()
+        super().save(*args, **kwargs)
+
     def get_active_head(self):
         return self.members.filter(
             is_family_head=True,
@@ -307,6 +317,11 @@ class Diocese(models.Model):
         return self.name
     
 class Priest(models.Model):
+    DESIGNATION_CHOICES = (
+        ("MAIN", "Main Priest"),
+        ("ASSISTANT", "Assistant Priest"),
+    )
+
     church = models.ForeignKey(
         Church,
         on_delete=models.CASCADE,
@@ -316,33 +331,23 @@ class Priest(models.Model):
     house_name = models.CharField(max_length=200)
     address = models.TextField()
 
-    def __str__(self):
-        return self.name
+    family_name = models.CharField(max_length=200, null=True, blank=True)
+    phone_number = models.CharField(max_length=15, null=True, blank=True)
+    is_active = models.BooleanField(default=True)
 
-class PriestChange(models.Model):
-
-    church = models.ForeignKey(
-        Church,
-        on_delete=models.CASCADE,
-        related_name="priest_changes"
+    designation = models.CharField(
+        max_length=20,
+        choices=DESIGNATION_CHOICES,
+        default="ASSISTANT"
     )
-
-    priest = models.ForeignKey(
-        Priest,
-        on_delete=models.CASCADE,
-        related_name="designation_history"
-    )
-
-    designation = models.ForeignKey(
-        Designation,
-        on_delete=models.CASCADE
-    )
-
     date_from = models.DateField()
     date_to = models.DateField(null=True, blank=True)
 
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     def __str__(self):
-        return f"{self.priest.name} - {self.designation.designation_name}"
+        return self.name
 
 
 class Member(models.Model):
@@ -386,9 +391,11 @@ class Member(models.Model):
             ("SINGLE", "Single"),
             ("MARRIED", "Married"),
             ("WIDOWED", "Widowed"),
+            ("DIVORCED", "Divorced"),
         )
     )
     house_name = models.CharField(max_length=150)
+    house_sequence = models.PositiveIntegerField(default=1)
     spouse = models.OneToOneField(
     "self",
     null=True,
@@ -459,6 +466,7 @@ class Member(models.Model):
         null=True,
         blank=True
     )
+
     def save(self, *args, **kwargs):
 
         was_head = None
@@ -467,11 +475,12 @@ class Member(models.Model):
                 pk=self.pk
             ).values_list("is_family_head", flat=True).first()
 
-    # 🔥 Enforce single active head per (family + house_name)
+    # 🔥 Enforce single active head per (family + house_name + house_sequence)
         if self.is_family_head:
             Member.objects.filter(
             family=self.family,
             house_name=self.house_name,
+            house_sequence=self.house_sequence,
             is_family_head=True,
             is_active=True
         ).exclude(pk=self.pk).update(is_family_head=False)
@@ -733,62 +742,10 @@ class Baptism(models.Model):
         super().save(*args, **kwargs)
 
 
-#Pre-Announcement
-class VilichCholluKuri(models.Model):
+from django.db import models
+from django.utils import timezone
+from datetime import date
 
-    church = models.ForeignKey(
-        Church,
-        on_delete=models.CASCADE,
-        related_name="vilich_chollu_kuris"
-    )
-
-    # Optional link later
-    marriage = models.OneToOneField(
-        "Marriage",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="vilich_chollu_kuri"
-    )
-
-    marriage_date = models.DateField()
-
-    # -------------------------
-    # GROOM DETAILS
-    # -------------------------
-    groom_name = models.CharField(max_length=150)
-    groom_dob = models.DateField(null=True, blank=True)
-    groom_age = models.PositiveIntegerField(null=True, blank=True)
-    groom_house_name = models.CharField(max_length=150)
-    groom_family_name = models.CharField(max_length=150)
-    groom_father = models.CharField(max_length=150)
-    groom_mother = models.CharField(max_length=150)
-    groom_place = models.CharField(max_length=150)
-    groom_marriage_count = models.PositiveIntegerField(default=1)
-
-    # -------------------------
-    # BRIDE DETAILS
-    # -------------------------
-    bride_name = models.CharField(max_length=150)
-    bride_dob = models.DateField(null=True, blank=True)
-    bride_age = models.PositiveIntegerField(null=True, blank=True)
-    bride_house_name = models.CharField(max_length=150)
-    bride_family_name = models.CharField(max_length=150)
-    bride_father = models.CharField(max_length=150)
-    bride_mother = models.CharField(max_length=150)
-    bride_place = models.CharField(max_length=150)
-    bride_marriage_count = models.PositiveIntegerField(default=1)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = ("church", "marriage")
-        ordering = ["-created_at"]
-
-    def __str__(self):
-        return f"Vilich Chollu Kuri - {self.groom_name} & {self.bride_name}"
-
-#marriage register
 class Marriage(models.Model):
     MARRIAGE_TYPE_CHOICES = (
         ("ADD_BRIDE", "Add Bride to Parish"),
@@ -801,22 +758,16 @@ class Marriage(models.Model):
         related_name="marriages"
     )
 
-    family = models.ForeignKey(
-        Family,
-        on_delete=models.PROTECT,
-        related_name="marriages"
-    )
-
     marriage_type = models.CharField(
         max_length=20,
         choices=MARRIAGE_TYPE_CHOICES
     )
 
     date = models.DateField()
-    register_number = models.CharField(max_length=50)
-    bride_dob = models.DateField(null=True, blank=True)
+    register_number = models.CharField(max_length=50, unique=True)
+    
     # -------------------------
-    # GROOM (internal or external)
+    # GROOM DETAILS
     # -------------------------
     groom_member = models.ForeignKey(
         Member,
@@ -827,17 +778,15 @@ class Marriage(models.Model):
     )
 
     groom_name = models.CharField(max_length=150, blank=True)
-
-    relation_of_groom_with_main_member = models.ForeignKey(
-        Relationship,
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        related_name="groom_marriages"
-    )
+    groom_dob = models.DateField(blank=True, null=True)
+    groom_house_name = models.CharField(max_length=150, blank=True)
+    groom_family_name = models.CharField(max_length=150, blank=True)
+    groom_address = models.TextField(blank=True)
+    groom_father = models.CharField(max_length=150, blank=True)
+    groom_mother = models.CharField(max_length=150, blank=True)
 
     # -------------------------
-    # BRIDE (internal or external)
+    # BRIDE DETAILS
     # -------------------------
     bride_member = models.ForeignKey(
         Member,
@@ -848,71 +797,50 @@ class Marriage(models.Model):
     )
 
     bride_name = models.CharField(max_length=150, blank=True)
+    bride_dob = models.DateField(blank=True, null=True)
+    bride_house_name = models.CharField(max_length=150, blank=True)
+    bride_family_name = models.CharField(max_length=150, blank=True)
     bride_address = models.TextField(blank=True)
-
-    relation_of_bride_with_main_member = models.ForeignKey(
-        Relationship,
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        related_name="bride_marriages"
-    )
-
-    # -------------------------
-    # PARENTS
-    # -------------------------
-    groom_father = models.CharField(max_length=150, blank=True)
-    groom_mother = models.CharField(max_length=150, blank=True)
     bride_father = models.CharField(max_length=150, blank=True)
     bride_mother = models.CharField(max_length=150, blank=True)
 
-    nationality_of_groom = models.CharField(max_length=100)
-    nationality_of_bride = models.CharField(max_length=100)
+    # -------------------------
+    # ADDITIONAL INFO
+    # -------------------------
+    nationality_of_groom = models.CharField(max_length=100, blank=True)
+    nationality_of_bride = models.CharField(max_length=100, blank=True)
 
     # -------------------------
     # WITNESSES
     # -------------------------
-    witness_bride_side = models.CharField(max_length=150)
-    witness_groom_side = models.CharField(max_length=150)
+    witness_bride_side = models.CharField(max_length=150, blank=True)
+    witness_groom_side = models.CharField(max_length=150, blank=True)
 
     # -------------------------
     # MINISTERS
     # -------------------------
-    minister_of_marriage = models.CharField(max_length=150)
+    minister_of_marriage = models.CharField(max_length=150, blank=True)
     other_priests = models.TextField(blank=True)
 
     # -------------------------
     # TRANSFER INFO (only for transfer type)
     # -------------------------
     transfer_to = models.CharField(max_length=150, blank=True)
-
     remarks = models.TextField(blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
-    groom_name = models.CharField(max_length=150, blank=True)
-
-    groom_dob = models.DateField(blank=True, null=True)
-
-    groom_house_name = models.CharField(max_length=150, blank=True)
-
-    groom_family_name = models.CharField(max_length=150, blank=True)
-
-    groom_address = models.TextField(blank=True)
     class Meta:
         unique_together = ("church", "register_number")
+        ordering = ["-date"]
 
     def save(self, *args, **kwargs):
-
         if not self.register_number:
-
             from registry.services import generate_register_number
-
             self.register_number = generate_register_number(
-            self.church,
-            "MARRIAGE"
+                self.church,
+                "MARRIAGE"
             )
-
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -924,9 +852,7 @@ class Marriage(models.Model):
         return f"{self.register_number} - {groom_display}"
 
 
-#dhesha kuri
 class DheshaKuri(models.Model):
-
     church = models.ForeignKey(
         Church,
         on_delete=models.CASCADE,

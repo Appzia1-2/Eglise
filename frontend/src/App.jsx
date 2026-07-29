@@ -16,13 +16,13 @@ import authService from "./auth/authService";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
 import BaptismPage from "./pages/BaptismPage";
 import ChurchInfoPage from "./pages/ChurchInfoPage";
-import PreAnnouncementPage from "./pages/PreAnnouncementPage";
+
 import MarriagePage from "./pages/MarriagePage";
 import TombTypePage from "./pages/TombTypePage";
 import TombFeesPage from "./pages/TombFeesPage";
 import DesignationPage from "./pages/DesignationPage";
 import PriestPage from "./pages/PriestPage";
-import PriestChangesPage from "./pages/PriestChangesPage";
+
 import RegisterSettingsPage from "./pages/RegisterSettingsPage";
 import DeathRegisterPage from "./pages/DeathRegisterPage";
 import EventsPage from "./pages/EventsPage";
@@ -134,14 +134,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/pre-announcement"
-          element={
-            <ProtectedRoute>
-              <PreAnnouncementPage />
-            </ProtectedRoute>
-          }
-        />
+       
         <Route
           path="/marriage"
           element={
@@ -182,14 +175,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/priest-change"
-          element={
-            <ProtectedRoute>
-              <PriestChangesPage />
-            </ProtectedRoute>
-          }
-        />
+        
         <Route
           path="/register-settings"
           element={

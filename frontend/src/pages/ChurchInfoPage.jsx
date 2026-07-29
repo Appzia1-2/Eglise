@@ -169,6 +169,7 @@ const ChurchInfoPage = () => {
     const fetchData = async () => {
       try {
         const response = await getChurchDashboard();
+        console.log("API Response:", response); // Debug log
         setData(response.data);
       } catch (error) {
         console.error("Error fetching church info:", error);
@@ -235,7 +236,7 @@ const ChurchInfoPage = () => {
               >
                 {church?.name || "Church Profile"}
               </Heading>
-              <HStack gap={6} color="whiteAlpha.800" fontWeight="600">
+              <HStack gap={6} color="whiteAlpha.800" fontWeight="600" flexWrap="wrap">
                 <HStack gap={2}>
                   <Icon as={LuMapPin} />
                   <Text fontSize="lg">{church?.city || "Location N/A"}</Text>
@@ -243,6 +244,18 @@ const ChurchInfoPage = () => {
                 <HStack gap={2}>
                   <Icon as={LuCircleCheck} color="green.300" />
                   <Text fontSize="lg">System Active</Text>
+                </HStack>
+                <HStack gap={2}>
+                  <Icon as={LuCalendar} />
+                  <Text fontSize="lg">
+                    {church?.created_at 
+                      ? `Joined ${new Date(church.created_at).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric'
+                        })}` 
+                      : ""}
+                  </Text>
                 </HStack>
               </HStack>
             </Box>
@@ -280,6 +293,17 @@ const ChurchInfoPage = () => {
                   label="Contact Number"
                   value={church?.phone}
                   icon={LuPhone}
+                />
+                <DetailRow
+                  label="Registered On"
+                  value={church?.created_at ? new Date(church.created_at).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  }) : "N/A"}
+                  icon={LuCalendar}
                 />
               </VStack>
             </InfoCard>
@@ -434,33 +458,6 @@ const ChurchInfoPage = () => {
                 )}
               </VStack>
             </InfoCard>
-
-            {/* <Box
-              bg="white"
-              p={8}
-              borderRadius="2xl"
-              border="1px solid"
-              borderColor="gray.100"
-              backgroundImage={`linear-gradient(rgba(255,255,255,0.9), rgba(255,255,255,0.9)), url('https://www.transparenttextures.com/patterns/cubes.png')`}
-            >
-              <VStack gap={4} align="center" textAlign="center">
-                <Circle
-                  size="60px"
-                  bg="rgba(123,13,30,0.05)"
-                  color={primaryMaroon}
-                >
-                  <Icon as={LuCalendar} boxSize={8} />
-                </Circle>
-                <VStack gap={1}>
-                  <Heading size="md" color="gray.800">
-                    Need Assistance?
-                  </Heading>
-                  <Text color="gray.500" fontSize="sm">
-                    Contact support for billing or plan upgrades
-                  </Text>
-                </VStack>
-              </VStack>
-            </Box> */}
 
             {/* Quick Stats Grid */}
             <MetricCard

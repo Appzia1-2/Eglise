@@ -16,7 +16,7 @@ const WARD_FIELDS = [
     required: true,
     coerce: Number,
   },
-  { name: "place", label: "Place", type: "text" },
+  { name: "place", label: "Place", type: "text", required: true },
 ];
 
 const WARD_COLUMNS = [

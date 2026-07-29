@@ -77,6 +77,16 @@ export const updateDeath = (id, data) =>
   apiClient.patch(`/api/registry/death-registers/${id}/`, data);
 export const deleteDeath = (id) =>
   apiClient.delete(`/api/registry/death-register/${id}/`);
+export const createDeathRecord = (data) =>
+  apiClient.post("/api/registry/death-register/create/", data);
+
+export const listHeadlessHouses = () =>
+  apiClient.get("/api/registry/members/headless-houses/");
+export const listMembersByHouse = (familyId, houseName, houseSequence) =>
+  apiClient.get(`/api/registry/members/by-house/`, {
+    params: { family: familyId, house_name: houseName, house_sequence: houseSequence },
+  });
+
 
 // Baptism APIs
 export const listBaptisms = () => apiClient.get("/api/registry/baptisms/");
@@ -296,3 +306,14 @@ export const listMemberAgeWise = (params = {}) =>
 
 export const listMemberPhoneDirectory = (params = {}) =>
   apiClient.get("/api/registry/members/phone-directory/", { params });
+
+export const listWaitingListMembers = () =>
+  apiClient.get("/api/registry/members/waiting-list/");
+
+export const transferAndPromoteHead = (id, data) =>
+  apiClient.post(`/api/registry/members/transfer-promote/${id}/`, data);
+
+export const changeMemberHead = (memberId, newHeadId) =>
+  apiClient.post(`/api/registry/members/change-head/${memberId}/`, {
+    head: newHeadId,
+  });
