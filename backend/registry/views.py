@@ -1584,8 +1584,6 @@ class InactiveMembersAPIView(ListAPIView):
         ).order_by("family__family_name", "house_name", "name")
 
 #Death Register
-from datetime import datetime
-
 class DeathRegisterFinalizeView(APIView):
     permission_classes=[IsAuthenticated, IsChurchUser]
 
@@ -1593,7 +1591,24 @@ class DeathRegisterFinalizeView(APIView):
         serializer = DeathRegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        member = serializer.validated_data["member"]
+        member = serializer.validated_data.get("member")
+
+        # 🔥 FIX: Get member from data if not in validated_data
+        if not member:
+            member_id = request.data.get("member")
+            if member_id:
+                try:
+                    member = Member.objects.get(id=member_id, church=request.user.church)
+                except Member.DoesNotExist:
+                    return Response(
+                        {"error": "Member not found."},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+            else:
+                return Response(
+                    {"error": "Member is required."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
         try:
             death = DeathRegister.objects.get(
@@ -1607,28 +1622,27 @@ class DeathRegisterFinalizeView(APIView):
             )
 
         with transaction.atomic():
-            # Convert string dates to date objects
+            # 🔥 FIX: Get dates from validated_data (they'll be date objects)
             died_on = serializer.validated_data.get("died_on")
             funeral_on = serializer.validated_data.get("funeral_on")
             
-            # If they're strings, convert them
-            if isinstance(died_on, str):
-                from datetime import datetime
-                died_on = datetime.strptime(died_on, "%Y-%m-%d").date()
-            if isinstance(funeral_on, str):
-                from datetime import datetime
-                funeral_on = datetime.strptime(funeral_on, "%Y-%m-%d").date()
-            
+            # 🔥 FIX: If dates are None, try to get from request data and parse
+            if not died_on and request.data.get("died_on"):
+                died_on = parse_date(request.data.get("died_on"))
+            if not funeral_on and request.data.get("funeral_on"):
+                funeral_on = parse_date(request.data.get("funeral_on"))
+
+            # Update the pending record
             death.died_on = died_on
             death.funeral_on = funeral_on
             death.tomb_type = serializer.validated_data.get("tomb_type")
             death.tomb_charge = serializer.validated_data.get("tomb_charge")
-            death.tomb_idn = serializer.validated_data.get("tomb_idn")
+            death.tomb_idn = serializer.validated_data.get("tomb_idn", "")
             death.reason_of_death = serializer.validated_data.get("reason_of_death")
-            death.remarks = serializer.validated_data.get("remarks")
+            death.remarks = serializer.validated_data.get("remarks", "")
             death.status = "COMPLETED"
             
-            # Save the death record
+            # 🔥 FIX: Save the death record (this will trigger reg_no generation)
             death.save()
 
             # Spouse widow logic
@@ -1943,6 +1957,8 @@ class DeathRegisterListAPIView(ListAPIView):
 
 
 
+from django.utils.dateparse import parse_date
+
 class DeathRegisterUpdateAPIView(UpdateAPIView):
     serializer_class = DeathRegisterSerializer
     permission_classes = [IsAuthenticated, IsChurchUser]
@@ -1953,24 +1969,34 @@ class DeathRegisterUpdateAPIView(UpdateAPIView):
         ).select_related("member")
 
     def perform_update(self, serializer):
-
         death = self.get_object()
 
         if death.status == "COMPLETED":
             raise ValidationError("Cannot modify completed death record.")
 
         with transaction.atomic():
+            # 🔥 FIX: Ensure dates are parsed before saving
+            validated_data = serializer.validated_data
+            
+            # Convert string dates to date objects if needed
+            if 'died_on' in validated_data and validated_data['died_on']:
+                if isinstance(validated_data['died_on'], str):
+                    validated_data['died_on'] = parse_date(validated_data['died_on'])
+            
+            if 'funeral_on' in validated_data and validated_data['funeral_on']:
+                if isinstance(validated_data['funeral_on'], str):
+                    validated_data['funeral_on'] = parse_date(validated_data['funeral_on'])
 
             death = serializer.save()
 
-            # 🔥 GENERATE REGISTER NUMBER HERE
+            # Generate register number if needed
             if not death.reg_no:
                 death.reg_no = generate_register_number(
                     death.church,
                     "DEATH"
                 )
 
-            # 🔥 Mark completed
+            # Mark completed
             death.status = "COMPLETED"
             death.save(update_fields=["reg_no", "status"])
 
@@ -2300,6 +2326,8 @@ class MarkMemberDeadAPIView(APIView):
         )
 
 
+from django.utils.dateparse import parse_date
+
 class DeathRegisterCreateAPIView(APIView):
     permission_classes = [IsAuthenticated, IsChurchUser]
 
@@ -2326,12 +2354,21 @@ class DeathRegisterCreateAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # 🔥 FIX: Parse dates from request
         died_on = request.data.get("died_on")
         funeral_on = request.data.get("funeral_on")
+        
+        # Convert string dates to date objects
+        if died_on and isinstance(died_on, str):
+            died_on = parse_date(died_on)
+        if funeral_on and isinstance(funeral_on, str):
+            funeral_on = parse_date(funeral_on)
+
         tomb_type = request.data.get("tomb_type")
         tomb_charge = request.data.get("tomb_charge")
         reason_of_death = request.data.get("reason_of_death")
 
+        # Validate required fields
         missing = []
         if not died_on:
             missing.append("died_on")
@@ -2356,20 +2393,19 @@ class DeathRegisterCreateAPIView(APIView):
             except ValueError as e:
                 return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+            # 🔥 FIX: Create death record with date objects
             death = DeathRegister.objects.create(
                 church=member.church,
                 member=member,
                 status="COMPLETED",
-                died_on=died_on,
-                funeral_on=funeral_on,
+                died_on=died_on,  # Now it's a date object
+                funeral_on=funeral_on,  # Now it's a date object
                 tomb_type_id=tomb_type,
                 tomb_charge=tomb_charge,
                 tomb_idn=request.data.get("tomb_idn", ""),
                 reason_of_death=reason_of_death,
                 remarks=request.data.get("remarks", ""),
             )
-            # reg_no is generated automatically in DeathRegister.save()
-            # since status is already "COMPLETED" at creation
 
         serializer = DeathRegisterSerializer(death)
         return Response(serializer.data, status=status.HTTP_201_CREATED)

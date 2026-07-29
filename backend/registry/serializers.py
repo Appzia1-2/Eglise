@@ -2500,6 +2500,7 @@ class InactiveMemberSerializer(serializers.ModelSerializer):
         
 #Death Register
 from django.utils.dateparse import parse_date
+from datetime import date
 
 class DeathRegisterSerializer(serializers.ModelSerializer):
 
@@ -2515,7 +2516,7 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
         read_only=True
     )
 
-    # 🔥 FIX: Add explicit date fields with input formats
+    # 🔥 FIX: Add custom date fields with proper parsing
     died_on = serializers.DateField(
         input_formats=['%Y-%m-%d', '%d-%m-%Y', '%Y/%m/%d', '%d/%m/%Y'],
         required=False,
@@ -2539,17 +2540,16 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
         if not member:
             raise serializers.ValidationError("Member is required.")
 
-        # 🔥 Member must already be expired (safety check)
         if not member.expired:
             raise serializers.ValidationError(
                 "Member must be marked expired first."
             )
 
-        # 🔥 Get dates from validated data (they'll already be date objects)
+        # 🔥 Get dates (they'll be date objects from the DateField above)
         died_on = data.get("died_on")
         funeral_on = data.get("funeral_on")
         
-        # If instance exists and date not in data, get from instance
+        # If updating, fallback to instance values
         if died_on is None and instance:
             died_on = instance.died_on
         if funeral_on is None and instance:
@@ -2559,7 +2559,7 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
         tomb_charge = data.get("tomb_charge", instance.tomb_charge if instance else None)
         reason_of_death = data.get("reason_of_death", instance.reason_of_death if instance else None)
 
-        # 🔥 Required validations for completion readiness
+        # Required validations
         if not died_on:
             raise serializers.ValidationError({
                 "died_on": "Date of death is required."
@@ -2584,15 +2584,15 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 "reason_of_death": "Reason of death is required."
             })
-            
-        # 🔥 Additional validation: funeral should be after death
+        
+        # 🔥 Validate funeral is after death
         if died_on and funeral_on and funeral_on < died_on:
             raise serializers.ValidationError({
                 "funeral_on": "Funeral date cannot be before death date."
             })
             
         return data
-    
+
 from django.contrib.auth import get_user_model
 User = get_user_model()
 class FamilyHeadUpdateSerializer(serializers.ModelSerializer):

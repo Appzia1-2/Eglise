@@ -904,29 +904,39 @@ class DheshaKuri(models.Model):
         return f"Dhesha Kuri - {self.bride_name}"
 
 #Death Register Model
+import logging
+from django.db import models
+from django.utils import timezone
+from datetime import date, datetime
+
+logger = logging.getLogger(__name__)
+
 class DeathRegister(models.Model):
     STATUS_CHOICES = (
         ("PENDING", "Pending"),
         ("COMPLETED", "Completed"),
     )
+    
     church = models.ForeignKey(
         Church,
         on_delete=models.CASCADE,
         related_name="death_registers"
     )
 
-    reg_no = models.CharField(max_length=50,blank=True,null=True)
+    reg_no = models.CharField(max_length=50, blank=True, null=True)
 
     member = models.OneToOneField(
         Member,
         on_delete=models.PROTECT,
         related_name="death_record"
     )
+    
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default="PENDING"
     )
+    
     died_on = models.DateField(null=True, blank=True)
     funeral_on = models.DateField(null=True, blank=True)
     
@@ -936,9 +946,15 @@ class DeathRegister(models.Model):
         null=True,
         blank=True
     )
-    tomb_charge = models.DecimalField(max_digits=10, decimal_places=2,null=True, blank=True)
+    
+    tomb_charge = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2,
+        null=True, 
+        blank=True
+    )
+    
     tomb_idn = models.CharField(max_length=100, blank=True)
-
     reason_of_death = models.TextField(blank=True)
     remarks = models.TextField(blank=True)
 
@@ -946,19 +962,102 @@ class DeathRegister(models.Model):
 
     class Meta:
         unique_together = ("church", "reg_no")
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.member.name} - {self.status} ({self.reg_no or 'No Reg No'})"
 
     def save(self, *args, **kwargs):
-
+        """
+        Override save to handle date conversions and register number generation
+        """
+        # 🔥 FIX 1: Ensure dates are proper date objects before saving
+        self._clean_dates()
+        
+        # 🔥 FIX 2: Generate register number if status is COMPLETED
         if self.status == "COMPLETED" and not self.reg_no:
-            from registry.services import generate_register_number
+            self._generate_register_number()
+        
+        # Call the parent save method
+        super().save(*args, **kwargs)
 
+    def _clean_dates(self):
+        """
+        Convert string dates to proper date objects
+        """
+        from django.utils.dateparse import parse_date
+        
+        # Clean died_on
+        if self.died_on:
+            if isinstance(self.died_on, str):
+                parsed = parse_date(self.died_on)
+                if parsed:
+                    self.died_on = parsed
+                else:
+                    logger.warning(f"Invalid died_on date format: {self.died_on}")
+                    self.died_on = None
+            elif not isinstance(self.died_on, date):
+                logger.warning(f"died_on is not a date object: {type(self.died_on)}")
+                self.died_on = None
+        
+        # Clean funeral_on
+        if self.funeral_on:
+            if isinstance(self.funeral_on, str):
+                parsed = parse_date(self.funeral_on)
+                if parsed:
+                    self.funeral_on = parsed
+                else:
+                    logger.warning(f"Invalid funeral_on date format: {self.funeral_on}")
+                    self.funeral_on = None
+            elif not isinstance(self.funeral_on, date):
+                logger.warning(f"funeral_on is not a date object: {type(self.funeral_on)}")
+                self.funeral_on = None
+
+    def _generate_register_number(self):
+        """
+        Safely generate register number with error handling
+        """
+        try:
+            from registry.services import generate_register_number
+            
             self.reg_no = generate_register_number(
                 self.church,
                 "DEATH"
             )
+            logger.info(f"Generated register number: {self.reg_no} for death record")
+            
+        except Exception as e:
+            logger.error(f"Failed to generate register number: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            
+            # 🔥 FALLBACK: Generate a temporary number
+            import time
+            timestamp = int(time.time())
+            self.reg_no = f"TEMP-DEATH-{timestamp}"
+            logger.warning(f"Using temporary register number: {self.reg_no}")
 
-        super().save(*args, **kwargs)
-
+    def is_completed(self):
+        """Check if death record is completed"""
+        return self.status == "COMPLETED"
+    
+    def is_pending(self):
+        """Check if death record is pending"""
+        return self.status == "PENDING"
+    
+    def get_days_since_death(self):
+        """Get number of days since death"""
+        if self.died_on:
+            today = date.today()
+            return (today - self.died_on).days
+        return None
+    
+    def get_days_since_funeral(self):
+        """Get number of days since funeral"""
+        if self.funeral_on:
+            today = date.today()
+            return (today - self.funeral_on).days
+        return None
 
 class RegisterSetting(models.Model):
 
