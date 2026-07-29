@@ -1584,6 +1584,8 @@ class InactiveMembersAPIView(ListAPIView):
         ).order_by("family__family_name", "house_name", "name")
 
 #Death Register
+from datetime import datetime
+
 class DeathRegisterFinalizeView(APIView):
     permission_classes=[IsAuthenticated, IsChurchUser]
 
@@ -1605,19 +1607,31 @@ class DeathRegisterFinalizeView(APIView):
             )
 
         with transaction.atomic():
-
-            # Update the pending record
-            death.died_on = serializer.validated_data.get("died_on")
-            death.funeral_on = serializer.validated_data.get("funeral_on")
+            # Convert string dates to date objects
+            died_on = serializer.validated_data.get("died_on")
+            funeral_on = serializer.validated_data.get("funeral_on")
+            
+            # If they're strings, convert them
+            if isinstance(died_on, str):
+                from datetime import datetime
+                died_on = datetime.strptime(died_on, "%Y-%m-%d").date()
+            if isinstance(funeral_on, str):
+                from datetime import datetime
+                funeral_on = datetime.strptime(funeral_on, "%Y-%m-%d").date()
+            
+            death.died_on = died_on
+            death.funeral_on = funeral_on
             death.tomb_type = serializer.validated_data.get("tomb_type")
             death.tomb_charge = serializer.validated_data.get("tomb_charge")
             death.tomb_idn = serializer.validated_data.get("tomb_idn")
             death.reason_of_death = serializer.validated_data.get("reason_of_death")
             death.remarks = serializer.validated_data.get("remarks")
             death.status = "COMPLETED"
+            
+            # Save the death record
             death.save()
 
-            # 🔥 Spouse widow logic
+            # Spouse widow logic
             if member.spouse:
                 member.spouse.marital_status = "WIDOWED"
                 member.spouse.save(update_fields=["marital_status"])
