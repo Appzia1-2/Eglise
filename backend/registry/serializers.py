@@ -166,6 +166,7 @@ class DioceseSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Phone number must be at least 10 digits")
 
         return value
+    
 class PriestSerializer(serializers.ModelSerializer):
     class Meta:
         model = Priest
@@ -1268,6 +1269,8 @@ class MobileFamilyBaptismSerializer(serializers.ModelSerializer):
             "date_of_baptism",
             "register_number",
         ]
+
+
 from rest_framework import serializers
 from django.db import transaction
 from django.utils import timezone

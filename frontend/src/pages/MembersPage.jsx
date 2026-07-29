@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { LuUserPlus, LuCrown, LuChevronDown, LuChevronUp } from "react-icons/lu";
+import { LuUserPlus, LuCrown } from "react-icons/lu";
 import {
   Box,
   Heading,
@@ -13,11 +13,6 @@ import {
   Avatar,
   Spinner,
   Center,
-  Flex,
-  VStack,
-  useBreakpointValue,
-  Icon,
-  Stack,
 } from "@chakra-ui/react";
 import RegistryTable from "../components/RegistryTable";
 import {
@@ -41,12 +36,9 @@ const MembersPage = () => {
   const [grades, setGrades] = useState([]);
   const [allMembers, setAllMembers] = useState([]);
   const [headlessHouses, setHeadlessHouses] = useState([]);
-  const [houseMembers, setHouseMembers] = useState({});
+  const [houseMembers, setHouseMembers] = useState({}); // key: "familyId|SEP|houseName|SEP|sequence" -> members[]
   const [loadingHouseKey, setLoadingHouseKey] = useState(null);
   const [promotingId, setPromotingId] = useState(null);
-  
-  const isMobile = useBreakpointValue({ base: true, md: false });
-  const isTablet = useBreakpointValue({ base: true, lg: false });
 
   useEffect(() => {
     const fetchOptions = async () => {
@@ -86,7 +78,7 @@ const MembersPage = () => {
 
   const handleAccordionChange = async (details) => {
     const openKey = details.value?.[0];
-    if (!openKey || houseMembers[openKey]) return;
+    if (!openKey || houseMembers[openKey]) return; // already loaded or nothing opened
 
     const [familyId, houseName, houseSequence] = openKey.split("|SEP|");
 
@@ -267,6 +259,7 @@ const MembersPage = () => {
     const freshGrades = gRes.data || [];
     const allMembers = mRes.data || [];
 
+    // 🔥 FIX: Use 'expired' not 'expire'
     const heads = allMembers.filter(
       (m) => m.is_family_head && m.is_active !== false && m.expired !== true,
     );
@@ -280,6 +273,7 @@ const MembersPage = () => {
         (g) => g.id === (h.grade?.id || h.grade),
       );
       
+      // 🔥 FIX: Use 'expired' not 'expire'
       const familyCount = allMembers.filter(
         (m) =>
           (m.family?.id || m.family) === (h.family?.id || h.family) &&
@@ -305,228 +299,8 @@ const MembersPage = () => {
     return { ...mRes, data: mapped };
   };
 
-  // Helper component for Headless Houses section
-  const HeadlessHousesSection = () => {
-    if (headlessHouses.length === 0) return null;
-
-    return (
-      <Box 
-        mt={8}
-        border="1px solid"
-        borderColor="gray.200"
-        borderRadius="lg"
-        overflow="hidden"
-        bg="white"
-        boxShadow="sm"
-      >
-        {/* Header - Matching RegistryTable style */}
-        <Box 
-          px={6} 
-          py={4} 
-          borderBottom="1px solid"
-          borderColor="gray.200"
-          bg="gray.50"
-        >
-          <Flex 
-            direction={isMobile ? "column" : "row"} 
-            justify="space-between" 
-            align={isMobile ? "start" : "center"}
-            gap={isMobile ? 2 : 0}
-          >
-            <Heading size="lg" color="gray.800">
-              Houses Without an Active Head
-            </Heading>
-            <Badge 
-              colorScheme="orange" 
-              borderRadius="full" 
-              px={4} 
-              py={1.5}
-              fontSize="sm"
-              fontWeight="medium"
-            >
-              {headlessHouses.length} House{headlessHouses.length > 1 ? 's' : ''} Without Head
-            </Badge>
-          </Flex>
-          <Text color="gray.500" fontSize="sm" mt={2}>
-            Click a house to expand it, view its members, and promote one to head.
-          </Text>
-        </Box>
-
-        {/* Body - Matching RegistryTable body style */}
-        <Box p={4}>
-          <Accordion.Root
-            collapsible
-            onValueChange={handleAccordionChange}
-            variant="plain"
-          >
-            {headlessHouses.map((h, index) => {
-              const key = houseKey(
-                h.family_id,
-                h.house_name,
-                h.house_sequence,
-              );
-              const members = houseMembers[key];
-              const isLoading = loadingHouseKey === key;
-
-              return (
-                <Accordion.Item 
-                  key={key} 
-                  value={key}
-                  border="1px solid"
-                  borderColor="gray.200"
-                  borderRadius="md"
-                  mb={3}
-                  _last={{ mb: 0 }}
-                  overflow="hidden"
-                  bg="white"
-                >
-                  <Accordion.ItemTrigger
-                    px={5}
-                    py={4}
-                    _hover={{ bg: "gray.50" }}
-                    transition="background 0.15s"
-                    bg="white"
-                  >
-                    <HStack flex="1" justify="space-between" width="100%">
-                      <HStack spacing={4} flex={1} minWidth={0}>
-                        <Box>
-                          <Text fontWeight="semibold" color="gray.800" fontSize="md">
-                            {h.family_name}
-                          </Text>
-                          <Text color="gray.500" fontSize="sm">
-                            {h.house_name}
-                          </Text>
-                        </Box>
-                      </HStack>
-                      <HStack spacing={3}>
-                        <Badge 
-                          colorScheme="orange" 
-                          borderRadius="full" 
-                          px={3}
-                          py={1}
-                          fontSize="xs"
-                          fontWeight="medium"
-                        >
-                          {h.member_count} {h.member_count === 1 ? "member" : "members"}
-                        </Badge>
-                        <Icon 
-                          as={LuChevronDown} 
-                          color="gray.400" 
-                          boxSize={5}
-                        />
-                      </HStack>
-                    </HStack>
-                  </Accordion.ItemTrigger>
-
-                  <Accordion.ItemContent>
-                    <Accordion.ItemBody px={0} pb={0}>
-                      {isLoading ? (
-                        <Center py={8}>
-                          <Spinner
-                            color="var(--primary-maroon)"
-                            size="md"
-                          />
-                        </Center>
-                      ) : (
-                        <Box overflowX="auto">
-                          <Table.Root 
-                            size={isMobile ? "sm" : "md"} 
-                            variant="outline"
-                            border="none"
-                          >
-                            <Table.Header>
-                              <Table.Row bg="gray.50">
-                                <Table.ColumnHeader fontWeight="semibold" fontSize="sm">
-                                  Member
-                                </Table.ColumnHeader>
-                                <Table.ColumnHeader fontWeight="semibold" fontSize="sm">
-                                  Relationship
-                                </Table.ColumnHeader>
-                                <Table.ColumnHeader fontWeight="semibold" fontSize="sm">
-                                  Gender
-                                </Table.ColumnHeader>
-                                <Table.ColumnHeader 
-                                  textAlign="right" 
-                                  fontWeight="semibold"
-                                  fontSize="sm"
-                                >
-                                  Action
-                                </Table.ColumnHeader>
-                              </Table.Row>
-                            </Table.Header>
-                            <Table.Body>
-                              {!members || members.length === 0 ? (
-                                <Table.Row>
-                                  <Table.Cell colSpan={4} textAlign="center" py={8}>
-                                    <Text color="gray.500">No members found in this house.</Text>
-                                  </Table.Cell>
-                                </Table.Row>
-                              ) : (
-                                members.map((m) => (
-                                  <Table.Row key={m.id}>
-                                    <Table.Cell>
-                                      <HStack spacing={3}>
-                                        <Avatar.Root size={isMobile ? "xs" : "sm"}>
-                                          <Avatar.Fallback name={m.name} />
-                                        </Avatar.Root>
-                                        <Text fontWeight="medium" fontSize="sm">
-                                          {m.name}
-                                        </Text>
-                                      </HStack>
-                                    </Table.Cell>
-                                    <Table.Cell>
-                                      <Text color="gray.600" fontSize="sm">
-                                        {m.relationship?.name || "—"}
-                                      </Text>
-                                    </Table.Cell>
-                                    <Table.Cell>
-                                      <Badge 
-                                        colorScheme={
-                                          m.gender === "MALE" ? "blue" : 
-                                          m.gender === "FEMALE" ? "pink" : "gray"
-                                        }
-                                        variant="subtle"
-                                        fontSize="xs"
-                                      >
-                                        {m.gender || "—"}
-                                      </Badge>
-                                    </Table.Cell>
-                                    <Table.Cell textAlign="right">
-                                      <Button
-                                        size={isMobile ? "xs" : "sm"}
-                                        bg="var(--primary-maroon)"
-                                        color="white"
-                                        _hover={{ opacity: 0.9 }}
-                                        _active={{ transform: "scale(0.98)" }}
-                                        loading={promotingId === m.id}
-                                        onClick={() => handlePromote(m, key)}
-                                        leftIcon={<LuCrown />}
-                                        width={isMobile ? "full" : "auto"}
-                                        fontSize="xs"
-                                      >
-                                        {isMobile ? "Promote" : "Promote to Head"}
-                                      </Button>
-                                    </Table.Cell>
-                                  </Table.Row>
-                                ))
-                              )}
-                            </Table.Body>
-                          </Table.Root>
-                        </Box>
-                      )}
-                    </Accordion.ItemBody>
-                  </Accordion.ItemContent>
-                </Accordion.Item>
-              );
-            })}
-          </Accordion.Root>
-        </Box>
-      </Box>
-    );
-  };
-
   return (
-    <VStack spacing={8} align="stretch" width="100%">
+    <>
       <RegistryTable
         title="Member Information"
         addLabel="Create Head"
@@ -542,9 +316,140 @@ const MembersPage = () => {
         extraActions={extraActions}
       />
 
-      <HeadlessHousesSection />
-    </VStack>
+      {headlessHouses.length > 0 && (
+        <Box mt={8} mb={6}>
+          <Heading size="md" mb={1} color="gray.800">
+            Houses Without an Active Head
+          </Heading>
+          <Text fontSize="sm" color="gray.500" mb={4}>
+            Click a house to expand it, view its members, and promote one to
+            head.
+          </Text>
+
+          <Box
+            borderRadius="lg"
+            border="1px solid"
+            borderColor="gray.200"
+            overflow="hidden"
+            boxShadow="sm"
+            bg="white"
+          >
+            <Accordion.Root
+              collapsible
+              onValueChange={handleAccordionChange}
+            >
+              {headlessHouses.map((h) => {
+                const key = houseKey(
+                  h.family_id,
+                  h.house_name,
+                  h.house_sequence,
+                );
+                const members = houseMembers[key];
+                const isLoading = loadingHouseKey === key;
+
+                return (
+                  <Accordion.Item key={key} value={key} borderColor="gray.200">
+                    <Accordion.ItemTrigger
+                      px={5}
+                      py={4}
+                      _hover={{ bg: "gray.50" }}
+                    >
+                      <HStack flex="1" justify="space-between">
+                        <HStack spacing={4}>
+                          <Text fontWeight="medium" color="gray.800">
+                            {h.family_name}
+                          </Text>
+                          <Text color="gray.500">— {h.house_name}</Text>
+                        </HStack>
+                        <Badge colorScheme="orange" borderRadius="full" px={2}>
+                          {h.member_count}{" "}
+                          {h.member_count === 1 ? "member" : "members"}
+                        </Badge>
+                      </HStack>
+                      <Accordion.ItemIndicator />
+                    </Accordion.ItemTrigger>
+
+                    <Accordion.ItemContent>
+                      <Accordion.ItemBody px={5} pb={5}>
+                        {isLoading ? (
+                          <Center py={6}>
+                            <Spinner
+                              color="var(--primary-maroon)"
+                              size="sm"
+                            />
+                          </Center>
+                        ) : !members || members.length === 0 ? (
+                          <Text color="gray.500" fontSize="sm" py={2}>
+                            No members found.
+                          </Text>
+                        ) : (
+                          <Table.Root size="sm">
+                            <Table.Header>
+                              <Table.Row bg="gray.50">
+                                <Table.ColumnHeader>Member</Table.ColumnHeader>
+                                <Table.ColumnHeader>
+                                  Relationship
+                                </Table.ColumnHeader>
+                                <Table.ColumnHeader>
+                                  Gender
+                                </Table.ColumnHeader>
+                                <Table.ColumnHeader textAlign="right">
+                                  Action
+                                </Table.ColumnHeader>
+                              </Table.Row>
+                            </Table.Header>
+                            <Table.Body>
+                              {members.map((m) => (
+                                <Table.Row key={m.id}>
+                                  <Table.Cell>
+                                    <HStack spacing={3}>
+                                      <Avatar.Root size="xs">
+                                        <Avatar.Fallback name={m.name} />
+                                      </Avatar.Root>
+                                      <Text>{m.name}</Text>
+                                    </HStack>
+                                  </Table.Cell>
+                                  <Table.Cell>
+                                    <Text color="gray.600">
+                                      {m.relationship?.name || "—"}
+                                    </Text>
+                                  </Table.Cell>
+                                  <Table.Cell>
+                                    <Text color="gray.600">
+                                      {m.gender || "—"}
+                                    </Text>
+                                  </Table.Cell>
+                                  <Table.Cell textAlign="right">
+                                    <Button
+                                      size="xs"
+                                      bg="var(--primary-maroon)"
+                                      color="white"
+                                      _hover={{ opacity: 0.9 }}
+                                      loading={promotingId === m.id}
+                                      onClick={() => handlePromote(m, key)}
+                                    >
+                                      <LuCrown style={{ marginRight: 4 }} />
+                                      Promote
+                                    </Button>
+                                  </Table.Cell>
+                                </Table.Row>
+                              ))}
+                            </Table.Body>
+                          </Table.Root>
+                        )}
+                      </Accordion.ItemBody>
+                    </Accordion.ItemContent>
+                  </Accordion.Item>
+                );
+              })}
+            </Accordion.Root>
+          </Box>
+        </Box>
+      )}
+    </>
   );
 };
 
 export default MembersPage;
+
+
