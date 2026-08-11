@@ -63,13 +63,14 @@ from .views import (
     MemberDetailAPIView,
     ChurchList,
     ChangeFamilyHeadAPIView,ChangeMemberHeadAPIView,
-    OfferingListCreateView,   
+    OfferingListCreateView,   PriestMasterAPIView,
     OfferingDetailView,HeadlessHousesGroupedAPIView,MembersByHouseAPIView,
-    RelationshipdetailView,GradeListCreateview,GradeDetailview,WardListWithFamilyCountAPIView,WardFamiliesMobileAPIView, VisitorMasterListCreateView,
+    RelationshipDetailView,GradeListCreateview,GradeDetailview,WardListWithFamilyCountAPIView,WardFamiliesMobileAPIView, VisitorMasterListCreateView,
     VisitorMasterDetailView,SubscriptionListCreateView,AccountGroupMasterListCreateView, AccountGroupMasterDetailView,TransferAndPromoteHeadAPIView,
     SubscriptionDetailView,AccountLedgerMasterListCreateView,PaymentMasterListCreateView,QurbanaReceiptsListCreateView,
     QurbanaReceiptsDetailView, CommitteeMasterListCreateView, CommitteeMasterDetailView, CommitteeMemberListCreateView,HeadlessHouseMembersAPIView,
-    CommitteeMemberDetailView, PaymentMasterDetailView, AccountLedgerMasterDetailView, MemberDirectoryAPIView,  MemberAgeWiseListAPIView, MemberPhoneDirectoryAPIView,
+    CommitteeMemberDetailView, PaymentMasterDetailView, AccountLedgerMasterDetailView, MemberDirectoryAPIView,
+    MemberAgeWiseListAPIView, MemberPhoneDirectoryAPIView,DioceseListCreateAPIView, DioceseDetailAPIView
 )
 
 urlpatterns = [
@@ -86,7 +87,7 @@ urlpatterns = [
 
     # Relationship
     path("relationships/",RelationshipListCreateAPIView.as_view(),name="relationship-list-create"),
-    path("relationships/<int:pk>/",RelationshipdetailView.as_view(),name="relationship-detail"),
+    path("relationships/<int:pk>/",RelationshipDetailView.as_view(),name="relationship-detail"),
     # Families
     path("families/", FamilyListCreateAPIView.as_view()),
     path("families/<int:pk>/", FamilyDetailAPIView.as_view()),
@@ -105,6 +106,11 @@ urlpatterns = [
     path("church/upgrade/", UpgradeAPIView.as_view()),
     path("church/dashboard/", ChurchDashboardAPIView.as_view()),
     path("my-church/",MyChurchAPIView.as_view(),name="my-church"),
+
+
+
+    path("dioceses/", DioceseListCreateAPIView.as_view(), name="diocese-list-create"),
+    path("dioceses/<int:pk>/", DioceseDetailAPIView.as_view(), name="diocese-detail"),
 
     path('churches/',ChurchList.as_view()),
     path("bills/",ChurchBillListAPIView.as_view(),name="church-bill-list"),
@@ -162,6 +168,11 @@ path("death-registers/<int:pk>/", DeathRegisterUpdateAPIView.as_view(), name="de
     #priest master
     path("priests/",PriestListCreateView.as_view(),name="priest-list-create"),
     path("priests/<int:pk>/",PriestDetailView.as_view(),name="priest-detail"),    
+    path(
+        "priests/master/",
+        PriestMasterAPIView.as_view(),
+        name="priest-master"
+    ),
 
     #settingsregister
     path("register-settings/",RegisterSettingListAPIView.as_view(),name="register-settings-list"),

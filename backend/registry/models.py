@@ -6,163 +6,835 @@ from dateutil.relativedelta import relativedelta
 from django.utils import timezone
 from django.utils.timezone import now
 from accounts.utils import create_family_head_user
+from django_countries.fields import CountryField
+from phonenumber_field.modelfields import PhoneNumberField
 
-class Church(models.Model):
-    name = models.CharField(max_length=200)
-    address = models.TextField()
-    city = models.CharField(max_length=100)
+# registry/models.py
+from django.db import models
+from django_countries.fields import CountryField
+from phonenumber_field.modelfields import PhoneNumberField
+from django.core.validators import URLValidator
+from django.core.exceptions import ValidationError
 
-    # Hidden for future use
-    # vicar = models.CharField(max_length=150)
-    # asst_vicar1 = models.CharField(max_length=150, blank=True)
-    # asst_vicar2 = models.CharField(max_length=150, blank=True)
-    # asst_vicar3 = models.CharField(max_length=150, blank=True)
-
-    diocese_name = models.CharField(max_length=150)
-
-    logo = models.ImageField(
-        upload_to="church_logos/",
+class Diocese(models.Model):
+    # Basic Information
+    name = models.CharField(max_length=200, help_text="Name of the Diocese")
+    metropolitan_name = models.CharField(
+        max_length=200, 
+        blank=True, 
         null=True,
-        blank=True
+        help_text="Name of the Metropolitan (Head of Diocese)"
     )
-
-    email = models.EmailField(unique=True)
-    phone_number = models.CharField(max_length=15)
-
-    is_active = models.BooleanField(default=True)
-
+    
+    # Contact Information
+    email = models.EmailField(unique=True, help_text="Official email of the Diocese")
+    phone_number = PhoneNumberField(
+        blank=True, 
+        null=True,
+        help_text="Phone number with country code"
+    )
+    
+    # Address Fields
+    address_line1 = models.CharField(
+        max_length=255, 
+        blank=True, 
+        null=True,
+        help_text="Street address, building name, etc."
+    )
+    address_line2 = models.CharField(
+        max_length=255, 
+        blank=True, 
+        null=True,
+        help_text="Apartment, suite, unit, etc."
+    )
+    city = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True,
+        help_text="City where Diocese office is located"
+    )
+    state = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True,
+        help_text="State/Province where Diocese office is located"
+    )
+    country = CountryField(
+        blank=True, 
+        null=True, 
+        blank_label="Select Country", 
+        help_text="Country where Diocese office is located"
+    )
+    postal_code = models.CharField(
+        max_length=20, 
+        blank=True, 
+        null=True,
+        help_text="Postal/ZIP code"
+    )
+    
+    # Website
+    website = models.URLField(
+        blank=True, 
+        null=True,
+        help_text="Official website of the Diocese",
+        validators=[URLValidator()]
+    )
+    
+    # Status
+    is_active = models.BooleanField(
+        default=True, 
+        help_text="Whether this diocese is currently active"
+    )
+    
+    # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
-    is_deleted = models.BooleanField(default=False)
-    deleted_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Diocese"
+        verbose_name_plural = "Dioceses"
+        ordering = ['name']
 
     def __str__(self):
         return self.name
     
+    def get_full_address(self):
+        """Get full address as a string"""
+        parts = []
+        if self.address_line1:
+            parts.append(self.address_line1)
+        if self.address_line2:
+            parts.append(self.address_line2)
+        if self.city:
+            parts.append(self.city)
+        if self.state:
+            parts.append(self.state)
+        if self.postal_code:
+            parts.append(self.postal_code)
+        if self.country:
+            parts.append(str(self.country.name))
+        return ", ".join(parts)
 
-class Package(models.Model):
-    name = models.CharField(max_length=100)
-    member_limit = models.PositiveIntegerField(null=True, blank=True)
-    is_trial = models.BooleanField(default=False)
-    trial_member_limit = models.PositiveIntegerField(
+
+class Church(models.Model):
+    name = models.CharField(max_length=200, help_text="Name of the Church")
+    code = models.CharField(
+        max_length=20, 
+        unique=True, 
+        blank=True, 
+        null=True,
+        help_text="Auto-generated church code (CH-001)"
+    )
+    diocese = models.ForeignKey(
+        'Diocese',
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        default=5,
-        help_text="Max members allowed for trial package"
+        related_name="churches"
     )
-    rate_per_member_monthly = models.DecimalField(max_digits=8, decimal_places=2)
-    rate_per_member_yearly = models.DecimalField(max_digits=8, decimal_places=2)
-
-    upgrade_rate_monthly = models.DecimalField(
-        max_digits=8, decimal_places=2, null=True, blank=True
+    established_year = models.IntegerField(
+        blank=True, 
+        null=True,
+        help_text="Year the church was established"
     )
-    upgrade_rate_yearly = models.DecimalField(
-        max_digits=8, decimal_places=2, null=True, blank=True
+    registration_number = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True,
+        help_text="Government registration number"
     )
+    currency = models.CharField(
+        max_length=10, 
+        blank=True, 
+        null=True,
+        help_text="Currency used by the church"
+    )
+    
+    # Address Fields
+    address = models.TextField(
+        blank=True, 
+        null=True,
+        help_text="Street address, building name, etc. (Address Line 1)"
+    )
+    address_line1 = models.CharField(
+        max_length=255, 
+        blank=True, 
+        null=True,
+        help_text="Apartment, suite, unit, etc. (Address Line 2)"
+    )
+    city = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True,
+        help_text="City where church is located"
+    )
+    state = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True,
+        help_text="State/Province where church is located"
+    )
+    country = CountryField(
+        blank=True, 
+        null=True, 
+        blank_label="Select Country", 
+        help_text="Country where church is located"
+    )
+    postal_code = models.CharField(
+        max_length=20, 
+        blank=True, 
+        null=True,
+        help_text="Postal/ZIP code"
+    )
+    
+    # Contact Information
+    email = models.EmailField(
+        blank=True,
+        null=True,
+        help_text="Email of the church"
+    )
+    phone_number = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="Phone number with country code"
+    )
+    alternate_phone = models.CharField(
+        max_length=20, 
+        blank=True, 
+        null=True,
+        help_text="Alternate phone number with country code"
+    )
+    
+    # Website
+    website = models.URLField(
+        blank=True, 
+        null=True,
+        help_text="Official website of the church",
+        validators=[URLValidator()]
+    )
+    
+    # Logo/Image
+    logo = models.ImageField(
+        upload_to="church_logos/",
+        null=True,
+        blank=True,
+        help_text="Church logo or image"
+    )
+    
+    # Status
+    is_active = models.BooleanField(
+        default=True, 
+        help_text="Whether this church is currently active"
+    )
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
 
-    is_custom = models.BooleanField(default=False)  # Contact Sales
-
-    def clean(self):
-        # Trial package rules
-        if self.is_trial:
-            if self.trial_member_limit is None:
-                raise ValidationError(
-                    "Trial package must have trial_member_limit"
-                )
-
-            # Trial must not have pricing
-            if (
-                self.rate_per_member_monthly or
-                self.rate_per_member_yearly or
-                self.upgrade_rate_monthly or
-                self.upgrade_rate_yearly
-            ):
-                raise ValidationError(
-                    "Trial package must not have pricing or upgrade rates"
-                )
-
-        # Custom package rules
-        if self.is_custom and self.is_trial:
-            raise ValidationError(
-                "Package cannot be both trial and custom"
-            )
-
-    def can_upgrade(self):
-        # Trial packages are never upgradable
-        if self.is_trial:
-            return False
-
-        return (
-            self.upgrade_rate_monthly is not None or
-            self.upgrade_rate_yearly is not None
-        )
+    class Meta:
+        verbose_name = "Church"
+        verbose_name_plural = "Churches"
+        ordering = ['name']
 
     def __str__(self):
         return self.name
+    
+    def save(self, *args, **kwargs):
+        if not self.code:
+            import re
+            last_church = Church.objects.filter(
+                is_deleted=False
+            ).order_by('-id').first()
+            
+            if last_church and last_church.code:
+                match = re.search(r'(?:CH|SMC)-(\d+)', last_church.code)
+                if match:
+                    last_num = int(match.group(1))
+                    self.code = f"CH-{str(last_num + 1).zfill(3)}"
+                else:
+                    self.code = "CH-001"
+            else:
+                self.code = "CH-001"
+        super().save(*args, **kwargs)
+    
+    def get_full_address(self):
+        """Get full address as a string"""
+        parts = []
+        if self.address:
+            parts.append(self.address)
+        if self.address_line1:
+            parts.append(self.address_line1)
+        if self.city:
+            parts.append(self.city)
+        if self.state:
+            parts.append(self.state)
+        if self.postal_code:
+            parts.append(self.postal_code)
+        if self.country:
+            parts.append(str(self.country.name))
+        return ", ".join(parts)
 
+from django.db import models
+from django.core.exceptions import ValidationError
+from datetime import date
+from dateutil.relativedelta import relativedelta
+
+class Package(models.Model):
+    code = models.CharField(max_length=50, unique=True, help_text="Unique package code (e.g., PKG-001)")
+    name = models.CharField(max_length=100)
+    member_limit = models.PositiveIntegerField(
+        null=True, 
+        blank=True,
+        help_text="Maximum members allowed. Leave blank for unlimited"
+    )
+    
+    # Pricing (only monthly and yearly rates)
+    rate_per_member_monthly = models.DecimalField(max_digits=8, decimal_places=2)
+    rate_per_member_yearly = models.DecimalField(max_digits=8, decimal_places=2)
+    
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    @property
+    def is_in_use(self):
+        """Check if any church is using this package"""
+        return self.subscriptions.filter(is_active=True).exists()
+    
+    @property
+    def church_count(self):
+        """Count of churches using this package"""
+        return self.subscriptions.filter(is_active=True).count()
+    
+    def can_delete(self):
+        """Check if package can be deleted (hard delete)"""
+        return not self.is_in_use
+    
+    def can_edit(self):
+        """Check if package can be edited"""
+        return not self.is_in_use
+    
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+    
+    class Meta:
+        ordering = ['code']
+
+from decimal import Decimal
+from datetime import date, datetime
 
 class ChurchSubscription(models.Model):
-    church = models.OneToOneField(Church, on_delete=models.CASCADE)
-    package = models.ForeignKey(Package, on_delete=models.PROTECT)
+    BILLING_CHOICES = (
+        ('MONTHLY', 'Monthly'),
+        ('YEARLY', 'Yearly'),
+    )
+    PAYMENT_CHOICES = (
+        ('PAID', 'Paid'),
+        ('UNPAID', 'Unpaid'),
+        ('EXPIRED', 'Expired'),
+    )
+    ORIGIN_CHOICES = (
+        ('BASE', 'Base Purchase'),
+        ('UPGRADE', 'Upgrade Purchase'),
+    )
+
+    church = models.OneToOneField(
+        'Church',
+        on_delete=models.CASCADE,
+        related_name='subscription'
+    )
+    package = models.ForeignKey(
+        'Package',
+        on_delete=models.PROTECT,
+        related_name='subscriptions'
+    )
 
     billing_cycle = models.CharField(
         max_length=10,
-        choices=(("MONTHLY", "Monthly"), ("YEARLY", "Yearly"))
+        choices=BILLING_CHOICES,
+        default='YEARLY'
     )
     payment_status = models.CharField(
         max_length=10,
-        choices=(("PAID", "Paid"), ("UNPAID", "Unpaid")),
-        default="UNPAID"
+        choices=PAYMENT_CHOICES,
+        default='UNPAID'
     )
+
+    # 🔥 duration_months ONLY for end_date calculation.
+    # It should NEVER be multiplied into price calculations.
     duration_months = models.PositiveIntegerField(
-        help_text="Number of months purchased (e.g. 3, 5, 12)"
+        default=12,
+        help_text="Number of months purchased - ONLY affects end_date, NOT price"
     )
+
     start_date = models.DateField(auto_now_add=True)
     end_date = models.DateField(null=True, blank=True)
-    custom_capacity = models.PositiveIntegerField(null=True, blank=True)
+
+    custom_capacity = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Custom member capacity if different from package limit"
+    )
+
+    # 🔥 PRICING SNAPSHOT — captured once, at purchase.
+    # Without this, editing a Package silently rewrites what every existing
+    # church already bought, because get_rate()/get_capacity() read the
+    # package live. Nullable so pre-existing rows keep working unchanged.
+    locked_rate = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Rate per member at time of purchase"
+    )
+    locked_capacity = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Member capacity at time of purchase"
+    )
+    locked_package_name = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Package name at time of purchase"
+    )
+
     is_active = models.BooleanField(default=False)
     credit_balance = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         default=0
     )
-    PRICING_ORIGIN_CHOICES = (
-        ("BASE", "Base Purchase"),
-        ("UPGRADE", "Upgrade Purchase"),
-    )
-
     pricing_origin = models.CharField(
         max_length=10,
-        choices=PRICING_ORIGIN_CHOICES,
-        default="BASE",
-        help_text="How this subscription tier was acquired"
+        choices=ORIGIN_CHOICES,
+        default='BASE'
     )
 
-    # -----------------------------
-    # AUTO-CALCULATE END DATE
-    # -----------------------------
+    # Upgrade tracking
+    previous_subscription = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='upgraded_to'
+    )
+    upgrade_from_package = models.ForeignKey(
+        'Package',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='upgraded_from'
+    )
+    upgrade_date = models.DateField(null=True, blank=True)
+    pro_rata_credit = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0
+    )
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Church Subscription'
+        verbose_name_plural = 'Church Subscriptions'
+
+    def __str__(self):
+        return f"{self.church.name} - {self.package.name} ({self.billing_cycle})"
+
     def save(self, *args, **kwargs):
+        """Snapshot pricing on purchase, then auto-calculate end date"""
+        # 🔥 Capture the package's terms once. The API clears locked_rate
+        # deliberately when a church switches package or billing cycle,
+        # which counts as a fresh purchase and re-snapshots here.
+        if self.locked_rate is None and self.package_id:
+            if self.billing_cycle == 'MONTHLY':
+                self.locked_rate = self.package.rate_per_member_monthly
+            else:
+                self.locked_rate = self.package.rate_per_member_yearly
+            self.locked_capacity = self.package.member_limit
+            self.locked_package_name = self.package.name
+
         if self.start_date and self.duration_months:
-            self.end_date = self.start_date + relativedelta(
-                months=self.duration_months
-            )
+            # Ensure start_date is a date object
+            if isinstance(self.start_date, datetime):
+                self.start_date = self.start_date.date()
+            self.end_date = self.start_date + relativedelta(months=self.duration_months)
         super().save(*args, **kwargs)
 
-    # -----------------------------
-    # EXPIRY CHECK
-    # -----------------------------
+    # ============ DATE & EXPIRATION METHODS ============
+
     def is_expired(self):
+        """Check if subscription has expired"""
         if not self.end_date:
             return False
         return self.end_date < date.today()
 
     def expires_in_days(self):
+        """Get number of days until expiration"""
         if not self.end_date:
             return None
-        return (self.end_date - date.today()).days
+        days_left = (self.end_date - date.today()).days
+        return max(0, days_left)
 
+    def get_used_days(self):
+        """Get number of days used in current subscription"""
+        if not self.start_date:
+            return 0
+        today = date.today()
+        if today < self.start_date:
+            return 0
+        return (today - self.start_date).days
+
+    def get_remaining_days(self):
+        """Get number of days remaining in current subscription"""
+        if not self.end_date:
+            return 0
+        today = date.today()
+        if today > self.end_date:
+            return 0
+        return (self.end_date - today).days
+
+    def get_total_days(self):
+        """Get total days in subscription period"""
+        if not self.start_date or not self.end_date:
+            return 0
+        return (self.end_date - self.start_date).days
+
+    def get_progress_percentage(self):
+        """Get percentage of subscription completed"""
+        total_days = self.get_total_days()
+        if total_days <= 0:
+            return 0
+        used_days = self.get_used_days()
+        percentage = (used_days / total_days) * 100
+        return round(min(100, percentage), 2)
+
+    # ============ PRICING METHODS ============
+
+    def get_rate(self):
+        """
+        Rate per member. The purchase-time snapshot wins over the live
+        package, so admin edits to a Package never change what an existing
+        church is paying.
+        """
+        if self.locked_rate is not None:
+            return self.locked_rate
+        # Fallback for rows created before snapshots existed
+        if self.billing_cycle == 'MONTHLY':
+            return self.package.rate_per_member_monthly
+        return self.package.rate_per_member_yearly
+
+    def get_capacity(self):
+        """
+        Member capacity. Precedence: custom_capacity > snapshot > live package.
+        """
+        if self.custom_capacity:
+            return self.custom_capacity
+        if self.locked_capacity is not None:
+            return self.locked_capacity
+        return self.package.member_limit
+
+    def get_total_price(self):
+        """
+        Calculate total price for this subscription.
+        CRITICAL: duration_months is NOT multiplied here.
+        duration_months ONLY controls the subscription end_date.
+
+        Formula:
+        - YEARLY: rate_per_member_yearly × capacity
+        - MONTHLY: rate_per_member_monthly × capacity
+
+        Example:
+        - rate = 1800, capacity = 25
+        - total = 1800 × 25 = 45,000
+        """
+        capacity = self.get_capacity()
+        rate = self.get_rate()
+        return rate * capacity
+
+    # 🔥 These two were near-duplicates that read the live package directly,
+    # bypassing the snapshot entirely (get_member_limit is used by to_dict).
+    # They now just delegate to the canonical methods above.
+    def get_amount_per_member(self):
+        """Alias for get_rate()"""
+        return self.get_rate()
+
+    def get_member_limit(self):
+        """Alias for get_capacity()"""
+        return self.get_capacity()
+
+    # ============ UPGRADE METHODS ============
+
+    def calculate_upgrade_cost(self, new_package, new_billing_cycle):
+        """
+        Calculate upgrade cost with pro-rata credit.
+
+        The NEW package is priced at its current live rate (it's a new
+        purchase). The credit is derived from get_total_price(), which uses
+        the OLD snapshot — so the church is credited what they actually paid.
+
+        Args:
+            new_package: The package to upgrade to
+            new_billing_cycle: 'MONTHLY' or 'YEARLY'
+
+        Returns:
+            dict: Contains new_price, credit_amount, final_amount, etc.
+        """
+        capacity = self.get_capacity()
+
+        if new_billing_cycle == 'MONTHLY':
+            rate = new_package.rate_per_member_monthly
+        else:
+            rate = new_package.rate_per_member_yearly
+
+        new_price = rate * capacity
+
+        # Calculate pro-rata credit
+        total_days = self.get_total_days()
+        remaining_days = self.get_remaining_days()
+
+        if total_days > 0:
+            remaining_percentage = remaining_days / total_days
+            original_price = self.get_total_price()
+            credit = original_price * Decimal(str(remaining_percentage))
+        else:
+            credit = Decimal('0')
+
+        final_amount = max(Decimal('0'), new_price - credit)
+
+        return {
+            'new_price': round(new_price, 2),
+            'credit_amount': round(credit, 2),
+            'final_amount': round(final_amount, 2),
+            'used_percentage': round(((total_days - remaining_days) / total_days) * 100, 2) if total_days > 0 else 0,
+            'remaining_percentage': round((remaining_days / total_days) * 100, 2) if total_days > 0 else 0,
+            'billing_cycle': new_billing_cycle,
+            'capacity': capacity,
+            'duration_months': self.duration_months
+        }
+
+    def is_upgradable(self):
+        """Check if subscription can be upgraded"""
+        return self.is_active and not self.is_expired()
+
+    def get_upgrade_history(self):
+        """Get full upgrade history for this subscription"""
+        history = []
+        current = self
+        while current.previous_subscription:
+            prev = current.previous_subscription
+            history.append({
+                'from_package': prev.locked_package_name or (prev.package.name if prev.package else "Unknown"),
+                'to_package': current.locked_package_name or (current.package.name if current.package else "Unknown"),
+                'upgrade_date': current.upgrade_date,
+                'pro_rata_credit': float(current.pro_rata_credit) if current.pro_rata_credit else 0,
+            })
+            current = prev
+        return history
+
+    # ============ STATUS METHODS ============
+
+    def get_status(self):
+        """Get machine-readable status"""
+        if self.is_expired():
+            return 'EXPIRED'
+        if self.is_active:
+            return 'ACTIVE'
+        if self.payment_status == 'PAID':
+            return 'PAID'
+        return 'INACTIVE'
+
+    def get_status_display(self):
+        """Get display-friendly status"""
+        status_map = {
+            'ACTIVE': 'Active',
+            'EXPIRED': 'Expired',
+            'PAID': 'Paid',
+            'INACTIVE': 'Inactive',
+            'UNPAID': 'Unpaid',
+            'PENDING': 'Pending',
+        }
+        return status_map.get(self.get_status(), 'Unknown')
+
+    def can_renew(self):
+        """Check if subscription can be renewed"""
+        return self.is_expired() or self.get_remaining_days() <= 30
+
+    def needs_renewal(self):
+        """Check if subscription needs renewal (expiring within 30 days)"""
+        if not self.end_date:
+            return False
+        days_left = self.expires_in_days()
+        return days_left is not None and days_left <= 30 and not self.is_expired()
+
+    # ============ JSON SERIALIZATION ============
+
+    def to_dict(self):
+        """Convert subscription to dictionary for API responses"""
+        return {
+            'id': self.id,
+            'church_id': self.church.id if self.church else None,
+            'church_name': self.church.name if self.church else None,
+            'church_code': self.church.code if self.church else None,
+            'package_id': self.package.id if self.package else None,
+            'package_name': self.package.name if self.package else None,
+            # 🔥 What the package was called at purchase, in case it was renamed
+            'purchased_package_name': self.locked_package_name or None,
+            'package_code': self.package.code if self.package else None,
+            'billing_cycle': self.billing_cycle,
+            'duration_months': self.duration_months,
+            'payment_status': self.payment_status,
+            'is_active': self.is_active,
+            'start_date': self.start_date.isoformat() if self.start_date else None,
+            'end_date': self.end_date.isoformat() if self.end_date else None,
+            'total_price': float(self.get_total_price()),
+            'rate_per_member': float(self.get_rate()),
+            'member_limit': self.get_member_limit(),
+            'progress_percentage': self.get_progress_percentage(),
+            'remaining_days': self.get_remaining_days(),
+            'is_expired': self.is_expired(),
+            'status': self.get_status_display(),
+            'pricing_origin': self.pricing_origin,
+            'upgrade_date': self.upgrade_date.isoformat() if self.upgrade_date else None,
+            'pro_rata_credit': float(self.pro_rata_credit) if self.pro_rata_credit else 0,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+    
+# registry/models.py - Tax Type Model
+
+class TaxType(models.Model):
+    """Tax Type Master - Defines different types of taxes"""
+    
+    tax_type_code = models.CharField(
+        max_length=20, 
+        unique=True,
+        help_text="Unique code for the tax type (e.g., GST, VAT, ST)"
+    )
+    tax_type_name = models.CharField(
+        max_length=100,
+        help_text="Full name of the tax type (e.g., Goods and Services Tax)"
+    )
+    country = CountryField(
+        blank=True,
+        null=True,
+        blank_label="Select Country",
+        help_text="Country where this tax type is applicable"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this tax type is currently active"
+    )
+    description = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Additional description or notes about this tax type"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['tax_type_code']
+        verbose_name = 'Tax Type'
+        verbose_name_plural = 'Tax Types'
+    
     def __str__(self):
-        return f"{self.church.name} - {self.package.name}"
+        return f"{self.tax_type_code} - {self.tax_type_name}"
+    
+    def get_display_name(self):
+        """Get display name with country if available"""
+        if self.country:
+            return f"{self.tax_type_name} ({self.country.name})"
+        return self.tax_type_name
 
+class TaxRate(models.Model):
+    """Tax Rate Master - Defines tax rates for different tax types"""
+    
+    tax_rate_code = models.CharField(
+        max_length=20, 
+        unique=True,
+        help_text="Unique code for the tax rate (e.g., GST-18, VAT-12)"
+    )
+    tax_rate_name = models.CharField(
+        max_length=100,
+        help_text="Name of the tax rate (e.g., GST @ 18%, VAT @ 12%)"
+    )
+    tax_type = models.ForeignKey(
+        TaxType,
+        on_delete=models.PROTECT,
+        related_name='tax_rates',
+        help_text="Tax type this rate belongs to"
+    )
+    rate_percentage = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2,
+        help_text="Tax rate percentage (e.g., 18.00 for 18%)"
+    )
+    effective_from = models.DateField(
+        help_text="Date from which this tax rate is effective"
+    )
+    effective_until = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date until which this tax rate is effective (leave blank for no end date)"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this tax rate is currently active"
+    )
+    description = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Additional description or notes about this tax rate"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['tax_type', '-effective_from']
+        verbose_name = 'Tax Rate'
+        verbose_name_plural = 'Tax Rates'
+        unique_together = ['tax_type', 'rate_percentage', 'effective_from']
+    
+    def __str__(self):
+        return f"{self.tax_rate_code} - {self.tax_rate_name}"
+    
+    def is_effective(self, check_date=None):
+        """Check if this tax rate is effective on a given date"""
+        if check_date is None:
+            check_date = date.today()  # Use date.today() from imported module
+        if self.effective_until:
+            return self.effective_from <= check_date <= self.effective_until
+        return self.effective_from <= check_date
+    
+    def get_effective_status(self):
+        """Get human-readable effective status"""
+        if self.is_effective():
+            return "Active"
+        elif self.effective_from > date.today():
+            return f"Starts from {self.effective_from.strftime('%d %b %Y')}"
+        else:
+            return "Expired"
+    
+    def get_display_rate(self):
+        """Get rate with percentage symbol"""
+        return f"{self.rate_percentage}%"
+    
+    def calculate_tax(self, amount):
+        """Calculate tax amount for a given amount"""
+        return (amount * self.rate_percentage) / 100
+    
+    def calculate_total_with_tax(self, amount):
+        """Calculate total amount including tax"""
+        return amount + self.calculate_tax(amount)
 
 
 class Ward(models.Model):
@@ -196,8 +868,12 @@ class Family(models.Model):
     history = models.TextField(blank=True)
     origin = models.CharField(max_length=150, blank=True)
 
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
-        unique_together = ['church', 'family_name']  # Unique per church
+        unique_together = ["church", "family_name"]
 
     def save(self, *args, **kwargs):
         if self.family_name:
@@ -301,25 +977,11 @@ class Designation(models.Model):
     def __str__(self):
         return self.designation_name
 
-class Diocese(models.Model):
-    church = models.ForeignKey(
-        Church,
-        on_delete=models.CASCADE,
-        related_name="dioces"
-    )
-    name = models.CharField(max_length=200)
-    address = models.TextField()
-    phone_number = models.CharField(max_length=20)
-    mail_id = models.EmailField()
-    metropolitan = models.CharField(max_length=200)
-
-    def __str__(self):
-        return self.name
-    
 class Priest(models.Model):
+
     DESIGNATION_CHOICES = (
-        ("MAIN", "Main Priest"),
-        ("ASSISTANT", "Assistant Priest"),
+        ("MAIN", "Vicar"),
+        ("ASSISTANT", "Assistant Vicar"),
     )
 
     church = models.ForeignKey(
@@ -327,24 +989,112 @@ class Priest(models.Model):
         on_delete=models.CASCADE,
         related_name="priests"
     )
-    name = models.CharField(max_length=200)
-    house_name = models.CharField(max_length=200)
-    address = models.TextField()
 
-    family_name = models.CharField(max_length=200, null=True, blank=True)
-    phone_number = models.CharField(max_length=15, null=True, blank=True)
-    is_active = models.BooleanField(default=True)
+    # ==============================
+    # BASIC INFORMATION
+    # ==============================
+
+    image = models.ImageField(
+        upload_to="vicars/",
+        null=True,
+        blank=True
+    )
+
+    name = models.CharField(
+        max_length=255
+    )
 
     designation = models.CharField(
         max_length=20,
         choices=DESIGNATION_CHOICES,
-        default="ASSISTANT"
+        default="MAIN"
     )
-    date_from = models.DateField()
-    date_to = models.DateField(null=True, blank=True)
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(
+        default=True
+    )
+
+    family_name = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True
+    )
+
+    phone_number = models.CharField(
+        max_length=30,
+        blank=True,
+        null=True
+    )
+
+    # ==============================
+    # ADDRESS
+    # ==============================
+
+    address_line1 = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True
+    )
+
+    address_line2 = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True
+    )
+
+    city = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True
+    )
+
+    state = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True
+    )
+
+    country = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True
+    )
+
+    postal_code = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True
+    )
+
+    # ==============================
+    # SERVICE INFORMATION
+    # ==============================
+
+    date_from = models.DateField(
+        null=True,
+        blank=True
+    )
+
+    date_to = models.DateField(
+        null=True,
+        blank=True
+    )
+
+    # ==============================
+    # RECORD INFORMATION
+    # ==============================
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+    # ==============================
+    # STRING
+    # ==============================
 
     def __str__(self):
         return self.name
@@ -512,65 +1262,49 @@ class Member(models.Model):
 
 class Bill(models.Model):
     BILL_TYPE_CHOICES = (
-    ("NEW", "New Subscription"),
-    ("UPGRADE", "Upgrade"),
-    ("EXTENSION", "Extension"),
-    ("RENEW", "Renewal"),
+        ("NEW", "New Subscription"),
+        ("UPGRADE", "Upgrade"),
+        ("EXTENSION", "Extension"),
+        ("RENEW", "Renewal"),
     )
-
     STATUS_CHOICES = (
         ("UNPAID", "Unpaid"),
         ("PAID", "Paid"),
         ("CANCELLED", "Cancelled"),
     )
-
-    bill_number = models.CharField(
-        max_length=30,
-        unique=True,
-        blank=True,
-        null=True
+    PAYMENT_METHOD_CHOICES = (
+        ("CASH", "Cash"),
+        ("UPI", "UPI"),
+        ("CARD", "Card"),
+        ("CHEQUE", "Cheque"),
     )
 
-    invoice_number = models.CharField(
-        max_length=30,
-        unique=True,
-        blank=True,
-        null=True
-    )
+    bill_number = models.CharField(max_length=30, unique=True, blank=True, null=True)
+    invoice_number = models.CharField(max_length=30, unique=True, blank=True, null=True)
 
-    church = models.ForeignKey(
-        Church,
-        on_delete=models.CASCADE,
-        related_name="bills"
-    )
-    subscription = models.ForeignKey(
-        ChurchSubscription,
-        on_delete=models.CASCADE,
-        related_name="bills"
-    )
+    church = models.ForeignKey(Church, on_delete=models.CASCADE, related_name="bills")
+    subscription = models.ForeignKey(ChurchSubscription, on_delete=models.CASCADE, related_name="bills")
 
-    bill_type = models.CharField(
-        max_length=20,
-        choices=BILL_TYPE_CHOICES
-    )
-
+    bill_type = models.CharField(max_length=20, choices=BILL_TYPE_CHOICES)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
 
-    billing_cycle = models.CharField(
-        max_length=10,
-        choices=(("MONTHLY", "Monthly"), ("YEARLY", "Yearly")),
-        null=True,
-        blank=True
-    )
-
+    billing_cycle = models.CharField(max_length=10, choices=(("MONTHLY", "Monthly"), ("YEARLY", "Yearly")), null=True, blank=True)
     duration_months = models.PositiveIntegerField(null=True, blank=True)
 
-    status = models.CharField(
-        max_length=10,
-        choices=STATUS_CHOICES,
-        default="UNPAID"
-    )
+    # Payment fields
+    payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, default='CASH')
+    transaction_id = models.CharField(max_length=100, blank=True, null=True)
+    note = models.TextField(blank=True, null=True)
+    payment_receipt = models.ImageField(upload_to="payment_receipts/", null=True, blank=True)
 
+    # Tax fields
+    tax_type = models.ForeignKey(TaxType, on_delete=models.SET_NULL, null=True, blank=True, related_name='bills')
+    tax_rate = models.ForeignKey(TaxRate, on_delete=models.SET_NULL, null=True, blank=True, related_name='bills')
+    tax_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="UNPAID")
     created_at = models.DateTimeField(auto_now_add=True)
     paid_at = models.DateTimeField(null=True, blank=True)
     breakdown = models.JSONField(null=True, blank=True)
@@ -578,22 +1312,27 @@ class Bill(models.Model):
     def save(self, *args, **kwargs):
         if not self.bill_number:
             self.bill_number = f"EGLS-BILL-{timezone.now().year}-{self.pk or 'NEW'}"
-
         if not self.invoice_number:
             self.invoice_number = f"EGLS-INV-{timezone.now().year}-{self.pk or 'NEW'}"
 
+        # Calculate tax if tax_type and tax_rate are set
+        if self.tax_type and self.tax_rate and self.amount:
+            self.tax_percentage = self.tax_rate.rate_percentage
+            self.tax_amount = (self.amount * self.tax_percentage) / 100
+            self.total_amount = self.amount + self.tax_amount
+        else:
+            self.total_amount = self.amount
+
         super().save(*args, **kwargs)
 
-    # Fix NEW placeholder after first save
+        # Fix NEW placeholder after first save
         if "NEW" in self.bill_number or "NEW" in self.invoice_number:
             self.bill_number = f"EGLS-BILL-{timezone.now().year}-{self.pk}"
             self.invoice_number = f"EGLS-INV-{timezone.now().year}-{self.pk}"
             super().save(update_fields=["bill_number", "invoice_number"])
 
-
     def __str__(self):
-        return f"Bill #{self.id} - {self.church.name}"
-
+        return f"Bill #{self.bill_number} - {self.church.name}"
 
 
 class UpgradeRequest(models.Model):

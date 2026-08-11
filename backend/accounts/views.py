@@ -5,14 +5,22 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
-from accounts.serializers import ChangePasswordSerializer, LoginSerializer
+from accounts.serializers import (
+    ChangePasswordSerializer, 
+    LoginSerializer, 
+    AdminLoginSerializer
+)
 from rest_framework.permissions import AllowAny
 from rest_framework.permissions import IsAuthenticated
 from accounts.permissions import IsChurchUser
 from accounts.serializers import ChurchProfileSerializer
 from django.core.mail import send_mail
-from rest_framework.decorators import api_view,permission_classes
+from rest_framework.decorators import api_view, permission_classes
 from django.contrib.auth.hashers import make_password
+import logging
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 class LoginAPIView(APIView):
     permission_classes = [AllowAny]
@@ -31,7 +39,7 @@ class LoginAPIView(APIView):
             "user_id": user.id,
             "email": user.email,
             "church_name": user.church.name if user.church else None,
-            
+            "force_password_change": user.force_password_change,  # NEW: Add this flag
         }
 
         if user.role == "CHURCH":
@@ -49,7 +57,76 @@ class LoginAPIView(APIView):
 
         return Response(response)
 
+class AdminLoginAPIView(APIView):
+    permission_classes = [AllowAny]
 
+    def post(self, request):
+        try:
+            logger.info("=== Admin Login Attempt ===")
+            logger.info(
+                "Admin login identifier received: %s",
+                request.data.get("username")
+            )
+
+            serializer = AdminLoginSerializer(data=request.data)
+
+            if not serializer.is_valid():
+                logger.error(
+                    "Admin login validation errors: %s",
+                    serializer.errors
+                )
+
+                return Response(
+                    {"errors": serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            user = serializer.validated_data["user"]
+
+            refresh = RefreshToken.for_user(user)
+
+            response = {
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "role": user.role,
+                    "is_superuser": user.is_superuser,
+                    "is_staff": user.is_staff,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                },
+                "redirect_to": "/admin/",
+            }
+
+            logger.info(
+                "Admin login successful: %s",
+                user.username
+            )
+
+            return Response(
+                response,
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            logger.error(
+                "Admin login error: %s",
+                str(e),
+                exc_info=True
+            )
+
+            return Response(
+                {
+                    "error": (
+                        "An unexpected error occurred. "
+                        "Please try again."
+                    )
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class LogoutAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -57,15 +134,21 @@ class LogoutAPIView(APIView):
     def post(self, request):
         try:
             refresh_token = request.data.get("refresh")
+            if not refresh_token:
+                return Response(
+                    {"detail": "Refresh token is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
             token = RefreshToken(refresh_token)
             token.blacklist()
             return Response(
                 {"detail": "Logged out successfully"},
                 status=status.HTTP_200_OK
             )
-        except Exception:
+        except Exception as e:
             return Response(
-                {"detail": "Invalid token"},
+                {"detail": str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -80,25 +163,20 @@ class ChangePasswordAPIView(APIView):
         old_password = serializer.validated_data["old_password"]
         new_password = serializer.validated_data["new_password"]
 
-        # ----------------------------
-        # VERIFY OLD PASSWORD
-        # ----------------------------
         if not user.check_password(old_password):
             return Response(
                 {"detail": "Old password is incorrect"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # ----------------------------
-        # SET NEW PASSWORD
-        # ----------------------------
         user.set_password(new_password)
+        user.force_password_change = False  # NEW: Mark password as changed
         user.save()
 
         return Response(
             {"detail": "Password changed successfully"},
             status=status.HTTP_200_OK
-        )    
+        )
 
 class ChurchProfileAPIView(APIView):
     permission_classes = [IsAuthenticated, IsChurchUser]
@@ -116,9 +194,8 @@ class ChurchProfileAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
-    
 
-#forgot password
+# Forgot password
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def forgot_password(request):
@@ -130,7 +207,6 @@ def forgot_password(request):
     try:
         user = User.objects.get(email=email)
     except User.DoesNotExist:
-        # ❗ SECURITY: don’t reveal user existence
         return Response(
             {"message": "If the email exists, OTP has been sent"},
             status=200
@@ -163,8 +239,7 @@ def forgot_password(request):
         status=200
     )
 
-
-#reset password
+# Reset password
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def reset_password(request):
@@ -199,14 +274,13 @@ def reset_password(request):
 
     # Reset password
     user.password = make_password(new_password)
-    user.save(update_fields=["password"])
+    user.force_password_change = False  # NEW: Mark password as changed
+    user.save(update_fields=["password", "force_password_change"])
 
     otp_obj.is_used = True
     otp_obj.save(update_fields=["is_used"])
 
     return Response({"message": "Password reset successful"}, status=200)
-
-
 
 class CheckEmailAPIView(APIView):
     permission_classes = [AllowAny]

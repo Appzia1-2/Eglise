@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
+
 import {
   Box,
   Container,
@@ -13,469 +14,1423 @@ import {
   Skeleton,
   Progress,
   Badge,
+  Button,
+  Image,
 } from "@chakra-ui/react";
+
 import {
   LuChurch,
   LuMapPin,
-  LuMail,
-  LuPhone,
   LuCircleCheck,
-  LuShieldCheck,
   LuUsers,
-  LuCalendar,
-  LuArrowUpRight,
+  LuPencil,
+  LuHouse,
+  LuCreditCard,
+  LuSettings,
+  LuEye,
 } from "react-icons/lu";
+
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+
 import { getChurchDashboard } from "../api/churchServices";
 
-const InfoCard = ({ title, children, icon }) => (
-  <Box
-    bg="white"
-    p={8}
-    borderRadius="2xl"
-    border="1px solid"
-    borderColor="gray.100"
-    boxShadow="0 4px 20px -5px rgba(0,0,0,0.05)"
-    position="relative"
-    overflow="hidden"
-    transition="all 0.3s"
-    _hover={{ transform: "translateY(-4px)", boxShadow: "xl" }}
-  >
-    <HStack gap={4} mb={8}>
-      <Circle
-        size="40px"
-        bg="rgba(123,13,30,0.08)"
-        color="var(--primary-maroon)"
-      >
-        <Icon as={icon} boxSize={5} />
-      </Circle>
-      <Heading
-        size="md"
-        color="gray.800"
-        fontWeight="800"
-        letterSpacing="tight"
-      >
-        {title}
-      </Heading>
-    </HStack>
-    {children}
-  </Box>
-);
 
-const DetailRow = ({ label, value, icon }) => (
-  <HStack
-    gap={5}
-    py={4}
-    borderBottom="1px solid"
-    borderColor="gray.50"
-    _last={{ borderBottom: "none" }}
-    transition="background 0.2s"
-    _hover={{ bg: "gray.25" }}
-  >
-    <Circle
-      size="32px"
-      bg="gray.50"
-      color="gray.400"
-      transition="all 0.2s"
-      _hover={{ bg: "rgba(123,13,30,0.05)", color: "var(--primary-maroon)" }}
+// =========================================================
+// CONSTANTS
+// =========================================================
+
+const PRIMARY_MAROON = "var(--primary-maroon)";
+const BORDER_COLOR = "#E5E7EB";
+
+
+// =========================================================
+// MEDIA URL
+// =========================================================
+
+const getMediaUrl = (url) => {
+
+  if (!url) {
+    return null;
+  }
+
+  // Convert to string
+  const value = String(url).trim();
+
+  if (!value) {
+    return null;
+  }
+
+  // Already complete URL
+  if (
+    value.startsWith("http://") ||
+    value.startsWith("https://") ||
+    value.startsWith("data:")
+  ) {
+    return value;
+  }
+
+  // Backend URL
+  const apiBase =
+    import.meta.env.VITE_API_BASE_URL ||
+    "http://127.0.0.1:8000";
+
+  const cleanBase = apiBase.replace(/\/+$/, "");
+
+  const cleanUrl = value.replace(/^\/+/, "");
+
+  return `${cleanBase}/${cleanUrl}`;
+};
+
+
+// =========================================================
+// FORMAT DATE
+// =========================================================
+
+const formatDate = (date, options = {}) => {
+
+  if (!date) {
+    return "N/A";
+  }
+
+  try {
+
+    const parsedDate = new Date(date);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      return "N/A";
+    }
+
+    return parsedDate.toLocaleDateString(
+      "en-IN",
+      options
+    );
+
+  } catch {
+
+    return "N/A";
+  }
+};
+
+
+// =========================================================
+// SECTION CARD
+// =========================================================
+
+const SectionCard = ({
+  title,
+  icon,
+  children,
+  action,
+}) => {
+
+  return (
+
+    <Box
+      border="1px solid"
+      borderColor={BORDER_COLOR}
+      borderRadius="9px"
+      bg="white"
+      overflow="hidden"
     >
-      <Icon as={icon} boxSize={4} />
-    </Circle>
-    <Box flex="1">
+
+      {/* HEADER */}
+
+      <Flex
+        px={{ base: 4, md: 5 }}
+        py={3}
+        align="center"
+        justify="space-between"
+        minH="58px"
+      >
+
+        <HStack gap={3}>
+
+          <Circle
+            size="34px"
+            bg="rgba(123, 13, 30, 0.08)"
+            color={PRIMARY_MAROON}
+          >
+
+            <Icon
+              as={icon}
+              boxSize={4}
+            />
+
+          </Circle>
+
+          <Heading
+            size="md"
+            color={PRIMARY_MAROON}
+            fontWeight="700"
+          >
+            {title}
+          </Heading>
+
+        </HStack>
+
+        {action}
+
+      </Flex>
+
+
+      {/* CONTENT */}
+
+      <Box
+        px={{ base: 4, md: 5 }}
+        pb={4}
+      >
+
+        {children}
+
+      </Box>
+
+    </Box>
+
+  );
+};
+
+
+// =========================================================
+// DETAIL ROW
+// =========================================================
+
+const DetailRow = ({
+  label,
+  value,
+}) => {
+
+  return (
+
+    <Flex
+      minH="37px"
+      align="center"
+      borderBottom="1px solid"
+      borderColor="#EEEEEE"
+      _last={{
+        borderBottom: "none",
+      }}
+    >
+
+      <Text
+        width={{
+          base: "42%",
+          md: "30%",
+        }}
+        flexShrink={0}
+        fontSize="sm"
+        color="#171717"
+        fontWeight="500"
+      >
+        {label}
+      </Text>
+
+      <Text
+        flex="1"
+        fontSize="sm"
+        color="#5F6368"
+        fontWeight="400"
+        overflow="hidden"
+        textOverflow="ellipsis"
+        whiteSpace="nowrap"
+      >
+        {value || "N/A"}
+      </Text>
+
+    </Flex>
+
+  );
+};
+
+
+// =========================================================
+// ADMIN DETAIL
+// =========================================================
+
+const AdminDetail = ({
+  label,
+  value,
+  isLast = false,
+}) => {
+
+  return (
+
+    <Box
+      textAlign="center"
+      px={{ base: 2, md: 4 }}
+      position="relative"
+      borderRight={
+        isLast
+          ? "none"
+          : {
+              base: "none",
+              md: "1px solid #DDDDDD",
+            }
+      }
+    >
+
       <Text
         fontSize="xs"
-        fontWeight="700"
-        color="gray.400"
-        textTransform="uppercase"
-        letterSpacing="widest"
+        color="#333333"
         mb={1}
       >
         {label}
       </Text>
-      <Text as="div" fontSize="md" fontWeight="700" color="gray.800">
+
+      <Text
+        fontSize="sm"
+        fontWeight="600"
+        color="#111111"
+        whiteSpace="nowrap"
+        overflow="hidden"
+        textOverflow="ellipsis"
+      >
         {value || "N/A"}
       </Text>
-    </Box>
-  </HStack>
-);
 
-const MetricCard = ({ label, value, limit, color, icon }) => {
-  const percentage = (value / limit) * 100;
-  const isCustomColor = color?.startsWith("var(") || color?.startsWith("#");
-
-  return (
-    <Box
-      bg="white"
-      p={6}
-      borderRadius="xl"
-      border="1px solid"
-      borderColor="gray.100"
-      boxShadow="sm"
-    >
-      <HStack justify="space-between" mb={4}>
-        <Circle
-          size="40px"
-          bg={isCustomColor ? "rgba(123,13,30,0.05)" : `${color}.50`}
-          color={isCustomColor ? color : `${color}.500`}
-        >
-          <Icon as={icon} boxSize={5} />
-        </Circle>
-        <Badge
-          colorPalette={isCustomColor ? "red" : color}
-          variant="subtle"
-          borderRadius="full"
-          px={3}
-        >
-          {Math.round(percentage)}% Capacity
-        </Badge>
-      </HStack>
-      <VStack align="start" gap={1} mb={4}>
-        <Text fontSize="sm" fontWeight="600" color="gray.500">
-          {label}
-        </Text>
-        <HStack align="baseline" gap={1}>
-          <Text fontSize="3xl" fontWeight="800" color="gray.900">
-            {value}
-          </Text>
-          <Text fontSize="sm" fontWeight="600" color="gray.400">
-            / {limit}
-          </Text>
-        </HStack>
-      </VStack>
-      <Progress.Root
-        value={percentage}
-        colorPalette={isCustomColor ? "red" : color}
-        size="sm"
-        borderRadius="full"
-      >
-        <Progress.Track bg={isCustomColor ? "red.50" : `${color}.50`}>
-          <Progress.Range
-            borderRadius="full"
-            bg={isCustomColor ? color : undefined}
-          />
-        </Progress.Track>
-      </Progress.Root>
     </Box>
+
   );
 };
 
+
+// =========================================================
+// CHURCH INFO PAGE
+// =========================================================
+
 const ChurchInfoPage = () => {
-  const primaryMaroon = "var(--primary-maroon)";
+
   const [data, setData] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+
+  const [isLoading, setIsLoading] =
+    useState(true);
+
+  const [logoError, setLogoError] =
+    useState(false);
+
+
+  // =======================================================
+  // FETCH DATA
+  // =======================================================
 
   useEffect(() => {
+
     const fetchData = async () => {
+
       try {
-        const response = await getChurchDashboard();
-        console.log("API Response:", response); // Debug log
-        setData(response.data);
+
+        const response =
+          await getChurchDashboard();
+
+        console.log(
+          "================================="
+        );
+
+        console.log(
+          "CHURCH DASHBOARD RESPONSE",
+          response
+        );
+
+        console.log(
+          "CHURCH DATA",
+          response?.data?.church
+        );
+
+        console.log(
+          "LOGO FROM API",
+          response?.data?.church?.logo
+        );
+
+        console.log(
+          "MEMBER DATA",
+          response?.data?.members
+        );
+
+        console.log(
+          "================================="
+        );
+
+        setData(
+          response?.data || {}
+        );
+
       } catch (error) {
-        console.error("Error fetching church info:", error);
+
+        console.error(
+          "Error fetching church information:",
+          error
+        );
+
+        setData({});
+
       } finally {
+
         setIsLoading(false);
+
       }
+
     };
+
     fetchData();
+
   }, []);
 
+
+  // =======================================================
+  // LOADING
+  // =======================================================
+
   if (isLoading) {
+
     return (
-      <Box bg="gray.50" minH="100vh" display="flex" flexDirection="column">
+
+      <Box
+        minH="100vh"
+        bg="white"
+        display="flex"
+        flexDirection="column"
+      >
+
         <Navbar />
-        <Container maxW="container.xl" flex="1" py={12}>
-          <Skeleton height="200px" borderRadius="3xl" mb={12} />
-          <SimpleGrid columns={{ base: 1, lg: 2 }} gap={10}>
-            <Skeleton height="500px" borderRadius="2xl" />
-            <Skeleton height="500px" borderRadius="2xl" />
-          </SimpleGrid>
+
+        <Container
+          maxW="container.xl"
+          flex="1"
+          py={4}
+        >
+
+          <VStack
+            gap={4}
+            align="stretch"
+          >
+
+            <Skeleton
+              height="48px"
+              borderRadius="8px"
+            />
+
+            <Skeleton
+              height="105px"
+              borderRadius="10px"
+            />
+
+            <SimpleGrid
+              columns={{
+                base: 1,
+                lg: 2,
+              }}
+              gap={4}
+            >
+
+              <Skeleton
+                height="400px"
+                borderRadius="10px"
+              />
+
+              <VStack
+                gap={4}
+                align="stretch"
+              >
+
+                <Skeleton
+                  height="235px"
+                  borderRadius="10px"
+                />
+
+                <Skeleton
+                  height="160px"
+                  borderRadius="10px"
+                />
+
+              </VStack>
+
+            </SimpleGrid>
+
+            <Skeleton
+              height="105px"
+              borderRadius="10px"
+            />
+
+          </VStack>
+
         </Container>
+
         <Footer />
+
       </Box>
+
     );
   }
 
-  const { church, subscription, members } = data || {};
+
+  // =======================================================
+  // SAFE DATA
+  // =======================================================
+
+  const church =
+    data?.church || {};
+
+  const subscription =
+    data?.subscription || {};
+
+  const members =
+    data?.members || {};
+
+
+  // =======================================================
+  // CHURCH INFORMATION
+  // =======================================================
+
+  const churchName =
+    church?.name ||
+    church?.church_name ||
+    "Church Name";
+
+  const churchCode =
+    church?.code ||
+    church?.church_code ||
+    "N/A";
+
+  const diocese =
+    church?.diocese ||
+    church?.diocese_name ||
+    "N/A";
+
+  const city =
+    church?.city ||
+    church?.location ||
+    "N/A";
+
+  const phone =
+    church?.phone_number ||
+    church?.phone ||
+    "N/A";
+
+  const email =
+    church?.email ||
+    church?.official_email ||
+    "N/A";
+
+  const address =
+    church?.full_address ||
+    church?.address ||
+    "N/A";
+
+
+  // =======================================================
+  // ESTABLISHED YEAR
+  // =======================================================
+
+  const establishedYear =
+    church?.established_year ??
+    church?.establishedYear ??
+    church?.establishment_year ??
+    church?.establishmentYear ??
+    "N/A";
+
+
+  // =======================================================
+  // ADMINISTRATIVE DETAILS
+  // =======================================================
+
+  const registrationNumber =
+    church?.registration_number ||
+    church?.registration_no ||
+    church?.reg_number ||
+    "N/A";
+
+  const financialYear =
+    church?.financial_year ||
+    church?.financial_year_name ||
+    "N/A";
+
+  const currency =
+    church?.currency ||
+    church?.default_currency ||
+    "INR (₹)";
+
+  const timezone =
+    church?.timezone ||
+    "Asia/Kolkata";
+
+
+  // =======================================================
+  // LOGO
+  // =======================================================
+
+  const churchLogo =
+    church?.logo ||
+    church?.logo_url ||
+    church?.image ||
+    church?.image_url ||
+    null;
+
+  const logoUrl =
+    getMediaUrl(churchLogo);
+
+
+  console.log(
+    "FINAL LOGO URL:",
+    logoUrl
+  );
+
+
+  // =======================================================
+  // SUBSCRIPTION
+  // =======================================================
+
+  const packageName =
+    subscription?.package_name ||
+    subscription?.package ||
+    subscription?.plan ||
+    subscription?.package_title ||
+    "Standard";
+
+  const billingCycle =
+    subscription?.billing_cycle ||
+    subscription?.billingCycle ||
+    "Monthly";
+
+  const memberLimit =
+    Number(
+      subscription?.allowed_limit ??
+      subscription?.member_limit ??
+      subscription?.capacity ??
+      members?.allowed_limit ??
+      0
+    );
+
+  const subscribedOn =
+    subscription?.start_date ||
+    subscription?.subscribed_on ||
+    subscription?.created_at ||
+    null;
+
+  const renewalDate =
+    subscription?.end_date ||
+    subscription?.renewal_date ||
+    subscription?.renewalDate ||
+    null;
+
+
+  // =======================================================
+  // SUBSCRIPTION STATUS
+  // =======================================================
+
+  let subscriptionStatus = "Active";
+
+  if (subscription?.status) {
+
+    subscriptionStatus =
+      subscription.status;
+
+  } else if (subscription?.payment_status) {
+
+    subscriptionStatus =
+      subscription.payment_status;
+
+  } else if (
+    subscription?.is_active === false
+  ) {
+
+    subscriptionStatus =
+      "Inactive";
+
+  }
+
+
+  // =======================================================
+  // MEMBERS
+  // =======================================================
+
+  const currentMembers =
+    Number(
+      members?.current_count ??
+      members?.active_count ??
+      members?.count ??
+      0
+    );
+
+  const allowedMembers =
+    Number(
+      memberLimit || 0
+    );
+
+  const memberPercentage =
+    allowedMembers > 0
+      ? Math.min(
+          (currentMembers /
+            allowedMembers) *
+            100,
+          100
+        )
+      : 0;
+
+  const remainingMembers =
+    members?.remaining != null
+      ? Number(members.remaining)
+      : Math.max(
+          allowedMembers -
+            currentMembers,
+          0
+        );
+
+
+  // =======================================================
+  // RETURN
+  // =======================================================
 
   return (
-    <Box bg="#F8F9FB" minH="100vh" display="flex" flexDirection="column">
+
+    <Box
+      minH="100vh"
+      bg="white"
+      display="flex"
+      flexDirection="column"
+    >
+
       <Navbar />
 
-      {/* Hero Section */}
-      <Box
-        bg={primaryMaroon}
-        pt={20}
-        pb={32}
-        position="relative"
-        overflow="hidden"
-        backgroundImage="radial-gradient(circle at 20% 50%, rgba(255,255,255,0.05) 0%, transparent 50%), radial-gradient(circle at 80% 50%, rgba(255,255,255,0.05) 0%, transparent 50%)"
-      >
-        <Container maxW="container.xl">
-          <VStack gap={6} align="start">
-            <Badge
-              bg="rgba(255,255,255,0.15)"
-              color="white"
-              px={4}
-              py={1}
-              borderRadius="full"
-              fontSize="xs"
-              fontWeight="700"
-              backdropFilter="blur(8px)"
-              border="1px solid rgba(255,255,255,0.2)"
-            >
-              CHURCH CONFIGURATION
-            </Badge>
-            <Box>
-              <Heading
-                size="4xl"
-                color="white"
-                fontWeight="900"
-                letterSpacing="-0.04em"
-                mb={2}
-              >
-                {church?.name || "Church Profile"}
-              </Heading>
-              <HStack gap={6} color="whiteAlpha.800" fontWeight="600" flexWrap="wrap">
-                <HStack gap={2}>
-                  <Icon as={LuMapPin} />
-                  <Text fontSize="lg">{church?.city || "Location N/A"}</Text>
-                </HStack>
-                <HStack gap={2}>
-                  <Icon as={LuCircleCheck} color="green.300" />
-                  <Text fontSize="lg">System Active</Text>
-                </HStack>
-                <HStack gap={2}>
-                  <Icon as={LuCalendar} />
-                  <Text fontSize="lg">
-                    {church?.created_at 
-                      ? `Joined ${new Date(church.created_at).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric'
-                        })}` 
-                      : ""}
-                  </Text>
-                </HStack>
-              </HStack>
-            </Box>
-          </VStack>
-        </Container>
-      </Box>
 
-      <Container maxW="container.xl" flex="1" mt="-20" mb={16}>
-        <SimpleGrid columns={{ base: 1, lg: 2 }} gap={10} alignItems="start">
-          {/* Left Column: General Info */}
-          <VStack gap={10} align="stretch">
-            <InfoCard title="General Information" icon={LuChurch}>
-              <VStack align="stretch" gap={0}>
+      {/* ===================================================
+          MAIN
+      =================================================== */}
+
+      <Box
+        flex="1"
+        overflow="hidden"
+      >
+
+        <Container
+          maxW="container.xl"
+          py={{
+            base: 3,
+            md: 4,
+          }}
+        >
+
+
+          {/* =================================================
+              PAGE HEADER
+          ================================================= */}
+
+          <Flex
+            justify="space-between"
+            align="center"
+            mb={3}
+            gap={3}
+          >
+
+            <HStack gap={3}>
+
+              <Circle
+                size="44px"
+                border="1px solid"
+                borderColor="#E1E6EC"
+                bg="white"
+                color={PRIMARY_MAROON}
+                flexShrink={0}
+              >
+
+                <Icon
+                  as={LuHouse}
+                  boxSize={5}
+                />
+
+              </Circle>
+
+
+              <Box>
+
+                <Heading
+                  size={{
+                    base: "md",
+                    md: "lg",
+                  }}
+                  color={PRIMARY_MAROON}
+                  fontWeight="700"
+                  lineHeight="1.2"
+                >
+                  Church Information
+                </Heading>
+
+                <Text
+                  fontSize="xs"
+                  color="#666666"
+                  mt={1}
+                >
+                  View and manage your church
+                  profile and subscription
+                </Text>
+
+              </Box>
+
+            </HStack>
+
+
+            <Button
+              variant="outline"
+              borderColor={PRIMARY_MAROON}
+              color={PRIMARY_MAROON}
+              borderRadius="6px"
+              size="sm"
+              px={4}
+              h="38px"
+              fontWeight="600"
+              flexShrink={0}
+              _hover={{
+                bg: "rgba(123,13,30,0.05)",
+              }}
+            >
+
+              <Icon
+                as={LuPencil}
+                mr={2}
+              />
+
+              Edit Church Info
+
+            </Button>
+
+          </Flex>
+
+
+          {/* =================================================
+              CHURCH SUMMARY
+          ================================================= */}
+
+          <Box
+            border="1px solid"
+            borderColor={BORDER_COLOR}
+            borderRadius="9px"
+            px={{
+              base: 4,
+              md: 6,
+            }}
+            py={3}
+            mb={3}
+            bg="white"
+          >
+
+            <HStack
+              gap={4}
+              align="center"
+            >
+
+
+              {/* =================================================
+                  LOGO
+              ================================================= */}
+
+              <Box
+                width={{
+                  base: "64px",
+                  md: "78px",
+                }}
+                height={{
+                  base: "64px",
+                  md: "78px",
+                }}
+                flexShrink={0}
+                border="1px solid"
+                borderColor={PRIMARY_MAROON}
+                borderRadius="50%"
+                bg="white"
+                overflow="hidden"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+              >
+
+                {logoUrl && !logoError ? (
+
+                  <Image
+                    src={logoUrl}
+                    alt={`${churchName} logo`}
+                    width="100%"
+                    height="100%"
+                    objectFit="contain"
+                    p={1}
+                    display="block"
+                    onError={(event) => {
+
+                      console.error(
+                        "================================="
+                      );
+
+                      console.error(
+                        "CHURCH LOGO FAILED"
+                      );
+
+                      console.error(
+                        "URL:",
+                        event.currentTarget.src
+                      );
+
+                      console.error(
+                        "API LOGO:",
+                        churchLogo
+                      );
+
+                      console.error(
+                        "================================="
+                      );
+
+                      setLogoError(true);
+
+                    }}
+                    onLoad={() => {
+
+                      console.log(
+                        "CHURCH LOGO LOADED:",
+                        logoUrl
+                      );
+
+                    }}
+                  />
+
+                ) : (
+
+                  <Icon
+                    as={LuChurch}
+                    boxSize={{
+                      base: 7,
+                      md: 9,
+                    }}
+                    color={PRIMARY_MAROON}
+                  />
+
+                )}
+
+              </Box>
+
+
+              {/* =================================================
+                  CHURCH NAME
+              ================================================= */}
+
+              <Box
+                minW={0}
+              >
+
+                <Heading
+                  size={{
+                    base: "lg",
+                    md: "xl",
+                  }}
+                  color="#111111"
+                  fontWeight="700"
+                  lineHeight="1.15"
+                  truncate
+                >
+                  {churchName}
+                </Heading>
+
+
+                <HStack
+                  gap={3}
+                  mt={1}
+                  flexWrap="wrap"
+                >
+
+                  <Text
+                    color="#555555"
+                    fontSize="sm"
+                    fontWeight="500"
+                  >
+                    {churchCode}
+                  </Text>
+
+
+                  <Badge
+                    colorPalette="green"
+                    variant="subtle"
+                    borderRadius="5px"
+                    px={2}
+                    py="2px"
+                    fontSize="xs"
+                  >
+
+                    <Icon
+                      as={LuCircleCheck}
+                      mr={1}
+                      boxSize={3}
+                    />
+
+                    {subscriptionStatus}
+
+                  </Badge>
+
+                </HStack>
+
+
+                <HStack
+                  gap={2}
+                  mt={1}
+                  color="#666666"
+                  fontSize="xs"
+                >
+
+                  <Icon
+                    as={LuMapPin}
+                    boxSize={3.5}
+                  />
+
+                  <Text truncate>
+
+                    {diocese}
+
+                    {city &&
+                    city !== "N/A"
+                      ? ` • ${city}`
+                      : ""}
+
+                  </Text>
+
+                </HStack>
+
+              </Box>
+
+            </HStack>
+
+          </Box>
+
+
+          {/* =================================================
+              TWO COLUMN CONTENT
+          ================================================= */}
+
+          <SimpleGrid
+            columns={{
+              base: 1,
+              lg: 2,
+            }}
+            gap={3}
+            alignItems="stretch"
+          >
+
+
+            {/* =================================================
+                GENERAL INFORMATION
+            ================================================= */}
+
+            <SectionCard
+              title="General Information"
+              icon={LuChurch}
+              action={
+                <Button
+                  variant="ghost"
+                  color={PRIMARY_MAROON}
+                  size="xs"
+                  fontWeight="600"
+                  _hover={{
+                    bg: "rgba(123,13,30,0.05)",
+                  }}
+                >
+
+                  <Icon
+                    as={LuPencil}
+                    mr={1}
+                    boxSize={3.5}
+                  />
+
+                  Edit
+
+                </Button>
+              }
+            >
+
+              <VStack
+                align="stretch"
+                gap={0}
+              >
+
                 <DetailRow
                   label="Church Name"
-                  value={church?.name}
-                  icon={LuChurch}
+                  value={churchName}
                 />
+
+                <DetailRow
+                  label="Church Code"
+                  value={churchCode}
+                />
+
                 <DetailRow
                   label="Diocese"
-                  value={church?.diocese}
-                  icon={LuShieldCheck}
+                  value={diocese}
                 />
+
                 <DetailRow
-                  label="City / Location"
-                  value={church?.city}
-                  icon={LuMapPin}
+                  label="Established Year"
+                  value={establishedYear}
                 />
+
                 <DetailRow
-                  label="Official Email"
-                  value={church?.email}
-                  icon={LuMail}
+                  label="Phone"
+                  value={phone}
                 />
+
                 <DetailRow
-                  label="Contact Number"
-                  value={church?.phone}
-                  icon={LuPhone}
+                  label="Email"
+                  value={email}
                 />
+
                 <DetailRow
-                  label="Registered On"
-                  value={church?.created_at ? new Date(church.created_at).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  }) : "N/A"}
-                  icon={LuCalendar}
+                  label="Address"
+                  value={address}
                 />
+
               </VStack>
-            </InfoCard>
 
-            <Box
-              h="100px"
-              bg="white"
-              px={8}
-              borderRadius="2xl"
-              border="1px solid"
-              borderColor="gray.100"
-              backgroundImage={`linear-gradient(rgba(255,255,255,0.9), rgba(255,255,255,0.9)), url('https://www.transparenttextures.com/patterns/cubes.png')`}
-              display="flex"
-              alignItems="center"
+            </SectionCard>
+
+
+            {/* =================================================
+                RIGHT COLUMN
+            ================================================= */}
+
+            <VStack
+              gap={3}
+              align="stretch"
             >
-              <HStack gap={6} align="center" width="full">
-                <Circle
-                  size="50px"
-                  bg="rgba(123,13,30,0.05)"
-                  color={primaryMaroon}
-                >
-                  <Icon as={LuCalendar} boxSize={6} />
-                </Circle>
-                <VStack gap={0} align="start">
-                  <Heading size="md" color="gray.800">
-                    Need Assistance?
-                  </Heading>
-                  <Text color="gray.500" fontSize="sm">
-                    Contact support for billing or plan upgrades
-                  </Text>
-                </VStack>
-              </HStack>
-            </Box>
-          </VStack>
 
-          {/* Right Column: Subscription & Status */}
-          <VStack gap={10} align="stretch">
-            <InfoCard title="Subscription Details" icon={LuShieldCheck}>
-              <VStack align="stretch" gap={6}>
-                <Box
-                  bg="gray.50"
-                  p={6}
-                  borderRadius="xl"
-                  border="1px dashed"
-                  borderColor="gray.200"
+
+              {/* =================================================
+                  SUBSCRIPTION
+              ================================================= */}
+
+              <SectionCard
+                title="Subscription Details"
+                icon={LuCreditCard}
+                action={
+                  <Badge
+                    colorPalette={
+                      subscription?.is_active === false
+                        ? "red"
+                        : "green"
+                    }
+                    variant="subtle"
+                    borderRadius="5px"
+                    px={2}
+                    py="2px"
+                    fontSize="xs"
+                  >
+
+                    {subscriptionStatus}
+
+                  </Badge>
+                }
+              >
+
+                <VStack
+                  align="stretch"
+                  gap={0}
                 >
-                  <HStack justify="space-between" mb={4}>
-                    <VStack align="start" gap={0}>
+
+                  <Flex
+                    px={3}
+                    py={2}
+                    bg="#FFF0F4"
+                    borderRadius="5px"
+                    justify="space-between"
+                    align="center"
+                    mb={1}
+                  >
+
+                    <Text
+                      fontSize="xs"
+                      color={PRIMARY_MAROON}
+                      fontWeight="500"
+                    >
+                      Current Plan
+                    </Text>
+
+                    <Text
+                      fontSize="sm"
+                      fontWeight="600"
+                      color="#222222"
+                    >
+                      {packageName}
+                    </Text>
+
+                  </Flex>
+
+
+                  <DetailRow
+                    label="Member Limit"
+                    value={
+                      allowedMembers
+                        ? `${allowedMembers.toLocaleString()} members`
+                        : "N/A"
+                    }
+                  />
+
+
+                  <DetailRow
+                    label="Billing Cycle"
+                    value={billingCycle}
+                  />
+
+
+                  <DetailRow
+                    label="Subscribed On"
+                    value={formatDate(
+                      subscribedOn,
+                      {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      }
+                    )}
+                  />
+
+
+                  <DetailRow
+                    label="Renewal Date"
+                    value={formatDate(
+                      renewalDate,
+                      {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      }
+                    )}
+                  />
+
+
+                  <Button
+                    variant="outline"
+                    borderColor={PRIMARY_MAROON}
+                    color={PRIMARY_MAROON}
+                    mt={2}
+                    w="full"
+                    h="34px"
+                    size="sm"
+                    borderRadius="5px"
+                    fontWeight="600"
+                    _hover={{
+                      bg: "rgba(123,13,30,0.04)",
+                    }}
+                  >
+
+                    <Icon
+                      as={LuEye}
+                      mr={2}
+                    />
+
+                    View Subscription
+
+                  </Button>
+
+                </VStack>
+
+              </SectionCard>
+
+
+              {/* =================================================
+                  MEMBER CAPACITY
+              ================================================= */}
+
+              <SectionCard
+                title="Member Capacity"
+                icon={LuUsers}
+              >
+
+                <VStack
+                  align="stretch"
+                  gap={2}
+                >
+
+                  <Flex
+                    justify="space-between"
+                    align="flex-end"
+                  >
+
+                    <Box>
+
+                      <Text
+                        fontSize="2xl"
+                        lineHeight="1"
+                        fontWeight="700"
+                        color="#111111"
+                      >
+                        {currentMembers.toLocaleString()}
+                      </Text>
+
                       <Text
                         fontSize="xs"
-                        fontWeight="700"
-                        color="gray.400"
-                        textTransform="uppercase"
+                        color="#666666"
+                        mt={1}
                       >
-                        Active Plan
+                        Active Members
                       </Text>
-                      <Heading size="lg" color={primaryMaroon}>
-                        {subscription?.package || "Standard"}
-                      </Heading>
-                    </VStack>
-                    <Icon as={LuArrowUpRight} boxSize={8} color="gray.300" />
-                  </HStack>
-                </Box>
 
-                <SimpleGrid columns={2} gap={8}>
-                  <Box>
+                    </Box>
+
+
+                    <Box textAlign="right">
+
+                      <Text
+                        fontSize="2xl"
+                        lineHeight="1"
+                        fontWeight="700"
+                        color="#111111"
+                      >
+                        {allowedMembers.toLocaleString()}
+                      </Text>
+
+                      <Text
+                        fontSize="xs"
+                        color="#666666"
+                        mt={1}
+                      >
+                        Limit
+                      </Text>
+
+                    </Box>
+
+                  </Flex>
+
+
+                  <Progress.Root
+                    value={memberPercentage}
+                    size="sm"
+                    borderRadius="full"
+                  >
+
+                    <Progress.Track
+                      bg="#EEEEEE"
+                      borderRadius="full"
+                    >
+
+                      <Progress.Range
+                        bg={PRIMARY_MAROON}
+                        borderRadius="full"
+                      />
+
+                    </Progress.Track>
+
+                  </Progress.Root>
+
+
+                  <Flex
+                    justify="space-between"
+                    align="center"
+                    gap={2}
+                    flexWrap="wrap"
+                  >
+
                     <Text
                       fontSize="xs"
-                      fontWeight="700"
-                      color="gray.400"
-                      textTransform="uppercase"
-                      mb={1}
+                      color="#666666"
                     >
-                      Billing Cycle
+                      {remainingMembers.toLocaleString()}{" "}
+                      member slots available
                     </Text>
-                    <Text fontWeight="800" fontSize="sm" color="gray.800">
-                      {subscription?.billing_cycle || "Monthly"}
-                    </Text>
-                  </Box>
-                  <Box>
-                    <Text
+
+
+                    <Badge
+                      colorPalette={
+                        memberPercentage >= 100
+                          ? "red"
+                          : memberPercentage >= 80
+                          ? "orange"
+                          : "green"
+                      }
+                      variant="subtle"
+                      borderRadius="5px"
+                      px={2}
+                      py="2px"
                       fontSize="xs"
-                      fontWeight="700"
-                      color="gray.400"
-                      textTransform="uppercase"
-                      mb={1}
                     >
-                      Renewal Date
-                    </Text>
-                    <Text fontWeight="800" fontSize="sm" color="gray.800">
-                      {subscription?.start_date
-                        ? new Date(subscription.start_date).toLocaleDateString()
-                        : "N/A"}
-                    </Text>
-                  </Box>
-                </SimpleGrid>
 
-                {subscription?.update_required ? (
-                  <Flex
-                    bg="red.50"
-                    p={4}
-                    borderRadius="xl"
-                    align="center"
-                    gap={4}
-                    border="1px solid"
-                    borderColor="red.100"
-                  >
-                    <Circle
-                      size="40px"
-                      bg="white"
-                      color="red.500"
-                      boxShadow="sm"
-                    >
-                      <Icon as={LuCalendar} boxSize={5} />
-                    </Circle>
-                    <Box>
-                      <Text fontWeight="800" color="red.700" fontSize="sm">
-                        Update Required
-                      </Text>
-                      <Text fontSize="xs" color="red.600" fontWeight="600">
-                        Please upgrade your plan to continue
-                      </Text>
-                    </Box>
-                  </Flex>
-                ) : (
-                  <Flex
-                    bg="green.50"
-                    p={4}
-                    borderRadius="xl"
-                    align="center"
-                    gap={4}
-                    border="1px solid"
-                    borderColor="green.100"
-                  >
-                    <Circle
-                      size="40px"
-                      bg="white"
-                      color="green.500"
-                      boxShadow="sm"
-                    >
-                      <Icon as={LuCircleCheck} boxSize={5} />
-                    </Circle>
-                    <Box>
-                      <Text fontWeight="800" color="green.700" fontSize="sm">
-                        Subscription Managed
-                      </Text>
-                      <Text fontSize="xs" color="green.600" fontWeight="600">
-                        Your account is in good standing
-                      </Text>
-                    </Box>
-                  </Flex>
-                )}
-              </VStack>
-            </InfoCard>
+                      {Math.round(
+                        memberPercentage
+                      )}
+                      % Used
 
-            {/* Quick Stats Grid */}
-            <MetricCard
-              label="Members Enrolled"
-              value={members?.current_count}
-              limit={members?.allowed_limit}
-              color={primaryMaroon}
-              icon={LuUsers}
-              flexDirection="row"
-              justifyContent="space-between"
-              alignItems="center"
-            />
-          </VStack>
-        </SimpleGrid>
-      </Container>
+                    </Badge>
+
+
+                    <Button
+                      variant="ghost"
+                      color={PRIMARY_MAROON}
+                      size="xs"
+                      fontWeight="600"
+                      _hover={{
+                        bg: "rgba(123,13,30,0.05)",
+                      }}
+                    >
+                      View Members
+                    </Button>
+
+                  </Flex>
+
+                </VStack>
+
+              </SectionCard>
+
+            </VStack>
+
+          </SimpleGrid>
+
+
+          {/* =================================================
+              ADMINISTRATIVE DETAILS
+          ================================================= */}
+
+          <Box mt={3}>
+
+            <SectionCard
+              title="Administrative Details"
+              icon={LuSettings}
+            >
+
+              <SimpleGrid
+                columns={{
+                  base: 2,
+                  md: 4,
+                }}
+                gap={0}
+                py={1}
+              >
+
+                <AdminDetail
+                  label="Registration Number"
+                  value={registrationNumber}
+                />
+
+                <AdminDetail
+                  label="Financial Year"
+                  value={financialYear}
+                />
+
+                <AdminDetail
+                  label="Default Currency"
+                  value={currency}
+                />
+
+                <AdminDetail
+                  label="Timezone"
+                  value={timezone}
+                  isLast
+                />
+
+              </SimpleGrid>
+
+            </SectionCard>
+
+          </Box>
+
+        </Container>
+
+      </Box>
+
 
       <Footer />
+
     </Box>
+
   );
 };
 

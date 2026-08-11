@@ -25,6 +25,186 @@ from django.db.models import Q,F
 from registry.services import generate_register_number
 from rest_framework.exceptions import NotFound
 from django.db import transaction, IntegrityError
+from django.db import transaction
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from accounts.permissions import IsAdminUser
+from registry.models import Diocese
+from registry.serializers import (
+    DioceseSerializer,
+    DioceseListSerializer,
+    DioceseCreateUpdateSerializer
+)
+from django.shortcuts import get_object_or_404
+import logging
+
+logger = logging.getLogger(__name__)
+
+class DioceseListCreateAPIView(APIView):
+    """
+    API View to list all dioceses and create new diocese
+    """
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request):
+        """Get all active dioceses"""
+        try:
+            dioceses = Diocese.objects.filter(is_active=True).order_by('name')
+            serializer = DioceseListSerializer(dioceses, many=True)
+            return Response({
+                "status": "success",
+                "count": dioceses.count(),
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error fetching dioceses: {str(e)}")
+            return Response({
+                "status": "error",
+                "message": "Failed to fetch dioceses"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request):
+        """Create a new diocese"""
+        try:
+            serializer = DioceseCreateUpdateSerializer(data=request.data)
+            
+            if not serializer.is_valid():
+                return Response({
+                    "status": "error",
+                    "errors": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Save the diocese
+            diocese = serializer.save()
+            
+            # Return the created diocese details
+            detail_serializer = DioceseSerializer(diocese)
+            return Response({
+                "status": "success",
+                "message": "Diocese created successfully",
+                "data": detail_serializer.data
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            logger.error(f"Error creating diocese: {str(e)}")
+            return Response({
+                "status": "error",
+                "message": "Failed to create diocese"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class DioceseDetailAPIView(APIView):
+    """
+    API View to get, update, and delete a specific diocese
+    """
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request, pk):
+        """Get a specific diocese by ID"""
+        try:
+            diocese = get_object_or_404(Diocese, pk=pk)
+            serializer = DioceseSerializer(diocese)
+            return Response({
+                "status": "success",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error fetching diocese {pk}: {str(e)}")
+            return Response({
+                "status": "error",
+                "message": "Diocese not found or error occurred"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    def put(self, request, pk):
+        """Update a specific diocese"""
+        try:
+            diocese = get_object_or_404(Diocese, pk=pk)
+            serializer = DioceseCreateUpdateSerializer(diocese, data=request.data, partial=False)
+            
+            if not serializer.is_valid():
+                return Response({
+                    "status": "error",
+                    "errors": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Update the diocese
+            updated_diocese = serializer.save()
+            detail_serializer = DioceseSerializer(updated_diocese)
+            
+            return Response({
+                "status": "success",
+                "message": "Diocese updated successfully",
+                "data": detail_serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error updating diocese {pk}: {str(e)}")
+            return Response({
+                "status": "error",
+                "message": "Failed to update diocese"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def patch(self, request, pk):
+        """Partially update a specific diocese"""
+        try:
+            diocese = get_object_or_404(Diocese, pk=pk)
+            serializer = DioceseCreateUpdateSerializer(diocese, data=request.data, partial=True)
+            
+            if not serializer.is_valid():
+                return Response({
+                    "status": "error",
+                    "errors": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Update the diocese
+            updated_diocese = serializer.save()
+            detail_serializer = DioceseSerializer(updated_diocese)
+            
+            return Response({
+                "status": "success",
+                "message": "Diocese updated successfully",
+                "data": detail_serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error partially updating diocese {pk}: {str(e)}")
+            return Response({
+                "status": "error",
+                "message": "Failed to update diocese"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def delete(self, request, pk):
+        """Soft delete a specific diocese (set is_active=False)"""
+        try:
+            diocese = get_object_or_404(Diocese, pk=pk)
+            
+            # Check if diocese has churches
+            church_count = diocese.churches.filter(is_deleted=False).count()
+            if church_count > 0:
+                return Response({
+                    "status": "error",
+                    "message": f"Cannot deactivate diocese because it has {church_count} active churches. Please reassign or deactivate churches first."
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            diocese.is_active = False
+            diocese.save()
+            
+            return Response({
+                "status": "success",
+                "message": f"Diocese '{diocese.name}' deactivated successfully"
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error deleting diocese {pk}: {str(e)}")
+            return Response({
+                "status": "error",
+                "message": "Failed to deactivate diocese"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
 class ChurchContextMixin:
 
     def get_serializer_context(self):
@@ -74,18 +254,48 @@ class FamilyListCreateAPIView(ChurchContextMixin,ListCreateAPIView):
     serializer_class = FamilySerializer
     permission_classes = [IsAuthenticated, IsChurchUser]
     
-class RelationshipListCreateAPIView(ChurchContextMixin,ListCreateAPIView):
-    model = Relationship
+class RelationshipListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = RelationshipSerializer
     permission_classes = [IsAuthenticated, IsChurchUser]
 
-    def perform_create(self, serializer):
-        serializer.save(church=self.request.user.church)
+    def get_queryset(self):
+        church = getattr(self.request.user, "church", None)
 
-class RelationshipdetailView(ChurchContextMixin,RetrieveUpdateDestroyAPIView):
-    permission_classes=[IsAuthenticated,IsChurchUser]
-    model=Relationship
-    serializer_class=RelationshipSerializer
+        if not church:
+            return Relationship.objects.none()
+
+        return Relationship.objects.filter(
+            church=church
+        ).order_by("name")
+
+    def perform_create(self, serializer):
+        church = getattr(self.request.user, "church", None)
+
+        if not church:
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError(
+                {"detail": "Your user is not associated with a church."}
+            )
+
+        serializer.save(church=church)
+
+
+class RelationshipDetailView(
+    generics.RetrieveUpdateDestroyAPIView
+):
+    serializer_class = RelationshipSerializer
+    permission_classes = [IsAuthenticated, IsChurchUser]
+
+    def get_queryset(self):
+        church = getattr(self.request.user, "church", None)
+
+        if not church:
+            return Relationship.objects.none()
+
+        return Relationship.objects.filter(
+            church=church
+        )
 
     
 
@@ -248,14 +458,19 @@ class MemberDetailAPIView(
         return super().destroy(request, *args, **kwargs)
 
 
-
+# registry/views.py
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status, permissions
+from django.db import transaction
+from django.shortcuts import get_object_or_404
+from .models import Package, ChurchSubscription, Bill
+from .serializers import SubscribeSerializer, PackageSerializer
 
 class PackageListAPIView(ListAPIView):
-    permission_classes = [IsAuthenticated,IsChurchAuthenticated]
-    queryset = Package.objects.all()
+    permission_classes = [IsAuthenticated, IsChurchAuthenticated]
+    queryset = Package.objects.filter(is_active=True)
     serializer_class = PackageSerializer
-    
-
 
 class SubscribeAPIView(APIView):
     permission_classes = [IsAuthenticated, IsChurchAuthenticated]
@@ -264,6 +479,7 @@ class SubscribeAPIView(APIView):
     def post(self, request):
         church = request.user.church
 
+        # Check if church already has a subscription
         if hasattr(church, "churchsubscription"):
             return Response(
                 {"detail": "Subscription already exists"},
@@ -281,47 +497,36 @@ class SubscribeAPIView(APIView):
         capacity = serializer.validated_data.get("capacity")
 
         # -------------------------
-        # TRIAL
+        # CREATE SUBSCRIPTION (No Trial)
         # -------------------------
-        if package.is_trial:
-            ChurchSubscription.objects.create(
-                church=church,
-                package=package,
-                payment_status="PAID",
-                is_active=True,
-            )
-            church.is_active = True
-            church.save(update_fields=["is_active"])
-
-            return Response(
-                {"detail": "Trial activated"},
-                status=status.HTTP_201_CREATED
-            )
-
         duration_months = 12 if billing_cycle == "YEARLY" else 1
-        resolved_capacity = (
-            capacity if package.is_custom else package.member_limit
-        )
+        
+        # Determine capacity
+        if capacity:
+            resolved_capacity = capacity
+        else:
+            resolved_capacity = package.member_limit
 
-        # -------------------------
-        # CREATE SUBSCRIPTION
-        # -------------------------
+        # Create subscription
         subscription = ChurchSubscription.objects.create(
             church=church,
             package=package,
             billing_cycle=billing_cycle,
             duration_months=duration_months,
-            custom_capacity=capacity if package.is_custom else None,
+            custom_capacity=capacity if capacity else None,
             payment_status="UNPAID",
             is_active=False,
         )
 
-        amount = calculate_new_bill_amount(
-            package=package,
-            billing_cycle=billing_cycle,
-            capacity=resolved_capacity,
-        )
+        # Calculate amount
+        if billing_cycle == "YEARLY":
+            rate = package.rate_per_member_yearly
+        else:
+            rate = package.rate_per_member_monthly
+        
+        amount = resolved_capacity * rate * duration_months if resolved_capacity else rate * duration_months
 
+        # Create bill
         bill = Bill.objects.create(
             church=church,
             subscription=subscription,
@@ -334,7 +539,7 @@ class SubscribeAPIView(APIView):
                     "type": "NEW",
                     "calculation": (
                         f"{resolved_capacity} × "
-                        f"{package.rate_per_member_yearly if billing_cycle == 'YEARLY' else package.rate_per_member_monthly} × "
+                        f"{rate} × "
                         f"{duration_months}"
                     ),
                     "total": float(amount),
@@ -360,8 +565,6 @@ class SubscribeAPIView(APIView):
         )
 
 
-
-    
 class UpgradeAPIView(APIView):
     permission_classes = [IsAuthenticated, IsChurchUser]
 
@@ -401,30 +604,23 @@ class UpgradeAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        target_package = get_object_or_404(Package, id=package_id)
+        target_package = get_object_or_404(Package, id=package_id, is_active=True)
 
         # -------------------------------------------------
-        # CUSTOM VALIDATION
+        # CAPACITY VALIDATION
         # -------------------------------------------------
-        if target_package.is_custom:
-            if not capacity:
-                return Response(
-                    {"detail": "capacity is required for custom package"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+        if capacity:
             capacity = int(capacity)
-        else:
-            if capacity:
+            if target_package.member_limit and capacity > target_package.member_limit:
                 return Response(
-                    {
-                        "detail":
-                        "capacity is allowed only for custom packages"
-                    },
+                    {"detail": f"Capacity exceeds package limit of {target_package.member_limit}"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+        else:
+            capacity = target_package.member_limit
 
         # -------------------------------------------------
-        # CALCULATE UPGRADE (SERVICE IS SOURCE OF TRUTH)
+        # CALCULATE UPGRADE WITH PRO-RATA
         # -------------------------------------------------
         result = calculate_prorated_upgrade_amount(
             subscription=subscription,
@@ -471,100 +667,269 @@ class UpgradeAPIView(APIView):
             },
             status=status.HTTP_201_CREATED
         )
-
 class ChurchDashboardAPIView(APIView):
     permission_classes = [IsAuthenticated, IsChurchAuthenticated]
 
     def get(self, request):
-        church = request.user.church
+        try:
+            church = request.user.church
 
-        # Build full logo URL
-        logo_url = None
-        if church.logo:
-            logo_url = request.build_absolute_uri(church.logo.url)
+            if not church:
+                return Response(
+                    {
+                        "detail": "No church is associated with this account."
+                    },
+                    status=400
+                )
 
-        # --------------------
-        # Church basic details
-        # --------------------
-        church_data = {
-            "id": church.id,
-            "name": church.name,
-            "city": church.city,
-            "diocese": church.diocese_name,
-            "email": church.email,
-            "phone": church.phone_number,
-            "is_active": church.is_active,
-            "logo": logo_url,
-            "created_at": church.created_at,
-        }
+            # =========================================================
+            # CHURCH LOGO
+            # =========================================================
 
-        # --------------------
-        # Subscription details
-        # --------------------
-        subscription = getattr(church, "churchsubscription", None)
+            logo_url = None
 
-        if subscription:
-            package = subscription.package
-            subscription_data = {
-                "package": package.name,
-                "member_limit": package.member_limit,
-                "billing_cycle": subscription.billing_cycle,
-                "is_custom": package.is_custom,
-                "start_date": subscription.start_date,
+            if church.logo:
+                try:
+                    logo_url = request.build_absolute_uri(
+                        church.logo.url
+                    )
+                except Exception:
+                    logo_url = None
+
+            # =========================================================
+            # CHURCH DATA
+            # =========================================================
+
+            church_data = {
+                "id": church.id,
+                "name": church.name,
+                "code": getattr(church, "code", None),
+
+                "city": getattr(church, "city", None),
+
+                "diocese": (
+                    church.diocese.name
+                    if getattr(church, "diocese", None)
+                    else None
+                ),
+
+                "email": getattr(church, "email", None),
+
+                "phone": getattr(
+                    church,
+                    "phone_number",
+                    None
+                ),
+
+                "phone_number": getattr(
+                    church,
+                    "phone_number",
+                    None
+                ),
+
+                "is_active": getattr(
+                    church,
+                    "is_active",
+                    True
+                ),
+
+                # IMPORTANT
+                "logo": logo_url,
+                "logo_url": logo_url,
+
+                "created_at": getattr(
+                    church,
+                    "created_at",
+                    None
+                ),
+
+                # Optional fields
+                "established_year": getattr(
+                    church,
+                    "established_year",
+                    None
+                ),
+
+                "registration_number": getattr(
+                    church,
+                    "registration_number",
+                    None
+                ),
+
+                "financial_year": getattr(
+                    church,
+                    "financial_year",
+                    None
+                ),
+
+                "currency": getattr(
+                    church,
+                    "currency",
+                    None
+                ),
+
+                "timezone": getattr(
+                    church,
+                    "timezone",
+                    None
+                ),
+
+                "address": getattr(
+                    church,
+                    "address",
+                    None
+                ),
+
+                "full_address": getattr(
+                    church,
+                    "full_address",
+                    None
+                ),
             }
-        else:
-            subscription_data = None
 
-        # --------------------
-        # 🔥 NEW: Count ONLY family heads
-        # --------------------
-        # Count only members who are family heads
-        current_count = church.members.filter(
-            is_active=True,
-            expired=False,
-            is_family_head=True  # ✅ Only count heads
-        ).count()
+            # =========================================================
+            # SUBSCRIPTION
+            # =========================================================
 
-        # Also get total family members (for additional stats)
-        total_individuals = church.members.filter(
-            is_active=True,
-            expired=False
-        ).count()
+            subscription = getattr(
+                church,
+                "subscription",
+                None
+            )
 
-        # Count families (number of heads = number of families)
-        total_families = current_count
+            if subscription:
 
-        allowed_limit = (
-            subscription.package.member_limit
-            if subscription and subscription.package.member_limit
-            else None
-        )
+                package = subscription.package
 
-        members_data = {
-            "current_count": current_count,  # 👈 Now this is family heads count
-            "total_individuals": total_individuals,  # Total people in all families
-            "total_families": total_families,  # Same as current_count
-            "allowed_limit": allowed_limit,
-            "remaining": (
-                allowed_limit - current_count
-                if allowed_limit is not None
-                else None
-            ),
-        }
+                subscription_data = {
+                    "package": package.name
+                    if package else None,
 
-        # --------------------
-        # Upgrade required?
-        # --------------------
-        upgrade_required = False
-        if subscription and allowed_limit is not None:
-            upgrade_required = current_count > allowed_limit
+                    "package_name": package.name
+                    if package else None,
 
-        return Response({
-            "church": church_data,
-            "subscription": subscription_data,
-            "members": members_data,
-            "upgrade_required": upgrade_required,
-        })
+                    "package_code": package.code
+                    if package else None,
+
+                    "member_limit": (
+                        package.member_limit
+                        if package else 0
+                    ),
+
+                    "billing_cycle": (
+                        subscription.get_billing_cycle_display()
+                    ),
+
+                    "start_date": subscription.start_date,
+
+                    "end_date": subscription.end_date,
+
+                    "renewal_date": subscription.end_date,
+
+                    "payment_status": (
+                        subscription.payment_status
+                    ),
+
+                    "is_active": (
+                        subscription.is_active
+                    ),
+
+                    "capacity": (
+                        subscription.get_capacity()
+                    ),
+
+                    "allowed_limit": (
+                        subscription.get_capacity()
+                    ),
+
+                    "days_remaining": (
+                        subscription.get_remaining_days()
+                    ),
+                }
+
+                allowed_limit = (
+                    subscription.get_capacity()
+                )
+
+            else:
+
+                subscription_data = None
+                allowed_limit = None
+
+            # =========================================================
+            # MEMBER COUNT
+            # =========================================================
+
+            # Active family heads
+            current_count = church.members.filter(
+                is_active=True,
+                expired=False,
+                is_family_head=True
+            ).count()
+
+            # All active individuals
+            total_individuals = church.members.filter(
+                is_active=True,
+                expired=False
+            ).count()
+
+            # =========================================================
+            # MEMBER DATA
+            # =========================================================
+
+            members_data = {
+                "current_count": current_count,
+
+                "active_count": current_count,
+
+                "total_individuals": total_individuals,
+
+                "total_families": current_count,
+
+                "allowed_limit": allowed_limit,
+
+                "remaining": (
+                    allowed_limit - current_count
+                    if allowed_limit is not None
+                    else None
+                ),
+            }
+
+            # =========================================================
+            # UPGRADE REQUIRED
+            # =========================================================
+
+            upgrade_required = bool(
+                subscription
+                and allowed_limit is not None
+                and current_count > allowed_limit
+            )
+
+            # =========================================================
+            # RESPONSE
+            # =========================================================
+
+            response_data = {
+                "church": church_data,
+                "subscription": subscription_data,
+                "members": members_data,
+                "upgrade_required": upgrade_required,
+            }
+
+            return Response(response_data)
+
+        except Exception as e:
+
+            import traceback
+            traceback.print_exc()
+
+            return Response(
+                {
+                    "detail": "Unable to load church dashboard.",
+                    "error": str(e)
+                },
+                status=500
+            )
 
 #member
 class MemberProfileAPIView(APIView):
@@ -2127,28 +2492,246 @@ class DioceseDetailView(generics.RetrieveUpdateDestroyAPIView):
     def get_queryset(self):
         return Diocese.objects.filter(church=self.request.user.church)
 
-#priest master
-class PriestListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated, IsChurchUser]
+from datetime import date as date_cls
+
+from rest_framework import generics
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from registry.models import Priest
+from registry.serializers import PriestSerializer
+
+from accounts.permissions import IsChurchUser
+
+
+# ============================================================
+# VICAR MASTER
+# ============================================================
+
+class PriestMasterAPIView(APIView):
+
+    permission_classes = [
+        IsAuthenticated,
+        IsChurchUser
+    ]
+
+    def get(self, request):
+
+        church = getattr(
+            request.user,
+            "church",
+            None
+        )
+
+        if not church:
+
+            return Response({
+                "current": [],
+                "previous": [],
+                "upcoming": [],
+                "counts": {
+                    "current": 0,
+                    "previous": 0,
+                    "upcoming": 0,
+                    "total": 0
+                }
+            })
+
+        today = date_cls.today()
+
+        priests = Priest.objects.filter(
+            church=church
+        ).order_by(
+            "-date_from",
+            "name"
+        )
+
+        current = []
+        previous = []
+        upcoming = []
+
+        for priest in priests:
+
+            serializer = PriestSerializer(
+                priest,
+                context={
+                    "request": request
+                }
+            )
+
+            item = serializer.data
+
+            # ==================================================
+            # CURRENT
+            # ==================================================
+
+            if (
+                priest.date_from
+                and priest.date_from <= today
+                and (
+                    priest.date_to is None
+                    or priest.date_to >= today
+                )
+            ):
+
+                current.append(item)
+
+            # ==================================================
+            # PREVIOUS
+            # ==================================================
+
+            elif (
+                priest.date_to
+                and priest.date_to < today
+            ):
+
+                previous.append(item)
+
+            # ==================================================
+            # UPCOMING
+            # ==================================================
+
+            elif (
+                priest.date_from
+                and priest.date_from > today
+            ):
+
+                upcoming.append(item)
+
+        return Response({
+
+            "current": current,
+
+            "previous": previous,
+
+            "upcoming": upcoming,
+
+            "counts": {
+                "current": len(current),
+                "previous": len(previous),
+                "upcoming": len(upcoming),
+                "total": (
+                    len(current)
+                    + len(previous)
+                    + len(upcoming)
+                )
+            }
+        })
+
+
+# ============================================================
+# PRIEST DROPDOWN
+# ============================================================
+
+class PriestDropdownAPIView(APIView):
+
+    permission_classes = [
+        IsAuthenticated,
+        IsChurchUser
+    ]
+
+    def get(self, request):
+
+        church = getattr(
+            request.user,
+            "church",
+            None
+        )
+
+        if not church:
+            return Response([])
+
+        priests = Priest.objects.filter(
+            church=church,
+            is_active=True
+        ).order_by(
+            "name"
+        )
+
+        data = []
+
+        for priest in priests:
+
+            data.append({
+                "id": priest.id,
+                "name": priest.name,
+                "family_name": priest.family_name,
+                "designation": priest.designation,
+                "designation_label":
+                    priest.get_designation_display(),
+            })
+
+        return Response(data)
+
+
+# ============================================================
+# CREATE PRIEST
+# ============================================================
+
+class PriestListCreateView(
+    generics.ListCreateAPIView
+):
+
+    permission_classes = [
+        IsAuthenticated,
+        IsChurchUser
+    ]
+
     serializer_class = PriestSerializer
 
     def get_queryset(self):
+
         return Priest.objects.filter(
             church=self.request.user.church
-        ).order_by("designation", "name")
+        ).order_by(
+            "-date_from",
+            "name"
+        )
+
+    def get_serializer_context(self):
+
+        context = super().get_serializer_context()
+
+        context["request"] = self.request
+
+        return context
 
     def perform_create(self, serializer):
-        serializer.save(church=self.request.user.church)
+
+        serializer.save(
+            church=self.request.user.church
+        )
 
 
-class PriestDetailView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticated, IsChurchUser]
+# ============================================================
+# PRIEST DETAIL
+# ============================================================
+
+class PriestDetailView(
+    generics.RetrieveUpdateDestroyAPIView
+):
+
+    permission_classes = [
+        IsAuthenticated,
+        IsChurchUser
+    ]
+
     serializer_class = PriestSerializer
 
     def get_queryset(self):
+
         return Priest.objects.filter(
             church=self.request.user.church
-        ).order_by("designation", "name")
+        )
+
+    def get_serializer_context(self):
+
+        context = super().get_serializer_context()
+
+        context["request"] = self.request
+
+        return context
 
 
 #Registersettings
@@ -2876,24 +3459,26 @@ class MemberDirectoryAPIView(APIView):
             members = members.filter(age__lte=age_max)
 
         # -------------------------
-        # Order: family A-Z, house A-Z, name A-Z
+        # Order: family A-Z, house A-Z, sequence, name A-Z
         # -------------------------
-        members = members.order_by("family__family_name", "house_name", "name")
+        members = members.order_by(
+            "family__family_name", "house_name", "house_sequence", "name"
+        )
 
         # -------------------------
-        # Group by (family_name, house_name)
+        # Group by (family_name, house_name, house_sequence)
         # -------------------------
         groups = {}
         for member in members:
             fam_name = member.family.family_name if member.family else "Unassigned"
-            key = (fam_name, member.house_name)
+            key = (fam_name, member.house_name, member.house_sequence)
             groups.setdefault(key, []).append(member)
 
         serialized_groups = []
-        for (fam_name, house_name) in sorted(
-            groups.keys(), key=lambda k: (k[0].lower(), k[1].lower())
+        for (fam_name, house_name, house_sequence) in sorted(
+            groups.keys(), key=lambda k: (k[0].lower(), k[1].lower(), k[2])
         ):
-            member_list = groups[(fam_name, house_name)]
+            member_list = groups[(fam_name, house_name, house_sequence)]
             serialized_groups.append({
                 "family_name": fam_name,
                 "house_name": house_name,
@@ -3018,3 +3603,6 @@ class MemberPhoneDirectoryAPIView(APIView):
             "total_members": members.count(),
             "members": serializer.data,
         })
+
+
+

@@ -34,7 +34,7 @@ const ROUTE_MAP = {
   
   "Death Register": "/death-register",
   Events: "/events",
-  Diocese: "/dioceses",
+  // Diocese: "/dioceses",
   "Member Offers": "/offerings",
   "Visitor Management": "/visitors",
   Subscriptions: "/subscriptions",
@@ -55,7 +55,7 @@ const MENU_DATA = {
   Masters: [
     {
       title: "Church Configuration",
-      items: ["Church Info", "Priest Master", "Diocese"],
+      items: ["Church Info", "Priest Master",],
     },
     {
       title: "Members",

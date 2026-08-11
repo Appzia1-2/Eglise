@@ -1,11 +1,11 @@
 from rest_framework import serializers
 from registry.models import Church
-from rest_framework import serializers
 from django.contrib.auth import authenticate
 from accounts.models import User
 from django.contrib.auth import get_user_model
+from django.db import models
 
-User=get_user_model()
+User = get_user_model()
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -18,7 +18,7 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError("Invalid credentials")
 
         user = authenticate(
-            username=user.username,  # Django still authenticates via username internally
+            username=user.username,
             password=data["password"]
         )
 
@@ -42,6 +42,83 @@ class LoginSerializer(serializers.Serializer):
                 raise serializers.ValidationError(
                     "Only family head can login"
                 )
+        data["user"] = user
+        return data
+
+class AdminLoginSerializer(serializers.Serializer):
+    username = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True)
+
+    def validate(self, data):
+        identifier = data.get("username", "").strip()
+        password = data.get("password")
+
+        if not identifier:
+            raise serializers.ValidationError(
+                {"username": "Username or email is required"}
+            )
+
+        if not password:
+            raise serializers.ValidationError(
+                {"password": "Password is required"}
+            )
+
+        # Find user using either username OR email
+        user = (
+            User.objects
+            .filter(
+                models.Q(username__iexact=identifier)
+                | models.Q(email__iexact=identifier)
+            )
+            .first()
+        )
+
+        if not user:
+            raise serializers.ValidationError(
+                {"non_field_errors": ["Invalid admin credentials"]}
+            )
+
+        # Authenticate using the actual username
+        user = authenticate(
+            username=user.username,
+            password=password
+        )
+
+        if not user:
+            raise serializers.ValidationError(
+                {"non_field_errors": ["Invalid admin credentials"]}
+            )
+
+        # ADMIN role only
+        if user.role != "ADMIN":
+            raise serializers.ValidationError(
+                {
+                    "non_field_errors": [
+                        "Access denied. Admin privileges required."
+                    ]
+                }
+            )
+
+        # Superuser only
+        if not user.is_superuser:
+            raise serializers.ValidationError(
+                {
+                    "non_field_errors": [
+                        "Access denied. Superuser privileges required."
+                    ]
+                }
+            )
+
+        # Active account only
+        if not user.is_active:
+            raise serializers.ValidationError(
+                {
+                    "non_field_errors": [
+                        "Account is inactive. Please contact support."
+                    ]
+                }
+            )
+
         data["user"] = user
         return data
     
@@ -76,7 +153,7 @@ class ChangePasswordSerializer(serializers.Serializer):
                 "New password and confirm password do not match"
             )
 
-        if len(data["new_password"]) < 6:
+        if len(data["new_password"]) < 8:
             raise serializers.ValidationError(
                 "Password must be at least 8 characters long"
             )

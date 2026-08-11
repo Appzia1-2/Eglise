@@ -8,6 +8,98 @@ from .models import Package
 from .models import ChurchSubscription, Package
 from django.utils import timezone
 
+
+from rest_framework import serializers
+from registry.models import Diocese
+
+class DioceseSerializer(serializers.ModelSerializer):
+    """
+    Full Diocese serializer with all fields
+    """
+    country_name = serializers.SerializerMethodField()
+    full_address = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Diocese
+        fields = [
+            'id',
+            'name',
+            'metropolitan_name',
+            'email',
+            'contact_details',
+            'address',
+            'city',
+            'state',
+            'country',
+            'country_name',
+            'full_address',
+            'is_active',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def get_country_name(self, obj):
+        """Get the country name from the country field"""
+        return obj.country.name if obj.country else None
+    
+    def get_full_address(self, obj):
+        """Get the complete formatted address"""
+        return obj.get_full_address()
+
+class DioceseListSerializer(serializers.ModelSerializer):
+    """
+    Simplified Diocese serializer for list views
+    """
+    country_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Diocese
+        fields = [
+            'id',
+            'name',
+            'metropolitan_name',
+            'city',
+            'state',
+            'country',
+            'country_name',
+            'is_active'
+        ]
+    
+    def get_country_name(self, obj):
+        return obj.country.name if obj.country else None
+
+class DioceseCreateUpdateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for creating and updating Diocese
+    """
+    class Meta:
+        model = Diocese
+        fields = [
+            'name',
+            'metropolitan_name',
+            'email',
+            'contact_details',
+            'address',
+            'city',
+            'state',
+            'country',
+        ]
+    
+    def validate_email(self, value):
+        """Validate that email is unique"""
+        if Diocese.objects.filter(email=value).exists():
+            raise serializers.ValidationError("A diocese with this email already exists.")
+        return value
+    
+    def validate(self, data):
+        """Validate that required fields are present"""
+        required_fields = ['name', 'email', 'address', 'city', 'state', 'country']
+        for field in required_fields:
+            if not data.get(field):
+                raise serializers.ValidationError({field: f"{field} is required."})
+        return data
+
 class ChurchListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Church
@@ -28,41 +120,64 @@ class ChurchDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Church
         fields = "__all__"
+
+
+from rest_framework import serializers
+from .models import Package, Church, ChurchSubscription, Bill
+
 class PackageSerializer(serializers.ModelSerializer):
+    """Admin Package Serializer"""
+    is_in_use = serializers.BooleanField(read_only=True)
+    church_count = serializers.IntegerField(read_only=True)
+    can_delete = serializers.BooleanField(read_only=True)
+    can_edit = serializers.BooleanField(read_only=True)
+    
     class Meta:
         model = Package
         fields = [
             "id",
+            "code",
             "name",
             "member_limit",
             "rate_per_member_monthly",
             "rate_per_member_yearly",
-            "upgrade_rate_monthly",
-            "upgrade_rate_yearly",
-            "is_custom",
+            "is_active",
+            "is_in_use",
+            "church_count",
+            "can_delete",
+            "can_edit",
+            "created_at",
+            "updated_at",
         ]
+        read_only_fields = ['code', 'created_at', 'updated_at']
 
 class SubscribeSerializer(serializers.Serializer):
     package_id = serializers.IntegerField()
-    billing_cycle = serializers.ChoiceField(
-        choices=("MONTHLY", "YEARLY")
-    )
-
+    billing_cycle = serializers.ChoiceField(choices=['MONTHLY', 'YEARLY'])
+    capacity = serializers.IntegerField(required=False, allow_null=True)
+    
     def validate(self, data):
-        church = self.context["church"]
-
-        if hasattr(church, "churchsubscription"):
-            raise serializers.ValidationError(
-                "Subscription already exists. Use upgrade."
-            )
-
+        package_id = data.get('package_id')
+        billing_cycle = data.get('billing_cycle')
+        capacity = data.get('capacity')
+        
         try:
-            package = Package.objects.get(id=data["package_id"])
+            package = Package.objects.get(id=package_id, is_active=True)
         except Package.DoesNotExist:
-            raise serializers.ValidationError("Invalid package")
-
-        data["package"] = package
+            raise serializers.ValidationError("Package not found or inactive")
+        
+        data['package'] = package
+        
+        # Validate capacity
+        if package.member_limit:
+            if capacity and capacity > package.member_limit:
+                raise serializers.ValidationError(
+                    f"Capacity exceeds package limit of {package.member_limit}"
+                )
+        
         return data
+
+
 
 
 class WardSerializer(serializers.ModelSerializer):
@@ -88,7 +203,6 @@ class WardSerializer(serializers.ModelSerializer):
         validated_data["church"] = self.context["church"]
         return super().create(validated_data)
 
-
 class FamilySerializer(serializers.ModelSerializer):
     class Meta:
         model = Family
@@ -98,14 +212,25 @@ class FamilySerializer(serializers.ModelSerializer):
             "family_name",
             "history",
             "origin",
+            "created_at",
+            "updated_at",
         ]
-        read_only_fields = ("church",)
+        read_only_fields = (
+            "id",
+            "church",
+            "created_at",
+            "updated_at",
+        )
 
     def validate_family_name(self, value):
         value = value.strip().capitalize()
         church = self.context["church"]
 
-        qs = Family.objects.filter(church=church, family_name=value)
+        qs = Family.objects.filter(
+            church=church,
+            family_name=value
+        )
+
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
 
@@ -113,12 +238,12 @@ class FamilySerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 f'A family named "{value}" already exists in this church.'
             )
+
         return value
 
     def create(self, validated_data):
         validated_data["church"] = self.context["church"]
         return super().create(validated_data)
-
 
 class TombTypeSerializer(serializers.ModelSerializer):
     class Meta:
@@ -166,101 +291,401 @@ class DioceseSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Phone number must be at least 10 digits")
 
         return value
-    
+
+from datetime import date as date_cls
+
+from django.db.models import Q
+from rest_framework import serializers
+
+from registry.models import Priest
+
+
 class PriestSerializer(serializers.ModelSerializer):
+
+    # ========================================================
+    # DESIGNATION
+    # ========================================================
+
+    designation_label = serializers.CharField(
+        source="get_designation_display",
+        read_only=True
+    )
+
+    # ========================================================
+    # IMAGE URL
+    # ========================================================
+
+    image_url = serializers.SerializerMethodField(
+        read_only=True
+    )
+
+    # ========================================================
+    # STATUS
+    # ========================================================
+
+    status = serializers.SerializerMethodField(
+        read_only=True
+    )
+
     class Meta:
         model = Priest
-        fields = "__all__"
-        read_only_fields = ("church",)
 
-    def validate(self, data):
-        request = self.context["request"]
-        church = request.user.church
+        fields = [
+            # ==================================================
+            # ID / CHURCH
+            # ==================================================
 
-        designation = data.get(
-            "designation", getattr(self.instance, "designation", "ASSISTANT")
-        )
+            "id",
+            "church",
+
+            # ==================================================
+            # IMAGE
+            # ==================================================
+
+            "image",
+            "image_url",
+
+            # ==================================================
+            # BASIC INFORMATION
+            # ==================================================
+
+            "name",
+            "family_name",
+            "designation",
+            "designation_label",
+            "phone_number",
+
+            # ==================================================
+            # SERVICE INFORMATION
+            # ==================================================
+
+            "date_from",
+            "date_to",
+
+            # ==================================================
+            # ADDRESS
+            # ==================================================
+
+            "address_line1",
+            "address_line2",
+            "city",
+            "state",
+            "country",
+            "postal_code",
+
+            # ==================================================
+            # ACTIVE
+            # ==================================================
+
+            "is_active",
+
+            # ==================================================
+            # CALCULATED
+            # ==================================================
+
+            "status",
+
+            # ==================================================
+            # RECORD INFORMATION
+            # ==================================================
+
+            "created_at",
+            "updated_at",
+        ]
+
+        read_only_fields = [
+            "id",
+            "church",
+            "image_url",
+            "designation_label",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+
+    # ========================================================
+    # IMAGE URL
+    # ========================================================
+
+    def get_image_url(self, obj):
+
+        request = self.context.get("request")
+
+        if not obj.image:
+            return None
+
+        try:
+            url = obj.image.url
+
+            if request:
+                return request.build_absolute_uri(url)
+
+            return url
+
+        except Exception:
+            return None
+
+    # ========================================================
+    # STATUS
+    # ========================================================
+
+    def get_status(self, obj):
+
         today = date_cls.today()
 
-        new_date_from = data.get(
-            "date_from", getattr(self.instance, "date_from", None)
+        # ----------------------------------------------------
+        # Manually inactive
+        # ----------------------------------------------------
+
+        if not obj.is_active:
+            return "PREVIOUS"
+
+        # ----------------------------------------------------
+        # Service hasn't started
+        # ----------------------------------------------------
+
+        if obj.date_from and obj.date_from > today:
+            return "UPCOMING"
+
+        # ----------------------------------------------------
+        # Currently serving
+        # ----------------------------------------------------
+
+        if obj.date_from and obj.date_from <= today:
+
+            # Ongoing
+            if obj.date_to is None:
+                return "CURRENT"
+
+            # End date has not passed
+            if obj.date_to >= today:
+                return "CURRENT"
+
+        # ----------------------------------------------------
+        # Previous
+        # ----------------------------------------------------
+
+        return "PREVIOUS"
+
+    # ========================================================
+    # VALIDATION
+    # ========================================================
+
+    def validate(self, data):
+
+        request = self.context.get("request")
+
+        if not request or not request.user.is_authenticated:
+            return data
+
+        church = getattr(
+            request.user,
+            "church",
+            None
         )
-        new_date_to = data.get(
-            "date_to", getattr(self.instance, "date_to", None)
-        )
 
-        # Get all active priests (both MAIN and ASSISTANT) for this church
-        active_priests = Priest.objects.filter(
-            church=church,
-            is_active=True,
-        ).filter(
-            Q(date_to__isnull=True) | Q(date_to__gte=today)
-        )
+        if not church:
+            raise serializers.ValidationError({
+                "detail":
+                    "No church is associated with this account."
+            })
 
-        if self.instance:
-            active_priests = active_priests.exclude(pk=self.instance.pk)
+        # ====================================================
+        # VALUES
+        # ====================================================
 
-        # Check for active priests that overlap with the new priest's dates
-        for existing in active_priests:
-            existing_start = existing.date_from
-            existing_end = existing.date_to
-
-            # Check if the new priest's period overlaps with the existing priest's period
-            starts_after_existing_ends = (
-                existing_end is not None
-                and new_date_from
-                and new_date_from > existing_end
+        designation = data.get(
+            "designation",
+            getattr(
+                self.instance,
+                "designation",
+                "MAIN"
             )
-            ends_before_existing_starts = (
-                new_date_to is not None and new_date_to < existing_start
+        )
+
+        date_from = data.get(
+            "date_from",
+            getattr(
+                self.instance,
+                "date_from",
+                None
             )
+        )
 
-            overlaps = not (starts_after_existing_ends or ends_before_existing_starts)
+        date_to = data.get(
+            "date_to",
+            getattr(
+                self.instance,
+                "date_to",
+                None
+            )
+        )
 
-            if overlaps:
-                # Handle different cases for better error messages
-                if existing.designation == "MAIN":
-                    role = "main priest"
-                else:
-                    role = "assistant priest"
-                
-                until = (
-                    existing_end.strftime("%d-%m-%Y")
-                    if existing_end
-                    else "an unspecified date"
-                )
+        is_active = data.get(
+            "is_active",
+            getattr(
+                self.instance,
+                "is_active",
+                True
+            )
+        )
+
+        today = date_cls.today()
+
+        # ====================================================
+        # DATE FROM REQUIRED
+        # ====================================================
+
+        if not date_from:
+
+            raise serializers.ValidationError({
+                "date_from":
+                    "Serving-from date is required."
+            })
+
+        # ====================================================
+        # DATE VALIDATION
+        # ====================================================
+
+        if date_to and date_from:
+
+            if date_to < date_from:
+
                 raise serializers.ValidationError({
-                    "designation": (
-                        f"This overlaps with {existing.name}, who is currently "
-                        f"serving as {role} until {until}. Please ensure the new "
-                        f"priest's service period does not overlap with any active priest."
-                    )
+                    "date_to":
+                        "Serving-to date cannot be earlier "
+                        "than serving-from date."
                 })
 
-        # Additional validation for MAIN priests
-        if designation == "MAIN":
-            if not new_date_from:
-                raise serializers.ValidationError({
-                    "date_from": "Serving-from date is required for a main priest."
-                })
+        # ====================================================
+        # CURRENTLY SERVING
+        # ====================================================
 
-        # Validation for ASSISTANT priests
-        else:
-            # Count active assistants (optional - keep or remove as needed)
-            active_assistants = Priest.objects.filter(
+        if is_active and date_to:
+
+            raise serializers.ValidationError({
+                "date_to":
+                    "A currently serving vicar cannot have "
+                    "a Serving To date."
+            })
+
+        # ====================================================
+        # PREVIOUS VICAR
+        # ====================================================
+
+        if not is_active and not date_to:
+
+            raise serializers.ValidationError({
+                "date_to":
+                    "Serving-to date is required for a "
+                    "previous vicar."
+            })
+
+        # ====================================================
+        # ASSISTANT VICAR
+        #
+        # MAXIMUM 3 CURRENT ASSISTANT VICARS
+        #
+        # Assistants CAN overlap.
+        # ====================================================
+
+        if designation == "ASSISTANT" and is_active:
+
+            assistant_count = Priest.objects.filter(
                 church=church,
                 designation="ASSISTANT",
-            ).filter(
-                Q(date_to__isnull=True) | Q(date_to__gte=today)
-            )
-            if self.instance:
-                active_assistants = active_assistants.exclude(pk=self.instance.pk)
+                is_active=True,
 
-            # Optional: Keep the max 3 assistants limit
-            if active_assistants.count() >= 3:
+                # Already started serving
+                date_from__isnull=False,
+                date_from__lte=today
+            ).filter(
+                # Still serving
+                Q(date_to__isnull=True) |
+                Q(date_to__gte=today)
+            )
+
+            # Don't count the same record when editing
+            if self.instance:
+
+                assistant_count = assistant_count.exclude(
+                    pk=self.instance.pk
+                )
+
+            if assistant_count.count() >= 3:
+
                 raise serializers.ValidationError({
-                    "designation": "Maximum of 3 active assistant priests allowed."
+                    "designation":
+                        "Maximum of 3 active Assistant "
+                        "Vicars are allowed."
                 })
+
+        # ====================================================
+        # VICAR
+        #
+        # ONLY ONE VICAR
+        #
+        # Assistant Vicars are completely ignored here.
+        # ====================================================
+
+        if designation == "MAIN":
+
+            existing_vicars = Priest.objects.filter(
+                church=church,
+                designation="MAIN"
+            )
+
+            # Don't compare with itself during edit
+            if self.instance:
+
+                existing_vicars = existing_vicars.exclude(
+                    pk=self.instance.pk
+                )
+
+            for existing in existing_vicars:
+
+                existing_start = existing.date_from
+                existing_end = existing.date_to
+
+                if not existing_start:
+                    continue
+
+                # ============================================
+                # EXISTING VICAR IS ONGOING
+                # ============================================
+
+                if existing_end is None:
+
+                    raise serializers.ValidationError({
+                        "date_from": (
+                            f"{existing.name} is already "
+                            "serving as Vicar until ongoing. "
+                            "The service period cannot overlap."
+                        )
+                    })
+
+                # ============================================
+                # EXISTING VICAR HAS AN END DATE
+                # ============================================
+
+                # New Vicar starts on or before old Vicar ends
+                if date_from <= existing_end:
+
+                    until = existing_end.strftime(
+                        "%d %b %Y"
+                    )
+
+                    raise serializers.ValidationError({
+                        "date_from": (
+                            f"{existing.name} is already "
+                            f"serving as Vicar until {until}. "
+                            "The service period cannot overlap."
+                        )
+                    })
+
+        # ====================================================
+        # DONE
+        # ====================================================
 
         return data
 
@@ -689,34 +1114,179 @@ class SubscribeSerializer(serializers.Serializer):
         return data
 
 
-#upgrade package serializer
+from registry.models import TaxType, TaxRate
+
+class TaxTypeSerializer(serializers.ModelSerializer):
+    """Serializer for Tax Type"""
+    country_name = serializers.SerializerMethodField()
+    tax_rate_count = serializers.IntegerField(read_only=True)
+    
+    class Meta:
+        model = TaxType
+        fields = [
+            'id',
+            'tax_type_code',
+            'tax_type_name',
+            'country',
+            'country_name',
+            'is_active',
+            'description',
+            'tax_rate_count',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def get_country_name(self, obj):
+        if obj.country:
+            return obj.country.name
+        return None
+
+
+class TaxRateSerializer(serializers.ModelSerializer):
+    """Serializer for Tax Rate"""
+    tax_type_name = serializers.CharField(source='tax_type.tax_type_name', read_only=True)
+    tax_type_code = serializers.CharField(source='tax_type.tax_type_code', read_only=True)
+    is_effective = serializers.BooleanField(read_only=True)
+    
+    class Meta:
+        model = TaxRate
+        fields = [
+            'id',
+            'tax_rate_code',
+            'tax_rate_name',
+            'tax_type',
+            'tax_type_name',
+            'tax_type_code',
+            'rate_percentage',
+            'effective_from',
+            'effective_until',
+            'is_active',
+            'is_effective',
+            'description',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def get_is_effective(self, obj):
+        return obj.is_effective()
+
+class TaxRateListSerializer(serializers.ModelSerializer):
+    """Simplified Tax Rate Serializer for list view"""
+    tax_type_display = serializers.CharField(source='tax_type.tax_type_name', read_only=True)
+    
+    class Meta:
+        model = TaxRate
+        fields = [
+            'id',
+            'tax_rate_code',
+            'tax_rate_name',
+            'tax_type_display',
+            'rate_percentage',
+            'effective_from',
+            'effective_until',
+            'is_active',
+        ]
+
+
+class TaxTypeListSerializer(serializers.ModelSerializer):
+    """Simplified Tax Type Serializer for list view"""
+    tax_rate_count = serializers.IntegerField(read_only=True)
+    
+    class Meta:
+        model = TaxType
+        fields = [
+            'id',
+            'tax_type_code',
+            'tax_type_name',
+            'country',
+            'is_active',
+            'tax_rate_count',
+            'created_at',
+        ]
+
+
+
 class UpgradeSerializer(serializers.Serializer):
     package_id = serializers.IntegerField()
+    billing_cycle = serializers.ChoiceField(
+        choices=['MONTHLY', 'YEARLY'], 
+        required=True
+    )
+    capacity = serializers.IntegerField(required=False, allow_null=True)
 
     def validate(self, data):
-        church = self.context["church"]
+        church = self.context.get("church")
+        
+        if not church:
+            raise serializers.ValidationError("Church context is required")
 
         subscription = getattr(church, "churchsubscription", None)
         if not subscription or not subscription.is_active:
             raise serializers.ValidationError("No active subscription")
 
         try:
-            new_package = Package.objects.get(id=data["package_id"])
+            new_package = Package.objects.get(id=data["package_id"], is_active=True)
         except Package.DoesNotExist:
-            raise serializers.ValidationError("Invalid package")
+            raise serializers.ValidationError("Invalid package or package is inactive")
 
-        if (
-            not new_package.is_custom and
-            not subscription.package.is_custom and
-            new_package.member_limit <= subscription.package.member_limit
-        ):
+        # Validate capacity
+        capacity = data.get('capacity')
+        if capacity:
+            if new_package.member_limit and capacity > new_package.member_limit:
+                raise serializers.ValidationError({
+                    'capacity': f"Capacity exceeds package limit of {new_package.member_limit}"
+                })
+
+        # Check if upgrading to a higher package (based on member_limit)
+        current_package = subscription.package
+        if new_package.member_limit and current_package.member_limit:
+            if new_package.member_limit <= current_package.member_limit:
+                raise serializers.ValidationError(
+                    "Upgrade must be to a package with higher member limit"
+                )
+        
+        # Check if trying to upgrade to the same package
+        if new_package.id == current_package.id:
             raise serializers.ValidationError(
-                "Upgrade must be to higher package"
+                "Cannot upgrade to the same package"
+            )
+
+        # Check for pending bills
+        from registry.models import Bill
+        if Bill.objects.filter(
+            subscription=subscription,
+            status='UNPAID'
+        ).exists():
+            raise serializers.ValidationError(
+                "Please clear pending bill before requesting upgrade"
             )
 
         data["subscription"] = subscription
         data["new_package"] = new_package
+        data["current_package"] = current_package
+        
         return data
+
+    def create(self, validated_data):
+        """
+        Create upgrade request
+        """
+        from registry.models import UpgradeRequest
+        
+        subscription = validated_data["subscription"]
+        new_package = validated_data["new_package"]
+        
+        upgrade_request = UpgradeRequest.objects.create(
+            church=subscription.church,
+            current_package=subscription.package,
+            requested_package=new_package,
+            status='PENDING',
+            reason=validated_data.get('reason', ''),
+        )
+        
+        return upgrade_request
 
 #for knowing member count
 class ChurchDashboardSerializer(serializers.Serializer):
@@ -837,45 +1407,81 @@ class SubscriptionExpirySerializer(serializers.Serializer):
     status = serializers.CharField()
 
 #upgrade request
+# registry/serializers.py
+
 class UpgradeRequestSerializer(serializers.ModelSerializer):
     requested_package = serializers.PrimaryKeyRelatedField(
-        queryset=Package.objects.filter(is_trial=False)
+        queryset=Package.objects.filter(is_active=True)  # Changed from is_trial=False
     )
+    
+    church_name = serializers.CharField(source='church.name', read_only=True)
+    current_package_name = serializers.CharField(source='current_package.name', read_only=True)
+    requested_package_name = serializers.CharField(source='requested_package.name', read_only=True)
 
     class Meta:
         model = UpgradeRequest
         fields = [
             "id",
+            "church",
+            "church_name",
+            "current_package",
+            "current_package_name",
             "requested_package",
+            "requested_package_name",
             "requested_capacity",
             "reason",
             "status",
+            "admin_notes",
             "created_at",
+            "updated_at",
         ]
         read_only_fields = [
             "id",
+            "church",
             "status",
             "created_at",
+            "updated_at",
         ]
 
     def validate(self, attrs):
         package = attrs.get("requested_package")
         capacity = attrs.get("requested_capacity")
-
-        # 🔒 Custom package requires capacity
-        if package.is_custom and not capacity:
+        church = self.context.get('church') or attrs.get('church')
+        
+        # Get current subscription
+        if church:
+            subscription = getattr(church, "churchsubscription", None)
+            if subscription:
+                attrs['current_package'] = subscription.package
+        
+        # Validate package is active
+        if not package.is_active:
             raise serializers.ValidationError(
-                {"requested_capacity": "Capacity is required for custom package"}
+                {"requested_package": "Requested package is not active"}
             )
-
-        # 🔒 Non-custom should not send capacity
-        if not package.is_custom and capacity:
+        
+        # Validate capacity against member limit
+        if package.member_limit:
+            if capacity and capacity > package.member_limit:
+                raise serializers.ValidationError(
+                    {"requested_capacity": f"Capacity cannot exceed package limit of {package.member_limit}"}
+                )
+        
+        # Check if upgrading to the same package
+        current_package = attrs.get('current_package')
+        if current_package and package.id == current_package.id:
             raise serializers.ValidationError(
-                {"requested_capacity": "Capacity allowed only for custom package"}
+                {"requested_package": "Cannot upgrade to the same package"}
             )
-
+        
+        # Check if it's a higher package (based on member_limit)
+        if current_package and package.member_limit and current_package.member_limit:
+            if package.member_limit <= current_package.member_limit:
+                raise serializers.ValidationError(
+                    {"requested_package": "Must upgrade to a package with higher member limit"}
+                )
+        
         return attrs
-    
 #Baptism
 class BaptismSerializer(serializers.ModelSerializer):
 
