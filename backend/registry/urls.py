@@ -70,7 +70,7 @@ from .views import (
     SubscriptionDetailView,AccountLedgerMasterListCreateView,PaymentMasterListCreateView,QurbanaReceiptsListCreateView,
     QurbanaReceiptsDetailView, CommitteeMasterListCreateView, CommitteeMasterDetailView, CommitteeMemberListCreateView,HeadlessHouseMembersAPIView,
     CommitteeMemberDetailView, PaymentMasterDetailView, AccountLedgerMasterDetailView, MemberDirectoryAPIView,
-    MemberAgeWiseListAPIView, MemberPhoneDirectoryAPIView,DioceseListCreateAPIView, DioceseDetailAPIView
+    MemberAgeWiseListAPIView, MemberPhoneDirectoryAPIView,DioceseListCreateAPIView, DioceseDetailAPIView, MemberDetailView
 )
 
 urlpatterns = [
@@ -137,6 +137,7 @@ path("marriages/<int:pk>/dhesha-kuri/", DheshaKuriAPIView.as_view()),
 path("mobile/families/marriages/", FamilyMarriagesMobileAPIView.as_view(), name="mobile-family-marriages"),
 path("mobile/marriages/<int:pk>/certificate/", MarriageCertificateMobileAPIView.as_view(), name="mobile-marriage-certificate"),
 path("mobile/marriage/dhesha-kuri/", UserDheshaKuriAPIView.as_view()),
+path('api/registry/family-heads/all/', FamilyHeadListAPIView.as_view(), name='family-heads-all'),
 
 # Inactive Members & Death
 path("members/inactive/", InactiveMembersAPIView.as_view(), name="inactive-members"),
@@ -146,6 +147,7 @@ path("death-registers/<int:pk>/", DeathRegisterUpdateAPIView.as_view(), name="de
     path("members/promote-head/<int:pk>/",PromoteFamilyHeadAPIView.as_view(),name="promote-family-head"),
     path("death-register/",DeathRegisterListAPIView.as_view(),name="list-all-death"),
     path("death-register/create/",DeathRegisterCreateAPIView.as_view(),name="death-register-create"),
+    path('members/<int:pk>/detail/', MemberDetailView.as_view(), name='member-detail'),
 
     path("family-head/<int:pk>/",FamilyHeadUpdateAPIView.as_view(),name="family-head-edit"),
     path("church-members/",ChurchMembersAPIView.as_view(),name="church-members"),

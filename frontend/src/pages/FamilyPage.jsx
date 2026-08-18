@@ -47,7 +47,8 @@ const FamilyPage = () => {
 
   const [currentPage, setCurrentPage] = useState(1);
 
-  const [pageSize] = useState(5);
+  // Number of records displayed per page
+  const pageSize = 5;
 
   // ==========================================================
   // LOAD FAMILIES
@@ -81,7 +82,7 @@ const FamilyPage = () => {
   }, []);
 
   // ==========================================================
-  // FILTER + SEARCH
+  // SEARCH + FILTER
   // ==========================================================
 
   const filteredFamilies = useMemo(() => {
@@ -147,10 +148,13 @@ const FamilyPage = () => {
     totalPages
   );
 
+  const startIndex =
+    (safePage - 1) * pageSize;
+
   const paginatedFamilies =
     filteredFamilies.slice(
-      (safePage - 1) * pageSize,
-      safePage * pageSize
+      startIndex,
+      startIndex + pageSize
     );
 
   useEffect(() => {
@@ -201,6 +205,30 @@ const FamilyPage = () => {
   };
 
   // ==========================================================
+  // DYNAMIC TABLE HEIGHT
+  // ==========================================================
+
+  /*
+    Header = 40px
+    Each row = 42px
+
+    The table grows depending on how many
+    records are currently displayed.
+  */
+
+  const tableRowHeight = 42;
+  const tableHeaderHeight = 42;
+
+  const tableHeight = loading
+    ? 90
+    : Math.max(
+        90,
+        tableHeaderHeight +
+          paginatedFamilies.length *
+            tableRowHeight
+      );
+
+  // ==========================================================
   // PAGINATION NUMBERS
   // ==========================================================
 
@@ -218,7 +246,11 @@ const FamilyPage = () => {
         pages.push("...");
       }
 
-      const start = Math.max(2, safePage - 1);
+      const start = Math.max(
+        2,
+        safePage - 1
+      );
+
       const end = Math.min(
         totalPages - 1,
         safePage + 1
@@ -250,39 +282,48 @@ const FamilyPage = () => {
     return (
       <Box
         border="1px solid #DCE2EA"
-        borderRadius="9px"
-        p={5}
+        borderRadius="8px"
+        h="78px"
+        px={4}
         bg="white"
+        display="flex"
+        alignItems="center"
       >
-        <Flex align="center" gap={5}>
+        <Flex
+          align="center"
+          width="100%"
+          height="100%"
+        >
           <Box
-            boxSize="65px"
+            width="65px"
+            height="100%"
+            borderRight="1px solid #DCE2EA"
             display="flex"
             alignItems="center"
             justifyContent="center"
-            borderRight="1px solid #DCE2EA"
-            pr={5}
+            flexShrink={0}
           >
             <Icon
               as={icon}
-              boxSize={10}
+              boxSize={8}
               color="#D7193F"
-              strokeWidth={1.7}
+              strokeWidth={1.6}
             />
           </Box>
 
-          <Box>
+          <Box pl={4}>
             <Text
-              fontSize="sm"
+              fontSize="12px"
               color="#182338"
               mb={1}
+              fontWeight="600"
             >
               {title}
             </Text>
 
             <Text
-              fontSize="3xl"
-              fontWeight="600"
+              fontSize="24px"
+              fontWeight="700"
               color="#182338"
               lineHeight="1"
             >
@@ -305,141 +346,47 @@ const FamilyPage = () => {
       display="flex"
       flexDirection="column"
     >
+      {/* ======================================================
+          NAVBAR
+      ====================================================== */}
+
       <Navbar />
 
-      <Container
-        maxW="container.xl"
-        py={5}
-        flex="1"
-      >
-        {/* ==================================================
-            BREADCRUMB
-        ================================================== */}
+      {/* ======================================================
+          MAIN CONTENT
+      ====================================================== */}
 
-        <HStack
-          gap={2}
-          mb={4}
-          color="#60708C"
-          fontSize="sm"
-        >
-          <Text>Masters</Text>
-          <Text>/</Text>
-          <Text>Family Master</Text>
-        </HStack>
-
-        {/* ==================================================
-            HEADER
-        ================================================== */}
-
-        <Flex
-          justify="space-between"
-          align={{
-            base: "flex-start",
-            md: "center",
-          }}
-          gap={4}
-          mb={5}
-          direction={{
-            base: "column",
-            md: "row",
-          }}
-        >
-          <Box>
-            <Text
-              fontSize="sm"
-              fontWeight="700"
-              color="#D7193F"
-              mb={1}
-            >
-              FAMILY MASTER
-            </Text>
-
-            <Heading
-              size="xl"
-              color="#182338"
-              mb={1}
-            >
-              Family Master
-            </Heading>
-
-            <Text
-              color="#60708C"
-              fontSize="sm"
-            >
-              Manage family records, origins and
-              history information.
-            </Text>
-          </Box>
-
-          <Button
-            bg={PRIMARY_MAROON}
-            color="white"
-            px={6}
-            h="48px"
-            borderRadius="7px"
-            onClick={() =>
-              navigate("/family-master/add")
-            }
-            _hover={{
-              bg: "#650A18",
-            }}
-          >
-            <Icon
-              as={LuPlus}
-              mr={2}
-              boxSize={5}
-            />
-
-            Add Family
-          </Button>
-        </Flex>
-
-        {/* ==================================================
-            STATS
-        ================================================== */}
-
-        <SimpleGrid
-          columns={{
-            base: 1,
-            md: 3,
-          }}
-          gap={5}
-          mb={5}
-        >
-          <StatCard
-            icon={LuHouse}
-            title="Total Families"
-            value={totalFamilies}
-          />
-
-          <StatCard
-            icon={LuMapPin}
-            title="With Origin"
-            value={withOrigin}
-          />
-
-          <StatCard
-            icon={LuBookOpen}
-            title="With History"
-            value={withHistory}
-          />
-        </SimpleGrid>
-
-        {/* ==================================================
-            TABLE CONTAINER
-        ================================================== */}
-
-        <Box
-          border="1px solid #DCE2EA"
-          borderRadius="9px"
-          p={4}
-          bg="white"
+      <Box flex="1">
+        <Container
+          maxW="1200px"
+          px={{ base: 4, md: 5 }}
+          py={{ base: 3, md: 4 }}
         >
           {/* ==================================================
-              SEARCH / FILTER
+              BREADCRUMB
+          ================================================== */}
+
+          <HStack
+            gap={2}
+            mb={2}
+            color="#60708C"
+            fontSize="11px"
+          >
+            <Text>Masters</Text>
+            <Text>/</Text>
+            <Text>Family Master</Text>
+          </HStack>
+
+          {/* ==================================================
+              HEADER
           ================================================== */}
 
           <Flex
+            justify="space-between"
+            align={{
+              base: "flex-start",
+              md: "center",
+            }}
             gap={3}
             mb={3}
             direction={{
@@ -447,443 +394,628 @@ const FamilyPage = () => {
               md: "row",
             }}
           >
-            <Box
-              position="relative"
-              maxW={{
-                base: "100%",
-                md: "360px",
-              }}
-              flex="1"
-            >
-              <Icon
-                as={LuSearch}
-                position="absolute"
-                left="14px"
-                top="50%"
-                transform="translateY(-50%)"
-                color="#60708C"
-                zIndex={1}
-              />
-
-              <Input
-                value={search}
-                onChange={(e) =>
-                  setSearch(e.target.value)
-                }
-                placeholder="Search family name or origin"
-                pl="42px"
-                h="44px"
-                borderColor="#DCE2EA"
-                borderRadius="7px"
-                fontSize="14px"
-                _focus={{
-                  borderColor: PRIMARY_MAROON,
-                  boxShadow:
-                    `0 0 0 1px ${PRIMARY_MAROON}`,
-                }}
-              />
-            </Box>
-
-            <Box
-              position="relative"
-              maxW={{
-                base: "100%",
-                md: "230px",
-              }}
-            >
-              <select
-                value={filter}
-                onChange={(e) =>
-                  setFilter(e.target.value)
-                }
-                style={{
-                  width: "100%",
-                  height: "44px",
-                  border:
-                    "1px solid #DCE2EA",
-                  borderRadius: "7px",
-                  padding: "0 38px 0 12px",
-                  fontSize: "14px",
-                  background: "white",
-                  color: "#182338",
-                  outline: "none",
-                  cursor: "pointer",
-                  appearance: "none",
-                }}
+            <Box>
+              <Text
+                fontSize="10px"
+                fontWeight="700"
+                color="#D7193F"
+                mb={1}
               >
-                <option value="ALL">
-                  All Records
-                </option>
+                FAMILY MASTER
+              </Text>
 
-                <option value="ORIGIN">
-                  With Origin
-                </option>
-
-                <option value="HISTORY">
-                  With History
-                </option>
-
-                <option value="NO_ORIGIN">
-                  Without Origin
-                </option>
-              </select>
-
-              <Icon
-                as={LuChevronDown}
-                position="absolute"
-                right="12px"
-                top="50%"
-                transform="translateY(-50%)"
-                pointerEvents="none"
+              <Heading
                 color="#182338"
-              />
+                fontSize={{
+                  base: "22px",
+                  md: "26px",
+                }}
+                lineHeight="1.1"
+                mb={1}
+              >
+                Family Master
+              </Heading>
+
+              <Text
+                color="#60708C"
+                fontSize="11px"
+              >
+                Manage family records, origins and
+                history information.
+              </Text>
             </Box>
 
             <Button
-              variant="outline"
-              h="44px"
-              borderColor="#FF5A7D"
-              color="#D7193F"
-              borderRadius="7px"
+              bg={PRIMARY_MAROON}
+              color="white"
               px={5}
-              onClick={() => {
-                setSearch("");
-                setFilter("ALL");
+              h="38px"
+              fontSize="12px"
+              borderRadius="6px"
+              flexShrink={0}
+              onClick={() =>
+                navigate("/family-master/add")
+              }
+              _hover={{
+                bg: "#650A18",
               }}
             >
               <Icon
-                as={LuFilter}
+                as={LuPlus}
                 mr={2}
+                boxSize={4}
               />
 
-              Filter
+              Add Family
             </Button>
           </Flex>
 
           {/* ==================================================
-              TABLE
+              STAT CARDS
+          ================================================== */}
+
+          <SimpleGrid
+            columns={{
+              base: 1,
+              md: 3,
+            }}
+            gap={3}
+            mb={3}
+          >
+            <StatCard
+              icon={LuHouse}
+              title="Total Families"
+              value={totalFamilies}
+            />
+
+            <StatCard
+              icon={LuMapPin}
+              title="With Origin"
+              value={withOrigin}
+            />
+
+            <StatCard
+              icon={LuBookOpen}
+              title="With History"
+              value={withHistory}
+            />
+          </SimpleGrid>
+
+          {/* ==================================================
+              TABLE CARD
           ================================================== */}
 
           <Box
-            overflowX="auto"
-            border="1px solid #E6EAF0"
-            borderRadius="7px"
+            border="1px solid #DCE2EA"
+            borderRadius="8px"
+            p={3}
+            bg="white"
           >
-            <Box
-              as="table"
-              width="100%"
-              minW="900px"
-              borderCollapse="collapse"
+            {/* ==================================================
+                SEARCH / FILTER
+            ================================================== */}
+
+            <Flex
+              gap={3}
+              mb={3}
+              direction={{
+                base: "column",
+                md: "row",
+              }}
             >
-              <Box as="thead">
-                <Box as="tr">
-                  {[
-                    "Family Name",
-                    "Origin",
-                    "History",
-                    "Last Updated",
-                    "Actions",
-                  ].map((heading) => (
-                    <Box
-                      as="th"
-                      key={heading}
-                      textAlign="left"
-                      px={4}
-                      py={3}
-                      fontSize="13px"
-                      fontWeight="600"
-                      color="#182338"
-                      borderBottom="1px solid #E6EAF0"
-                      whiteSpace="nowrap"
-                    >
-                      {heading}
-                    </Box>
-                  ))}
-                </Box>
-              </Box>
+              {/* SEARCH */}
 
-              <Box as="tbody">
-                {loading ? (
-                  <Box as="tr">
-                    <Box
-                      as="td"
-                      colSpan={5}
-                      textAlign="center"
-                      py={10}
-                      color="#60708C"
-                    >
-                      Loading families...
-                    </Box>
-                  </Box>
-                ) : paginatedFamilies.length === 0 ? (
-                  <Box as="tr">
-                    <Box
-                      as="td"
-                      colSpan={5}
-                      textAlign="center"
-                      py={10}
-                      color="#60708C"
-                    >
-                      No families found.
-                    </Box>
-                  </Box>
-                ) : (
-                  paginatedFamilies.map(
-                    (family) => (
-                      <Box
-                        as="tr"
-                        key={family.id}
-                        _hover={{
-                          bg: "#FFFBFC",
-                        }}
-                      >
-                        <Box
-                          as="td"
-                          px={4}
-                          py={3}
-                          fontSize="14px"
-                          fontWeight="500"
-                          color="#182338"
-                          borderBottom="1px solid #E6EAF0"
-                        >
-                          {family.family_name ||
-                            "-"}
-                        </Box>
-
-                        <Box
-                          as="td"
-                          px={4}
-                          py={3}
-                          fontSize="14px"
-                          color="#344054"
-                          borderBottom="1px solid #E6EAF0"
-                        >
-                          {family.origin ||
-                            "-"}
-                        </Box>
-
-                        <Box
-                          as="td"
-                          px={4}
-                          py={3}
-                          fontSize="14px"
-                          color="#344054"
-                          borderBottom="1px solid #E6EAF0"
-                          maxW="450px"
-                        >
-                          <Text
-                            overflow="hidden"
-                            textOverflow="ellipsis"
-                            whiteSpace="nowrap"
-                          >
-                            {family.history ||
-                              "-"}
-                          </Text>
-                        </Box>
-
-                        <Box
-                          as="td"
-                          px={4}
-                          py={3}
-                          fontSize="14px"
-                          color="#344054"
-                          borderBottom="1px solid #E6EAF0"
-                          whiteSpace="nowrap"
-                        >
-                          {formatDate(
-                            family.updated_at
-                          )}
-                        </Box>
-
-                        <Box
-                          as="td"
-                          px={4}
-                          py={3}
-                          borderBottom="1px solid #E6EAF0"
-                        >
-                          <HStack gap={3}>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              color="#D7193F"
-                              px={1}
-                              onClick={() =>
-                                navigate(
-                                  `/family-master/${family.id}`
-                                )
-                              }
-                              _hover={{
-                                bg: "#FFF0F4",
-                              }}
-                            >
-                              <Icon
-                                as={LuEye}
-                                mr={1}
-                              />
-
-                              View
-                            </Button>
-
-                            <Box
-                              h="22px"
-                              borderLeft="1px solid #DCE2EA"
-                            />
-
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              color="#D7193F"
-                              px={1}
-                              onClick={() =>
-                                navigate(
-                                  `/family-master/${family.id}/edit`
-                                )
-                              }
-                              _hover={{
-                                bg: "#FFF0F4",
-                              }}
-                            >
-                              <Icon
-                                as={LuPencil}
-                                mr={1}
-                              />
-
-                              Edit
-                            </Button>
-                          </HStack>
-                        </Box>
-                      </Box>
-                    )
-                  )
-                )}
-              </Box>
-            </Box>
-          </Box>
-
-          {/* ==================================================
-              PAGINATION
-          ================================================== */}
-
-          <Flex
-            justify="space-between"
-            align="center"
-            mt={3}
-            gap={3}
-            direction={{
-              base: "column",
-              md: "row",
-            }}
-          >
-            <Text
-              fontSize="13px"
-              color="#60708C"
-            >
-              {filteredFamilies.length === 0
-                ? "Showing 0 families"
-                : `Showing ${
-                    (safePage - 1) *
-                      pageSize +
-                    1
-                  }–${Math.min(
-                    safePage * pageSize,
-                    filteredFamilies.length
-                  )} of ${
-                    filteredFamilies.length
-                  } families`}
-            </Text>
-
-            <HStack gap={1}>
-              <Button
-                size="sm"
-                variant="outline"
-                borderColor="#DCE2EA"
-                disabled={safePage === 1}
-                onClick={() =>
-                  setCurrentPage(
-                    Math.max(
-                      1,
-                      safePage - 1
-                    )
-                  )
-                }
+              <Box
+                position="relative"
+                maxW={{
+                  base: "100%",
+                  md: "380px",
+                }}
+                flex="1"
               >
                 <Icon
-                  as={LuChevronLeft}
+                  as={LuSearch}
+                  position="absolute"
+                  left="12px"
+                  top="50%"
+                  transform="translateY(-50%)"
+                  color="#60708C"
+                  zIndex={1}
+                  boxSize={4}
                 />
-                Previous
-              </Button>
 
-              {renderPages().map(
-                (page, index) =>
-                  page === "..." ? (
-                    <Text
-                      key={`dots-${index}`}
-                      px={2}
-                      color="#60708C"
-                    >
-                      ...
-                    </Text>
-                  ) : (
-                    <Button
-                      key={page}
-                      size="sm"
-                      minW="36px"
-                      variant={
-                        page === safePage
-                          ? "solid"
-                          : "outline"
-                      }
-                      bg={
-                        page === safePage
-                          ? PRIMARY_MAROON
-                          : "white"
-                      }
-                      color={
-                        page === safePage
-                          ? "white"
-                          : "#344054"
-                      }
-                      borderColor={
-                        page === safePage
-                          ? PRIMARY_MAROON
-                          : "#DCE2EA"
-                      }
-                      onClick={() =>
-                        setCurrentPage(page)
-                      }
-                    >
-                      {page}
-                    </Button>
-                  )
-              )}
+                <Input
+                  value={search}
+                  onChange={(e) =>
+                    setSearch(e.target.value)
+                  }
+                  placeholder="Search family name or origin"
+                  pl="38px"
+                  h="38px"
+                  borderColor="#DCE2EA"
+                  borderRadius="6px"
+                  fontSize="12px"
+                  _focus={{
+                    borderColor: PRIMARY_MAROON,
+                    boxShadow:
+                      `0 0 0 1px ${PRIMARY_MAROON}`,
+                  }}
+                />
+              </Box>
+
+              {/* FILTER */}
+
+              <Box
+                position="relative"
+                width={{
+                  base: "100%",
+                  md: "210px",
+                }}
+              >
+                <select
+                  value={filter}
+                  onChange={(e) =>
+                    setFilter(e.target.value)
+                  }
+                  style={{
+                    width: "100%",
+                    height: "38px",
+                    border:
+                      "1px solid #DCE2EA",
+                    borderRadius: "6px",
+                    padding:
+                      "0 35px 0 11px",
+                    fontSize: "12px",
+                    background: "white",
+                    color: "#182338",
+                    outline: "none",
+                    cursor: "pointer",
+                    appearance: "none",
+                  }}
+                >
+                  <option value="ALL">
+                    All Records
+                  </option>
+
+                  <option value="ORIGIN">
+                    With Origin
+                  </option>
+
+                  <option value="HISTORY">
+                    With History
+                  </option>
+
+                  <option value="NO_ORIGIN">
+                    Without Origin
+                  </option>
+                </select>
+
+                <Icon
+                  as={LuChevronDown}
+                  position="absolute"
+                  right="11px"
+                  top="50%"
+                  transform="translateY(-50%)"
+                  pointerEvents="none"
+                  color="#182338"
+                  boxSize={4}
+                />
+              </Box>
+
+              {/* RESET FILTER */}
 
               <Button
-                size="sm"
                 variant="outline"
+                h="38px"
                 borderColor="#FF5A7D"
                 color="#D7193F"
-                disabled={
-                  safePage === totalPages
-                }
-                onClick={() =>
-                  setCurrentPage(
-                    Math.min(
-                      totalPages,
-                      safePage + 1
-                    )
-                  )
-                }
+                borderRadius="6px"
+                px={4}
+                fontSize="12px"
+                onClick={() => {
+                  setSearch("");
+                  setFilter("ALL");
+                }}
               >
-                Next
                 <Icon
-                  as={LuChevronRight}
-                  ml={1}
+                  as={LuFilter}
+                  mr={2}
+                  boxSize={4}
                 />
+
+                Filter
               </Button>
-            </HStack>
-          </Flex>
-        </Box>
-      </Container>
+            </Flex>
+
+            {/* ==================================================
+                TABLE
+            ================================================== */}
+
+            <Box
+              height={`${tableHeight}px`}
+              overflowX="auto"
+              overflowY="hidden"
+              border="1px solid #E6EAF0"
+              borderRadius="6px"
+              transition="height 0.2s ease"
+            >
+              <Box
+                as="table"
+                width="100%"
+                minW="850px"
+                height="100%"
+                borderCollapse="collapse"
+              >
+                {/* TABLE HEADER */}
+
+                <Box as="thead">
+                  <Box
+                    as="tr"
+                    height={`${tableHeaderHeight}px`}
+                  >
+                    {[
+                      "Family Name",
+                      "Origin",
+                      "History",
+                      "Last Updated",
+                      "Actions",
+                    ].map((heading) => (
+                      <Box
+                        as="th"
+                        key={heading}
+                        textAlign="left"
+                        px={4}
+                        py={2}
+                        fontSize="11px"
+                        fontWeight="700"
+                        color="#182338"
+                        borderBottom="1px solid #E6EAF0"
+                        whiteSpace="nowrap"
+                        bg="white"
+                      >
+                        {heading}
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+
+                {/* TABLE BODY */}
+
+                <Box as="tbody">
+                  {/* LOADING */}
+
+                  {loading ? (
+                    <Box as="tr">
+                      <Box
+                        as="td"
+                        colSpan={5}
+                        textAlign="center"
+                        height="48px"
+                        color="#60708C"
+                        fontSize="12px"
+                      >
+                        Loading families...
+                      </Box>
+                    </Box>
+                  ) : paginatedFamilies.length === 0 ? (
+                    /* EMPTY */
+
+                    <Box as="tr">
+                      <Box
+                        as="td"
+                        colSpan={5}
+                        textAlign="center"
+                        height="48px"
+                        color="#60708C"
+                        fontSize="12px"
+                      >
+                        No families found.
+                      </Box>
+                    </Box>
+                  ) : (
+                    paginatedFamilies.map(
+                      (family) => (
+                        <Box
+                          as="tr"
+                          key={family.id}
+                          height={`${tableRowHeight}px`}
+                          _hover={{
+                            bg: "#FFFBFC",
+                          }}
+                        >
+                          {/* FAMILY NAME */}
+
+                          <Box
+                            as="td"
+                            px={4}
+                            py={1}
+                            fontSize="12px"
+                            fontWeight="600"
+                            color="#182338"
+                            borderBottom="1px solid #E6EAF0"
+                            whiteSpace="nowrap"
+                          >
+                            {family.family_name ||
+                              "-"}
+                          </Box>
+
+                          {/* ORIGIN */}
+
+                          <Box
+                            as="td"
+                            px={4}
+                            py={1}
+                            fontSize="12px"
+                            color="#344054"
+                            borderBottom="1px solid #E6EAF0"
+                          >
+                            {family.origin ||
+                              "-"}
+                          </Box>
+
+                          {/* HISTORY */}
+
+                          <Box
+                            as="td"
+                            px={4}
+                            py={1}
+                            fontSize="12px"
+                            color="#344054"
+                            borderBottom="1px solid #E6EAF0"
+                            maxW="400px"
+                          >
+                            <Text
+                              overflow="hidden"
+                              textOverflow="ellipsis"
+                              whiteSpace="nowrap"
+                            >
+                              {family.history ||
+                                "-"}
+                            </Text>
+                          </Box>
+
+                          {/* LAST UPDATED */}
+
+                          <Box
+                            as="td"
+                            px={4}
+                            py={1}
+                            fontSize="12px"
+                            color="#344054"
+                            borderBottom="1px solid #E6EAF0"
+                            whiteSpace="nowrap"
+                          >
+                            {formatDate(
+                              family.updated_at
+                            )}
+                          </Box>
+
+                          {/* ACTIONS */}
+
+                          <Box
+                            as="td"
+                            px={4}
+                            py={1}
+                            borderBottom="1px solid #E6EAF0"
+                          >
+                            <HStack gap={2}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                h="30px"
+                                color="#D7193F"
+                                px={2}
+                                fontSize="11px"
+                                onClick={() =>
+                                  navigate(
+                                    `/family-master/${family.id}`
+                                  )
+                                }
+                                _hover={{
+                                  bg: "#FFF0F4",
+                                }}
+                              >
+                                <Icon
+                                  as={LuEye}
+                                  mr={1}
+                                  boxSize={3.5}
+                                />
+
+                                View
+                              </Button>
+
+                              <Box
+                                h="20px"
+                                borderLeft="1px solid #DCE2EA"
+                              />
+
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                h="30px"
+                                color="#D7193F"
+                                px={2}
+                                fontSize="11px"
+                                onClick={() =>
+                                  navigate(
+                                    `/family-master/${family.id}/edit`
+                                  )
+                                }
+                                _hover={{
+                                  bg: "#FFF0F4",
+                                }}
+                              >
+                                <Icon
+                                  as={LuPencil}
+                                  mr={1}
+                                  boxSize={3.5}
+                                />
+
+                                Edit
+                              </Button>
+                            </HStack>
+                          </Box>
+                        </Box>
+                      )
+                    )
+                  )}
+                </Box>
+              </Box>
+            </Box>
+
+            {/* ==================================================
+                PAGINATION
+            ================================================== */}
+
+            <Flex
+              justify="space-between"
+              align="center"
+              mt={3}
+              gap={3}
+              direction={{
+                base: "column",
+                md: "row",
+              }}
+            >
+              {/* COUNT */}
+
+              <Text
+                fontSize="11px"
+                color="#60708C"
+              >
+                {filteredFamilies.length === 0
+                  ? "Showing 0 families"
+                  : `Showing ${
+                      startIndex + 1
+                    }–${Math.min(
+                      startIndex +
+                        paginatedFamilies.length,
+                      filteredFamilies.length
+                    )} of ${
+                      filteredFamilies.length
+                    } families`}
+              </Text>
+
+              {/* PAGINATION */}
+
+              <HStack gap={1}>
+                {/* PREVIOUS */}
+
+                <Button
+                  size="xs"
+                  h="30px"
+                  variant="outline"
+                  borderColor="#DCE2EA"
+                  color="#60708C"
+                  disabled={safePage === 1}
+                  onClick={() =>
+                    setCurrentPage(
+                      Math.max(
+                        1,
+                        safePage - 1
+                      )
+                    )
+                  }
+                >
+                  <Icon
+                    as={LuChevronLeft}
+                    boxSize={3.5}
+                  />
+
+                  Previous
+                </Button>
+
+                {/* PAGE NUMBERS */}
+
+                {renderPages().map(
+                  (page, index) =>
+                    page === "..." ? (
+                      <Text
+                        key={`dots-${index}`}
+                        px={1.5}
+                        fontSize="11px"
+                        color="#60708C"
+                      >
+                        ...
+                      </Text>
+                    ) : (
+                      <Button
+                        key={page}
+                        size="xs"
+                        h="30px"
+                        minW="30px"
+                        variant={
+                          page === safePage
+                            ? "solid"
+                            : "outline"
+                        }
+                        bg={
+                          page === safePage
+                            ? PRIMARY_MAROON
+                            : "white"
+                        }
+                        color={
+                          page === safePage
+                            ? "white"
+                            : "#344054"
+                        }
+                        borderColor={
+                          page === safePage
+                            ? PRIMARY_MAROON
+                            : "#DCE2EA"
+                        }
+                        onClick={() =>
+                          setCurrentPage(page)
+                        }
+                        _hover={{
+                          bg:
+                            page === safePage
+                              ? "#650A18"
+                              : "#FFF0F4",
+                        }}
+                      >
+                        {page}
+                      </Button>
+                    )
+                )}
+
+                {/* NEXT */}
+
+                <Button
+                  size="xs"
+                  h="30px"
+                  variant="outline"
+                  borderColor="#FF5A7D"
+                  color="#D7193F"
+                  disabled={
+                    safePage === totalPages
+                  }
+                  onClick={() =>
+                    setCurrentPage(
+                      Math.min(
+                        totalPages,
+                        safePage + 1
+                      )
+                    )
+                  }
+                >
+                  Next
+
+                  <Icon
+                    as={LuChevronRight}
+                    ml={1}
+                    boxSize={3.5}
+                  />
+                </Button>
+              </HStack>
+            </Flex>
+          </Box>
+        </Container>
+      </Box>
+
+      {/* ======================================================
+          FOOTER
+      ====================================================== */}
 
       <Footer />
     </Box>

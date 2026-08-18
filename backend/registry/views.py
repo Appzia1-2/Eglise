@@ -11,7 +11,7 @@ from accounts.permissions import IsChurchAuthenticated,IsChurchUser, IsMemberUse
 from accounts.utils import create_family_head_user
 from registry.services import calculate_new_bill_amount, calculate_prorated_upgrade_amount, generate_folio_number, get_next_subscription_action, handle_member_death
 from .models import Baptism, Bill, Church, DeathRegister, Designation, DheshaKuri, Diocese, Events, Grade, Marriage, Priest,  RegisterSetting, Relationship, TombFee, TombType, UpgradeRequest,  Ward, Family, Member, Package, Offering, VisitorMaster, Subscription, AccountGroupMaster, AccountLedgerMaster, PaymentMaster, QurbanaReceipts, CommitteeMaster, CommitteeMember
-from .serializers import BaptismSerializer, BillDetailSerializer, BillListSerializer, ChurchDetailSerializer, ChurchListSerializer, DeathRegisterSerializer, DesignationSerializer, DheshaKuriSerializer, DioceseSerializer, EventSerializer, FamilyHeadCreateSerializer, FamilyHeadUpdateSerializer, FamilyMemberSerializer, GradeSerializer, InactiveMemberSerializer, MarriageCertificateSerializer, MarriageSerializer, MemberProfileSerializer, MobileFamilyBaptismSerializer, MobileFamilyDetailSerializer, MobileFamilyListSerializer, MobileFamilyMemberSerializer,  PriestNameSerializer,PriestSerializer, RegisterSettingSerializer, RelationshipSerializer, SubscriptionExpirySerializer, TombFeeSerializer, TombTypeSerializer, UpgradeSerializer,  WardSerializer, FamilySerializer, MemberSerializer,PackageSerializer, WardWithFamilyCountSerializer, OfferingSerializer, VisitorMasterSerializer, SubscriptionSerializer, AccountGroupMasterSerializer, AccountLedgerMasterSerializer, PaymentMasterSerializer, QurbanaReceiptsSerializer, CommitteeMasterSerializer, CommitteeMemberSerializer, MemberDirectorySerializer
+from .serializers import BaptismSerializer, BillDetailSerializer, BillListSerializer, ChurchDetailSerializer,MemberDetailSerializer, ChurchListSerializer, DeathRegisterSerializer, DesignationSerializer, DheshaKuriSerializer, DioceseSerializer, EventSerializer, FamilyHeadCreateSerializer, FamilyHeadUpdateSerializer, FamilyMemberSerializer, GradeSerializer, InactiveMemberSerializer, MarriageCertificateSerializer, MarriageSerializer, MemberProfileSerializer, MobileFamilyBaptismSerializer, MobileFamilyDetailSerializer, MobileFamilyListSerializer, MobileFamilyMemberSerializer,  PriestNameSerializer,PriestSerializer, RegisterSettingSerializer, RelationshipSerializer, SubscriptionExpirySerializer, TombFeeSerializer, TombTypeSerializer, UpgradeSerializer,  WardSerializer, FamilySerializer, MemberSerializer,PackageSerializer, WardWithFamilyCountSerializer, OfferingSerializer, VisitorMasterSerializer, SubscriptionSerializer, AccountGroupMasterSerializer, AccountLedgerMasterSerializer, PaymentMasterSerializer, QurbanaReceiptsSerializer, CommitteeMasterSerializer, CommitteeMemberSerializer, MemberDirectorySerializer
 from rest_framework.generics import ListAPIView
 from .models import ChurchSubscription
 from .serializers import SubscribeSerializer,UpgradeRequestSerializer
@@ -352,24 +352,43 @@ class FamilyDetailAPIView(
         # ✅ Safe to delete
         return super().destroy(request, *args, **kwargs)
 
+# registry/views.py - Update FamilyHeadCreateAPIView
+
+from rest_framework.parsers import MultiPartParser, FormParser
 
 class FamilyHeadCreateAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsChurchUser]
+    permission_classes = [
+        IsAuthenticated,
+        IsChurchUser,
+    ]
+    parser_classes = [MultiPartParser, FormParser]  # Add this
 
+    @transaction.atomic
     def post(self, request):
+        # Log incoming data for debugging
+        print("=== REQUEST DATA ===")
+        print("POST data:", request.data.dict() if hasattr(request.data, 'dict') else request.data)
+        print("FILES:", request.FILES)
+        
         serializer = FamilyHeadCreateSerializer(
             data=request.data,
-            context={"church": request.user.church}
+            context={
+                "church": request.user.church,
+                "request": request
+            }
         )
 
         serializer.is_valid(raise_exception=True)
+
         head = serializer.save()
 
         return Response(
             {
                 "message": "Family head created successfully.",
                 "member_id": head.id,
-                "family_id": head.family.id,
+                "family_id": head.family_id,
+                "register_number": head.register_number,
+                "folio_number": head.folio_number,
             },
             status=status.HTTP_201_CREATED
         )
@@ -2301,24 +2320,25 @@ class ChangeMemberHeadAPIView(APIView):
             status=status.HTTP_200_OK
         )
      
+# registry/views.py
+
 class DeathRegisterListAPIView(ListAPIView):
-    serializer_class = DeathRegisterSerializer
+    """List all death registers"""
+    serializer_class = DeathRegisterSerializer  # or DeathRegisterListSerializer
     permission_classes = [IsAuthenticated, IsChurchUser]
 
     def get_queryset(self):
         church = self.request.user.church
-
         queryset = DeathRegister.objects.filter(
             church=church
-        ).select_related("member","member__family")
-
-        status_param = self.request.query_params.get("status")
-        if status_param:
-            queryset = queryset.filter(status=status_param.upper())
+        ).select_related("member", "member__family")
+        
+        # 🔥 REMOVED: status filter since no status field
+        # status_param = self.request.query_params.get("status")
+        # if status_param:
+        #     queryset = queryset.filter(status=status_param.upper())
 
         return queryset.order_by("-created_at")
-
-
 
 
 
@@ -2335,12 +2355,13 @@ class DeathRegisterUpdateAPIView(UpdateAPIView):
 
     def perform_update(self, serializer):
         death = self.get_object()
-
-        if death.status == "COMPLETED":
-            raise ValidationError("Cannot modify completed death record.")
+        
+        # 🔥 REMOVED: No status check needed
+        # if death.status == "COMPLETED":
+        #     raise ValidationError("Cannot modify completed death record.")
 
         with transaction.atomic():
-            # 🔥 FIX: Ensure dates are parsed before saving
+            # Ensure dates are parsed before saving
             validated_data = serializer.validated_data
             
             # Convert string dates to date objects if needed
@@ -2354,16 +2375,14 @@ class DeathRegisterUpdateAPIView(UpdateAPIView):
 
             death = serializer.save()
 
-            # Generate register number if needed
+            # Generate register number if needed (should already be generated in save())
             if not death.reg_no:
                 death.reg_no = generate_register_number(
                     death.church,
                     "DEATH"
                 )
+                death.save(update_fields=["reg_no"])
 
-            # Mark completed
-            death.status = "COMPLETED"
-            death.save(update_fields=["reg_no", "status"])
 
 
 #family head edit details
@@ -2912,6 +2931,7 @@ class MarkMemberDeadAPIView(APIView):
 from django.utils.dateparse import parse_date
 
 class DeathRegisterCreateAPIView(APIView):
+    """Create a new death registration"""
     permission_classes = [IsAuthenticated, IsChurchUser]
 
     def post(self, request):
@@ -2924,71 +2944,65 @@ class DeathRegisterCreateAPIView(APIView):
             )
 
         try:
-            member = Member.objects.get(pk=member_id, church=request.user.church)
+            member = Member.objects.get(
+                pk=member_id, 
+                church=request.user.church
+            )
         except Member.DoesNotExist:
             return Response(
                 {"error": "Member not found."},
                 status=status.HTTP_404_NOT_FOUND
             )
 
+        # Check if already deceased
         if member.expired:
             return Response(
                 {"error": "Member is already marked as deceased."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # 🔥 FIX: Parse dates from request
-        died_on = request.data.get("died_on")
-        funeral_on = request.data.get("funeral_on")
-        
-        # Convert string dates to date objects
-        if died_on and isinstance(died_on, str):
-            died_on = parse_date(died_on)
-        if funeral_on and isinstance(funeral_on, str):
-            funeral_on = parse_date(funeral_on)
-
-        tomb_type = request.data.get("tomb_type")
-        tomb_charge = request.data.get("tomb_charge")
-        reason_of_death = request.data.get("reason_of_death")
-
         # Validate required fields
-        missing = []
-        if not died_on:
-            missing.append("died_on")
-        if not funeral_on:
-            missing.append("funeral_on")
-        if not tomb_type:
-            missing.append("tomb_type")
-        if tomb_charge is None or tomb_charge == "":
-            missing.append("tomb_charge")
-        if not reason_of_death or not str(reason_of_death).strip():
-            missing.append("reason_of_death")
-
-        if missing:
+        required_fields = ['died_on', 'funeral_on', 'tomb_type', 'tomb_charge', 'reason_of_death']
+        missing_fields = [field for field in required_fields if not request.data.get(field)]
+        
+        if missing_fields:
             return Response(
-                {field: "This field is required." for field in missing},
+                {field: "This field is required." for field in missing_fields},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         with transaction.atomic():
-            try:
-                handle_member_death(member)
-            except ValueError as e:
-                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-            # 🔥 FIX: Create death record with date objects
+            # 🔥 REMOVED: status field - create directly
             death = DeathRegister.objects.create(
                 church=member.church,
                 member=member,
-                status="COMPLETED",
-                died_on=died_on,  # Now it's a date object
-                funeral_on=funeral_on,  # Now it's a date object
-                tomb_type_id=tomb_type,
-                tomb_charge=tomb_charge,
+                died_on=request.data.get("died_on"),
+                funeral_on=request.data.get("funeral_on"),
+                tomb_type_id=request.data.get("tomb_type"),
+                tomb_charge=request.data.get("tomb_charge"),
                 tomb_idn=request.data.get("tomb_idn", ""),
-                reason_of_death=reason_of_death,
+                reason_of_death=request.data.get("reason_of_death"),
                 remarks=request.data.get("remarks", ""),
             )
+            
+            # 🔥 Register number is auto-generated in the save() method
+
+            # Deactivate the member
+            member.expired = True
+            member.is_active = False
+            member.inactive_reason = "DECEASED"
+            member.inactive_date = date.today()
+            member.save()
+
+            # If family head, deactivate user account
+            if member.is_family_head and hasattr(member, 'user'):
+                member.user.is_active = False
+                member.user.save()
+
+            # Update spouse status
+            if member.spouse:
+                member.spouse.marital_status = "WIDOWED"
+                member.spouse.save()
 
         serializer = DeathRegisterSerializer(death)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -3063,17 +3077,15 @@ class FamilyHeadListAPIView(ListAPIView):
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
-
         data = [
             {
-                "member_id": m.id,
+                "id": m.id,
                 "name": m.name,
                 "family_name": m.family.family_name,
                 "house_name": m.house_name
             }
             for m in queryset
         ]
-
         return Response(data)
 
 class HeadlessHouseMembersAPIView(ListAPIView):
@@ -3083,33 +3095,54 @@ class HeadlessHouseMembersAPIView(ListAPIView):
     def get_queryset(self):
         church = self.request.user.church
 
-        # Exact (family_id, house_name) pairs that currently have an active head
+        family_id = self.kwargs.get("family_id")
+        house_name = self.kwargs.get("house_name")
+
         houses_with_head = set(
             Member.objects.filter(
                 church=church,
                 is_family_head=True,
                 is_active=True,
                 expired=False,
-            ).values_list("family_id", "house_name")
+            ).values_list(
+                "family_id",
+                "house_name",
+                "house_sequence",
+            )
         )
 
         candidates = Member.objects.filter(
             church=church,
+            family_id=family_id,
+            house_name=house_name,
             is_active=True,
             expired=False,
             is_family_head=False,
-        ).select_related("family", "relationship", "ward", "grade")
+        ).select_related(
+            "family",
+            "relationship",
+            "ward",
+            "grade",
+        )
 
-        # Filter in Python since Django can't exclude on tuple-pairs directly
         eligible_ids = [
-            m.id for m in candidates
-            if (m.family_id, m.house_name) not in houses_with_head
+            m.id
+            for m in candidates
+            if (
+                m.family_id,
+                m.house_name,
+                m.house_sequence,
+            ) not in houses_with_head
         ]
 
-        return Member.objects.filter(id__in=eligible_ids).select_related(
-            "family", "relationship", "ward", "grade"
+        return Member.objects.filter(
+            id__in=eligible_ids
+        ).select_related(
+            "family",
+            "relationship",
+            "ward",
+            "grade",
         )
-    
 
 
 # views.py
@@ -3145,7 +3178,6 @@ class MembersUnderHeadAPIView(ListAPIView):
         church = self.request.user.church
         head_id = self.kwargs.get("pk")
 
-        # 🔥 Get head safely
         try:
             head = Member.objects.get(
                 pk=head_id,
@@ -3157,14 +3189,13 @@ class MembersUnderHeadAPIView(ListAPIView):
         except Member.DoesNotExist:
             raise NotFound("Active family head not found.")
 
-        # 🔥 ONLY ACTIVE + NOT EXPIRED MEMBERS OF THIS EXACT HOUSEHOLD (EXCLUDING HEAD)
+        # 🔥 REMOVE the is_active filter to show ALL members
         return Member.objects.filter(
             church=church,
             family=head.family,
             house_name__iexact=head.house_name,
             house_sequence=head.house_sequence,
-            is_active=True,
-            expired=False
+            expired=False  # Keep expired filter
         ).exclude(
             pk=head.id
         ).select_related(
@@ -3606,3 +3637,44 @@ class MemberPhoneDirectoryAPIView(APIView):
 
 
 
+# ============================================================
+# MEMBER DETAIL VIEW - With nested relationships
+# ============================================================
+
+class MemberDetailView(APIView):
+    """
+    Get detailed member information with nested relationship objects.
+    This resolves foreign keys to their display names.
+    """
+    permission_classes = [IsAuthenticated, IsChurchUser]
+    
+    def get(self, request, pk):
+        try:
+            member = Member.objects.select_related(
+                'family', 'ward', 'grade', 'relationship'
+            ).get(
+                pk=pk,
+                church=request.user.church
+            )
+        except Member.DoesNotExist:
+            return Response(
+                {"detail": "Member not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {"detail": f"Error fetching member: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            serializer = MemberDetailSerializer(
+                member, 
+                context={'request': request}
+            )
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(
+                {"detail": f"Error serializing member: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

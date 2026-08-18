@@ -1099,24 +1099,26 @@ class Priest(models.Model):
     def __str__(self):
         return self.name
 
-
+    
 class Member(models.Model):
     register_number = models.CharField(
-    max_length=50,
-    blank=True,
-    null=True
+        max_length=50,
+        blank=True,
+        null=True
     )
 
     folio_number = models.CharField(
-    max_length=50,
-    blank=True,
-    null=True
+        max_length=50,
+        blank=True,
+        null=True
     )
+
     church = models.ForeignKey(
         Church,
         on_delete=models.CASCADE,
         related_name="members"
     )
+
     family = models.ForeignKey(
         Family,
         on_delete=models.CASCADE,
@@ -1128,13 +1130,18 @@ class Member(models.Model):
 
     gender = models.CharField(
         max_length=10,
-        choices=(("MALE", "Male"), ("FEMALE", "Female"))
+        choices=(
+            ("MALE", "Male"),
+            ("FEMALE", "Female")
+        )
     )
+
     email = models.EmailField(
         unique=True,
         null=True,
         blank=True
     )
+
     marital_status = models.CharField(
         max_length=20,
         choices=(
@@ -1144,36 +1151,87 @@ class Member(models.Model):
             ("DIVORCED", "Divorced"),
         )
     )
+
     house_name = models.CharField(max_length=150)
     house_sequence = models.PositiveIntegerField(default=1)
+
     spouse = models.OneToOneField(
-    "self",
-    null=True,
-    blank=True,
-    on_delete=models.SET_NULL,
-    related_name="partner"
-)
-    spouse_name = models.CharField(max_length=150, blank=True)
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="partner"
+    )
 
-    dob = models.DateField(null=True, blank=True)
-    age = models.PositiveIntegerField(editable=False, null=True, blank=True)
+    spouse_name = models.CharField(
+        max_length=150,
+        blank=True
+    )
 
-    mobile_no = models.CharField(max_length=15,blank=True)
-    phone_no = models.CharField(max_length=15, blank=True)
+    dob = models.DateField(
+        null=True,
+        blank=True
+    )
 
-    blood_group = models.CharField(max_length=5, blank=True)
-    expired = models.BooleanField(default=False)
+    age = models.PositiveIntegerField(
+        editable=False,
+        null=True,
+        blank=True
+    )
 
-    father_name = models.CharField(max_length=150, blank=True)
-    mother_name = models.CharField(max_length=150, blank=True)
+    mobile_no = models.CharField(
+        max_length=15,
+        blank=True
+    )
 
-    date_of_baptism = models.DateField(null=True, blank=True)
-    parish_of_baptism = models.CharField(max_length=150, blank=True)
+    phone_no = models.CharField(
+        max_length=15,
+        blank=True
+    )
 
-    educational_qualification = models.CharField(max_length=150, blank=True)
-    sunday_school_qualification = models.CharField(max_length=150, blank=True)
+    blood_group = models.CharField(
+        max_length=5,
+        blank=True
+    )
 
-    profession = models.CharField(max_length=150, blank=True)
+    expired = models.BooleanField(
+        default=False
+    )
+
+    father_name = models.CharField(
+        max_length=150,
+        blank=True
+    )
+
+    mother_name = models.CharField(
+        max_length=150,
+        blank=True
+    )
+
+    date_of_baptism = models.DateField(
+        null=True,
+        blank=True
+    )
+
+    parish_of_baptism = models.CharField(
+        max_length=150,
+        blank=True
+    )
+
+    educational_qualification = models.CharField(
+        max_length=150,
+        blank=True
+    )
+
+    sunday_school_qualification = models.CharField(
+        max_length=150,
+        blank=True
+    )
+
+    profession = models.CharField(
+        max_length=150,
+        blank=True
+    )
 
     relationship = models.ForeignKey(
         Relationship,
@@ -1181,20 +1239,20 @@ class Member(models.Model):
         null=True,
         blank=True
     )
+
     ward = models.ForeignKey(
-    Ward,
-    on_delete=models.PROTECT,
-    null=True,
-    blank=True,
-    related_name="members"
+        Ward,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="members"
     )
 
     family_image = models.ImageField(
-    upload_to="family_images/",
-    null=True,
-    blank=True
+        upload_to="family_images/",
+        null=True,
+        blank=True
     )
-
 
     grade = models.ForeignKey(
         Grade,
@@ -1203,58 +1261,107 @@ class Member(models.Model):
         blank=True
     )
 
-    joining_date = models.DateField(null=True, blank=True)
-    transferred_from = models.CharField(max_length=150, blank=True)
-    address = models.TextField(blank=True)
-    is_family_head = models.BooleanField(default=False)
-    is_active = models.BooleanField(default=True)
+    joining_date = models.DateField(
+        null=True,
+        blank=True
+    )
+
+    transferred_from = models.CharField(
+        max_length=150,
+        blank=True
+    )
+
+    address = models.TextField(
+        blank=True
+    )
+
+    is_family_head = models.BooleanField(
+        default=False
+    )
+
+    is_active = models.BooleanField(
+        default=True
+    )
+
     inactive_reason = models.CharField(
         max_length=100,
         blank=True
-        )
+    )
+
     inactive_date = models.DateField(
         null=True,
         blank=True
     )
 
+    # ============================================================
+    # TIMESTAMPS
+    # ============================================================
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+    # ============================================================
+    # SAVE
+    # ============================================================
+
     def save(self, *args, **kwargs):
 
         was_head = None
+
         if self.pk:
             was_head = Member.objects.filter(
                 pk=self.pk
-            ).values_list("is_family_head", flat=True).first()
+            ).values_list(
+                "is_family_head",
+                flat=True
+            ).first()
 
-    # 🔥 Enforce single active head per (family + house_name + house_sequence)
+        # Enforce single active head per
+        # family + house_name + house_sequence
         if self.is_family_head:
             Member.objects.filter(
-            family=self.family,
-            house_name=self.house_name,
-            house_sequence=self.house_sequence,
-            is_family_head=True,
-            is_active=True
-        ).exclude(pk=self.pk).update(is_family_head=False)
+                family=self.family,
+                house_name=self.house_name,
+                house_sequence=self.house_sequence,
+                is_family_head=True,
+                is_active=True
+            ).exclude(
+                pk=self.pk
+            ).update(
+                is_family_head=False
+            )
 
-    # 🔢 Age calculation
+        # Age calculation
         if self.dob:
             today = date.today()
-            self.age = today.year - self.dob.year - (
-                (today.month, today.day) < (self.dob.month, self.dob.day)
-        )
+
+            self.age = (
+                today.year
+                - self.dob.year
+                - (
+                    (today.month, today.day)
+                    < (self.dob.month, self.dob.day)
+                )
+            )
 
         super().save(*args, **kwargs)
 
-    # 👤 Auto create login for new head
+        # Auto create login for new family head
         if self.is_family_head and self.is_active:
+
             if was_head is False or was_head is None:
+
                 if not self.email:
                     raise ValidationError(
-                    "Family head must have an email address."
+                        "Family head must have an email address."
                     )
 
                 create_family_head_user(self)
-
-
 
     def __str__(self):
         return self.name
@@ -1651,11 +1758,6 @@ from datetime import date, datetime
 logger = logging.getLogger(__name__)
 
 class DeathRegister(models.Model):
-    STATUS_CHOICES = (
-        ("PENDING", "Pending"),
-        ("COMPLETED", "Completed"),
-    )
-    
     church = models.ForeignKey(
         Church,
         on_delete=models.CASCADE,
@@ -1670,14 +1772,8 @@ class DeathRegister(models.Model):
         related_name="death_record"
     )
     
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default="PENDING"
-    )
-    
-    died_on = models.DateField(null=True, blank=True)
-    funeral_on = models.DateField(null=True, blank=True)
+    died_on = models.DateField()
+    funeral_on = models.DateField()
     
     tomb_type = models.ForeignKey(
         TombType,
@@ -1694,7 +1790,7 @@ class DeathRegister(models.Model):
     )
     
     tomb_idn = models.CharField(max_length=100, blank=True)
-    reason_of_death = models.TextField(blank=True)
+    reason_of_death = models.TextField()
     remarks = models.TextField(blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -1704,17 +1800,17 @@ class DeathRegister(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.member.name} - {self.status} ({self.reg_no or 'No Reg No'})"
+        return f"{self.member.name} ({self.reg_no or 'No Reg No'})"
 
     def save(self, *args, **kwargs):
         """
         Override save to handle date conversions and register number generation
         """
-        # 🔥 FIX 1: Ensure dates are proper date objects before saving
+        # Clean dates before saving
         self._clean_dates()
         
-        # 🔥 FIX 2: Generate register number if status is COMPLETED
-        if self.status == "COMPLETED" and not self.reg_no:
+        # Generate register number if not present
+        if not self.reg_no:
             self._generate_register_number()
         
         # Call the parent save method
@@ -1770,19 +1866,11 @@ class DeathRegister(models.Model):
             import traceback
             logger.error(traceback.format_exc())
             
-            # 🔥 FALLBACK: Generate a temporary number
+            # Fallback: Generate a temporary number
             import time
             timestamp = int(time.time())
             self.reg_no = f"TEMP-DEATH-{timestamp}"
             logger.warning(f"Using temporary register number: {self.reg_no}")
-
-    def is_completed(self):
-        """Check if death record is completed"""
-        return self.status == "COMPLETED"
-    
-    def is_pending(self):
-        """Check if death record is pending"""
-        return self.status == "PENDING"
     
     def get_days_since_death(self):
         """Get number of days since death"""

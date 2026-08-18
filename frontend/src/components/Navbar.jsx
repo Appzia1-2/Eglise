@@ -23,7 +23,7 @@ const ROUTE_MAP = {
   Ward: "/ward",
   Grade: "/grade",
   Relationship: "/relationship",
-  "Member Info": "/members",
+  "Member Info": "/family-heads",
   "Baptism Register": "/baptism",
   "Marriage Register": "/marriage",
 

@@ -1,3 +1,5 @@
+// apiClient.js
+
 import axios from "axios";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/";
@@ -5,12 +7,13 @@ console.log("Using API_BASE_URL:", API_BASE_URL);
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
+  // Remove default Content-Type header - let axios set it per request
+  // headers: {
+  //   "Content-Type": "application/json",
+  // },
 });
 
-// Request interceptor to add token
+// Request interceptor to add token and handle content types
 apiClient.interceptors.request.use(
   (config) => {
     // Try both regular token and admin token
@@ -21,6 +24,21 @@ apiClient.interceptors.request.use(
     } else {
       console.log("No token found for request:", config.url);
     }
+
+    // IMPORTANT: Handle FormData properly
+    // If the data is FormData, remove Content-Type header so browser can set it with boundary
+    if (config.data instanceof FormData) {
+      console.log("FormData detected - removing Content-Type header");
+      delete config.headers["Content-Type"];
+      // The browser will automatically set Content-Type with the correct boundary
+    } else if (config.data && typeof config.data === 'object' && !(config.data instanceof FormData)) {
+      // For regular JSON data, set Content-Type to application/json
+      if (!config.headers["Content-Type"]) {
+        config.headers["Content-Type"] = "application/json";
+      }
+    }
+
+    console.log(`Making ${config.method.toUpperCase()} request to: ${config.url}`);
     return config;
   },
   (error) => {

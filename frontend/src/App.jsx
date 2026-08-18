@@ -1,4 +1,4 @@
-// src/App.jsx - Updated with correct imports
+// src/App.jsx - Updated with Member View Route and Headless Route
 
 import {
   BrowserRouter as Router,
@@ -15,10 +15,41 @@ import FamilyEditPage from "./pages/FamilyEditPage";
 
 
 import WardPage from "./pages/WardPage";
+import WardAddPage from "./pages/WardAddPage";
+import WardViewPage from "./pages/WardViewPage";
+import WardEditPage from "./pages/WardEditPage";
+
+
 import GradePage from "./pages/GradePage";
+import GradeAdd from "./pages/GradeAdd";
+import GradeEdit from "./pages/GradeEdit";
+import GradeView from "./pages/GradeView";
+
 import RelationshipPage from "./pages/RelationshipPage";
-import MembersPage from "./pages/MembersPage";
-import MemberDetailsPage from "./pages/MemberDetailsPage";
+import RelationshipAddPage from "./pages/RelationshipAddPage";
+import RelationshipViewPage from "./pages/RelationshipViewPage";
+import RelationshipEditPage from "./pages/RelationshipEditPage";
+
+
+// import MembersPage from "./pages/MembersPage";
+// import MemberDetailsPage from "./pages/MemberDetailsPage";
+import FamilyHeadDashboard from "./pages/FamilyHeadDashboard";
+ 
+// Family Head Pages
+import RegisterFamilyHeadPage from "./pages/RegisterFamilyHeadPage"; // 2-step form
+import FamilyHeadDetailsPage from "./pages/FamilyHeadDetailsPage";    // View + Edit button
+import EditFamilyHeadPage from "./pages/EditFamilyHeadPage";          // Full edit form
+ 
+// Member Pages
+import MemberListUnderHeadPage from "./pages/MemberListUnderHeadPage"; // List members of a head
+import AddMemberPage from "./pages/AddMemberPage";                     // Create member under head
+import EditMemberPage from "./pages/EditMemberPage";                   // Edit member
+import MemberDetailPage from "./pages/MemberDetailPage";               // ✅ NEW: View member details
+import FamilyHeadPrintPreviewPage from "./pages/FamilyHeadPrintPreviewPage";
+ 
+import HeadlessHouseMembersPage from "./pages/HeadlessHouseMembersPage";
+import HeadlessPromote from "./pages/HeadlessPromote";
+
 import authService from "./auth/authService";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
 import BaptismPage from "./pages/BaptismPage";
@@ -34,7 +65,11 @@ import EditPriestPage from "./pages/EditPriestPage";
 import ViewPriestPage from "./pages/ViewPriestPage";
 
 import RegisterSettingsPage from "./pages/RegisterSettingsPage";
+
 import DeathRegisterPage from "./pages/DeathRegisterPage";
+import DeathAddPage from "./pages/DeathAddPage";
+
+
 import EventsPage from "./pages/EventsPage";
 // import DiocesePage from "./pages/DiocesePage";
 import OfferingPage from "./pages/OfferingPage";
@@ -120,50 +155,50 @@ function App() {
           }
         />
         <Route
-  path="/family"
-  element={
-    <Navigate
-      to="/family-master"
-      replace
-    />
-  }
-/>
+          path="/family"
+          element={
+            <Navigate
+              to="/family-master"
+              replace
+            />
+          }
+        />
 
-<Route
-  path="/family-master"
-  element={
-    <ProtectedRoute>
-      <FamilyPage />
-    </ProtectedRoute>
-  }
-/>
+        <Route
+          path="/family-master"
+          element={
+            <ProtectedRoute>
+              <FamilyPage />
+            </ProtectedRoute>
+          }
+        />
 
-<Route
-  path="/family-master/add"
-  element={
-    <ProtectedRoute>
-      <FamilyAddPage />
-    </ProtectedRoute>
-  }
-/>
+        <Route
+          path="/family-master/add"
+          element={
+            <ProtectedRoute>
+              <FamilyAddPage />
+            </ProtectedRoute>
+          }
+        />
 
-<Route
-  path="/family-master/:id/edit"
-  element={
-    <ProtectedRoute>
-      <FamilyEditPage />
-    </ProtectedRoute>
-  }
-/>
+        <Route
+          path="/family-master/:id/edit"
+          element={
+            <ProtectedRoute>
+              <FamilyEditPage />
+            </ProtectedRoute>
+          }
+        />
 
-<Route
-  path="/family-master/:id"
-  element={
-    <ProtectedRoute>
-      <FamilyViewPage />
-    </ProtectedRoute>
-  }
-/>
+        <Route
+          path="/family-master/:id"
+          element={
+            <ProtectedRoute>
+              <FamilyViewPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/ward"
           element={
@@ -172,11 +207,65 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route
+          path="/ward/add"
+          element={
+            <ProtectedRoute>
+              <WardAddPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/ward/:id"
+          element={
+            <ProtectedRoute>
+              <WardViewPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/ward/:id/edit"
+          element={
+            <ProtectedRoute>
+              <WardEditPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/grade"
           element={
             <ProtectedRoute>
               <GradePage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/grade/add"
+          element={
+            <ProtectedRoute>
+              <GradeAdd />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/grade/:id/edit"
+          element={
+            <ProtectedRoute>
+              <GradeEdit />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/grade/:id"
+          element={
+            <ProtectedRoute>
+              <GradeView />
             </ProtectedRoute>
           }
         />
@@ -189,18 +278,137 @@ function App() {
           }
         />
         <Route
-          path="/members"
+          path="/relationship/add"
+          element={<RelationshipAddPage />}
+        />
+
+        <Route
+          path="/relationship/:id"
+          element={<RelationshipViewPage />}
+        />
+
+        <Route
+          path="/relationship/:id/edit"
+          element={<RelationshipEditPage />}
+        />
+        
+        {/* =========================================================
+            FAMILY HEAD ROUTES
+        ========================================================= */}
+
+        <Route
+          path="/family-heads"
           element={
             <ProtectedRoute>
-              <MembersPage />
+              <FamilyHeadDashboard />
             </ProtectedRoute>
           }
         />
+
         <Route
-          path="/members/:headId"
+          path="/family-heads/create"
           element={
             <ProtectedRoute>
-              <MemberDetailsPage />
+              <RegisterFamilyHeadPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ✅ IMPORTANT: Headless route MUST come BEFORE the :headId route */}
+        <Route
+          path="/family-heads/headless"
+          element={
+            <ProtectedRoute>
+              <HeadlessHouseMembersPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/family-heads/headless/:familyId/:houseName/members"
+          element={
+            <ProtectedRoute>
+              <HeadlessHouseMembersPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/family-heads/:headId"
+          element={
+            <ProtectedRoute>
+              <FamilyHeadDetailsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/family-heads/:headId/edit"
+          element={
+            <ProtectedRoute>
+              <EditFamilyHeadPage />
+            </ProtectedRoute>
+          }
+        />
+
+         <Route
+          path="/headless/promote"
+          element={
+            <ProtectedRoute>
+              <HeadlessPromote />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/family-heads/:headId/print"
+          element={
+            <ProtectedRoute>
+              <FamilyHeadPrintPreviewPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* =========================================================
+            MEMBERS UNDER FAMILY HEAD
+        ========================================================= */}
+
+        {/* List members under a head */}
+        <Route
+          path="/family-heads/:headId/members"
+          element={
+            <ProtectedRoute>
+              <MemberListUnderHeadPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Create new member under a head */}
+        <Route
+          path="/family-heads/:headId/members/create"
+          element={
+            <ProtectedRoute>
+              <AddMemberPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ✅ NEW: View member details */}
+        <Route
+          path="/family-heads/:headId/members/:memberId"
+          element={
+            <ProtectedRoute>
+              <MemberDetailPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Edit member */}
+        <Route
+          path="/family-heads/:headId/members/:memberId/edit"
+          element={
+            <ProtectedRoute>
+              <EditMemberPage />
             </ProtectedRoute>
           }
         />
@@ -253,30 +461,30 @@ function App() {
           }
         />
         <Route
-  path="/priest-master"
-  element={
-    <ProtectedRoute>
-      <PriestPage />
-    </ProtectedRoute>
-  }
-/>
+          path="/priest-master"
+          element={
+            <ProtectedRoute>
+              <PriestPage />
+            </ProtectedRoute>
+          }
+        />
 
-<Route
-  path="/priest-master/register"
-  element={
-    <ProtectedRoute>
-      <RegisterPriestPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/priest-master/edit/:id"
-  element={<EditPriestPage />}
-/>
-<Route
-  path="/priest-master/:id"
-  element={<ViewPriestPage />}
-/>
+        <Route
+          path="/priest-master/register"
+          element={
+            <ProtectedRoute>
+              <RegisterPriestPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/priest-master/edit/:id"
+          element={<EditPriestPage />}
+        />
+        <Route
+          path="/priest-master/:id"
+          element={<ViewPriestPage />}
+        />
 
         <Route
           path="/register-settings"
@@ -291,6 +499,15 @@ function App() {
           element={
             <ProtectedRoute>
               <DeathRegisterPage />
+            </ProtectedRoute>
+          }
+        />
+
+         <Route
+          path="/death/add"
+          element={
+            <ProtectedRoute>
+              <DeathAddPage />
             </ProtectedRoute>
           }
         />
@@ -508,13 +725,13 @@ function App() {
           }
         />
         <Route
-  path="/admin/packages/edit/:id"
-  element={
-    <AdminProtectedRoute>
-      <PackageEditPage />
-    </AdminProtectedRoute>
-  }
-/>
+          path="/admin/packages/edit/:id"
+          element={
+            <AdminProtectedRoute>
+              <PackageEditPage />
+            </AdminProtectedRoute>
+          }
+        />
         
         
         {/* Admin Subscription Routes */}

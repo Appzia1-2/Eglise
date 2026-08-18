@@ -1,9 +1,10 @@
+// frontend/src/api/registryServices.js
+
 import apiClient from "./apiClient";
 
 // ============================================================
 // WARD APIs
 // ============================================================
-
 export const listWards = () =>
   apiClient.get("/api/registry/wards/");
 
@@ -18,7 +19,6 @@ export const updateWard = (id, data) =>
 
 export const deleteWard = (id) =>
   apiClient.delete(`/api/registry/wards/${id}/`);
-
 
 // ============================================================
 // GRADE APIs
@@ -100,59 +100,221 @@ export const deleteFamily = (id) =>
   );
 
 // ============================================================
-// MEMBERS APIs
+// MEMBERS / FAMILY HEAD SERVICES
 // ============================================================
 
-export const listMembers = () =>
-  apiClient.get("/api/registry/members/");
 
-export const listFamilyMembers = (familyId) =>
-  apiClient.get(
-    `/api/registry/members/?family=${familyId}`
+// ============================================================
+// LIST ALL MEMBERS
+// ============================================================
+
+export const listMembers = () => {
+  return apiClient.get(
+    "/api/registry/members/"
   );
+};
 
-export const createMember = (data) =>
-  apiClient.post("/api/registry/members/", data);
 
-export const getMember = (id) =>
-  apiClient.get(`/api/registry/members/${id}/`);
+// ============================================================
+// LIST MEMBERS BY FAMILY
+// ============================================================
 
-export const updateMember = (id, data) =>
-  apiClient.patch(
-    `/api/registry/members/${id}/`,
+export const listFamilyMembers = (familyId) => {
+  return apiClient.get(
+    "/api/registry/members/",
+    {
+      params: {
+        family: familyId,
+      },
+    }
+  );
+};
+
+
+// ============================================================
+// GET SINGLE MEMBER
+// ============================================================
+
+export const getMember = (id) => {
+  return apiClient.get(
+    `/api/registry/members/${id}/`
+  );
+};
+
+
+// ============================================================
+// CREATE NORMAL MEMBER
+// ============================================================
+
+export const createMember = (data) => {
+  return apiClient.post(
+    "/api/registry/members/",
     data
   );
+};
 
-export const deleteMember = (id) =>
-  apiClient.delete(`/api/registry/members/${id}/`);
 
-export const createHead = (data) =>
-  apiClient.post(
+// ============================================================
+// CREATE FAMILY HEAD
+// ============================================================
+//
+// IMPORTANT:
+// This function accepts BOTH:
+//
+// 1. Normal JSON
+// 2. FormData
+//
+// For your RegisterFamilyHeadPage,
+// it will receive FormData containing:
+//
+// family
+// ward
+// grade
+// house_name
+// name
+// ...
+// family_image
+//
+// Do NOT convert FormData to JSON here.
+//
+
+export const createHead = (data) => {
+  return apiClient.post(
     "/api/registry/members/create-head/",
     data
   );
+};
 
-export const updateHead = (id, data) =>
-  apiClient.patch(
+
+// ============================================================
+// UPDATE MEMBER
+// ============================================================
+
+export const updateMember = (
+  id,
+  data
+) => {
+  return apiClient.patch(
+    `/api/registry/members/${id}/`,
+    data
+  );
+};
+
+
+// ============================================================
+// UPDATE FAMILY HEAD
+// ============================================================
+
+export const updateHead = (
+  id,
+  data
+) => {
+  return apiClient.patch(
     `/api/registry/family-head/${id}/`,
     data
   );
+};
 
-export const markMemberAsDeceased = (id) =>
-  apiClient.post(
+
+// ============================================================
+// DELETE MEMBER
+// ============================================================
+
+export const deleteMember = (id) => {
+  return apiClient.delete(
+    `/api/registry/members/${id}/`
+  );
+};
+
+
+// ============================================================
+// MARK MEMBER AS DECEASED
+// ============================================================
+
+export const markMemberAsDeceased = (
+  id
+) => {
+  return apiClient.post(
     `/api/registry/members/mark-dead/${id}/`
   );
+};
 
-export const promoteToHead = (id) =>
-  apiClient.post(
+
+// ============================================================
+// PROMOTE MEMBER TO FAMILY HEAD
+// ============================================================
+
+export const promoteToHead = (
+  id
+) => {
+  return apiClient.post(
     `/api/registry/members/promote-head/${id}/`
   );
+};
 
-export const listMembersByHead = (headId) =>
-  apiClient.get(
+// ============================================================
+// GET MEMBER DETAIL (with nested relationships)
+// ============================================================
+
+export const getMemberDetail = async (memberId) => {
+  const response = await apiClient.get(`/api/registry/members/${memberId}/detail/`);
+  return response;
+};
+
+// ============================================================
+// LIST MEMBERS BY FAMILY HEAD
+// ============================================================
+
+export const listMembersByHead = (
+  headId
+) => {
+  return apiClient.get(
     `/api/registry/members/by-head/${headId}/`
   );
+};
 
+// ============================================================
+// FAMILY HEAD LIST - FOR DROPDOWN / SELECTION
+// ============================================================
+
+/**
+ * List all active family heads for the current church
+ * Used for dropdowns when changing a member's head
+ * 
+ * Uses the members endpoint with filter for family heads
+ * 
+ * @returns {Promise} - Array of family head objects with id, name, family_name, house_name
+ */
+export const listFamilyHeads = async () => {
+  // Use the members list endpoint with filter for family heads
+  const response = await apiClient.get("/api/registry/members/", {
+    params: {
+      is_family_head: true,
+      is_active: true,
+    }
+  });
+  
+  // Transform the response to match expected format
+  const members = response.data?.results || response.data || [];
+  
+  // If members is not an array, return empty array
+  if (!Array.isArray(members)) {
+    return { data: [] };
+  }
+  
+  // Transform to expected format: { id, name, family_name, house_name }
+  const transformedData = members.map(member => ({
+    id: member.id,
+    name: member.name,
+    family_name: member.family?.family_name || member.family_name || "—",
+    house_name: member.house_name || "—"
+  }));
+  
+  return {
+    data: transformedData,
+    ...response
+  };
+};
 
 // ============================================================
 // DEATH REGISTER APIs
@@ -168,18 +330,18 @@ export const listDeaths = (status) => {
 
 export const getDeath = (id) =>
   apiClient.get(
-    `/api/registry/death-register/${id}/`
+    `/api/registry/death-registers/${id}/`
   );
 
 export const updateDeath = (id, data) =>
   apiClient.patch(
-    `/api/registry/death-register/${id}/`,
+    `/api/registry/death-registers/${id}/`,
     data
   );
 
 export const deleteDeath = (id) =>
   apiClient.delete(
-    `/api/registry/death-register/${id}/`
+    `/api/registry/death-registers/${id}/`
   );
 
 export const createDeathRecord = (data) =>
@@ -213,7 +375,6 @@ export const listMembersByHouse = (
       },
     }
   );
-
 
 // ============================================================
 // BAPTISM APIs
@@ -355,8 +516,6 @@ export const getPriestMaster = async () => {
     "/api/registry/priests/"
   );
 
-  // Return the complete axios response
-  // because PriestPage.jsx uses response.data
   return response;
 };
 
@@ -463,36 +622,6 @@ export const deleteEvent = (id) =>
   apiClient.delete(
     `/api/registry/events/${id}/`
   );
-
-
-// ============================================================
-// DIOCESE
-// ============================================================
-
-// export const listDioceses = () =>
-//   apiClient.get("/api/registry/dioceses/");
-
-// export const createDiocese = (data) =>
-//   apiClient.post(
-//     "/api/registry/dioceses/",
-//     data
-//   );
-
-// export const getDiocese = (id) =>
-//   apiClient.get(
-//     `/api/registry/dioceses/${id}/`
-//   );
-
-// export const updateDiocese = (id, data) =>
-//   apiClient.patch(
-//     `/api/registry/dioceses/${id}/`,
-//     data
-//   );
-
-// export const deleteDiocese = (id) =>
-//   apiClient.delete(
-//     `/api/registry/dioceses/${id}/`
-//   );
 
 
 // ============================================================
@@ -831,6 +960,16 @@ export const transferAndPromoteHead = (
     data
   );
 
+// ============================================================
+// CHANGE MEMBER'S FAMILY HEAD
+// ============================================================
+
+/**
+ * Change a member's family head
+ * @param {number} memberId - The ID of the member to transfer
+ * @param {number} newHeadId - The ID of the new family head
+ * @returns {Promise} - API response
+ */
 export const changeMemberHead = (
   memberId,
   newHeadId

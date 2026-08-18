@@ -35,33 +35,21 @@ import Footer from "../components/Footer";
 
 import { getChurchDashboard } from "../api/churchServices";
 
-
-// =========================================================
-// CONSTANTS
-// =========================================================
-
-const PRIMARY_MAROON = "var(--primary-maroon)";
-const BORDER_COLOR = "#E5E7EB";
-
-
 // =========================================================
 // MEDIA URL
 // =========================================================
 
 const getMediaUrl = (url) => {
-
   if (!url) {
     return null;
   }
 
-  // Convert to string
   const value = String(url).trim();
 
   if (!value) {
     return null;
   }
 
-  // Already complete URL
   if (
     value.startsWith("http://") ||
     value.startsWith("https://") ||
@@ -70,31 +58,26 @@ const getMediaUrl = (url) => {
     return value;
   }
 
-  // Backend URL
   const apiBase =
     import.meta.env.VITE_API_BASE_URL ||
     "http://127.0.0.1:8000";
 
   const cleanBase = apiBase.replace(/\/+$/, "");
-
   const cleanUrl = value.replace(/^\/+/, "");
 
   return `${cleanBase}/${cleanUrl}`;
 };
-
 
 // =========================================================
 // FORMAT DATE
 // =========================================================
 
 const formatDate = (date, options = {}) => {
-
   if (!date) {
     return "N/A";
   }
 
   try {
-
     const parsedDate = new Date(date);
 
     if (Number.isNaN(parsedDate.getTime())) {
@@ -105,13 +88,10 @@ const formatDate = (date, options = {}) => {
       "en-IN",
       options
     );
-
   } catch {
-
     return "N/A";
   }
 };
-
 
 // =========================================================
 // SECTION CARD
@@ -123,17 +103,14 @@ const SectionCard = ({
   children,
   action,
 }) => {
-
   return (
-
     <Box
       border="1px solid"
-      borderColor={BORDER_COLOR}
+      borderColor="var(--border-color)"
       borderRadius="9px"
-      bg="white"
+      bg="var(--white)"
       overflow="hidden"
     >
-
       {/* HEADER */}
 
       <Flex
@@ -143,36 +120,29 @@ const SectionCard = ({
         justify="space-between"
         minH="58px"
       >
-
         <HStack gap={3}>
-
           <Circle
             size="34px"
-            bg="rgba(123, 13, 30, 0.08)"
-            color={PRIMARY_MAROON}
+            bg="rgba(174, 32, 80, 0.08)"
+            color="var(--primary-maroon)"
           >
-
             <Icon
               as={icon}
               boxSize={4}
             />
-
           </Circle>
 
           <Heading
             size="md"
-            color={PRIMARY_MAROON}
+            color="var(--primary-maroon)"
             fontWeight="700"
           >
             {title}
           </Heading>
-
         </HStack>
 
         {action}
-
       </Flex>
-
 
       {/* CONTENT */}
 
@@ -180,16 +150,11 @@ const SectionCard = ({
         px={{ base: 4, md: 5 }}
         pb={4}
       >
-
         {children}
-
       </Box>
-
     </Box>
-
   );
 };
-
 
 // =========================================================
 // DETAIL ROW
@@ -199,19 +164,16 @@ const DetailRow = ({
   label,
   value,
 }) => {
-
   return (
-
     <Flex
       minH="37px"
       align="center"
       borderBottom="1px solid"
-      borderColor="#EEEEEE"
+      borderColor="var(--divider-color)"
       _last={{
         borderBottom: "none",
       }}
     >
-
       <Text
         width={{
           base: "42%",
@@ -219,7 +181,7 @@ const DetailRow = ({
         }}
         flexShrink={0}
         fontSize="sm"
-        color="#171717"
+        color="var(--dark-text)"
         fontWeight="500"
       >
         {label}
@@ -228,7 +190,7 @@ const DetailRow = ({
       <Text
         flex="1"
         fontSize="sm"
-        color="#5F6368"
+        color="var(--light-gray)"
         fontWeight="400"
         overflow="hidden"
         textOverflow="ellipsis"
@@ -236,12 +198,9 @@ const DetailRow = ({
       >
         {value || "N/A"}
       </Text>
-
     </Flex>
-
   );
 };
-
 
 // =========================================================
 // ADMIN DETAIL
@@ -252,9 +211,7 @@ const AdminDetail = ({
   value,
   isLast = false,
 }) => {
-
   return (
-
     <Box
       textAlign="center"
       px={{ base: 2, md: 4 }}
@@ -264,14 +221,13 @@ const AdminDetail = ({
           ? "none"
           : {
               base: "none",
-              md: "1px solid #DDDDDD",
+              md: "1px solid var(--muted-border)",
             }
       }
     >
-
       <Text
         fontSize="xs"
-        color="#333333"
+        color="var(--dark-text)"
         mb={1}
       >
         {label}
@@ -280,26 +236,22 @@ const AdminDetail = ({
       <Text
         fontSize="sm"
         fontWeight="600"
-        color="#111111"
+        color="var(--dark-text)"
         whiteSpace="nowrap"
         overflow="hidden"
         textOverflow="ellipsis"
       >
         {value || "N/A"}
       </Text>
-
     </Box>
-
   );
 };
-
 
 // =========================================================
 // CHURCH INFO PAGE
 // =========================================================
 
 const ChurchInfoPage = () => {
-
   const [data, setData] = useState(null);
 
   const [isLoading, setIsLoading] =
@@ -308,17 +260,13 @@ const ChurchInfoPage = () => {
   const [logoError, setLogoError] =
     useState(false);
 
-
   // =======================================================
   // FETCH DATA
   // =======================================================
 
   useEffect(() => {
-
     const fetchData = async () => {
-
       try {
-
         const response =
           await getChurchDashboard();
 
@@ -353,44 +301,33 @@ const ChurchInfoPage = () => {
         setData(
           response?.data || {}
         );
-
       } catch (error) {
-
         console.error(
           "Error fetching church information:",
           error
         );
 
         setData({});
-
       } finally {
-
         setIsLoading(false);
-
       }
-
     };
 
     fetchData();
-
   }, []);
-
 
   // =======================================================
   // LOADING
   // =======================================================
 
   if (isLoading) {
-
     return (
-
       <Box
         minH="100vh"
-        bg="white"
+        bg="var(--white)"
         display="flex"
         flexDirection="column"
       >
-
         <Navbar />
 
         <Container
@@ -398,12 +335,10 @@ const ChurchInfoPage = () => {
           flex="1"
           py={4}
         >
-
           <VStack
             gap={4}
             align="stretch"
           >
-
             <Skeleton
               height="48px"
               borderRadius="8px"
@@ -421,7 +356,6 @@ const ChurchInfoPage = () => {
               }}
               gap={4}
             >
-
               <Skeleton
                 height="400px"
                 borderRadius="10px"
@@ -431,7 +365,6 @@ const ChurchInfoPage = () => {
                 gap={4}
                 align="stretch"
               >
-
                 <Skeleton
                   height="235px"
                   borderRadius="10px"
@@ -441,27 +374,20 @@ const ChurchInfoPage = () => {
                   height="160px"
                   borderRadius="10px"
                 />
-
               </VStack>
-
             </SimpleGrid>
 
             <Skeleton
               height="105px"
               borderRadius="10px"
             />
-
           </VStack>
-
         </Container>
 
         <Footer />
-
       </Box>
-
     );
   }
-
 
   // =======================================================
   // SAFE DATA
@@ -475,7 +401,6 @@ const ChurchInfoPage = () => {
 
   const members =
     data?.members || {};
-
 
   // =======================================================
   // CHURCH INFORMATION
@@ -516,7 +441,6 @@ const ChurchInfoPage = () => {
     church?.address ||
     "N/A";
 
-
   // =======================================================
   // ESTABLISHED YEAR
   // =======================================================
@@ -527,7 +451,6 @@ const ChurchInfoPage = () => {
     church?.establishment_year ??
     church?.establishmentYear ??
     "N/A";
-
 
   // =======================================================
   // ADMINISTRATIVE DETAILS
@@ -553,7 +476,6 @@ const ChurchInfoPage = () => {
     church?.timezone ||
     "Asia/Kolkata";
 
-
   // =======================================================
   // LOGO
   // =======================================================
@@ -568,12 +490,10 @@ const ChurchInfoPage = () => {
   const logoUrl =
     getMediaUrl(churchLogo);
 
-
   console.log(
     "FINAL LOGO URL:",
     logoUrl
   );
-
 
   // =======================================================
   // SUBSCRIPTION
@@ -612,7 +532,6 @@ const ChurchInfoPage = () => {
     subscription?.renewalDate ||
     null;
 
-
   // =======================================================
   // SUBSCRIPTION STATUS
   // =======================================================
@@ -620,24 +539,17 @@ const ChurchInfoPage = () => {
   let subscriptionStatus = "Active";
 
   if (subscription?.status) {
-
     subscriptionStatus =
       subscription.status;
-
   } else if (subscription?.payment_status) {
-
     subscriptionStatus =
       subscription.payment_status;
-
   } else if (
     subscription?.is_active === false
   ) {
-
     subscriptionStatus =
       "Inactive";
-
   }
-
 
   // =======================================================
   // MEMBERS
@@ -675,22 +587,18 @@ const ChurchInfoPage = () => {
           0
         );
 
-
   // =======================================================
   // RETURN
   // =======================================================
 
   return (
-
     <Box
       minH="100vh"
-      bg="white"
+      bg="var(--white)"
       display="flex"
       flexDirection="column"
     >
-
       <Navbar />
-
 
       {/* ===================================================
           MAIN
@@ -700,7 +608,6 @@ const ChurchInfoPage = () => {
         flex="1"
         overflow="hidden"
       >
-
         <Container
           maxW="container.xl"
           py={{
@@ -708,8 +615,6 @@ const ChurchInfoPage = () => {
             md: 4,
           }}
         >
-
-
           {/* =================================================
               PAGE HEADER
           ================================================= */}
@@ -720,34 +625,28 @@ const ChurchInfoPage = () => {
             mb={3}
             gap={3}
           >
-
             <HStack gap={3}>
-
               <Circle
                 size="44px"
                 border="1px solid"
-                borderColor="#E1E6EC"
-                bg="white"
-                color={PRIMARY_MAROON}
+                borderColor="var(--border-color)"
+                bg="var(--white)"
+                color="var(--primary-maroon)"
                 flexShrink={0}
               >
-
                 <Icon
                   as={LuHouse}
                   boxSize={5}
                 />
-
               </Circle>
 
-
               <Box>
-
                 <Heading
                   size={{
                     base: "md",
                     md: "lg",
                   }}
-                  color={PRIMARY_MAROON}
+                  color="var(--primary-maroon)"
                   fontWeight="700"
                   lineHeight="1.2"
                 >
@@ -756,22 +655,19 @@ const ChurchInfoPage = () => {
 
                 <Text
                   fontSize="xs"
-                  color="#666666"
+                  color="var(--light-gray)"
                   mt={1}
                 >
                   View and manage your church
                   profile and subscription
                 </Text>
-
               </Box>
-
             </HStack>
-
 
             <Button
               variant="outline"
-              borderColor={PRIMARY_MAROON}
-              color={PRIMARY_MAROON}
+              borderColor="var(--primary-maroon)"
+              color="var(--primary-maroon)"
               borderRadius="6px"
               size="sm"
               px={4}
@@ -779,21 +675,17 @@ const ChurchInfoPage = () => {
               fontWeight="600"
               flexShrink={0}
               _hover={{
-                bg: "rgba(123,13,30,0.05)",
+                bg: "rgba(174, 32, 80, 0.05)",
               }}
             >
-
               <Icon
                 as={LuPencil}
                 mr={2}
               />
 
               Edit Church Info
-
             </Button>
-
           </Flex>
-
 
           {/* =================================================
               CHURCH SUMMARY
@@ -801,7 +693,7 @@ const ChurchInfoPage = () => {
 
           <Box
             border="1px solid"
-            borderColor={BORDER_COLOR}
+            borderColor="var(--border-color)"
             borderRadius="9px"
             px={{
               base: 4,
@@ -809,15 +701,12 @@ const ChurchInfoPage = () => {
             }}
             py={3}
             mb={3}
-            bg="white"
+            bg="var(--white)"
           >
-
             <HStack
               gap={4}
               align="center"
             >
-
-
               {/* =================================================
                   LOGO
               ================================================= */}
@@ -833,17 +722,15 @@ const ChurchInfoPage = () => {
                 }}
                 flexShrink={0}
                 border="1px solid"
-                borderColor={PRIMARY_MAROON}
+                borderColor="var(--primary-maroon)"
                 borderRadius="50%"
-                bg="white"
+                bg="var(--white)"
                 overflow="hidden"
                 display="flex"
                 alignItems="center"
                 justifyContent="center"
               >
-
                 {logoUrl && !logoError ? (
-
                   <Image
                     src={logoUrl}
                     alt={`${churchName} logo`}
@@ -853,7 +740,6 @@ const ChurchInfoPage = () => {
                     p={1}
                     display="block"
                     onError={(event) => {
-
                       console.error(
                         "================================="
                       );
@@ -877,48 +763,37 @@ const ChurchInfoPage = () => {
                       );
 
                       setLogoError(true);
-
                     }}
                     onLoad={() => {
-
                       console.log(
                         "CHURCH LOGO LOADED:",
                         logoUrl
                       );
-
                     }}
                   />
-
                 ) : (
-
                   <Icon
                     as={LuChurch}
                     boxSize={{
                       base: 7,
                       md: 9,
                     }}
-                    color={PRIMARY_MAROON}
+                    color="var(--primary-maroon)"
                   />
-
                 )}
-
               </Box>
-
 
               {/* =================================================
                   CHURCH NAME
               ================================================= */}
 
-              <Box
-                minW={0}
-              >
-
+              <Box minW={0}>
                 <Heading
                   size={{
                     base: "lg",
                     md: "xl",
                   }}
-                  color="#111111"
+                  color="var(--dark-text)"
                   fontWeight="700"
                   lineHeight="1.15"
                   truncate
@@ -926,21 +801,18 @@ const ChurchInfoPage = () => {
                   {churchName}
                 </Heading>
 
-
                 <HStack
                   gap={3}
                   mt={1}
                   flexWrap="wrap"
                 >
-
                   <Text
-                    color="#555555"
+                    color="var(--light-gray)"
                     fontSize="sm"
                     fontWeight="500"
                   >
                     {churchCode}
                   </Text>
-
 
                   <Badge
                     colorPalette="green"
@@ -950,7 +822,6 @@ const ChurchInfoPage = () => {
                     py="2px"
                     fontSize="xs"
                   >
-
                     <Icon
                       as={LuCircleCheck}
                       mr={1}
@@ -958,43 +829,32 @@ const ChurchInfoPage = () => {
                     />
 
                     {subscriptionStatus}
-
                   </Badge>
-
                 </HStack>
-
 
                 <HStack
                   gap={2}
                   mt={1}
-                  color="#666666"
+                  color="var(--light-gray)"
                   fontSize="xs"
                 >
-
                   <Icon
                     as={LuMapPin}
                     boxSize={3.5}
                   />
 
                   <Text truncate>
-
                     {diocese}
 
                     {city &&
                     city !== "N/A"
                       ? ` • ${city}`
                       : ""}
-
                   </Text>
-
                 </HStack>
-
               </Box>
-
             </HStack>
-
           </Box>
-
 
           {/* =================================================
               TWO COLUMN CONTENT
@@ -1008,8 +868,6 @@ const ChurchInfoPage = () => {
             gap={3}
             alignItems="stretch"
           >
-
-
             {/* =================================================
                 GENERAL INFORMATION
             ================================================= */}
@@ -1020,14 +878,13 @@ const ChurchInfoPage = () => {
               action={
                 <Button
                   variant="ghost"
-                  color={PRIMARY_MAROON}
+                  color="var(--primary-maroon)"
                   size="xs"
                   fontWeight="600"
                   _hover={{
-                    bg: "rgba(123,13,30,0.05)",
+                    bg: "rgba(174, 32, 80, 0.05)",
                   }}
                 >
-
                   <Icon
                     as={LuPencil}
                     mr={1}
@@ -1035,16 +892,13 @@ const ChurchInfoPage = () => {
                   />
 
                   Edit
-
                 </Button>
               }
             >
-
               <VStack
                 align="stretch"
                 gap={0}
               >
-
                 <DetailRow
                   label="Church Name"
                   value={churchName}
@@ -1079,11 +933,8 @@ const ChurchInfoPage = () => {
                   label="Address"
                   value={address}
                 />
-
               </VStack>
-
             </SectionCard>
-
 
             {/* =================================================
                 RIGHT COLUMN
@@ -1093,8 +944,6 @@ const ChurchInfoPage = () => {
               gap={3}
               align="stretch"
             >
-
-
               {/* =================================================
                   SUBSCRIPTION
               ================================================= */}
@@ -1115,31 +964,26 @@ const ChurchInfoPage = () => {
                     py="2px"
                     fontSize="xs"
                   >
-
                     {subscriptionStatus}
-
                   </Badge>
                 }
               >
-
                 <VStack
                   align="stretch"
                   gap={0}
                 >
-
                   <Flex
                     px={3}
                     py={2}
-                    bg="#FFF0F4"
+                    bg="var(--light-maroon-bg)"
                     borderRadius="5px"
                     justify="space-between"
                     align="center"
                     mb={1}
                   >
-
                     <Text
                       fontSize="xs"
-                      color={PRIMARY_MAROON}
+                      color="var(--primary-maroon)"
                       fontWeight="500"
                     >
                       Current Plan
@@ -1148,13 +992,11 @@ const ChurchInfoPage = () => {
                     <Text
                       fontSize="sm"
                       fontWeight="600"
-                      color="#222222"
+                      color="var(--dark-text)"
                     >
                       {packageName}
                     </Text>
-
                   </Flex>
-
 
                   <DetailRow
                     label="Member Limit"
@@ -1165,12 +1007,10 @@ const ChurchInfoPage = () => {
                     }
                   />
 
-
                   <DetailRow
                     label="Billing Cycle"
                     value={billingCycle}
                   />
-
 
                   <DetailRow
                     label="Subscribed On"
@@ -1184,7 +1024,6 @@ const ChurchInfoPage = () => {
                     )}
                   />
 
-
                   <DetailRow
                     label="Renewal Date"
                     value={formatDate(
@@ -1197,11 +1036,10 @@ const ChurchInfoPage = () => {
                     )}
                   />
 
-
                   <Button
                     variant="outline"
-                    borderColor={PRIMARY_MAROON}
-                    color={PRIMARY_MAROON}
+                    borderColor="var(--primary-maroon)"
+                    color="var(--primary-maroon)"
                     mt={2}
                     w="full"
                     h="34px"
@@ -1209,23 +1047,18 @@ const ChurchInfoPage = () => {
                     borderRadius="5px"
                     fontWeight="600"
                     _hover={{
-                      bg: "rgba(123,13,30,0.04)",
+                      bg: "rgba(174, 32, 80, 0.04)",
                     }}
                   >
-
                     <Icon
                       as={LuEye}
                       mr={2}
                     />
 
                     View Subscription
-
                   </Button>
-
                 </VStack>
-
               </SectionCard>
-
 
               {/* =================================================
                   MEMBER CAPACITY
@@ -1235,83 +1068,68 @@ const ChurchInfoPage = () => {
                 title="Member Capacity"
                 icon={LuUsers}
               >
-
                 <VStack
                   align="stretch"
                   gap={2}
                 >
-
                   <Flex
                     justify="space-between"
                     align="flex-end"
                   >
-
                     <Box>
-
                       <Text
                         fontSize="2xl"
                         lineHeight="1"
                         fontWeight="700"
-                        color="#111111"
+                        color="var(--dark-text)"
                       >
                         {currentMembers.toLocaleString()}
                       </Text>
 
                       <Text
                         fontSize="xs"
-                        color="#666666"
+                        color="var(--light-gray)"
                         mt={1}
                       >
                         Active Members
                       </Text>
-
                     </Box>
 
-
                     <Box textAlign="right">
-
                       <Text
                         fontSize="2xl"
                         lineHeight="1"
                         fontWeight="700"
-                        color="#111111"
+                        color="var(--dark-text)"
                       >
                         {allowedMembers.toLocaleString()}
                       </Text>
 
                       <Text
                         fontSize="xs"
-                        color="#666666"
+                        color="var(--light-gray)"
                         mt={1}
                       >
                         Limit
                       </Text>
-
                     </Box>
-
                   </Flex>
-
 
                   <Progress.Root
                     value={memberPercentage}
                     size="sm"
                     borderRadius="full"
                   >
-
                     <Progress.Track
-                      bg="#EEEEEE"
+                      bg="var(--divider-color)"
                       borderRadius="full"
                     >
-
                       <Progress.Range
-                        bg={PRIMARY_MAROON}
+                        bg="var(--primary-maroon)"
                         borderRadius="full"
                       />
-
                     </Progress.Track>
-
                   </Progress.Root>
-
 
                   <Flex
                     justify="space-between"
@@ -1319,15 +1137,13 @@ const ChurchInfoPage = () => {
                     gap={2}
                     flexWrap="wrap"
                   >
-
                     <Text
                       fontSize="xs"
-                      color="#666666"
+                      color="var(--light-gray)"
                     >
                       {remainingMembers.toLocaleString()}{" "}
                       member slots available
                     </Text>
-
 
                     <Badge
                       colorPalette={
@@ -1343,49 +1159,38 @@ const ChurchInfoPage = () => {
                       py="2px"
                       fontSize="xs"
                     >
-
                       {Math.round(
                         memberPercentage
                       )}
                       % Used
-
                     </Badge>
-
 
                     <Button
                       variant="ghost"
-                      color={PRIMARY_MAROON}
+                      color="var(--primary-maroon)"
                       size="xs"
                       fontWeight="600"
                       _hover={{
-                        bg: "rgba(123,13,30,0.05)",
+                        bg: "rgba(174, 32, 80, 0.05)",
                       }}
                     >
                       View Members
                     </Button>
-
                   </Flex>
-
                 </VStack>
-
               </SectionCard>
-
             </VStack>
-
           </SimpleGrid>
-
 
           {/* =================================================
               ADMINISTRATIVE DETAILS
           ================================================= */}
 
           <Box mt={3}>
-
             <SectionCard
               title="Administrative Details"
               icon={LuSettings}
             >
-
               <SimpleGrid
                 columns={{
                   base: 2,
@@ -1394,7 +1199,6 @@ const ChurchInfoPage = () => {
                 gap={0}
                 py={1}
               >
-
                 <AdminDetail
                   label="Registration Number"
                   value={registrationNumber}
@@ -1415,22 +1219,14 @@ const ChurchInfoPage = () => {
                   value={timezone}
                   isLast
                 />
-
               </SimpleGrid>
-
             </SectionCard>
-
           </Box>
-
         </Container>
-
       </Box>
 
-
       <Footer />
-
     </Box>
-
   );
 };
 

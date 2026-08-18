@@ -1,14 +1,28 @@
 :root {
   --primary-maroon: #ae2050;
   --primary-gold: #e6b566;
+
   --light-gray: #718096;
+  --dark-text: #333333;
+
   --white: #ffffff;
   --light-bg: #f8f9fa;
+
+  --border-color: #e5e7eb;
+  --divider-color: #eeeeee;
+  --muted-border: #dddddd;
+
+  --light-maroon-bg: #fff0f4;
+
+  --success: #38a169;
+  --warning: #d69e2e;
+  --danger: #e53e3e;
+  --info: #3182ce;
 }
 
 body {
   margin: 0;
   padding: 0;
   background-color: var(--white);
-  color: #333; 
+  color: var(--dark-text);
 }
