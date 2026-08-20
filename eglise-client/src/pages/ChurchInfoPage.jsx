@@ -114,15 +114,15 @@ const SectionCard = ({
       {/* HEADER */}
 
       <Flex
-        px={{ base: 4, md: 5 }}
-        py={3}
+        px={{ base: 3, md: 4 }}
+        py={2}
         align="center"
         justify="space-between"
-        minH="58px"
+        minH="48px"
       >
-        <HStack gap={3}>
+        <HStack gap={2}>
           <Circle
-            size="34px"
+            size="32px"
             bg="rgba(174, 32, 80, 0.08)"
             color="var(--primary-maroon)"
           >
@@ -147,8 +147,8 @@ const SectionCard = ({
       {/* CONTENT */}
 
       <Box
-        px={{ base: 4, md: 5 }}
-        pb={4}
+        px={{ base: 3, md: 4 }}
+        pb={3}
       >
         {children}
       </Box>
@@ -166,7 +166,7 @@ const DetailRow = ({
 }) => {
   return (
     <Flex
-      minH="37px"
+      minH="34px"
       align="center"
       borderBottom="1px solid"
       borderColor="var(--divider-color)"
@@ -453,6 +453,17 @@ const ChurchInfoPage = () => {
     "N/A";
 
   // =======================================================
+  // VICAR / PRIEST
+  // =======================================================
+
+  const vicarPriest =
+    church?.vicar ||
+    church?.priest ||
+    church?.vicar_name ||
+    church?.priest_name ||
+    "N/A";
+
+  // =======================================================
   // ADMINISTRATIVE DETAILS
   // =======================================================
 
@@ -609,10 +620,12 @@ const ChurchInfoPage = () => {
         overflow="hidden"
       >
         <Container
-          maxW="container.xl"
+          maxW="none"
+          w="calc(100% - 56px)"
+          px={0}
           py={{
-            base: 3,
-            md: 4,
+            base: 2,
+            md: 3,
           }}
         >
           {/* =================================================
@@ -625,7 +638,7 @@ const ChurchInfoPage = () => {
             mb={3}
             gap={3}
           >
-            <HStack gap={3}>
+            <HStack gap={2}>
               <Circle
                 size="44px"
                 border="1px solid"
@@ -656,7 +669,7 @@ const ChurchInfoPage = () => {
                 <Text
                   fontSize="xs"
                   color="var(--light-gray)"
-                  mt={1}
+                  mt={0.5}
                 >
                   View and manage your church
                   profile and subscription
@@ -670,8 +683,8 @@ const ChurchInfoPage = () => {
               color="var(--primary-maroon)"
               borderRadius="6px"
               size="sm"
-              px={4}
-              h="38px"
+              px={3}
+              h="34px"
               fontWeight="600"
               flexShrink={0}
               _hover={{
@@ -776,7 +789,7 @@ const ChurchInfoPage = () => {
                     as={LuChurch}
                     boxSize={{
                       base: 7,
-                      md: 9,
+                      md: 8,
                     }}
                     color="var(--primary-maroon)"
                   />
@@ -803,7 +816,7 @@ const ChurchInfoPage = () => {
 
                 <HStack
                   gap={3}
-                  mt={1}
+                  mt={0.5}
                   flexWrap="wrap"
                 >
                   <Text
@@ -834,7 +847,7 @@ const ChurchInfoPage = () => {
 
                 <HStack
                   gap={2}
-                  mt={1}
+                  mt={0.5}
                   color="var(--light-gray)"
                   fontSize="xs"
                 >
@@ -917,6 +930,15 @@ const ChurchInfoPage = () => {
                 <DetailRow
                   label="Established Year"
                   value={establishedYear}
+                />
+
+                <DetailRow
+                  label="Vicar / Priest"
+                  value={
+                    typeof vicarPriest === "object"
+                      ? vicarPriest?.name || "N/A"
+                      : vicarPriest
+                  }
                 />
 
                 <DetailRow
@@ -1089,7 +1111,7 @@ const ChurchInfoPage = () => {
                       <Text
                         fontSize="xs"
                         color="var(--light-gray)"
-                        mt={1}
+                        mt={0.5}
                       >
                         Active Members
                       </Text>
@@ -1108,7 +1130,7 @@ const ChurchInfoPage = () => {
                       <Text
                         fontSize="xs"
                         color="var(--light-gray)"
-                        mt={1}
+                        mt={0.5}
                       >
                         Limit
                       </Text>
@@ -1134,7 +1156,7 @@ const ChurchInfoPage = () => {
                   <Flex
                     justify="space-between"
                     align="center"
-                    gap={2}
+                    gap={1.5}
                     flexWrap="wrap"
                   >
                     <Text

@@ -1,0 +1,48 @@
+{
+  "name": "eglise",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@chakra-ui/form-control": "^2.2.0",
+    "@chakra-ui/icons": "^2.2.4",
+    "@chakra-ui/modal": "^2.3.1",
+    "@chakra-ui/react": "^3.35.0",
+    "@chakra-ui/table": "^2.1.0",
+    "@chakra-ui/toast": "^7.0.2",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "axios": "^1.13.5",
+    "country-state-city": "^3.2.1",
+    "formik": "^2.4.9",
+    "framer-motion": "^12.34.3",
+    "libphonenumber-js": "^1.13.10",
+    "react": "^19.2.0",
+    "react-country-flag": "^3.1.0",
+    "react-dom": "^19.2.0",
+    "react-icons": "^5.7.0",
+    "react-phone-input-2": "^2.15.1",
+    "react-phone-number-input": "^3.4.17",
+    "react-router-dom": "^7.13.1",
+    "react-to-print": "^3.3.0",
+    "recharts": "^3.10.1",
+    "yup": "^1.7.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react-swc": "^4.2.2",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "vite": "^7.3.1"
+  }
+}
