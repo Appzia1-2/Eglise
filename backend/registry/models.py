@@ -930,14 +930,24 @@ class Grade(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.church.name})"
-
+    
 class TombType(models.Model):
     church = models.ForeignKey(
         Church,
         on_delete=models.CASCADE,
         related_name="tomb_type"
     )
+
     name = models.CharField(max_length=150)
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
     class Meta:
         unique_together = ["church", "name"]
 
@@ -970,7 +980,12 @@ class Designation(models.Model):
         on_delete=models.CASCADE,
         related_name="designation"
     )
+
     designation_name = models.CharField(max_length=150)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
         unique_together = ["church", "designation_name"]
 
@@ -2067,6 +2082,9 @@ class Subscription(models.Model):
     cancel_reason = models.TextField(blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(
+            auto_now=True
+        )
 
     def __str__(self):
         return f"{self.grade.name} - {self.term} ({self.amount})"

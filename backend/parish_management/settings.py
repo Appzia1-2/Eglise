@@ -64,8 +64,13 @@ FRONTEND_LOGIN_URL = "http://demo1.appziatec.in/login"
 
 
 CORS_ALLOWED_ORIGINS = [
+    # Local - Client
     "http://localhost:5173",
-    "https://demo5.appziatec.in"
+    # Local - Admin
+    "http://localhost:5174",
+    # Production
+    "https://demo5.appziatec.in",
+    "https://demo7.appziatec.in",
 ]
 
 CORS_ALLOW_HEADERS = [
