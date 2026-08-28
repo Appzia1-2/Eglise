@@ -4,8 +4,40 @@ from django.contrib.auth import authenticate
 from accounts.models import User
 from django.contrib.auth import get_user_model
 from django.db import models
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 User = get_user_model()
+
+# ==========================================
+# ✅ CUSTOM JWT SERIALIZER - ADD THIS
+# ==========================================
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """
+    Custom JWT serializer that includes user role and permissions in the token
+    This fixes the 403 Forbidden error by including role in the JWT payload
+    """
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        
+        # Add custom claims to the token
+        token['role'] = user.role
+        token['is_superuser'] = user.is_superuser
+        token['is_staff'] = user.is_staff
+        token['email'] = user.email
+        token['username'] = user.username
+        token['user_id'] = user.id
+        
+        # Add church info if available
+        if user.church:
+            token['church_id'] = user.church.id
+            token['church_name'] = user.church.name
+        
+        return token
+
+# ==========================================
+# EXISTING SERIALIZERS
+# ==========================================
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()

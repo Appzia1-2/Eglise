@@ -249,23 +249,30 @@ class TombTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = TombType
         fields = "__all__"
-        read_only_fields = ("church",)
+        read_only_fields = ("church", "created_at", "updated_at")  # ✅ Added timestamps
+
 
 class TombFeeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TombFee
         fields = "__all__"
-        read_only_fields = ("church",)
+        read_only_fields = ("church", "created_at", "updated_at")  # ✅ Added timestamps
 
     def validate(self, data):
-
         church = self.context["request"].user.church
         tomb_type = data.get("tomb_type")
 
+        # ✅ Check if tomb_type exists before accessing .church
+        if not tomb_type:
+            raise serializers.ValidationError(
+                {"tomb_type": "This field is required."}
+            )
+
+        # ✅ Verify tomb_type belongs to this church
         if tomb_type.church != church:
             raise serializers.ValidationError(
-                "Invalid tomb type for this church."
+                {"tomb_type": "Invalid tomb type for this church."}
             )
 
         return data
@@ -4082,31 +4089,49 @@ class PriestNameSerializer(serializers.ModelSerializer):
         fields = ["vicar", "asst_vicar1", "asst_vicar2", "asst_vicar3"]
 
 
-
 class EventSerializer(serializers.ModelSerializer):
     class Meta:
         model = Events
         fields = '__all__'
-        read_only_fields = ("church", "created_at")
+        read_only_fields = ("church", "created_at", "updated_at")  # Added updated_at
 
 class OfferingSerializer(serializers.ModelSerializer):
+
     class Meta:
         model = Offering
         fields = "__all__"
-        read_only_fields = ("church",)
+        read_only_fields = (
+            "church",
+            "created_at",
+            "updated_at",
+        )
 
     def validate_amount(self, value):
         if value <= 0:
-            raise serializers.ValidationError("Amount must be greater than zero")
+            raise serializers.ValidationError(
+                "Amount must be greater than zero"
+            )
         return value
 
     def validate(self, data):
-        is_cancelled = data.get("is_cancelled", getattr(self.instance, "is_cancelled", False))
-        cancel_reason = data.get("cancel_reason", getattr(self.instance, "cancel_reason", ""))
+        is_cancelled = data.get(
+            "is_cancelled",
+            getattr(self.instance, "is_cancelled", False)
+        )
+
+        cancel_reason = data.get(
+            "cancel_reason",
+            getattr(self.instance, "cancel_reason", "")
+        )
+
         if is_cancelled and not cancel_reason:
             raise serializers.ValidationError(
-                {"cancel_reason": "Cancel reason is required when marking as cancelled."}
+                {
+                    "cancel_reason":
+                    "Cancel reason is required when marking as cancelled."
+                }
             )
+
         return data
     
 class VisitorMasterSerializer(serializers.ModelSerializer):

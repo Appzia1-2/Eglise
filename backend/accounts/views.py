@@ -57,6 +57,7 @@ class LoginAPIView(APIView):
 
         return Response(response)
 
+    
 class AdminLoginAPIView(APIView):
     permission_classes = [AllowAny]
 
@@ -84,6 +85,14 @@ class AdminLoginAPIView(APIView):
             user = serializer.validated_data["user"]
 
             refresh = RefreshToken.for_user(user)
+
+            # ✅ ADD THESE 5 LINES - THIS IS THE FIX
+            refresh['role'] = user.role
+            refresh['is_superuser'] = user.is_superuser
+            refresh['is_staff'] = user.is_staff
+            refresh['email'] = user.email
+            refresh['username'] = user.username
+            refresh['user_id'] = user.id
 
             response = {
                 "access": str(refresh.access_token),

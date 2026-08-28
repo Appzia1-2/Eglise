@@ -498,7 +498,6 @@ class SubscribeAPIView(APIView):
     def post(self, request):
         church = request.user.church
 
-        # Check if church already has a subscription
         if hasattr(church, "churchsubscription"):
             return Response(
                 {"detail": "Subscription already exists"},
@@ -515,18 +514,13 @@ class SubscribeAPIView(APIView):
         billing_cycle = serializer.validated_data.get("billing_cycle")
         capacity = serializer.validated_data.get("capacity")
 
-        # -------------------------
-        # CREATE SUBSCRIPTION (No Trial)
-        # -------------------------
         duration_months = 12 if billing_cycle == "YEARLY" else 1
         
-        # Determine capacity
         if capacity:
             resolved_capacity = capacity
         else:
             resolved_capacity = package.member_limit
 
-        # Create subscription
         subscription = ChurchSubscription.objects.create(
             church=church,
             package=package,
@@ -537,15 +531,10 @@ class SubscribeAPIView(APIView):
             is_active=False,
         )
 
-        # Calculate amount
-        if billing_cycle == "YEARLY":
-            rate = package.rate_per_member_yearly
-        else:
-            rate = package.rate_per_member_monthly
-        
-        amount = resolved_capacity * rate * duration_months if resolved_capacity else rate * duration_months
+        # ✅ FIXED: Use subscription.get_total_price()
+        # Does NOT multiply by duration_months
+        amount = subscription.get_total_price()
 
-        # Create bill
         bill = Bill.objects.create(
             church=church,
             subscription=subscription,
@@ -556,10 +545,9 @@ class SubscribeAPIView(APIView):
             breakdown={
                 "items": [{
                     "type": "NEW",
+                    # ✅ FIXED: Shows correct calculation
                     "calculation": (
-                        f"{resolved_capacity} × "
-                        f"{rate} × "
-                        f"{duration_months}"
+                        f"{resolved_capacity} × {subscription.get_rate()}"
                     ),
                     "total": float(amount),
                 }],
@@ -582,7 +570,6 @@ class SubscribeAPIView(APIView):
             },
             status=status.HTTP_201_CREATED
         )
-
 
 class UpgradeAPIView(APIView):
     permission_classes = [IsAuthenticated, IsChurchUser]
@@ -3206,24 +3193,41 @@ class MembersUnderHeadAPIView(ListAPIView):
         ).order_by("name")
 
 class OfferingListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated, IsChurchUser]
+    permission_classes = [
+        IsAuthenticated,
+        IsChurchUser
+    ]
+
     serializer_class = OfferingSerializer
 
     def get_queryset(self):
-        return Offering.objects.filter(
-            church=self.request.user.church
-        ).order_by("-created_at")
+        return (
+            Offering.objects
+            .filter(church=self.request.user.church)
+            .select_related("event", "member")
+            .order_by("-updated_at")
+        )
 
     def perform_create(self, serializer):
-        serializer.save(church=self.request.user.church)
+        serializer.save(
+            church=self.request.user.church
+        )
 
 
 class OfferingDetailView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticated, IsChurchUser]
+    permission_classes = [
+        IsAuthenticated,
+        IsChurchUser
+    ]
+
     serializer_class = OfferingSerializer
 
     def get_queryset(self):
-        return Offering.objects.filter(church=self.request.user.church)
+        return (
+            Offering.objects
+            .filter(church=self.request.user.church)
+            .select_related("event", "member")
+        )
 
 class VisitorMasterListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated, IsChurchUser]

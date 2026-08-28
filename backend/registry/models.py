@@ -968,6 +968,15 @@ class TombFee(models.Model):
     tomb_fees = models.DecimalField(max_digits=15, decimal_places=3)
     indication = models.CharField(max_length=255)
     specification = models.TextField(blank=True)
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True  # ✅ Set on creation, never changes
+    )
+    
+    updated_at = models.DateTimeField(
+        auto_now=True  # ✅ Updates on every save
+    )
+    
     class Meta:
         unique_together = ["church", "tomb_type", "indication"]
 
@@ -2013,6 +2022,7 @@ class Events(models.Model):
     name = models.CharField(max_length=200)
 
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.name}"
@@ -2023,23 +2033,36 @@ class Offering(models.Model):
         on_delete=models.CASCADE,
         related_name="offerings"
     )
+
     event = models.ForeignKey(
         Events,
         on_delete=models.PROTECT,
         related_name="offerings"
     )
+
     member = models.ForeignKey(
         Member,
         on_delete=models.PROTECT,
         related_name="offerings"
     )
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
+
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
     narration = models.TextField(blank=True)
 
     is_cancelled = models.BooleanField(default=False)
     cancel_reason = models.TextField(blank=True)
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
 
     def __str__(self):
         return f"{self.member.name} - {self.amount} ({self.event.name})"
