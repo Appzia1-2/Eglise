@@ -66,6 +66,8 @@ import TombTypeEditPage from "./pages/TombTypeEditPage";
 
 
 import TombFeesPage from "./pages/TombFeesPage";
+import TombFeesAddPage from "./pages/TombFeesAddPage";
+import TombFeeEditPage from "./pages/TombFeeEditPage";
 
 
 import DesignationPage from "./pages/DesignationPage";
@@ -86,8 +88,18 @@ import DeathAddPage from "./pages/DeathAddPage";
 
 
 import EventsPage from "./pages/EventsPage";
+import EventsAddPage from "./pages/EventsAddPage";
+import EventsEditPage from "./pages/EventsEditPage";
+
+
 // import DiocesePage from "./pages/DiocesePage";
 import OfferingPage from "./pages/OfferingPage";
+import OfferingAddPage from "./pages/OfferingAddPage";
+import OfferingEditPage from "./pages/OfferingEditPage";
+
+
+
+
 import VisitorPage from "./pages/VisitorPage";
 
 import SubscriptionPage from "./pages/SubscriptionPage";
@@ -129,7 +141,7 @@ function App() {
           }
         />
         <Route
-          path="/"
+          path="/church/dashboard"
           element={
             <ProtectedRoute>
               <HomePage />
@@ -465,6 +477,23 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+          <Route
+          path="/tomb-fees/add"
+          element={
+            <ProtectedRoute>
+              <TombFeesAddPage />
+            </ProtectedRoute>
+          }
+        />
+          <Route
+          path="/tomb-fees/:id/edit"
+          element={
+            <ProtectedRoute>
+              <TombFeeEditPage />
+            </ProtectedRoute>
+          }
+        />
         {/* =========================================================
     DESIGNATION MASTER ROUTES
 ========================================================= */}
@@ -563,6 +592,22 @@ function App() {
             </ProtectedRoute>
           }
         />
+         <Route
+          path="/events/add"
+          element={
+            <ProtectedRoute>
+              <EventsAddPage />
+            </ProtectedRoute>
+          }
+        />
+          <Route
+          path="/events/:id/edit"
+          element={
+            <ProtectedRoute>
+              <EventsEditPage />
+            </ProtectedRoute>
+          }
+        />
         {/* <Route
           path="/dioceses"
           element={
@@ -576,6 +621,22 @@ function App() {
           element={
             <ProtectedRoute>
               <OfferingPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/offerings/add"
+          element={
+            <ProtectedRoute>
+              <OfferingAddPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/offerings/:id/edit"
+          element={
+            <ProtectedRoute>
+              <OfferingEditPage />
             </ProtectedRoute>
           }
         />

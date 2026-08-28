@@ -3,22 +3,20 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
-  Container,
   Flex,
   Heading,
   HStack,
+  Icon,
   Input,
   SimpleGrid,
-  Table,
   Text,
 } from "@chakra-ui/react";
 
 import {
   LuCalendarDays,
+  LuChevronDown,
   LuChevronLeft,
   LuChevronRight,
-  LuChevronsLeft,
-  LuChevronsRight,
   LuEye,
   LuFilter,
   LuPencil,
@@ -35,6 +33,10 @@ import Footer from "../components/Footer";
 import { listRelationships } from "../api/registryServices";
 
 const PRIMARY_MAROON = "var(--primary-maroon)";
+const RED = "#D7193F";
+const DARK = "#182338";
+const MUTED = "#60708C";
+const BORDER = "#DCE2EA";
 
 const RelationshipPage = () => {
   const navigate = useNavigate();
@@ -44,22 +46,17 @@ const RelationshipPage = () => {
   const [error, setError] = useState("");
 
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState("ALL");
 
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Maximum 6 records per page
-  const ITEMS_PER_PAGE = 6;
+  const pageSize = 5;
 
   // ==========================================================
   // LOAD DATA
   // ==========================================================
 
-  useEffect(() => {
-    fetchRelationships();
-  }, []);
-
-  const fetchRelationships = async () => {
+  const loadRelationships = async () => {
     try {
       setLoading(true);
       setError("");
@@ -77,7 +74,6 @@ const RelationshipPage = () => {
       setRelationships(items);
     } catch (err) {
       console.error("Error fetching relationships:", err);
-
       setError("Unable to load relationships.");
       setRelationships([]);
     } finally {
@@ -85,113 +81,233 @@ const RelationshipPage = () => {
     }
   };
 
+  useEffect(() => {
+    loadRelationships();
+  }, []);
+
   // ==========================================================
-  // SEARCH
+  // SEARCH + FILTER
   // ==========================================================
 
   const filteredRelationships = useMemo(() => {
     let result = [...relationships];
 
-    const searchValue = search.trim().toLowerCase();
+    const searchText = search.trim().toLowerCase();
 
-    if (searchValue) {
-      result = result.filter((item) =>
-        String(item.name || "")
-          .toLowerCase()
-          .includes(searchValue)
+    // ========================================================
+    // SEARCH
+    // ========================================================
+
+    if (searchText) {
+      result = result.filter((item) => {
+        const name = String(item.name || "").toLowerCase();
+        return name.includes(searchText);
+      });
+    }
+
+    // ========================================================
+    // FILTER
+    // ========================================================
+
+    if (filter === "RECENTLY_UPDATED") {
+      const now = new Date();
+      const sevenDaysAgo = new Date(
+        now.getTime() - 7 * 24 * 60 * 60 * 1000
       );
+
+      result = result.filter((item) => {
+        if (!item.updated_at) return false;
+        const updated = new Date(item.updated_at);
+        if (Number.isNaN(updated.getTime())) return false;
+        return updated >= sevenDaysAgo && updated <= now;
+      });
     }
 
     return result;
-  }, [relationships, search]);
+  }, [relationships, search, filter]);
 
   // ==========================================================
   // PAGINATION
   // ==========================================================
 
-  const totalItems = filteredRelationships.length;
-
   const totalPages = Math.max(
     1,
-    Math.ceil(totalItems / ITEMS_PER_PAGE)
+    Math.ceil(
+      filteredRelationships.length / pageSize
+    )
   );
 
-  const safeCurrentPage = Math.min(
+  const safePage = Math.min(
     currentPage,
     totalPages
   );
 
   const startIndex =
-    (safeCurrentPage - 1) * ITEMS_PER_PAGE;
+    (safePage - 1) * pageSize;
 
   const paginatedRelationships =
     filteredRelationships.slice(
       startIndex,
-      startIndex + ITEMS_PER_PAGE
+      startIndex + pageSize
     );
 
-  // Reset page when search/filter changes
   useEffect(() => {
     setCurrentPage(1);
   }, [search, filter]);
 
   // ==========================================================
-  // DATE FORMAT
+  // STATS
   // ==========================================================
 
-  const formatDate = (dateValue) => {
-    if (!dateValue) return "-";
-
-    const date = new Date(dateValue);
-
-    if (Number.isNaN(date.getTime())) {
-      return "-";
-    }
-
-    return date.toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  };
-
-  // ==========================================================
-  // RECENTLY UPDATED
-  // ==========================================================
+  const totalRelationships = relationships.length;
 
   const recentlyUpdatedCount = useMemo(() => {
     if (!relationships.length) return 0;
 
     const now = new Date();
+    const sevenDaysAgo = new Date(
+      now.getTime() - 7 * 24 * 60 * 60 * 1000
+    );
 
     return relationships.filter((item) => {
       if (!item.updated_at) return false;
-
       const updated = new Date(item.updated_at);
-
-      if (Number.isNaN(updated.getTime())) {
-        return false;
-      }
-
-      const difference =
-        now.getTime() - updated.getTime();
-
-      const days =
-        difference / (1000 * 60 * 60 * 24);
-
-      return days >= 0 && days <= 30;
+      if (Number.isNaN(updated.getTime())) return false;
+      return updated >= sevenDaysAgo && updated <= now;
     }).length;
   }, [relationships]);
 
   // ==========================================================
-  // PAGE NUMBERS
+  // DATE FORMAT - with time like Tomb Fees
   // ==========================================================
 
-  const pageNumbers = [];
+  const formatDateTime = (date) => {
+    if (!date) return "-";
 
-  for (let page = 1; page <= totalPages; page++) {
-    pageNumbers.push(page);
-  }
+    const parsedDate = new Date(date);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      return "-";
+    }
+
+    return parsedDate.toLocaleString(
+      "en-GB",
+      {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }
+    );
+  };
+
+  // ==========================================================
+  // STAT CARD - Matches Tomb Fees exactly
+  // ==========================================================
+
+  const StatCard = ({
+    icon,
+    title,
+    value,
+  }) => {
+    return (
+      <Box
+        border="1px solid #DCE2EA"
+        borderRadius="8px"
+        h="78px"
+        px={4}
+        bg="white"
+        display="flex"
+        alignItems="center"
+      >
+        <Flex
+          align="center"
+          width="100%"
+          height="100%"
+        >
+          <Box
+            width="65px"
+            height="100%"
+            borderRight="1px solid #DCE2EA"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            flexShrink={0}
+          >
+            <Icon
+              as={icon}
+              boxSize={8}
+              color={RED}
+              strokeWidth={1.6}
+            />
+          </Box>
+
+          <Box pl={4}>
+            <Text
+              fontSize="12px"
+              color={DARK}
+              mb={1}
+              fontWeight="600"
+            >
+              {title}
+            </Text>
+
+            <Text
+              fontSize="24px"
+              fontWeight="700"
+              color={DARK}
+              lineHeight="1"
+            >
+              {value}
+            </Text>
+          </Box>
+        </Flex>
+      </Box>
+    );
+  };
+
+  // ==========================================================
+  // PAGINATION NUMBERS - with ellipsis like Tomb Fees
+  // ==========================================================
+
+  const renderPages = () => {
+    const pages = [];
+
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      pages.push(1);
+
+      if (safePage > 3) {
+        pages.push("...");
+      }
+
+      const start = Math.max(
+        2,
+        safePage - 1
+      );
+
+      const end = Math.min(
+        totalPages - 1,
+        safePage + 1
+      );
+
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+
+      if (safePage < totalPages - 2) {
+        pages.push("...");
+      }
+
+      pages.push(totalPages);
+    }
+
+    return pages;
+  };
 
   // ==========================================================
   // RENDER
@@ -199,75 +315,80 @@ const RelationshipPage = () => {
 
   return (
     <Box
-      h="100vh"
       minH="100vh"
       bg="white"
       display="flex"
       flexDirection="column"
-      overflow="hidden"
     >
-      {/* =====================================================
+      {/* ======================================================
           NAVBAR
-      ===================================================== */}
+      ====================================================== */}
 
       <Navbar />
 
-      {/* =====================================================
-          MAIN CONTENT
-      ===================================================== */}
+      {/* ======================================================
+          MAIN CONTENT - Full width like Tomb Fees
+      ====================================================== */}
 
       <Box
         flex="1"
-        minH="0"
-        overflow="hidden"
+        w="100%"
       >
-        <Container
-          maxW="1200px"
-          px={{ base: 4, md: 5 }}
-          py={{ base: 2, md: 3 }}
-          height="100%"
+        <Box
+          w="100%"
+          px={{
+            base: 3,
+            md: 4,
+          }}
+          py={{
+            base: 3,
+            md: 4,
+          }}
         >
-          {/* =================================================
+          {/* ==================================================
               BREADCRUMB
-          ================================================= */}
+          ================================================== */}
 
           <HStack
             gap={2}
             mb={2}
-            color="#60708C"
-            fontSize="12px"
+            color={MUTED}
+            fontSize="11px"
           >
             <Text>Masters</Text>
             <Text>/</Text>
             <Text>Relationship Master</Text>
           </HStack>
 
-          {/* =================================================
+          {/* ==================================================
               HEADER
-          ================================================= */}
+          ================================================== */}
 
           <Flex
             justify="space-between"
-            align="center"
+            align={{
+              base: "flex-start",
+              md: "center",
+            }}
+            gap={3}
+            mb={3}
             direction={{
               base: "column",
               md: "row",
             }}
-            gap={2}
-            mb={3}
           >
             <Box>
               <Text
-                fontSize="11px"
+                fontSize="10px"
                 fontWeight="700"
-                color="#D7193F"
+                color={RED}
                 mb={1}
               >
                 RELATIONSHIP MASTER
               </Text>
 
               <Heading
-                color="#182338"
+                color={DARK}
                 fontSize={{
                   base: "22px",
                   md: "26px",
@@ -279,22 +400,20 @@ const RelationshipPage = () => {
               </Heading>
 
               <Text
-                color="#60708C"
-                fontSize="12px"
+                color={MUTED}
+                fontSize="11px"
               >
                 Manage relationship records used in
                 member and family details.
               </Text>
             </Box>
 
-            {/* ADD BUTTON */}
-
             <Button
               bg={PRIMARY_MAROON}
               color="white"
               px={5}
               h="38px"
-              fontSize="13px"
+              fontSize="12px"
               borderRadius="6px"
               flexShrink={0}
               onClick={() =>
@@ -304,20 +423,19 @@ const RelationshipPage = () => {
                 bg: "#650A18",
               }}
             >
-              <LuPlus
-                size={17}
-                style={{
-                  marginRight: "7px",
-                }}
+              <Icon
+                as={LuPlus}
+                mr={2}
+                boxSize={4}
               />
 
               Add Relationship
             </Button>
           </Flex>
 
-          {/* =================================================
+          {/* ==================================================
               STAT CARDS
-          ================================================= */}
+          ================================================== */}
 
           <SimpleGrid
             columns={{
@@ -327,132 +445,37 @@ const RelationshipPage = () => {
             gap={3}
             mb={3}
           >
-            {/* TOTAL */}
+            <StatCard
+              icon={LuUsers}
+              title="Total Relationships"
+              value={totalRelationships}
+            />
 
-            <Box
-              border="1px solid #DCE2EA"
-              borderRadius="8px"
-              h="78px"
-              px={4}
-              display="flex"
-              alignItems="center"
-              flexShrink={0}
-            >
-              <Flex
-                align="center"
-                width="100%"
-                height="100%"
-              >
-                <Box
-                  width="68px"
-                  height="52px"
-                  borderRight="1px solid #DCE2EA"
-                  display="flex"
-                  justifyContent="center"
-                  alignItems="center"
-                  flexShrink={0}
-                >
-                  <LuUsers
-                    size={34}
-                    color="#D7193F"
-                    strokeWidth={1.5}
-                  />
-                </Box>
-
-                <Box pl={4}>
-                  <Text
-                    fontSize="11px"
-                    fontWeight="600"
-                    color="#182338"
-                    mb={1}
-                  >
-                    Total Relationships
-                  </Text>
-
-                  <Text
-                    fontSize="25px"
-                    fontWeight="700"
-                    color="#182338"
-                    lineHeight="1"
-                  >
-                    {relationships.length}
-                  </Text>
-                </Box>
-              </Flex>
-            </Box>
-
-            {/* RECENTLY UPDATED */}
-
-            <Box
-              border="1px solid #DCE2EA"
-              borderRadius="8px"
-              h="78px"
-              px={4}
-              display="flex"
-              alignItems="center"
-              flexShrink={0}
-            >
-              <Flex
-                align="center"
-                width="100%"
-                height="100%"
-              >
-                <Box
-                  width="68px"
-                  height="52px"
-                  borderRight="1px solid #DCE2EA"
-                  display="flex"
-                  justifyContent="center"
-                  alignItems="center"
-                  flexShrink={0}
-                >
-                  <LuCalendarDays
-                    size={34}
-                    color="#D7193F"
-                    strokeWidth={1.5}
-                  />
-                </Box>
-
-                <Box pl={4}>
-                  <Text
-                    fontSize="11px"
-                    fontWeight="600"
-                    color="#182338"
-                    mb={1}
-                  >
-                    Recently Updated
-                  </Text>
-
-                  <Text
-                    fontSize="25px"
-                    fontWeight="700"
-                    color="#182338"
-                    lineHeight="1"
-                  >
-                    {recentlyUpdatedCount}
-                  </Text>
-                </Box>
-              </Flex>
-            </Box>
+            <StatCard
+              icon={LuCalendarDays}
+              title="Recently Updated"
+              value={recentlyUpdatedCount}
+            />
           </SimpleGrid>
 
-          {/* =================================================
+          {/* ==================================================
               TABLE CARD
-          ================================================= */}
+          ================================================== */}
 
           <Box
             border="1px solid #DCE2EA"
             borderRadius="8px"
-            p={{ base: 2, md: 3 }}
-            overflow="hidden"
+            p={3}
+            bg="white"
+            w="100%"
           >
-            {/* =================================================
-                FILTER BAR
-            ================================================= */}
+            {/* ==================================================
+                SEARCH / FILTER
+            ================================================== */}
 
             <Flex
-              gap={2}
-              mb={2}
+              gap={3}
+              mb={3}
               direction={{
                 base: "column",
                 md: "row",
@@ -462,22 +485,22 @@ const RelationshipPage = () => {
 
               <Box
                 position="relative"
-                flex="1"
                 maxW={{
                   base: "100%",
-                  md: "430px",
+                  md: "380px",
                 }}
+                flex="1"
               >
-                <Box
+                <Icon
+                  as={LuSearch}
                   position="absolute"
-                  left="13px"
+                  left="12px"
                   top="50%"
                   transform="translateY(-50%)"
-                  color="#60708C"
+                  color={MUTED}
                   zIndex={1}
-                >
-                  <LuSearch size={16} />
-                </Box>
+                  boxSize={4}
+                />
 
                 <Input
                   value={search}
@@ -485,15 +508,11 @@ const RelationshipPage = () => {
                     setSearch(e.target.value)
                   }
                   placeholder="Search relationship name"
-                  pl="40px"
+                  pl="38px"
                   h="38px"
-                  fontSize="13px"
-                  borderColor="#DCE2EA"
+                  borderColor={BORDER}
                   borderRadius="6px"
-                  color="#182338"
-                  _placeholder={{
-                    color: "#8B98AB",
-                  }}
+                  fontSize="12px"
                   _focus={{
                     borderColor: PRIMARY_MAROON,
                     boxShadow:
@@ -502,12 +521,13 @@ const RelationshipPage = () => {
                 />
               </Box>
 
-              {/* RECORD FILTER */}
+              {/* FILTER */}
 
-              {/* <Box
+              <Box
+                position="relative"
                 width={{
                   base: "100%",
-                  md: "200px",
+                  md: "210px",
                 }}
               >
                 <select
@@ -521,51 +541,69 @@ const RelationshipPage = () => {
                     border:
                       "1px solid #DCE2EA",
                     borderRadius: "6px",
-                    padding: "0 12px",
-                    fontSize: "13px",
-                    color: "#182338",
+                    padding:
+                      "0 35px 0 11px",
+                    fontSize: "12px",
                     background: "white",
+                    color: DARK,
                     outline: "none",
+                    cursor: "pointer",
+                    appearance: "none",
                   }}
                 >
-                  <option value="all">
+                  <option value="ALL">
                     All Records
                   </option>
+
+                  <option value="RECENTLY_UPDATED">
+                    Recently Updated
+                  </option>
                 </select>
-              </Box> */}
 
-              {/* FILTER BUTTON */}
+                <Icon
+                  as={LuChevronDown}
+                  position="absolute"
+                  right="11px"
+                  top="50%"
+                  transform="translateY(-50%)"
+                  pointerEvents="none"
+                  color={DARK}
+                  boxSize={4}
+                />
+              </Box>
 
-              {/* <Button
+              {/* RESET FILTER */}
+
+              <Button
                 variant="outline"
                 h="38px"
-                px={4}
-                fontSize="13px"
-                borderColor="#D7193F"
-                color="#D7193F"
+                borderColor="#FF5A7D"
+                color={RED}
                 borderRadius="6px"
-                _hover={{
-                  bg: "#FFF5F7",
+                px={4}
+                fontSize="12px"
+                onClick={() => {
+                  setSearch("");
+                  setFilter("ALL");
                 }}
               >
-                <LuFilter
-                  size={15}
-                  style={{
-                    marginRight: "7px",
-                  }}
+                <Icon
+                  as={LuFilter}
+                  mr={2}
+                  boxSize={4}
                 />
 
                 Filter
-              </Button> */}
+              </Button>
             </Flex>
 
-            {/* =================================================
-                ERROR
-            ================================================= */}
+            {/* ==================================================
+                ERROR MESSAGE
+            ================================================== */}
 
             {error && (
               <Box
-                mb={2}
+                mb={3}
                 p={2}
                 borderRadius="6px"
                 bg="#FFF5F5"
@@ -580,209 +618,166 @@ const RelationshipPage = () => {
               </Box>
             )}
 
-            {/* =================================================
-                TABLE
-
-                IMPORTANT:
-                No fixed height here.
-                It grows only when rows are added.
-            ================================================= */}
+            {/* ==================================================
+                TABLE - Custom table like Tomb Fees
+            ================================================== */}
 
             <Box
-              border="1px solid #DCE2EA"
-              borderRadius="7px"
-              overflow="hidden"
+              overflowX="auto"
+              overflowY="hidden"
+              border="1px solid #E6EAF0"
+              borderRadius="6px"
+              width="100%"
             >
-              <Table.Root
-                size="sm"
-                variant="outline"
+              <Box
+                as="table"
                 width="100%"
+                minW="850px"
+                borderCollapse="collapse"
               >
                 {/* TABLE HEADER */}
 
-                <Table.Header>
-                  <Table.Row bg="white">
-                    <Table.ColumnHeader
-                      color="#182338"
-                      fontWeight="700"
-                      fontSize="12px"
-                      py={2}
-                      px={4}
-                    >
-                      Relationship Name
-                    </Table.ColumnHeader>
-
-                    <Table.ColumnHeader
-                      color="#182338"
-                      fontWeight="700"
-                      fontSize="12px"
-                      py={2}
-                      px={4}
-                    >
-                      Last Updated
-                    </Table.ColumnHeader>
-
-                    <Table.ColumnHeader
-                      color="#182338"
-                      fontWeight="700"
-                      fontSize="12px"
-                      py={2}
-                      px={4}
-                      textAlign="right"
-                    >
-                      Actions
-                    </Table.ColumnHeader>
-                  </Table.Row>
-                </Table.Header>
+                <Box as="thead">
+                  <Box
+                    as="tr"
+                    height="42px"
+                  >
+                    {[
+                      "Relationship Name",
+                      "Last Updated",
+                      "Actions",
+                    ].map((heading) => (
+                      <Box
+                        as="th"
+                        key={heading}
+                        textAlign="left"
+                        px={4}
+                        py={2}
+                        fontSize="11px"
+                        fontWeight="700"
+                        color={DARK}
+                        borderBottom="1px solid #E6EAF0"
+                        whiteSpace="nowrap"
+                        bg="white"
+                      >
+                        {heading}
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
 
                 {/* TABLE BODY */}
 
-                <Table.Body>
+                <Box as="tbody">
                   {/* LOADING */}
 
-                  {loading && (
-                    <Table.Row>
-                      <Table.Cell
+                  {loading ? (
+                    <Box as="tr">
+                      <Box
+                        as="td"
                         colSpan={3}
-                        py={5}
                         textAlign="center"
+                        height="48px"
+                        color={MUTED}
+                        fontSize="12px"
                       >
-                        <Text
-                          color="#60708C"
-                          fontSize="12px"
-                        >
-                          Loading relationships...
-                        </Text>
-                      </Table.Cell>
-                    </Table.Row>
-                  )}
-
-                  {/* EMPTY */}
-
-                  {!loading &&
-                    paginatedRelationships.length === 0 && (
-                      <Table.Row>
-                        <Table.Cell
-                          colSpan={3}
-                          py={5}
-                          textAlign="center"
-                        >
-                          <Text
-                            color="#60708C"
-                            fontSize="12px"
-                          >
-                            No relationships found.
-                          </Text>
-
-                          <Button
-                            mt={2}
-                            bg={PRIMARY_MAROON}
-                            color="white"
-                            size="sm"
-                            fontSize="12px"
-                            onClick={() =>
-                              navigate(
-                                "/relationship/add"
-                              )
-                            }
-                            _hover={{
-                              bg: "#650A18",
-                            }}
-                          >
-                            <LuPlus
-                              size={15}
-                              style={{
-                                marginRight: "6px",
-                              }}
-                            />
-
-                            Add your first relationship
-                          </Button>
-                        </Table.Cell>
-                      </Table.Row>
-                    )}
-
-                  {/* DATA */}
-
-                  {!loading &&
+                        Loading relationships...
+                      </Box>
+                    </Box>
+                  ) : paginatedRelationships.length === 0 ? (
+                    <Box as="tr">
+                      <Box
+                        as="td"
+                        colSpan={3}
+                        textAlign="center"
+                        height="48px"
+                        color={MUTED}
+                        fontSize="12px"
+                      >
+                        No relationships found.
+                      </Box>
+                    </Box>
+                  ) : (
                     paginatedRelationships.map(
                       (relationship) => (
-                        <Table.Row
+                        <Box
+                          as="tr"
                           key={relationship.id}
+                          height="42px"
                           _hover={{
-                            bg: "#FCFCFD",
+                            bg: "#FFFBFC",
                           }}
                         >
-                          {/* NAME */}
+                          {/* RELATIONSHIP NAME */}
 
-                          <Table.Cell
+                          <Box
+                            as="td"
                             px={4}
-                            py={1.5}
-                            color="#182338"
-                            fontSize="13px"
-                            fontWeight="500"
+                            py={1}
+                            fontSize="12px"
+                            fontWeight="600"
+                            color={DARK}
+                            borderBottom="1px solid #E6EAF0"
+                            whiteSpace="nowrap"
                           >
                             {relationship.name || "-"}
-                          </Table.Cell>
+                          </Box>
 
-                          {/* DATE */}
+                          {/* LAST UPDATED - with time */}
 
-                          <Table.Cell
+                          <Box
+                            as="td"
                             px={4}
-                            py={1.5}
-                            color="#182338"
-                            fontSize="13px"
+                            py={1}
+                            fontSize="12px"
+                            color="#344054"
+                            borderBottom="1px solid #E6EAF0"
+                            whiteSpace="nowrap"
                           >
-                            {formatDate(
+                            {formatDateTime(
                               relationship.updated_at
                             )}
-                          </Table.Cell>
+                          </Box>
 
                           {/* ACTIONS */}
 
-                          <Table.Cell
+                          <Box
+                            as="td"
                             px={4}
-                            py={1.5}
+                            py={1}
+                            borderBottom="1px solid #E6EAF0"
                           >
-                            <HStack
-                              justify="flex-end"
-                              gap={0}
-                            >
+                            <HStack gap={2}>
                               {/* VIEW */}
 
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                h="28px"
-                                px={3}
-                                fontSize="12px"
-                                color="#D7193F"
-                                borderRadius="4px"
+                                h="30px"
+                                color={RED}
+                                px={2}
+                                fontSize="11px"
                                 onClick={() =>
                                   navigate(
                                     `/relationship/${relationship.id}`
                                   )
                                 }
                                 _hover={{
-                                  bg: "#FFF5F7",
+                                  bg: "#FFF0F4",
                                 }}
                               >
-                                <LuEye
-                                  size={14}
-                                  style={{
-                                    marginRight: "5px",
-                                  }}
+                                <Icon
+                                  as={LuEye}
+                                  mr={1}
+                                  boxSize={3.5}
                                 />
 
                                 View
                               </Button>
 
-                              {/* DIVIDER */}
-
                               <Box
-                                height="18px"
-                                width="1px"
-                                bg="#DCE2EA"
+                                h="20px"
+                                borderLeft="1px solid #DCE2EA"
                               />
 
                               {/* EDIT */}
@@ -790,211 +785,190 @@ const RelationshipPage = () => {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                h="28px"
-                                px={3}
-                                fontSize="12px"
-                                color="#D7193F"
-                                borderRadius="4px"
+                                h="30px"
+                                color={RED}
+                                px={2}
+                                fontSize="11px"
                                 onClick={() =>
                                   navigate(
                                     `/relationship/${relationship.id}/edit`
                                   )
                                 }
                                 _hover={{
-                                  bg: "#FFF5F7",
+                                  bg: "#FFF0F4",
                                 }}
                               >
-                                <LuPencil
-                                  size={14}
-                                  style={{
-                                    marginRight: "5px",
-                                  }}
+                                <Icon
+                                  as={LuPencil}
+                                  mr={1}
+                                  boxSize={3.5}
                                 />
 
                                 Edit
                               </Button>
                             </HStack>
-                          </Table.Cell>
-                        </Table.Row>
+                          </Box>
+                        </Box>
                       )
-                    )}
-                </Table.Body>
-              </Table.Root>
+                    )
+                  )}
+                </Box>
+              </Box>
             </Box>
 
-            {/* =================================================
-                PAGINATION
+            {/* ==================================================
+                PAGINATION - Like Tomb Fees
+            ================================================== */}
 
-                Only show pagination when there are records.
-            ================================================= */}
+            <Flex
+              justify="space-between"
+              align="center"
+              mt={3}
+              gap={3}
+              direction={{
+                base: "column",
+                md: "row",
+              }}
+            >
+              {/* COUNT */}
 
-            {totalItems > 0 && (
-              <Flex
-                mt={2}
-                align="center"
-                justify="space-between"
-                direction={{
-                  base: "column",
-                  md: "row",
-                }}
-                gap={2}
+              <Text
+                fontSize="11px"
+                color={MUTED}
               >
-                {/* COUNT */}
+                {filteredRelationships.length === 0
+                  ? "Showing 0 relationships"
+                  : `Showing ${
+                      startIndex + 1
+                    }–${Math.min(
+                      startIndex +
+                        paginatedRelationships.length,
+                      filteredRelationships.length
+                    )} of ${
+                      filteredRelationships.length
+                    } relationships`}
+              </Text>
 
-                <Text
-                  color="#60708C"
-                  fontSize="11px"
+              {/* PAGINATION */}
+
+              <HStack gap={1}>
+                {/* PREVIOUS */}
+
+                <Button
+                  size="xs"
+                  h="30px"
+                  variant="outline"
+                  borderColor={BORDER}
+                  color={MUTED}
+                  disabled={safePage === 1}
+                  onClick={() =>
+                    setCurrentPage(
+                      Math.max(
+                        1,
+                        safePage - 1
+                      )
+                    )
+                  }
                 >
-                  Showing{" "}
-                  {startIndex + 1}-
-                  {Math.min(
-                    startIndex +
-                      paginatedRelationships.length,
-                    totalItems
-                  )}{" "}
-                  of {totalItems} relationships
-                </Text>
+                  <Icon
+                    as={LuChevronLeft}
+                    boxSize={3.5}
+                  />
 
-                {/* PAGINATION */}
+                  Previous
+                </Button>
 
-                {totalPages > 1 && (
-                  <HStack gap={1}>
-                    {/* FIRST */}
+                {/* PAGE NUMBERS */}
 
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      h="28px"
-                      minW="28px"
-                      borderColor="#DCE2EA"
-                      color="#60708C"
-                      disabled={
-                        safeCurrentPage === 1
-                      }
-                      onClick={() =>
-                        setCurrentPage(1)
-                      }
-                    >
-                      <LuChevronsLeft size={13} />
-                    </Button>
-
-                    {/* PREVIOUS */}
-
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      h="28px"
-                      minW="28px"
-                      borderColor="#DCE2EA"
-                      color="#60708C"
-                      disabled={
-                        safeCurrentPage === 1
-                      }
-                      onClick={() =>
-                        setCurrentPage((prev) =>
-                          Math.max(
-                            1,
-                            prev - 1
-                          )
-                        )
-                      }
-                    >
-                      <LuChevronLeft size={13} />
-                    </Button>
-
-                    {/* PAGE NUMBERS */}
-
-                    {pageNumbers.map((page) => (
+                {renderPages().map(
+                  (page, index) =>
+                    page === "..." ? (
+                      <Text
+                        key={`dots-${index}`}
+                        px={1.5}
+                        fontSize="11px"
+                        color={MUTED}
+                      >
+                        ...
+                      </Text>
+                    ) : (
                       <Button
                         key={page}
                         size="xs"
-                        h="28px"
-                        minW="28px"
-                        border="1px solid"
-                        borderColor={
-                          safeCurrentPage === page
-                            ? PRIMARY_MAROON
-                            : "#DCE2EA"
+                        h="30px"
+                        minW="30px"
+                        variant={
+                          page === safePage
+                            ? "solid"
+                            : "outline"
                         }
                         bg={
-                          safeCurrentPage === page
+                          page === safePage
                             ? PRIMARY_MAROON
                             : "white"
                         }
                         color={
-                          safeCurrentPage === page
+                          page === safePage
                             ? "white"
-                            : "#60708C"
+                            : "#344054"
+                        }
+                        borderColor={
+                          page === safePage
+                            ? PRIMARY_MAROON
+                            : BORDER
                         }
                         onClick={() =>
                           setCurrentPage(page)
                         }
                         _hover={{
                           bg:
-                            safeCurrentPage === page
+                            page === safePage
                               ? "#650A18"
-                              : "#FFF5F7",
+                              : "#FFF0F4",
                         }}
                       >
                         {page}
                       </Button>
-                    ))}
-
-                    {/* NEXT */}
-
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      h="28px"
-                      minW="28px"
-                      borderColor="#DCE2EA"
-                      color="#60708C"
-                      disabled={
-                        safeCurrentPage ===
-                        totalPages
-                      }
-                      onClick={() =>
-                        setCurrentPage((prev) =>
-                          Math.min(
-                            totalPages,
-                            prev + 1
-                          )
-                        )
-                      }
-                    >
-                      <LuChevronRight size={13} />
-                    </Button>
-
-                    {/* LAST */}
-
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      h="28px"
-                      minW="28px"
-                      borderColor="#DCE2EA"
-                      color="#60708C"
-                      disabled={
-                        safeCurrentPage ===
-                        totalPages
-                      }
-                      onClick={() =>
-                        setCurrentPage(totalPages)
-                      }
-                    >
-                      <LuChevronsRight size={13} />
-                    </Button>
-                  </HStack>
+                    )
                 )}
-              </Flex>
-            )}
+
+                {/* NEXT */}
+
+                <Button
+                  size="xs"
+                  h="30px"
+                  variant="outline"
+                  borderColor="#FF5A7D"
+                  color={RED}
+                  disabled={
+                    safePage === totalPages
+                  }
+                  onClick={() =>
+                    setCurrentPage(
+                      Math.min(
+                        totalPages,
+                        safePage + 1
+                      )
+                    )
+                  }
+                >
+                  Next
+
+                  <Icon
+                    as={LuChevronRight}
+                    ml={1}
+                    boxSize={3.5}
+                  />
+                </Button>
+              </HStack>
+            </Flex>
           </Box>
-        </Container>
+        </Box>
       </Box>
 
-      {/* =====================================================
+      {/* ======================================================
           FOOTER
-      ===================================================== */}
+      ====================================================== */}
 
       <Footer />
     </Box>

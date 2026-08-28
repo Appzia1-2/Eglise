@@ -3,7 +3,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
-  Container,
   Flex,
   Heading,
   HStack,
@@ -15,7 +14,6 @@ import {
 
 import {
   LuBadgeDollarSign,
-  LuCalendarDays,
   LuChevronDown,
   LuChevronLeft,
   LuChevronRight,
@@ -458,12 +456,18 @@ const SubscriptionPage = () => {
           MAIN CONTENT
       ====================================================== */}
 
-      <Box flex="1">
-        <Container
-          maxW="1200px"
+      <Box flex="1" w="100%">
+        {/* ====================================================
+            CHANGED:
+            Removed Container maxW="1200px"
+            so content can use full available width.
+        ==================================================== */}
+
+        <Box
+          w="100%"
           px={{
-            base: 4,
-            md: 5,
+            base: 3,
+            md: 4,
           }}
           py={{
             base: 3,
@@ -613,6 +617,7 @@ const SubscriptionPage = () => {
             borderRadius="8px"
             p={3}
             bg="white"
+            w="100%"
           >
             {/* ==================================================
                 SEARCH / FILTER
@@ -764,6 +769,7 @@ const SubscriptionPage = () => {
               border="1px solid #E6EAF0"
               borderRadius="6px"
               transition="height 0.2s ease"
+              width="100%"
             >
               <Box
                 as="table"
@@ -1022,27 +1028,31 @@ const SubscriptionPage = () => {
                               {/* EDIT */}
 
                               <Button
-  variant="ghost"
-  size="sm"
-  h="30px"
-  color={RED}
-  px={2}
-  fontSize="11px"
-  onClick={() =>
-    navigate(`/subscriptions/${subscription.id}/edit`)
-  }
-  _hover={{
-    bg: "#FFF0F4",
-  }}
->
-  <Icon
-    as={LuPencil}
-    mr={1}
-    boxSize={3.5}
-  />
+                                variant="ghost"
+                                size="sm"
+                                h="30px"
+                                color={RED}
+                                px={2}
+                                fontSize="11px"
+                                onClick={() =>
+                                  navigate(
+                                    `/subscriptions/${subscription.id}/edit`
+                                  )
+                                }
+                                _hover={{
+                                  bg: "#FFF0F4",
+                                }}
+                              >
+                                <Icon
+                                  as={
+                                    LuPencil
+                                  }
+                                  mr={1}
+                                  boxSize={3.5}
+                                />
 
-  Edit
-</Button>
+                                Edit
+                              </Button>
                             </HStack>
                           </Box>
                         </Box>
@@ -1216,7 +1226,7 @@ const SubscriptionPage = () => {
               </HStack>
             </Flex>
           </Box>
-        </Container>
+        </Box>
       </Box>
 
       {/* ======================================================

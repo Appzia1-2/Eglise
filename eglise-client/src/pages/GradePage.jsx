@@ -3,22 +3,20 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
-  Container,
   Flex,
   Heading,
   HStack,
+  Icon,
   Input,
   SimpleGrid,
-  Table,
   Text,
 } from "@chakra-ui/react";
 
 import {
   LuCalendarDays,
+  LuChevronDown,
   LuChevronLeft,
   LuChevronRight,
-  LuChevronsLeft,
-  LuChevronsRight,
   LuEye,
   LuFilter,
   LuGraduationCap,
@@ -38,24 +36,27 @@ import {
 } from "../api/registryServices";
 
 const PRIMARY_MAROON = "var(--primary-maroon)";
-
-const PAGE_SIZE = 5;
+const RED = "#D7193F";
+const DARK = "#182338";
+const MUTED = "#60708C";
+const BORDER = "#DCE2EA";
 
 const GradePage = () => {
   const navigate = useNavigate();
 
   const [grades, setGrades] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("ALL");
 
-  const [page, setPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
 
-  const [error, setError] = useState("");
+  const pageSize = 5;
 
   // ==========================================================
-  // LOAD GRADES
+  // LOAD DATA
   // ==========================================================
 
   const loadGrades = async () => {
@@ -74,11 +75,8 @@ const GradePage = () => {
       setGrades(items);
     } catch (err) {
       console.error("Error loading grades:", err);
-
-      setError(
-        err?.response?.data?.detail ||
-          "Unable to load grade records."
-      );
+      setError("Unable to load grade records.");
+      setGrades([]);
     } finally {
       setLoading(false);
     }
@@ -89,143 +87,118 @@ const GradePage = () => {
   }, []);
 
   // ==========================================================
-  // FILTER
+  // SEARCH + FILTER
   // ==========================================================
 
   const filteredGrades = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
+    let result = [...grades];
 
-    return grades.filter((grade) => {
-      const matchesSearch =
-        !keyword ||
-        String(grade.name || "")
-          .toLowerCase()
-          .includes(keyword);
+    const searchText = search.trim().toLowerCase();
 
-      if (!matchesSearch) {
-        return false;
-      }
+    // ========================================================
+    // SEARCH
+    // ========================================================
 
-      if (filter === "ALL") {
-        return true;
-      }
+    if (searchText) {
+      result = result.filter((grade) => {
+        const name = String(grade.name || "").toLowerCase();
+        return name.includes(searchText);
+      });
+    }
 
-      if (filter === "RECENT") {
-        if (!grade.updated_at) {
-          return false;
-        }
+    // ========================================================
+    // FILTER
+    // ========================================================
 
-        const updatedDate = new Date(
-          grade.updated_at
-        );
+    if (filter === "RECENTLY_UPDATED") {
+      const now = new Date();
+      const sevenDaysAgo = new Date(
+        now.getTime() - 7 * 24 * 60 * 60 * 1000
+      );
 
-        if (Number.isNaN(updatedDate.getTime())) {
-          return false;
-        }
+      result = result.filter((grade) => {
+        if (!grade.updated_at) return false;
+        const updated = new Date(grade.updated_at);
+        if (Number.isNaN(updated.getTime())) return false;
+        return updated >= sevenDaysAgo && updated <= now;
+      });
+    }
 
-        const now = new Date();
-
-        const difference =
-          now.getTime() -
-          updatedDate.getTime();
-
-        const days =
-          difference /
-          (1000 * 60 * 60 * 24);
-
-        return days >= 0 && days <= 30;
-      }
-
-      return true;
-    });
+    return result;
   }, [grades, search, filter]);
 
   // ==========================================================
   // PAGINATION
   // ==========================================================
 
-  const totalItems = filteredGrades.length;
-
   const totalPages = Math.max(
     1,
-    Math.ceil(totalItems / PAGE_SIZE)
+    Math.ceil(
+      filteredGrades.length / pageSize
+    )
   );
 
   const safePage = Math.min(
-    page,
+    currentPage,
     totalPages
   );
 
   const startIndex =
-    (safePage - 1) * PAGE_SIZE;
+    (safePage - 1) * pageSize;
 
   const paginatedGrades =
     filteredGrades.slice(
       startIndex,
-      startIndex + PAGE_SIZE
+      startIndex + pageSize
     );
 
   useEffect(() => {
-    setPage(1);
+    setCurrentPage(1);
   }, [search, filter]);
 
   // ==========================================================
-  // RECENTLY UPDATED
+  // STATS
   // ==========================================================
 
-  const recentlyUpdated = useMemo(() => {
-    if (!grades.length) {
-      return 0;
-    }
+  const totalGrades = grades.length;
+
+  const recentlyUpdatedCount = useMemo(() => {
+    if (!grades.length) return 0;
 
     const now = new Date();
+    const sevenDaysAgo = new Date(
+      now.getTime() - 7 * 24 * 60 * 60 * 1000
+    );
 
     return grades.filter((grade) => {
-      if (!grade.updated_at) {
-        return false;
-      }
-
-      const updatedDate = new Date(
-        grade.updated_at
-      );
-
-      if (Number.isNaN(updatedDate.getTime())) {
-        return false;
-      }
-
-      const difference =
-        now.getTime() -
-        updatedDate.getTime();
-
-      const days =
-        difference /
-        (1000 * 60 * 60 * 24);
-
-      return days >= 0 && days <= 30;
+      if (!grade.updated_at) return false;
+      const updated = new Date(grade.updated_at);
+      if (Number.isNaN(updated.getTime())) return false;
+      return updated >= sevenDaysAgo && updated <= now;
     }).length;
   }, [grades]);
 
   // ==========================================================
-  // DATE FORMAT
+  // DATE FORMAT - with time like Tomb Fees
   // ==========================================================
 
-  const formatDate = (value) => {
-    if (!value) {
+  const formatDateTime = (date) => {
+    if (!date) return "-";
+
+    const parsedDate = new Date(date);
+
+    if (Number.isNaN(parsedDate.getTime())) {
       return "-";
     }
 
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-      return "-";
-    }
-
-    return date.toLocaleDateString(
+    return parsedDate.toLocaleString(
       "en-GB",
       {
         day: "2-digit",
         month: "short",
         year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
       }
     );
   };
@@ -245,14 +218,9 @@ const GradePage = () => {
 
     try {
       await deleteGrade(id);
-
       await loadGrades();
     } catch (err) {
-      console.error(
-        "Error deleting grade:",
-        err
-      );
-
+      console.error("Error deleting grade:", err);
       alert(
         err?.response?.data?.detail ||
           "Unable to delete grade."
@@ -261,18 +229,111 @@ const GradePage = () => {
   };
 
   // ==========================================================
-  // PAGE NUMBERS
+  // STAT CARD - Matches Tomb Fees exactly
   // ==========================================================
 
-  const pageNumbers = [];
+  const StatCard = ({
+    icon,
+    title,
+    value,
+  }) => {
+    return (
+      <Box
+        border="1px solid #DCE2EA"
+        borderRadius="8px"
+        h="78px"
+        px={4}
+        bg="white"
+        display="flex"
+        alignItems="center"
+      >
+        <Flex
+          align="center"
+          width="100%"
+          height="100%"
+        >
+          <Box
+            width="65px"
+            height="100%"
+            borderRight="1px solid #DCE2EA"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            flexShrink={0}
+          >
+            <Icon
+              as={icon}
+              boxSize={8}
+              color={RED}
+              strokeWidth={1.6}
+            />
+          </Box>
 
-  for (
-    let i = 1;
-    i <= totalPages;
-    i++
-  ) {
-    pageNumbers.push(i);
-  }
+          <Box pl={4}>
+            <Text
+              fontSize="12px"
+              color={DARK}
+              mb={1}
+              fontWeight="600"
+            >
+              {title}
+            </Text>
+
+            <Text
+              fontSize="24px"
+              fontWeight="700"
+              color={DARK}
+              lineHeight="1"
+            >
+              {value}
+            </Text>
+          </Box>
+        </Flex>
+      </Box>
+    );
+  };
+
+  // ==========================================================
+  // PAGINATION NUMBERS - with ellipsis like Tomb Fees
+  // ==========================================================
+
+  const renderPages = () => {
+    const pages = [];
+
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      pages.push(1);
+
+      if (safePage > 3) {
+        pages.push("...");
+      }
+
+      const start = Math.max(
+        2,
+        safePage - 1
+      );
+
+      const end = Math.min(
+        totalPages - 1,
+        safePage + 1
+      );
+
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+
+      if (safePage < totalPages - 2) {
+        pages.push("...");
+      }
+
+      pages.push(totalPages);
+    }
+
+    return pages;
+  };
 
   // ==========================================================
   // RENDER
@@ -285,549 +346,464 @@ const GradePage = () => {
       display="flex"
       flexDirection="column"
     >
+      {/* ======================================================
+          NAVBAR
+      ====================================================== */}
+
       <Navbar />
 
-      <Container
-        maxW="1200px"
-        px={{ base: 4, md: 5 }}
-        py={{ base: 2, md: 3 }}
+      {/* ======================================================
+          MAIN CONTENT - Full width like Tomb Fees
+      ====================================================== */}
+
+      <Box
         flex="1"
+        w="100%"
       >
-        {/* BREADCRUMB */}
-
-        <HStack
-          gap={2}
-          mb={2}
-          color="#60708C"
-          fontSize="12px"
-        >
-          <Text>Masters</Text>
-
-          <Text>/</Text>
-
-          <Text>Grade Master</Text>
-        </HStack>
-
-        {/* HEADER */}
-
-        <Flex
-          justify="space-between"
-          align="center"
-          direction={{
-            base: "column",
-            md: "row",
-          }}
-          gap={2}
-          mb={3}
-        >
-          <Box>
-            <Text
-              fontSize="11px"
-              fontWeight="700"
-              color="#D7193F"
-              mb={1}
-            >
-              GRADE MASTER
-            </Text>
-
-            <Heading
-              color="#182338"
-              fontSize={{
-                base: "22px",
-                md: "26px",
-              }}
-              lineHeight="1.1"
-              mb={1}
-            >
-              Grade Master
-            </Heading>
-
-            <Text
-              color="#60708C"
-              fontSize="12px"
-            >
-              Manage grade records used in
-              church and member details.
-            </Text>
-          </Box>
-
-          {/* ADD */}
-
-          <Button
-            bg={PRIMARY_MAROON}
-            color="white"
-            px={5}
-            h="38px"
-            fontSize="13px"
-            borderRadius="6px"
-            onClick={() =>
-              navigate("/grade/add")
-            }
-            _hover={{
-              bg: "#650A18",
-            }}
-          >
-            <LuPlus
-              size={17}
-              style={{
-                marginRight: "7px",
-              }}
-            />
-
-            Add Grade
-          </Button>
-        </Flex>
-
-        {/* STAT CARDS */}
-
-        <SimpleGrid
-          columns={{
-            base: 1,
-            md: 2,
-          }}
-          gap={3}
-          mb={3}
-        >
-          {/* TOTAL */}
-
-          <Box
-            border="1px solid #DCE2EA"
-            borderRadius="8px"
-            h="78px"
-            px={4}
-            display="flex"
-            alignItems="center"
-          >
-            <Flex
-              align="center"
-              width="100%"
-              height="100%"
-            >
-              <Box
-                width="68px"
-                height="52px"
-                borderRight="1px solid #DCE2EA"
-                display="flex"
-                justifyContent="center"
-                alignItems="center"
-              >
-                <LuGraduationCap
-                  size={34}
-                  color="#D7193F"
-                  strokeWidth={1.5}
-                />
-              </Box>
-
-              <Box pl={4}>
-                <Text
-                  fontSize="11px"
-                  fontWeight="600"
-                  color="#182338"
-                  mb={1}
-                >
-                  Total Grades
-                </Text>
-
-                <Text
-                  fontSize="25px"
-                  fontWeight="700"
-                  color="#182338"
-                  lineHeight="1"
-                >
-                  {grades.length}
-                </Text>
-              </Box>
-            </Flex>
-          </Box>
-
-          {/* RECENT */}
-
-          <Box
-            border="1px solid #DCE2EA"
-            borderRadius="8px"
-            h="78px"
-            px={4}
-            display="flex"
-            alignItems="center"
-          >
-            <Flex
-              align="center"
-              width="100%"
-              height="100%"
-            >
-              <Box
-                width="68px"
-                height="52px"
-                borderRight="1px solid #DCE2EA"
-                display="flex"
-                justifyContent="center"
-                alignItems="center"
-              >
-                <LuCalendarDays
-                  size={34}
-                  color="#D7193F"
-                  strokeWidth={1.5}
-                />
-              </Box>
-
-              <Box pl={4}>
-                <Text
-                  fontSize="11px"
-                  fontWeight="600"
-                  color="#182338"
-                  mb={1}
-                >
-                  Recently Updated
-                </Text>
-
-                <Text
-                  fontSize="25px"
-                  fontWeight="700"
-                  color="#182338"
-                  lineHeight="1"
-                >
-                  {recentlyUpdated}
-                </Text>
-              </Box>
-            </Flex>
-          </Box>
-        </SimpleGrid>
-
-        {/* TABLE CARD */}
-
         <Box
-          border="1px solid #DCE2EA"
-          borderRadius="8px"
-          p={{ base: 2, md: 3 }}
-          overflow="hidden"
+          w="100%"
+          px={{
+            base: 3,
+            md: 4,
+          }}
+          py={{
+            base: 3,
+            md: 4,
+          }}
         >
-          {/* FILTER BAR */}
+          {/* ==================================================
+              BREADCRUMB
+          ================================================== */}
 
-          <Flex
+          <HStack
             gap={2}
             mb={2}
+            color={MUTED}
+            fontSize="11px"
+          >
+            <Text>Masters</Text>
+            <Text>/</Text>
+            <Text>Grade Master</Text>
+          </HStack>
+
+          {/* ==================================================
+              HEADER
+          ================================================== */}
+
+          <Flex
+            justify="space-between"
+            align={{
+              base: "flex-start",
+              md: "center",
+            }}
+            gap={3}
+            mb={3}
             direction={{
               base: "column",
               md: "row",
             }}
           >
-            {/* SEARCH */}
-
-            <Box
-              position="relative"
-              flex="1"
-              maxW={{
-                base: "100%",
-                md: "430px",
-              }}
-            >
-              <Box
-                position="absolute"
-                left="13px"
-                top="50%"
-                transform="translateY(-50%)"
-                color="#60708C"
-                zIndex={1}
+            <Box>
+              <Text
+                fontSize="10px"
+                fontWeight="700"
+                color={RED}
+                mb={1}
               >
-                <LuSearch size={16} />
-              </Box>
+                GRADE MASTER
+              </Text>
 
-              <Input
-                value={search}
-                onChange={(e) =>
-                  setSearch(e.target.value)
-                }
-                placeholder="Search grade name"
-                pl="40px"
-                h="38px"
-                fontSize="13px"
-                borderColor="#DCE2EA"
-                borderRadius="6px"
-                color="#182338"
-                _placeholder={{
-                  color: "#8B98AB",
+              <Heading
+                color={DARK}
+                fontSize={{
+                  base: "22px",
+                  md: "26px",
                 }}
-                _focus={{
-                  borderColor:
-                    PRIMARY_MAROON,
-                  boxShadow:
-                    `0 0 0 1px ${PRIMARY_MAROON}`,
-                }}
-              />
-            </Box>
-
-            {/* FILTER */}
-
-            <Box
-              width={{
-                base: "100%",
-                md: "200px",
-              }}
-            >
-              <select
-                value={filter}
-                onChange={(e) =>
-                  setFilter(e.target.value)
-                }
-                style={{
-                  width: "100%",
-                  height: "38px",
-                  border:
-                    "1px solid #DCE2EA",
-                  borderRadius: "6px",
-                  padding: "0 12px",
-                  fontSize: "13px",
-                  color: "#182338",
-                  background: "white",
-                  outline: "none",
-                }}
+                lineHeight="1.1"
+                mb={1}
               >
-                <option value="ALL">
-                  All Records
-                </option>
+                Grade Master
+              </Heading>
 
-                <option value="RECENT">
-                  Recently Updated
-                </option>
-              </select>
+              <Text
+                color={MUTED}
+                fontSize="11px"
+              >
+                Manage grade records used in
+                church and member details.
+              </Text>
             </Box>
-
-            {/* RESET */}
 
             <Button
-              variant="outline"
+              bg={PRIMARY_MAROON}
+              color="white"
+              px={5}
               h="38px"
-              px={4}
-              fontSize="13px"
-              borderColor="#D7193F"
-              color="#D7193F"
+              fontSize="12px"
               borderRadius="6px"
-              onClick={() => {
-                setSearch("");
-                setFilter("ALL");
-              }}
+              flexShrink={0}
+              onClick={() =>
+                navigate("/grade/add")
+              }
               _hover={{
-                bg: "#FFF5F7",
+                bg: "#650A18",
               }}
             >
-              <LuFilter
-                size={15}
-                style={{
-                  marginRight: "7px",
-                }}
+              <Icon
+                as={LuPlus}
+                mr={2}
+                boxSize={4}
               />
 
-              Filter
+              Add Grade
             </Button>
           </Flex>
 
-          {/* ERROR */}
+          {/* ==================================================
+              STAT CARDS
+          ================================================== */}
 
-          {error && (
-            <Box
-              mb={2}
-              p={2}
-              borderRadius="6px"
-              bg="#FFF5F5"
-              border="1px solid #FED7D7"
-            >
-              <Text
-                color="red.600"
-                fontSize="12px"
-              >
-                {error}
-              </Text>
-            </Box>
-          )}
+          <SimpleGrid
+            columns={{
+              base: 1,
+              md: 2,
+            }}
+            gap={3}
+            mb={3}
+          >
+            <StatCard
+              icon={LuGraduationCap}
+              title="Total Grades"
+              value={totalGrades}
+            />
 
-          {/* TABLE */}
+            <StatCard
+              icon={LuCalendarDays}
+              title="Recently Updated"
+              value={recentlyUpdatedCount}
+            />
+          </SimpleGrid>
+
+          {/* ==================================================
+              TABLE CARD
+          ================================================== */}
 
           <Box
             border="1px solid #DCE2EA"
-            borderRadius="7px"
-            overflowX="auto"
+            borderRadius="8px"
+            p={3}
+            bg="white"
+            w="100%"
           >
-            <Box minW="700px">
-              <Table.Root
-                size="sm"
-                variant="outline"
+            {/* ==================================================
+                SEARCH / FILTER
+            ================================================== */}
+
+            <Flex
+              gap={3}
+              mb={3}
+              direction={{
+                base: "column",
+                md: "row",
+              }}
+            >
+              {/* SEARCH */}
+
+              <Box
+                position="relative"
+                maxW={{
+                  base: "100%",
+                  md: "380px",
+                }}
+                flex="1"
               >
-                <Table.Header>
-                  <Table.Row bg="white">
-                    <Table.ColumnHeader
-                      color="#182338"
-                      fontWeight="700"
-                      fontSize="12px"
-                      py={2}
-                      px={4}
-                    >
-                      Grade Name
-                    </Table.ColumnHeader>
+                <Icon
+                  as={LuSearch}
+                  position="absolute"
+                  left="12px"
+                  top="50%"
+                  transform="translateY(-50%)"
+                  color={MUTED}
+                  zIndex={1}
+                  boxSize={4}
+                />
 
-                    <Table.ColumnHeader
-                      color="#182338"
-                      fontWeight="700"
-                      fontSize="12px"
-                      py={2}
-                      px={4}
-                    >
-                      Last Updated
-                    </Table.ColumnHeader>
+                <Input
+                  value={search}
+                  onChange={(e) =>
+                    setSearch(e.target.value)
+                  }
+                  placeholder="Search grade name"
+                  pl="38px"
+                  h="38px"
+                  borderColor={BORDER}
+                  borderRadius="6px"
+                  fontSize="12px"
+                  _focus={{
+                    borderColor: PRIMARY_MAROON,
+                    boxShadow:
+                      `0 0 0 1px ${PRIMARY_MAROON}`,
+                  }}
+                />
+              </Box>
 
-                    <Table.ColumnHeader
-                      color="#182338"
-                      fontWeight="700"
-                      fontSize="12px"
-                      py={2}
-                      px={4}
-                      textAlign="right"
-                    >
-                      Actions
-                    </Table.ColumnHeader>
-                  </Table.Row>
-                </Table.Header>
+              {/* FILTER */}
 
-                <Table.Body>
+              <Box
+                position="relative"
+                width={{
+                  base: "100%",
+                  md: "210px",
+                }}
+              >
+                <select
+                  value={filter}
+                  onChange={(e) =>
+                    setFilter(e.target.value)
+                  }
+                  style={{
+                    width: "100%",
+                    height: "38px",
+                    border:
+                      "1px solid #DCE2EA",
+                    borderRadius: "6px",
+                    padding:
+                      "0 35px 0 11px",
+                    fontSize: "12px",
+                    background: "white",
+                    color: DARK,
+                    outline: "none",
+                    cursor: "pointer",
+                    appearance: "none",
+                  }}
+                >
+                  <option value="ALL">
+                    All Records
+                  </option>
+
+                  <option value="RECENTLY_UPDATED">
+                    Recently Updated
+                  </option>
+                </select>
+
+                <Icon
+                  as={LuChevronDown}
+                  position="absolute"
+                  right="11px"
+                  top="50%"
+                  transform="translateY(-50%)"
+                  pointerEvents="none"
+                  color={DARK}
+                  boxSize={4}
+                />
+              </Box>
+
+              {/* RESET FILTER */}
+
+              <Button
+                variant="outline"
+                h="38px"
+                borderColor="#FF5A7D"
+                color={RED}
+                borderRadius="6px"
+                px={4}
+                fontSize="12px"
+                onClick={() => {
+                  setSearch("");
+                  setFilter("ALL");
+                }}
+              >
+                <Icon
+                  as={LuFilter}
+                  mr={2}
+                  boxSize={4}
+                />
+
+                Filter
+              </Button>
+            </Flex>
+
+            {/* ==================================================
+                ERROR MESSAGE
+            ================================================== */}
+
+            {error && (
+              <Box
+                mb={3}
+                p={2}
+                borderRadius="6px"
+                bg="#FFF5F5"
+                border="1px solid #FED7D7"
+              >
+                <Text
+                  color="red.600"
+                  fontSize="12px"
+                >
+                  {error}
+                </Text>
+              </Box>
+            )}
+
+            {/* ==================================================
+                TABLE - Custom table like Tomb Fees
+            ================================================== */}
+
+            <Box
+              overflowX="auto"
+              overflowY="hidden"
+              border="1px solid #E6EAF0"
+              borderRadius="6px"
+              width="100%"
+            >
+              <Box
+                as="table"
+                width="100%"
+                minW="850px"
+                borderCollapse="collapse"
+              >
+                {/* TABLE HEADER */}
+
+                <Box as="thead">
+                  <Box
+                    as="tr"
+                    height="42px"
+                  >
+                    {[
+                      "Grade Name",
+                      "Last Updated",
+                      "Actions",
+                    ].map((heading) => (
+                      <Box
+                        as="th"
+                        key={heading}
+                        textAlign="left"
+                        px={4}
+                        py={2}
+                        fontSize="11px"
+                        fontWeight="700"
+                        color={DARK}
+                        borderBottom="1px solid #E6EAF0"
+                        whiteSpace="nowrap"
+                        bg="white"
+                      >
+                        {heading}
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+
+                {/* TABLE BODY */}
+
+                <Box as="tbody">
                   {/* LOADING */}
 
-                  {loading && (
-                    <Table.Row>
-                      <Table.Cell
+                  {loading ? (
+                    <Box as="tr">
+                      <Box
+                        as="td"
                         colSpan={3}
-                        py={5}
                         textAlign="center"
+                        height="48px"
+                        color={MUTED}
+                        fontSize="12px"
                       >
-                        <Text
-                          color="#60708C"
-                          fontSize="12px"
-                        >
-                          Loading grades...
-                        </Text>
-                      </Table.Cell>
-                    </Table.Row>
-                  )}
-
-                  {/* EMPTY */}
-
-                  {!loading &&
-                    paginatedGrades.length ===
-                      0 && (
-                      <Table.Row>
-                        <Table.Cell
-                          colSpan={3}
-                          py={5}
-                          textAlign="center"
-                        >
-                          <Text
-                            color="#60708C"
-                            fontSize="12px"
-                          >
-                            No grades found.
-                          </Text>
-
-                          <Button
-                            mt={2}
-                            bg={PRIMARY_MAROON}
-                            color="white"
-                            size="sm"
-                            fontSize="12px"
-                            onClick={() =>
-                              navigate(
-                                "/grade/add"
-                              )
-                            }
-                            _hover={{
-                              bg: "#650A18",
-                            }}
-                          >
-                            <LuPlus
-                              size={15}
-                              style={{
-                                marginRight:
-                                  "6px",
-                              }}
-                            />
-
-                            Add your first grade
-                          </Button>
-                        </Table.Cell>
-                      </Table.Row>
-                    )}
-
-                  {/* DATA */}
-
-                  {!loading &&
+                        Loading grades...
+                      </Box>
+                    </Box>
+                  ) : paginatedGrades.length === 0 ? (
+                    <Box as="tr">
+                      <Box
+                        as="td"
+                        colSpan={3}
+                        textAlign="center"
+                        height="48px"
+                        color={MUTED}
+                        fontSize="12px"
+                      >
+                        No grades found.
+                      </Box>
+                    </Box>
+                  ) : (
                     paginatedGrades.map(
                       (grade) => (
-                        <Table.Row
+                        <Box
+                          as="tr"
                           key={grade.id}
+                          height="42px"
                           _hover={{
-                            bg: "#FCFCFD",
+                            bg: "#FFFBFC",
                           }}
                         >
-                          <Table.Cell
+                          {/* GRADE NAME */}
+
+                          <Box
+                            as="td"
                             px={4}
-                            py={1.5}
-                            color="#182338"
-                            fontSize="13px"
+                            py={1}
+                            fontSize="12px"
                             fontWeight="600"
+                            color={DARK}
+                            borderBottom="1px solid #E6EAF0"
+                            whiteSpace="nowrap"
                           >
                             {grade.name || "-"}
-                          </Table.Cell>
+                          </Box>
 
-                          <Table.Cell
+                          {/* LAST UPDATED - with time */}
+
+                          <Box
+                            as="td"
                             px={4}
-                            py={1.5}
-                            color="#182338"
-                            fontSize="13px"
+                            py={1}
+                            fontSize="12px"
+                            color="#344054"
+                            borderBottom="1px solid #E6EAF0"
+                            whiteSpace="nowrap"
                           >
-                            {formatDate(
+                            {formatDateTime(
                               grade.updated_at
                             )}
-                          </Table.Cell>
+                          </Box>
 
-                          <Table.Cell
+                          {/* ACTIONS */}
+
+                          <Box
+                            as="td"
                             px={4}
-                            py={1.5}
+                            py={1}
+                            borderBottom="1px solid #E6EAF0"
                           >
-                            <HStack
-                              justify="flex-end"
-                              gap={0}
-                            >
+                            <HStack gap={2}>
                               {/* VIEW */}
 
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                h="28px"
-                                px={3}
-                                fontSize="12px"
-                                color="#D7193F"
-                                borderRadius="4px"
+                                h="30px"
+                                color={RED}
+                                px={2}
+                                fontSize="11px"
                                 onClick={() =>
                                   navigate(
                                     `/grade/${grade.id}`
                                   )
                                 }
                                 _hover={{
-                                  bg: "#FFF5F7",
+                                  bg: "#FFF0F4",
                                 }}
                               >
-                                <LuEye
-                                  size={14}
-                                  style={{
-                                    marginRight:
-                                      "5px",
-                                  }}
+                                <Icon
+                                  as={LuEye}
+                                  mr={1}
+                                  boxSize={3.5}
                                 />
 
                                 View
                               </Button>
 
                               <Box
-                                height="18px"
-                                width="1px"
-                                bg="#DCE2EA"
+                                h="20px"
+                                borderLeft="1px solid #DCE2EA"
                               />
 
                               {/* EDIT */}
@@ -835,214 +811,190 @@ const GradePage = () => {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                h="28px"
-                                px={3}
-                                fontSize="12px"
-                                color="#D7193F"
-                                borderRadius="4px"
+                                h="30px"
+                                color={RED}
+                                px={2}
+                                fontSize="11px"
                                 onClick={() =>
                                   navigate(
                                     `/grade/${grade.id}/edit`
                                   )
                                 }
                                 _hover={{
-                                  bg: "#FFF5F7",
+                                  bg: "#FFF0F4",
                                 }}
                               >
-                                <LuPencil
-                                  size={14}
-                                  style={{
-                                    marginRight:
-                                      "5px",
-                                  }}
+                                <Icon
+                                  as={LuPencil}
+                                  mr={1}
+                                  boxSize={3.5}
                                 />
 
                                 Edit
                               </Button>
-
-                              <Box
-                                height="18px"
-                                width="1px"
-                                bg="#DCE2EA"
-                              />
-
-                              {/* DELETE */}
-
-                              {/* <Button
-                                variant="ghost"
-                                size="sm"
-                                h="28px"
-                                px={3}
-                                fontSize="12px"
-                                color="#D7193F"
-                                borderRadius="4px"
-                                onClick={() =>
-                                  handleDelete(
-                                    grade.id
-                                  )
-                                }
-                                _hover={{
-                                  bg: "#FFF5F7",
-                                }}
-                              >
-                                Delete
-                              </Button> */}
                             </HStack>
-                          </Table.Cell>
-                        </Table.Row>
+                          </Box>
+                        </Box>
                       )
-                    )}
-                </Table.Body>
-              </Table.Root>
+                    )
+                  )}
+                </Box>
+              </Box>
             </Box>
-          </Box>
 
-          {/* PAGINATION */}
+            {/* ==================================================
+                PAGINATION - Like Tomb Fees
+            ================================================== */}
 
-          <Flex
-            mt={2}
-            align="center"
-            justify="space-between"
-            direction={{
-              base: "column",
-              md: "row",
-            }}
-            gap={2}
-          >
-            <Text
-              color="#60708C"
-              fontSize="11px"
+            <Flex
+              justify="space-between"
+              align="center"
+              mt={3}
+              gap={3}
+              direction={{
+                base: "column",
+                md: "row",
+              }}
             >
-              Showing{" "}
-              {totalItems === 0
-                ? 0
-                : startIndex + 1}
-              -
-              {Math.min(
-                startIndex +
-                  paginatedGrades.length,
-                totalItems
-              )}{" "}
-              of {totalItems} grades
-            </Text>
+              {/* COUNT */}
 
-            <HStack gap={1}>
-              <Button
-                variant="outline"
-                size="xs"
-                h="28px"
-                minW="28px"
-                borderColor="#DCE2EA"
-                color="#60708C"
-                disabled={safePage === 1}
-                onClick={() =>
-                  setPage(1)
-                }
+              <Text
+                fontSize="11px"
+                color={MUTED}
               >
-                <LuChevronsLeft size={13} />
-              </Button>
+                {filteredGrades.length === 0
+                  ? "Showing 0 grades"
+                  : `Showing ${
+                      startIndex + 1
+                    }–${Math.min(
+                      startIndex +
+                        paginatedGrades.length,
+                      filteredGrades.length
+                    )} of ${
+                      filteredGrades.length
+                    } grades`}
+              </Text>
 
-              <Button
-                variant="outline"
-                size="xs"
-                h="28px"
-                minW="28px"
-                borderColor="#DCE2EA"
-                color="#60708C"
-                disabled={safePage === 1}
-                onClick={() =>
-                  setPage((prev) =>
-                    Math.max(
-                      1,
-                      prev - 1
+              {/* PAGINATION */}
+
+              <HStack gap={1}>
+                {/* PREVIOUS */}
+
+                <Button
+                  size="xs"
+                  h="30px"
+                  variant="outline"
+                  borderColor={BORDER}
+                  color={MUTED}
+                  disabled={safePage === 1}
+                  onClick={() =>
+                    setCurrentPage(
+                      Math.max(
+                        1,
+                        safePage - 1
+                      )
                     )
-                  )
-                }
-              >
-                <LuChevronLeft size={13} />
-              </Button>
+                  }
+                >
+                  <Icon
+                    as={LuChevronLeft}
+                    boxSize={3.5}
+                  />
 
-              {pageNumbers.map(
-                (pageNumber) => (
-                  <Button
-                    key={pageNumber}
-                    size="xs"
-                    h="28px"
-                    minW="28px"
-                    border="1px solid"
-                    borderColor={
-                      safePage === pageNumber
-                        ? PRIMARY_MAROON
-                        : "#DCE2EA"
-                    }
-                    bg={
-                      safePage === pageNumber
-                        ? PRIMARY_MAROON
-                        : "white"
-                    }
-                    color={
-                      safePage === pageNumber
-                        ? "white"
-                        : "#60708C"
-                    }
-                    onClick={() =>
-                      setPage(pageNumber)
-                    }
-                    _hover={{
-                      bg:
-                        safePage ===
-                        pageNumber
-                          ? "#650A18"
-                          : "#FFF5F7",
-                    }}
-                  >
-                    {pageNumber}
-                  </Button>
-                )
-              )}
+                  Previous
+                </Button>
 
-              <Button
-                variant="outline"
-                size="xs"
-                h="28px"
-                minW="28px"
-                borderColor="#DCE2EA"
-                color="#60708C"
-                disabled={
-                  safePage === totalPages
-                }
-                onClick={() =>
-                  setPage((prev) =>
-                    Math.min(
-                      totalPages,
-                      prev + 1
+                {/* PAGE NUMBERS */}
+
+                {renderPages().map(
+                  (page, index) =>
+                    page === "..." ? (
+                      <Text
+                        key={`dots-${index}`}
+                        px={1.5}
+                        fontSize="11px"
+                        color={MUTED}
+                      >
+                        ...
+                      </Text>
+                    ) : (
+                      <Button
+                        key={page}
+                        size="xs"
+                        h="30px"
+                        minW="30px"
+                        variant={
+                          page === safePage
+                            ? "solid"
+                            : "outline"
+                        }
+                        bg={
+                          page === safePage
+                            ? PRIMARY_MAROON
+                            : "white"
+                        }
+                        color={
+                          page === safePage
+                            ? "white"
+                            : "#344054"
+                        }
+                        borderColor={
+                          page === safePage
+                            ? PRIMARY_MAROON
+                            : BORDER
+                        }
+                        onClick={() =>
+                          setCurrentPage(page)
+                        }
+                        _hover={{
+                          bg:
+                            page === safePage
+                              ? "#650A18"
+                              : "#FFF0F4",
+                        }}
+                      >
+                        {page}
+                      </Button>
                     )
-                  )
-                }
-              >
-                <LuChevronRight size={13} />
-              </Button>
+                )}
 
-              <Button
-                variant="outline"
-                size="xs"
-                h="28px"
-                minW="28px"
-                borderColor="#DCE2EA"
-                color="#60708C"
-                disabled={
-                  safePage === totalPages
-                }
-                onClick={() =>
-                  setPage(totalPages)
-                }
-              >
-                <LuChevronsRight size={13} />
-              </Button>
-            </HStack>
-          </Flex>
+                {/* NEXT */}
+
+                <Button
+                  size="xs"
+                  h="30px"
+                  variant="outline"
+                  borderColor="#FF5A7D"
+                  color={RED}
+                  disabled={
+                    safePage === totalPages
+                  }
+                  onClick={() =>
+                    setCurrentPage(
+                      Math.min(
+                        totalPages,
+                        safePage + 1
+                      )
+                    )
+                  }
+                >
+                  Next
+
+                  <Icon
+                    as={LuChevronRight}
+                    ml={1}
+                    boxSize={3.5}
+                  />
+                </Button>
+              </HStack>
+            </Flex>
+          </Box>
         </Box>
-      </Container>
+      </Box>
+
+      {/* ======================================================
+          FOOTER
+      ====================================================== */}
 
       <Footer />
     </Box>

@@ -894,7 +894,7 @@ const SubscriptionAddPage = () => {
                 </Grid>
               )}
 
-              {/* Row 5: Amount */}
+              {/* Row 5: Amount - WITH DYNAMIC CALCULATION */}
               {selectedPackage && (
                 <Box
                   bg="rgba(174,32,80,0.06)"
@@ -910,6 +910,7 @@ const SubscriptionAddPage = () => {
                     <Text fontWeight="700" color="#1a1a2e">
                       {billingCycle === "YEARLY" ? "Yearly" : "Monthly"} Subscription Amount
                     </Text>
+                    {/* ✅ FIX: Dynamic calculation instead of hardcoded */}
                     <Badge
                       bg="blue.50"
                       color="blue.600"
@@ -918,7 +919,7 @@ const SubscriptionAddPage = () => {
                       py={0.5}
                       borderRadius="full"
                     >
-                      {billingCycle === "YEARLY" ? "₹1,800 × 25 = ₹45,000" : "₹150 × 25 = ₹3,750"}
+                      {formatCurrency(ratePerMember)} × {capacity} = {formatCurrency(totalAmount)}
                     </Badge>
                   </HStack>
                   <Text fontSize="3xl" fontWeight="800" color={primaryMaroon} lineHeight="1">

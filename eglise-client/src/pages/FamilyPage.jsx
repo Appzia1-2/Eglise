@@ -3,7 +3,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
-  Container,
   Flex,
   Heading,
   HStack,
@@ -35,6 +34,10 @@ import Footer from "../components/Footer";
 import { listFamilies } from "../api/registryServices";
 
 const PRIMARY_MAROON = "var(--primary-maroon)";
+const RED = "#D7193F";
+const DARK = "#182338";
+const MUTED = "#60708C";
+const BORDER = "#DCE2EA";
 
 const FamilyPage = () => {
   const navigate = useNavigate();
@@ -47,7 +50,6 @@ const FamilyPage = () => {
 
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Number of records displayed per page
   const pageSize = 5;
 
   // ==========================================================
@@ -94,7 +96,6 @@ const FamilyPage = () => {
       result = result.filter((family) => {
         const familyName =
           family.family_name?.toLowerCase() || "";
-
         const origin =
           family.origin?.toLowerCase() || "";
 
@@ -180,10 +181,10 @@ const FamilyPage = () => {
   ).length;
 
   // ==========================================================
-  // DATE
+  // DATE FORMAT - Updated to match Tomb Fees (with time)
   // ==========================================================
 
-  const formatDate = (date) => {
+  const formatDateTime = (date) => {
     if (!date) {
       return "-";
     }
@@ -194,39 +195,82 @@ const FamilyPage = () => {
       return "-";
     }
 
-    return parsedDate.toLocaleDateString(
+    return parsedDate.toLocaleString(
       "en-GB",
       {
         day: "2-digit",
         month: "short",
         year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
       }
     );
   };
 
   // ==========================================================
-  // DYNAMIC TABLE HEIGHT
+  // STAT CARD - Matches Tomb Fees exactly
   // ==========================================================
 
-  /*
-    Header = 40px
-    Each row = 42px
+  const StatCard = ({
+    icon,
+    title,
+    value,
+  }) => {
+    return (
+      <Box
+        border="1px solid #DCE2EA"
+        borderRadius="8px"
+        h="78px"
+        px={4}
+        bg="white"
+        display="flex"
+        alignItems="center"
+      >
+        <Flex
+          align="center"
+          width="100%"
+          height="100%"
+        >
+          <Box
+            width="65px"
+            height="100%"
+            borderRight="1px solid #DCE2EA"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            flexShrink={0}
+          >
+            <Icon
+              as={icon}
+              boxSize={8}
+              color={RED}
+              strokeWidth={1.6}
+            />
+          </Box>
 
-    The table grows depending on how many
-    records are currently displayed.
-  */
+          <Box pl={4}>
+            <Text
+              fontSize="12px"
+              color={DARK}
+              mb={1}
+              fontWeight="600"
+            >
+              {title}
+            </Text>
 
-  const tableRowHeight = 42;
-  const tableHeaderHeight = 42;
-
-  const tableHeight = loading
-    ? 90
-    : Math.max(
-        90,
-        tableHeaderHeight +
-          paginatedFamilies.length *
-            tableRowHeight
-      );
+            <Text
+              fontSize="24px"
+              fontWeight="700"
+              color={DARK}
+              lineHeight="1"
+            >
+              {value}
+            </Text>
+          </Box>
+        </Flex>
+      </Box>
+    );
+  };
 
   // ==========================================================
   // PAGINATION NUMBERS
@@ -271,71 +315,6 @@ const FamilyPage = () => {
   };
 
   // ==========================================================
-  // STAT CARD
-  // ==========================================================
-
-  const StatCard = ({
-    icon,
-    title,
-    value,
-  }) => {
-    return (
-      <Box
-        border="1px solid #DCE2EA"
-        borderRadius="8px"
-        h="78px"
-        px={4}
-        bg="white"
-        display="flex"
-        alignItems="center"
-      >
-        <Flex
-          align="center"
-          width="100%"
-          height="100%"
-        >
-          <Box
-            width="65px"
-            height="100%"
-            borderRight="1px solid #DCE2EA"
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-            flexShrink={0}
-          >
-            <Icon
-              as={icon}
-              boxSize={8}
-              color="#D7193F"
-              strokeWidth={1.6}
-            />
-          </Box>
-
-          <Box pl={4}>
-            <Text
-              fontSize="12px"
-              color="#182338"
-              mb={1}
-              fontWeight="600"
-            >
-              {title}
-            </Text>
-
-            <Text
-              fontSize="24px"
-              fontWeight="700"
-              color="#182338"
-              lineHeight="1"
-            >
-              {value}
-            </Text>
-          </Box>
-        </Flex>
-      </Box>
-    );
-  };
-
-  // ==========================================================
   // RENDER
   // ==========================================================
 
@@ -353,14 +332,23 @@ const FamilyPage = () => {
       <Navbar />
 
       {/* ======================================================
-          MAIN CONTENT
+          MAIN CONTENT - Changed to match Tomb Fees width
       ====================================================== */}
 
-      <Box flex="1">
-        <Container
-          maxW="1200px"
-          px={{ base: 4, md: 5 }}
-          py={{ base: 3, md: 4 }}
+      <Box
+        flex="1"
+        w="100%"
+      >
+        <Box
+          w="100%"
+          px={{
+            base: 3,
+            md: 4,
+          }}
+          py={{
+            base: 3,
+            md: 4,
+          }}
         >
           {/* ==================================================
               BREADCRUMB
@@ -369,7 +357,7 @@ const FamilyPage = () => {
           <HStack
             gap={2}
             mb={2}
-            color="#60708C"
+            color={MUTED}
             fontSize="11px"
           >
             <Text>Masters</Text>
@@ -398,14 +386,14 @@ const FamilyPage = () => {
               <Text
                 fontSize="10px"
                 fontWeight="700"
-                color="#D7193F"
+                color={RED}
                 mb={1}
               >
                 FAMILY MASTER
               </Text>
 
               <Heading
-                color="#182338"
+                color={DARK}
                 fontSize={{
                   base: "22px",
                   md: "26px",
@@ -417,7 +405,7 @@ const FamilyPage = () => {
               </Heading>
 
               <Text
-                color="#60708C"
+                color={MUTED}
                 fontSize="11px"
               >
                 Manage family records, origins and
@@ -490,6 +478,7 @@ const FamilyPage = () => {
             borderRadius="8px"
             p={3}
             bg="white"
+            w="100%"
           >
             {/* ==================================================
                 SEARCH / FILTER
@@ -519,7 +508,7 @@ const FamilyPage = () => {
                   left="12px"
                   top="50%"
                   transform="translateY(-50%)"
-                  color="#60708C"
+                  color={MUTED}
                   zIndex={1}
                   boxSize={4}
                 />
@@ -532,7 +521,7 @@ const FamilyPage = () => {
                   placeholder="Search family name or origin"
                   pl="38px"
                   h="38px"
-                  borderColor="#DCE2EA"
+                  borderColor={BORDER}
                   borderRadius="6px"
                   fontSize="12px"
                   _focus={{
@@ -567,7 +556,7 @@ const FamilyPage = () => {
                       "0 35px 0 11px",
                     fontSize: "12px",
                     background: "white",
-                    color: "#182338",
+                    color: DARK,
                     outline: "none",
                     cursor: "pointer",
                     appearance: "none",
@@ -597,7 +586,7 @@ const FamilyPage = () => {
                   top="50%"
                   transform="translateY(-50%)"
                   pointerEvents="none"
-                  color="#182338"
+                  color={DARK}
                   boxSize={4}
                 />
               </Box>
@@ -608,7 +597,7 @@ const FamilyPage = () => {
                 variant="outline"
                 h="38px"
                 borderColor="#FF5A7D"
-                color="#D7193F"
+                color={RED}
                 borderRadius="6px"
                 px={4}
                 fontSize="12px"
@@ -628,22 +617,20 @@ const FamilyPage = () => {
             </Flex>
 
             {/* ==================================================
-                TABLE
+                TABLE - Updated to match Tomb Fees
             ================================================== */}
 
             <Box
-              height={`${tableHeight}px`}
               overflowX="auto"
               overflowY="hidden"
               border="1px solid #E6EAF0"
               borderRadius="6px"
-              transition="height 0.2s ease"
+              width="100%"
             >
               <Box
                 as="table"
                 width="100%"
-                minW="850px"
-                height="100%"
+                minW="1050px"
                 borderCollapse="collapse"
               >
                 {/* TABLE HEADER */}
@@ -651,7 +638,7 @@ const FamilyPage = () => {
                 <Box as="thead">
                   <Box
                     as="tr"
-                    height={`${tableHeaderHeight}px`}
+                    height="42px"
                   >
                     {[
                       "Family Name",
@@ -668,7 +655,7 @@ const FamilyPage = () => {
                         py={2}
                         fontSize="11px"
                         fontWeight="700"
-                        color="#182338"
+                        color={DARK}
                         borderBottom="1px solid #E6EAF0"
                         whiteSpace="nowrap"
                         bg="white"
@@ -691,22 +678,20 @@ const FamilyPage = () => {
                         colSpan={5}
                         textAlign="center"
                         height="48px"
-                        color="#60708C"
+                        color={MUTED}
                         fontSize="12px"
                       >
                         Loading families...
                       </Box>
                     </Box>
                   ) : paginatedFamilies.length === 0 ? (
-                    /* EMPTY */
-
                     <Box as="tr">
                       <Box
                         as="td"
                         colSpan={5}
                         textAlign="center"
                         height="48px"
-                        color="#60708C"
+                        color={MUTED}
                         fontSize="12px"
                       >
                         No families found.
@@ -718,7 +703,7 @@ const FamilyPage = () => {
                         <Box
                           as="tr"
                           key={family.id}
-                          height={`${tableRowHeight}px`}
+                          height="42px"
                           _hover={{
                             bg: "#FFFBFC",
                           }}
@@ -731,7 +716,7 @@ const FamilyPage = () => {
                             py={1}
                             fontSize="12px"
                             fontWeight="600"
-                            color="#182338"
+                            color={DARK}
                             borderBottom="1px solid #E6EAF0"
                             whiteSpace="nowrap"
                           >
@@ -748,12 +733,13 @@ const FamilyPage = () => {
                             fontSize="12px"
                             color="#344054"
                             borderBottom="1px solid #E6EAF0"
+                            whiteSpace="nowrap"
                           >
                             {family.origin ||
                               "-"}
                           </Box>
 
-                          {/* HISTORY */}
+                          {/* HISTORY - Updated to match Tomb Fees specification column */}
 
                           <Box
                             as="td"
@@ -762,19 +748,16 @@ const FamilyPage = () => {
                             fontSize="12px"
                             color="#344054"
                             borderBottom="1px solid #E6EAF0"
-                            maxW="400px"
+                            maxW="300px"
+                            overflow="hidden"
+                            textOverflow="ellipsis"
+                            whiteSpace="nowrap"
                           >
-                            <Text
-                              overflow="hidden"
-                              textOverflow="ellipsis"
-                              whiteSpace="nowrap"
-                            >
-                              {family.history ||
-                                "-"}
-                            </Text>
+                            {family.history ||
+                              "-"}
                           </Box>
 
-                          {/* LAST UPDATED */}
+                          {/* LAST UPDATED - Updated to show time as well */}
 
                           <Box
                             as="td"
@@ -785,7 +768,7 @@ const FamilyPage = () => {
                             borderBottom="1px solid #E6EAF0"
                             whiteSpace="nowrap"
                           >
-                            {formatDate(
+                            {formatDateTime(
                               family.updated_at
                             )}
                           </Box>
@@ -803,7 +786,7 @@ const FamilyPage = () => {
                                 variant="ghost"
                                 size="sm"
                                 h="30px"
-                                color="#D7193F"
+                                color={RED}
                                 px={2}
                                 fontSize="11px"
                                 onClick={() =>
@@ -833,7 +816,7 @@ const FamilyPage = () => {
                                 variant="ghost"
                                 size="sm"
                                 h="30px"
-                                color="#D7193F"
+                                color={RED}
                                 px={2}
                                 fontSize="11px"
                                 onClick={() =>
@@ -881,7 +864,7 @@ const FamilyPage = () => {
 
               <Text
                 fontSize="11px"
-                color="#60708C"
+                color={MUTED}
               >
                 {filteredFamilies.length === 0
                   ? "Showing 0 families"
@@ -905,8 +888,8 @@ const FamilyPage = () => {
                   size="xs"
                   h="30px"
                   variant="outline"
-                  borderColor="#DCE2EA"
-                  color="#60708C"
+                  borderColor={BORDER}
+                  color={MUTED}
                   disabled={safePage === 1}
                   onClick={() =>
                     setCurrentPage(
@@ -934,7 +917,7 @@ const FamilyPage = () => {
                         key={`dots-${index}`}
                         px={1.5}
                         fontSize="11px"
-                        color="#60708C"
+                        color={MUTED}
                       >
                         ...
                       </Text>
@@ -962,7 +945,7 @@ const FamilyPage = () => {
                         borderColor={
                           page === safePage
                             ? PRIMARY_MAROON
-                            : "#DCE2EA"
+                            : BORDER
                         }
                         onClick={() =>
                           setCurrentPage(page)
@@ -986,7 +969,7 @@ const FamilyPage = () => {
                   h="30px"
                   variant="outline"
                   borderColor="#FF5A7D"
-                  color="#D7193F"
+                  color={RED}
                   disabled={
                     safePage === totalPages
                   }
@@ -1010,7 +993,7 @@ const FamilyPage = () => {
               </HStack>
             </Flex>
           </Box>
-        </Container>
+        </Box>
       </Box>
 
       {/* ======================================================

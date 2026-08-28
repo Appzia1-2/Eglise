@@ -1,4 +1,4 @@
-// src/pages/Login.jsx  (Church Portal — two-step login)
+// src/pages/Login.jsx (Church Portal — two-step login)
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -28,10 +28,7 @@ import {
   LuSmartphone,
   LuActivity,
 } from "react-icons/lu";
-// ⚠️ IMPORT PATH — set this to wherever YOUR apiClient.js lives, relative to
-// src/pages/LoginPage.jsx. Whatever folder your other service files sit in
-// (they import it as "./apiClient") is the folder to point at. Common options:
-//   "../api/apiClient"   "../services/apiClient"   "../utils/apiClient"
+// ✅ FIXED: Correct import path
 import apiClient from "../api/apiClient";
 import { toaster } from "../components/ui/toaster";
 import logo from "../assets/logo.png";
@@ -168,21 +165,51 @@ const Login = () => {
 
     setLoading(true);
     try {
-      // Verify the account exists before showing the password step.
+      // ✅ FIXED: Use the correct endpoint
       const res = await apiClient.post("/api/accounts/auth/check-email/", { email: value });
-      const exists = res?.data?.exists ?? res?.data?.registered ?? res?.data?.found ?? true;
-      if (exists === false) {
-        toaster.create({ title: "Account not found", description: "No account is registered with that email.", type: "error", duration: 5000 });
+      const data = res?.data || {};
+      
+      if (data.exists === false) {
+        toaster.create({ 
+          title: "Account not found", 
+          description: "No account is registered with that email.", 
+          type: "error", 
+          duration: 5000 
+        });
         return;
       }
+      
+      if (data.active === false) {
+        toaster.create({ 
+          title: "Account inactive", 
+          description: "This account is deactivated. Please contact support.", 
+          type: "error", 
+          duration: 5000 
+        });
+        return;
+      }
+      
+      // Store user role for later use
+      localStorage.setItem("user_role", data.role || "");
       setStep(2);
     } catch (err) {
       const status = err?.response?.status;
       const msg = err?.response?.data?.detail || err?.response?.data?.error || err?.response?.data?.message;
-      if (status === 404) {
-        toaster.create({ title: "Account not found", description: "No account is registered with that email.", type: "error", duration: 5000 });
+      
+      if (status === 404 || status === 400) {
+        toaster.create({ 
+          title: "Account not found", 
+          description: "No account is registered with that email.", 
+          type: "error", 
+          duration: 5000 
+        });
       } else {
-        toaster.create({ title: "Something went wrong", description: msg || "Please try again.", type: "error", duration: 5000 });
+        toaster.create({ 
+          title: "Something went wrong", 
+          description: msg || "Please try again.", 
+          type: "error", 
+          duration: 5000 
+        });
       }
     } finally {
       setLoading(false);
@@ -197,21 +224,69 @@ const Login = () => {
     }
     setLoading(true);
     try {
-      const res = await apiClient.post("/api/accounts/login/", { email: email.trim(), password });
+      // ✅ FIXED: Use the correct login endpoint
+      const res = await apiClient.post("/api/accounts/login/", { 
+        email: email.trim(), 
+        password: password 
+      });
 
-      // apiClient reads "token" / "refresh" from localStorage — store under those keys.
       const d = res?.data || {};
       const access = d.access || d.token || d.access_token;
       const refresh = d.refresh || d.refresh_token;
-      if (access) localStorage.setItem("token", access);
-      if (refresh) localStorage.setItem("refresh", refresh);
-      if (d.user) localStorage.setItem("user", JSON.stringify(d.user));
+      
+      if (access) {
+        localStorage.setItem("token", access);
+        localStorage.setItem("admin_token", access); // Also store as admin_token for compatibility
+      }
+      if (refresh) {
+        localStorage.setItem("refresh", refresh);
+        localStorage.setItem("admin_refresh", refresh);
+      }
+      
+      // Store user data
+      const userData = d.user || {
+        id: d.user_id,
+        email: d.email,
+        role: d.role,
+        church_name: d.church_name,
+        church_id: d.church_id,
+      };
+      localStorage.setItem("user", JSON.stringify(userData));
+      localStorage.setItem("user_role", d.role || "");
 
-      toaster.create({ title: "Welcome back", description: "Signed in successfully.", type: "success", duration: 2500 });
-      navigate("/");
+      toaster.create({ 
+        title: "Welcome back", 
+        description: `Signed in as ${d.role || "User"}`, 
+        type: "success", 
+        duration: 2500 
+      });
+      
+      // ✅ Redirect based on role
+      if (d.role === "CHURCH") {
+        navigate("/church/dashboard");
+      } else if (d.role === "USER") {
+        navigate("/user/dashboard");
+      } else {
+        navigate("/");
+      }
     } catch (err) {
-      const msg = err?.response?.data?.detail || err?.response?.data?.error || err?.response?.data?.message || "Incorrect password. Please try again.";
-      toaster.create({ title: "Sign in failed", description: msg, type: "error", duration: 5000 });
+      console.error("Login error:", err);
+      const errorData = err?.response?.data || {};
+      let msg = errorData?.detail || errorData?.error || errorData?.message || "Incorrect password. Please try again.";
+      
+      // Handle validation errors
+      if (errorData?.email) {
+        msg = errorData.email[0] || msg;
+      } else if (errorData?.non_field_errors) {
+        msg = errorData.non_field_errors[0] || msg;
+      }
+      
+      toaster.create({ 
+        title: "Sign in failed", 
+        description: msg, 
+        type: "error", 
+        duration: 5000 
+      });
     } finally {
       setLoading(false);
     }

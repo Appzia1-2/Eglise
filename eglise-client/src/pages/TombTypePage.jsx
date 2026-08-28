@@ -3,27 +3,26 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
-  Container,
   Flex,
   Heading,
   HStack,
+  Icon,
   Input,
   SimpleGrid,
-  Table,
   Text,
 } from "@chakra-ui/react";
 
 import {
+  LuChevronDown,
   LuChevronLeft,
   LuChevronRight,
-  LuChevronsLeft,
-  LuChevronsRight,
   LuEye,
   LuFilter,
   LuLandmark,
   LuPencil,
   LuPlus,
   LuSearch,
+  LuCalendarDays,
 } from "react-icons/lu";
 
 import { useNavigate } from "react-router-dom";
@@ -36,24 +35,27 @@ import {
 } from "../api/churchServices";
 
 const PRIMARY_MAROON = "var(--primary-maroon)";
-
-const PAGE_SIZE = 5;
+const RED = "#D7193F";
+const DARK = "#182338";
+const MUTED = "#60708C";
+const BORDER = "#DCE2EA";
 
 const TombTypePage = () => {
   const navigate = useNavigate();
 
   const [tombTypes, setTombTypes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("ALL");
 
-  const [page, setPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
 
-  const [error, setError] = useState("");
+  const pageSize = 5;
 
   // ==========================================================
-  // LOAD TOMB TYPES
+  // LOAD DATA
   // ==========================================================
 
   const loadTombTypes = async () => {
@@ -72,11 +74,8 @@ const TombTypePage = () => {
       setTombTypes(items);
     } catch (err) {
       console.error("Error loading tomb types:", err);
-
-      setError(
-        err?.response?.data?.detail ||
-          "Unable to load tomb type records."
-      );
+      setError("Unable to load tomb type records.");
+      setTombTypes([]);
     } finally {
       setLoading(false);
     }
@@ -87,25 +86,122 @@ const TombTypePage = () => {
   }, []);
 
   // ==========================================================
-  // FORMAT DATE
+  // SEARCH + FILTER
   // ==========================================================
 
-  const formatDate = (value) => {
-    if (!value) {
+  const filteredTombTypes = useMemo(() => {
+    let result = [...tombTypes];
+
+    const searchText = search.trim().toLowerCase();
+
+    // ========================================================
+    // SEARCH
+    // ========================================================
+
+    if (searchText) {
+      result = result.filter((tombType) => {
+        const name = String(tombType.name || "").toLowerCase();
+        return name.includes(searchText);
+      });
+    }
+
+    // ========================================================
+    // FILTER
+    // ========================================================
+
+    if (filter === "RECENTLY_UPDATED") {
+      const now = new Date();
+      const sevenDaysAgo = new Date(
+        now.getTime() - 7 * 24 * 60 * 60 * 1000
+      );
+
+      result = result.filter((tombType) => {
+        const updatedAt = tombType?.updated_at || tombType?.updated || tombType?.updated_on;
+        if (!updatedAt) return false;
+        const updated = new Date(updatedAt);
+        if (Number.isNaN(updated.getTime())) return false;
+        return updated >= sevenDaysAgo && updated <= now;
+      });
+    }
+
+    return result;
+  }, [tombTypes, search, filter]);
+
+  // ==========================================================
+  // PAGINATION
+  // ==========================================================
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(
+      filteredTombTypes.length / pageSize
+    )
+  );
+
+  const safePage = Math.min(
+    currentPage,
+    totalPages
+  );
+
+  const startIndex =
+    (safePage - 1) * pageSize;
+
+  const paginatedTombTypes =
+    filteredTombTypes.slice(
+      startIndex,
+      startIndex + pageSize
+    );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, filter]);
+
+  // ==========================================================
+  // STATS
+  // ==========================================================
+
+  const totalTombTypes = tombTypes.length;
+
+  const recentlyUpdatedCount = useMemo(() => {
+    if (!tombTypes.length) return 0;
+
+    const now = new Date();
+    const sevenDaysAgo = new Date(
+      now.getTime() - 7 * 24 * 60 * 60 * 1000
+    );
+
+    return tombTypes.filter((tombType) => {
+      const updatedAt = tombType?.updated_at || tombType?.updated || tombType?.updated_on;
+      if (!updatedAt) return false;
+      const updated = new Date(updatedAt);
+      if (Number.isNaN(updated.getTime())) return false;
+      return updated >= sevenDaysAgo && updated <= now;
+    }).length;
+  }, [tombTypes]);
+
+  // ==========================================================
+  // DATE FORMAT - with time like Tomb Fees
+  // ==========================================================
+
+  const formatDateTime = (date) => {
+    if (!date) return "-";
+
+    const parsedDate = new Date(date);
+
+    if (Number.isNaN(parsedDate.getTime())) {
       return "-";
     }
 
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-      return "-";
-    }
-
-    return date.toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
+    return parsedDate.toLocaleString(
+      "en-GB",
+      {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }
+    );
   };
 
   // ==========================================================
@@ -122,66 +218,111 @@ const TombTypePage = () => {
   };
 
   // ==========================================================
-  // FILTER
+  // STAT CARD - Matches Tomb Fees exactly
   // ==========================================================
 
-  const filteredTombTypes = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
+  const StatCard = ({
+    icon,
+    title,
+    value,
+  }) => {
+    return (
+      <Box
+        border="1px solid #DCE2EA"
+        borderRadius="8px"
+        h="78px"
+        px={4}
+        bg="white"
+        display="flex"
+        alignItems="center"
+      >
+        <Flex
+          align="center"
+          width="100%"
+          height="100%"
+        >
+          <Box
+            width="65px"
+            height="100%"
+            borderRight="1px solid #DCE2EA"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            flexShrink={0}
+          >
+            <Icon
+              as={icon}
+              boxSize={8}
+              color={RED}
+              strokeWidth={1.6}
+            />
+          </Box>
 
-    return tombTypes.filter((tombType) => {
-      const matchesSearch =
-        !keyword ||
-        String(tombType.name || "")
-          .toLowerCase()
-          .includes(keyword);
+          <Box pl={4}>
+            <Text
+              fontSize="12px"
+              color={DARK}
+              mb={1}
+              fontWeight="600"
+            >
+              {title}
+            </Text>
 
-      if (!matchesSearch) {
-        return false;
-      }
-
-      if (filter === "ALL") {
-        return true;
-      }
-
-      return true;
-    });
-  }, [tombTypes, search, filter]);
-
-  // ==========================================================
-  // PAGINATION
-  // ==========================================================
-
-  const totalItems = filteredTombTypes.length;
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(totalItems / PAGE_SIZE)
-  );
-
-  const safePage = Math.min(page, totalPages);
-
-  const startIndex =
-    (safePage - 1) * PAGE_SIZE;
-
-  const paginatedTombTypes =
-    filteredTombTypes.slice(
-      startIndex,
-      startIndex + PAGE_SIZE
+            <Text
+              fontSize="24px"
+              fontWeight="700"
+              color={DARK}
+              lineHeight="1"
+            >
+              {value}
+            </Text>
+          </Box>
+        </Flex>
+      </Box>
     );
-
-  useEffect(() => {
-    setPage(1);
-  }, [search, filter]);
+  };
 
   // ==========================================================
-  // PAGE NUMBERS
+  // PAGINATION NUMBERS - with ellipsis like Tomb Fees
   // ==========================================================
 
-  const pageNumbers = [];
+  const renderPages = () => {
+    const pages = [];
 
-  for (let i = 1; i <= totalPages; i++) {
-    pageNumbers.push(i);
-  }
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      pages.push(1);
+
+      if (safePage > 3) {
+        pages.push("...");
+      }
+
+      const start = Math.max(
+        2,
+        safePage - 1
+      );
+
+      const end = Math.min(
+        totalPages - 1,
+        safePage + 1
+      );
+
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+
+      if (safePage < totalPages - 2) {
+        pages.push("...");
+      }
+
+      pages.push(totalPages);
+    }
+
+    return pages;
+  };
 
   // ==========================================================
   // RENDER
@@ -194,576 +335,464 @@ const TombTypePage = () => {
       display="flex"
       flexDirection="column"
     >
+      {/* ======================================================
+          NAVBAR
+      ====================================================== */}
+
       <Navbar />
 
-      <Container
-        maxW="1200px"
-        px={{ base: 4, md: 5 }}
-        py={{ base: 2, md: 3 }}
+      {/* ======================================================
+          MAIN CONTENT - Full width like Tomb Fees
+      ====================================================== */}
+
+      <Box
         flex="1"
+        w="100%"
       >
-        {/* ==================================================
-            BREADCRUMB
-        ================================================== */}
-
-        <HStack
-          gap={2}
-          mb={2}
-          color="#60708C"
-          fontSize="12px"
-        >
-          <Text>Masters</Text>
-          <Text>/</Text>
-          <Text>Tomb Type Master</Text>
-        </HStack>
-
-        {/* ==================================================
-            HEADER
-        ================================================== */}
-
-        <Flex
-          justify="space-between"
-          align="center"
-          direction={{
-            base: "column",
-            md: "row",
-          }}
-          gap={2}
-          mb={3}
-        >
-          <Box>
-            <Text
-              fontSize="11px"
-              fontWeight="700"
-              color="#D7193F"
-              mb={1}
-            >
-              TOMB TYPE MASTER
-            </Text>
-
-            <Heading
-              color="#182338"
-              fontSize={{
-                base: "22px",
-                md: "26px",
-              }}
-              lineHeight="1.1"
-              mb={1}
-            >
-              Tomb Type Master
-            </Heading>
-
-            <Text
-              color="#60708C"
-              fontSize="12px"
-            >
-              Manage tomb type records used in
-              church and cemetery details.
-            </Text>
-          </Box>
-
-          {/* ADD BUTTON */}
-
-          <Button
-            bg={PRIMARY_MAROON}
-            color="white"
-            px={5}
-            h="38px"
-            fontSize="13px"
-            borderRadius="6px"
-            onClick={() =>
-              navigate("/tomb-type/add")
-            }
-            _hover={{
-              bg: "#650A18",
-            }}
-          >
-            <LuPlus
-              size={17}
-              style={{
-                marginRight: "7px",
-              }}
-            />
-
-            Add Tomb Type
-          </Button>
-        </Flex>
-
-        {/* ==================================================
-            STAT CARDS
-        ================================================== */}
-
-        <SimpleGrid
-          columns={{
-            base: 1,
-            md: 2,
-          }}
-          gap={3}
-          mb={3}
-        >
-          {/* TOTAL TOMB TYPES */}
-
-          <Box
-            border="1px solid #DCE2EA"
-            borderRadius="8px"
-            h="78px"
-            px={4}
-            display="flex"
-            alignItems="center"
-          >
-            <Flex
-              align="center"
-              width="100%"
-              height="100%"
-            >
-              <Box
-                width="68px"
-                height="52px"
-                borderRight="1px solid #DCE2EA"
-                display="flex"
-                justifyContent="center"
-                alignItems="center"
-              >
-                <LuLandmark
-                  size={34}
-                  color="#D7193F"
-                  strokeWidth={1.5}
-                />
-              </Box>
-
-              <Box pl={4}>
-                <Text
-                  fontSize="11px"
-                  fontWeight="600"
-                  color="#182338"
-                  mb={1}
-                >
-                  Total Tomb Types
-                </Text>
-
-                <Text
-                  fontSize="25px"
-                  fontWeight="700"
-                  color="#182338"
-                  lineHeight="1"
-                >
-                  {tombTypes.length}
-                </Text>
-              </Box>
-            </Flex>
-          </Box>
-
-          {/* MATCHING RECORDS */}
-
-          <Box
-            border="1px solid #DCE2EA"
-            borderRadius="8px"
-            h="78px"
-            px={4}
-            display="flex"
-            alignItems="center"
-          >
-            <Flex
-              align="center"
-              width="100%"
-              height="100%"
-            >
-              <Box
-                width="68px"
-                height="52px"
-                borderRight="1px solid #DCE2EA"
-                display="flex"
-                justifyContent="center"
-                alignItems="center"
-              >
-                <LuSearch
-                  size={32}
-                  color="#D7193F"
-                  strokeWidth={1.5}
-                />
-              </Box>
-
-              <Box pl={4}>
-                <Text
-                  fontSize="11px"
-                  fontWeight="600"
-                  color="#182338"
-                  mb={1}
-                >
-                  Matching Records
-                </Text>
-
-                <Text
-                  fontSize="25px"
-                  fontWeight="700"
-                  color="#182338"
-                  lineHeight="1"
-                >
-                  {filteredTombTypes.length}
-                </Text>
-              </Box>
-            </Flex>
-          </Box>
-        </SimpleGrid>
-
-        {/* ==================================================
-            TABLE CARD
-        ================================================== */}
-
         <Box
-          border="1px solid #DCE2EA"
-          borderRadius="8px"
-          p={{ base: 2, md: 3 }}
-          overflow="hidden"
+          w="100%"
+          px={{
+            base: 3,
+            md: 4,
+          }}
+          py={{
+            base: 3,
+            md: 4,
+          }}
         >
           {/* ==================================================
-              FILTER BAR
+              BREADCRUMB
+          ================================================== */}
+
+          <HStack
+            gap={2}
+            mb={2}
+            color={MUTED}
+            fontSize="11px"
+          >
+            <Text>Masters</Text>
+            <Text>/</Text>
+            <Text>Tomb Type Master</Text>
+          </HStack>
+
+          {/* ==================================================
+              HEADER
           ================================================== */}
 
           <Flex
-            gap={2}
-            mb={2}
+            justify="space-between"
+            align={{
+              base: "flex-start",
+              md: "center",
+            }}
+            gap={3}
+            mb={3}
             direction={{
               base: "column",
               md: "row",
             }}
           >
-            {/* SEARCH */}
-
-            <Box
-              position="relative"
-              flex="1"
-              maxW={{
-                base: "100%",
-                md: "430px",
-              }}
-            >
-              <Box
-                position="absolute"
-                left="13px"
-                top="50%"
-                transform="translateY(-50%)"
-                color="#60708C"
-                zIndex={1}
+            <Box>
+              <Text
+                fontSize="10px"
+                fontWeight="700"
+                color={RED}
+                mb={1}
               >
-                <LuSearch size={16} />
-              </Box>
+                TOMB TYPE MASTER
+              </Text>
 
-              <Input
-                value={search}
-                onChange={(e) =>
-                  setSearch(e.target.value)
-                }
-                placeholder="Search tomb type name"
-                pl="40px"
-                h="38px"
-                fontSize="13px"
-                borderColor="#DCE2EA"
-                borderRadius="6px"
-                color="#182338"
-                _placeholder={{
-                  color: "#8B98AB",
+              <Heading
+                color={DARK}
+                fontSize={{
+                  base: "22px",
+                  md: "26px",
                 }}
-                _focus={{
-                  borderColor: PRIMARY_MAROON,
-                  boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
-                }}
-              />
-            </Box>
-
-            {/* FILTER */}
-
-            <Box
-              width={{
-                base: "100%",
-                md: "200px",
-              }}
-            >
-              <select
-                value={filter}
-                onChange={(e) =>
-                  setFilter(e.target.value)
-                }
-                style={{
-                  width: "100%",
-                  height: "38px",
-                  border: "1px solid #DCE2EA",
-                  borderRadius: "6px",
-                  padding: "0 12px",
-                  fontSize: "13px",
-                  color: "#182338",
-                  background: "white",
-                  outline: "none",
-                }}
+                lineHeight="1.1"
+                mb={1}
               >
-                <option value="ALL">
-                  All Records
-                </option>
-              </select>
-            </Box>
+                Tomb Type Master
+              </Heading>
 
-            {/* FILTER / RESET */}
+              <Text
+                color={MUTED}
+                fontSize="11px"
+              >
+                Manage tomb type records used in
+                church and cemetery details.
+              </Text>
+            </Box>
 
             <Button
-              variant="outline"
+              bg={PRIMARY_MAROON}
+              color="white"
+              px={5}
               h="38px"
-              px={4}
-              fontSize="13px"
-              borderColor="#D7193F"
-              color="#D7193F"
+              fontSize="12px"
               borderRadius="6px"
-              onClick={() => {
-                setSearch("");
-                setFilter("ALL");
-              }}
+              flexShrink={0}
+              onClick={() =>
+                navigate("/tomb-type/add")
+              }
               _hover={{
-                bg: "#FFF5F7",
+                bg: "#650A18",
               }}
             >
-              <LuFilter
-                size={15}
-                style={{
-                  marginRight: "7px",
-                }}
+              <Icon
+                as={LuPlus}
+                mr={2}
+                boxSize={4}
               />
 
-              Filter
+              Add Tomb Type
             </Button>
           </Flex>
 
           {/* ==================================================
-              ERROR
+              STAT CARDS
           ================================================== */}
 
-          {error && (
-            <Box
-              mb={2}
-              p={2}
-              borderRadius="6px"
-              bg="#FFF5F5"
-              border="1px solid #FED7D7"
-            >
-              <Text
-                color="red.600"
-                fontSize="12px"
-              >
-                {error}
-              </Text>
-            </Box>
-          )}
+          <SimpleGrid
+            columns={{
+              base: 1,
+              md: 2,
+            }}
+            gap={3}
+            mb={3}
+          >
+            <StatCard
+              icon={LuLandmark}
+              title="Total Tomb Types"
+              value={totalTombTypes}
+            />
+
+            <StatCard
+              icon={LuCalendarDays}
+              title="Recently Updated"
+              value={recentlyUpdatedCount}
+            />
+          </SimpleGrid>
 
           {/* ==================================================
-              TABLE
+              TABLE CARD
           ================================================== */}
 
           <Box
             border="1px solid #DCE2EA"
-            borderRadius="7px"
-            overflowX="auto"
+            borderRadius="8px"
+            p={3}
+            bg="white"
+            w="100%"
           >
-            <Box minW="800px">
-              <Table.Root
-                size="sm"
-                variant="outline"
+            {/* ==================================================
+                SEARCH / FILTER
+            ================================================== */}
+
+            <Flex
+              gap={3}
+              mb={3}
+              direction={{
+                base: "column",
+                md: "row",
+              }}
+            >
+              {/* SEARCH */}
+
+              <Box
+                position="relative"
+                maxW={{
+                  base: "100%",
+                  md: "380px",
+                }}
+                flex="1"
               >
-                <Table.Header>
-                  <Table.Row bg="white">
+                <Icon
+                  as={LuSearch}
+                  position="absolute"
+                  left="12px"
+                  top="50%"
+                  transform="translateY(-50%)"
+                  color={MUTED}
+                  zIndex={1}
+                  boxSize={4}
+                />
 
-                    {/* NAME */}
+                <Input
+                  value={search}
+                  onChange={(e) =>
+                    setSearch(e.target.value)
+                  }
+                  placeholder="Search tomb type name"
+                  pl="38px"
+                  h="38px"
+                  borderColor={BORDER}
+                  borderRadius="6px"
+                  fontSize="12px"
+                  _focus={{
+                    borderColor: PRIMARY_MAROON,
+                    boxShadow:
+                      `0 0 0 1px ${PRIMARY_MAROON}`,
+                  }}
+                />
+              </Box>
 
-                    <Table.ColumnHeader
-                      color="#182338"
-                      fontWeight="700"
-                      fontSize="12px"
-                      py={2}
-                      px={4}
-                    >
-                      Tomb Type Name
-                    </Table.ColumnHeader>
+              {/* FILTER */}
 
-                    {/* LAST UPDATED */}
+              <Box
+                position="relative"
+                width={{
+                  base: "100%",
+                  md: "210px",
+                }}
+              >
+                <select
+                  value={filter}
+                  onChange={(e) =>
+                    setFilter(e.target.value)
+                  }
+                  style={{
+                    width: "100%",
+                    height: "38px",
+                    border:
+                      "1px solid #DCE2EA",
+                    borderRadius: "6px",
+                    padding:
+                      "0 35px 0 11px",
+                    fontSize: "12px",
+                    background: "white",
+                    color: DARK,
+                    outline: "none",
+                    cursor: "pointer",
+                    appearance: "none",
+                  }}
+                >
+                  <option value="ALL">
+                    All Records
+                  </option>
 
-                    <Table.ColumnHeader
-                      color="#182338"
-                      fontWeight="700"
-                      fontSize="12px"
-                      py={2}
-                      px={4}
-                    >
-                      Last Updated
-                    </Table.ColumnHeader>
+                  <option value="RECENTLY_UPDATED">
+                    Recently Updated
+                  </option>
+                </select>
 
-                    {/* ACTIONS */}
+                <Icon
+                  as={LuChevronDown}
+                  position="absolute"
+                  right="11px"
+                  top="50%"
+                  transform="translateY(-50%)"
+                  pointerEvents="none"
+                  color={DARK}
+                  boxSize={4}
+                />
+              </Box>
 
-                    <Table.ColumnHeader
-                      color="#182338"
-                      fontWeight="700"
-                      fontSize="12px"
-                      py={2}
-                      px={4}
-                      textAlign="right"
-                    >
-                      Actions
-                    </Table.ColumnHeader>
+              {/* RESET FILTER */}
 
-                  </Table.Row>
-                </Table.Header>
+              <Button
+                variant="outline"
+                h="38px"
+                borderColor="#FF5A7D"
+                color={RED}
+                borderRadius="6px"
+                px={4}
+                fontSize="12px"
+                onClick={() => {
+                  setSearch("");
+                  setFilter("ALL");
+                }}
+              >
+                <Icon
+                  as={LuFilter}
+                  mr={2}
+                  boxSize={4}
+                />
 
-                <Table.Body>
+                Filter
+              </Button>
+            </Flex>
 
-                  {/* ==================================================
-                      LOADING
-                  ================================================== */}
+            {/* ==================================================
+                ERROR MESSAGE
+            ================================================== */}
 
-                  {loading && (
-                    <Table.Row>
-                      <Table.Cell
-                        colSpan={3}
-                        py={5}
-                        textAlign="center"
+            {error && (
+              <Box
+                mb={3}
+                p={2}
+                borderRadius="6px"
+                bg="#FFF5F5"
+                border="1px solid #FED7D7"
+              >
+                <Text
+                  color="red.600"
+                  fontSize="12px"
+                >
+                  {error}
+                </Text>
+              </Box>
+            )}
+
+            {/* ==================================================
+                TABLE - Custom table like Tomb Fees
+            ================================================== */}
+
+            <Box
+              overflowX="auto"
+              overflowY="hidden"
+              border="1px solid #E6EAF0"
+              borderRadius="6px"
+              width="100%"
+            >
+              <Box
+                as="table"
+                width="100%"
+                minW="850px"
+                borderCollapse="collapse"
+              >
+                {/* TABLE HEADER */}
+
+                <Box as="thead">
+                  <Box
+                    as="tr"
+                    height="42px"
+                  >
+                    {[
+                      "Tomb Type Name",
+                      "Last Updated",
+                      "Actions",
+                    ].map((heading) => (
+                      <Box
+                        as="th"
+                        key={heading}
+                        textAlign="left"
+                        px={4}
+                        py={2}
+                        fontSize="11px"
+                        fontWeight="700"
+                        color={DARK}
+                        borderBottom="1px solid #E6EAF0"
+                        whiteSpace="nowrap"
+                        bg="white"
                       >
-                        <Text
-                          color="#60708C"
-                          fontSize="12px"
-                        >
-                          Loading tomb types...
-                        </Text>
-                      </Table.Cell>
-                    </Table.Row>
-                  )}
+                        {heading}
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
 
-                  {/* ==================================================
-                      EMPTY
-                  ================================================== */}
+                {/* TABLE BODY */}
 
-                  {!loading &&
-                    paginatedTombTypes.length ===
-                      0 && (
-                      <Table.Row>
-                        <Table.Cell
-                          colSpan={3}
-                          py={5}
-                          textAlign="center"
-                        >
-                          <Text
-                            color="#60708C"
-                            fontSize="12px"
-                          >
-                            No tomb types found.
-                          </Text>
+                <Box as="tbody">
+                  {/* LOADING */}
 
-                          <Button
-                            mt={2}
-                            bg={PRIMARY_MAROON}
-                            color="white"
-                            size="sm"
-                            fontSize="12px"
-                            onClick={() =>
-                              navigate(
-                                "/tomb-type/add"
-                              )
-                            }
-                            _hover={{
-                              bg: "#650A18",
-                            }}
-                          >
-                            <LuPlus
-                              size={15}
-                              style={{
-                                marginRight: "6px",
-                              }}
-                            />
-
-                            Add your first tomb type
-                          </Button>
-                        </Table.Cell>
-                      </Table.Row>
-                    )}
-
-                  {/* ==================================================
-                      DATA
-                  ================================================== */}
-
-                  {!loading &&
+                  {loading ? (
+                    <Box as="tr">
+                      <Box
+                        as="td"
+                        colSpan={3}
+                        textAlign="center"
+                        height="48px"
+                        color={MUTED}
+                        fontSize="12px"
+                      >
+                        Loading tomb types...
+                      </Box>
+                    </Box>
+                  ) : paginatedTombTypes.length === 0 ? (
+                    <Box as="tr">
+                      <Box
+                        as="td"
+                        colSpan={3}
+                        textAlign="center"
+                        height="48px"
+                        color={MUTED}
+                        fontSize="12px"
+                      >
+                        No tomb types found.
+                      </Box>
+                    </Box>
+                  ) : (
                     paginatedTombTypes.map(
                       (tombType) => (
-                        <Table.Row
+                        <Box
+                          as="tr"
                           key={tombType.id}
+                          height="42px"
                           _hover={{
-                            bg: "#FCFCFD",
+                            bg: "#FFFBFC",
                           }}
                         >
-                          {/* NAME */}
+                          {/* TOMB TYPE NAME */}
 
-                          <Table.Cell
+                          <Box
+                            as="td"
                             px={4}
-                            py={1.5}
-                            color="#182338"
-                            fontSize="13px"
+                            py={1}
+                            fontSize="12px"
                             fontWeight="600"
+                            color={DARK}
+                            borderBottom="1px solid #E6EAF0"
+                            whiteSpace="nowrap"
                           >
                             {tombType.name || "-"}
-                          </Table.Cell>
+                          </Box>
 
-                          {/* LAST UPDATED */}
+                          {/* LAST UPDATED - with time */}
 
-                          <Table.Cell
+                          <Box
+                            as="td"
                             px={4}
-                            py={1.5}
-                            color="#60708C"
+                            py={1}
                             fontSize="12px"
+                            color="#344054"
+                            borderBottom="1px solid #E6EAF0"
+                            whiteSpace="nowrap"
                           >
-                            {formatDate(
+                            {formatDateTime(
                               getLastUpdated(tombType)
                             )}
-                          </Table.Cell>
+                          </Box>
 
                           {/* ACTIONS */}
 
-                          <Table.Cell
+                          <Box
+                            as="td"
                             px={4}
-                            py={1.5}
+                            py={1}
+                            borderBottom="1px solid #E6EAF0"
                           >
-                            <HStack
-                              justify="flex-end"
-                              gap={0}
-                            >
-
+                            <HStack gap={2}>
                               {/* VIEW */}
 
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                h="28px"
-                                px={3}
-                                fontSize="12px"
-                                color="#D7193F"
-                                borderRadius="4px"
+                                h="30px"
+                                color={RED}
+                                px={2}
+                                fontSize="11px"
                                 onClick={() =>
                                   navigate(
                                     `/tomb-type/${tombType.id}`
                                   )
                                 }
                                 _hover={{
-                                  bg: "#FFF5F7",
+                                  bg: "#FFF0F4",
                                 }}
                               >
-                                <LuEye
-                                  size={14}
-                                  style={{
-                                    marginRight: "5px",
-                                  }}
+                                <Icon
+                                  as={LuEye}
+                                  mr={1}
+                                  boxSize={3.5}
                                 />
 
                                 View
                               </Button>
 
-                              {/* DIVIDER */}
-
                               <Box
-                                height="18px"
-                                width="1px"
-                                bg="#DCE2EA"
+                                h="20px"
+                                borderLeft="1px solid #DCE2EA"
                               />
 
                               {/* EDIT */}
@@ -771,199 +800,190 @@ const TombTypePage = () => {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                h="28px"
-                                px={3}
-                                fontSize="12px"
-                                color="#D7193F"
-                                borderRadius="4px"
+                                h="30px"
+                                color={RED}
+                                px={2}
+                                fontSize="11px"
                                 onClick={() =>
                                   navigate(
                                     `/tomb-type/${tombType.id}/edit`
                                   )
                                 }
                                 _hover={{
-                                  bg: "#FFF5F7",
+                                  bg: "#FFF0F4",
                                 }}
                               >
-                                <LuPencil
-                                  size={14}
-                                  style={{
-                                    marginRight: "5px",
-                                  }}
+                                <Icon
+                                  as={LuPencil}
+                                  mr={1}
+                                  boxSize={3.5}
                                 />
 
                                 Edit
                               </Button>
-
                             </HStack>
-                          </Table.Cell>
-                        </Table.Row>
+                          </Box>
+                        </Box>
                       )
-                    )}
-
-                </Table.Body>
-              </Table.Root>
-            </Box>
-          </Box>
-
-          {/* ==================================================
-              PAGINATION
-          ================================================== */}
-
-          <Flex
-            mt={2}
-            align="center"
-            justify="space-between"
-            direction={{
-              base: "column",
-              md: "row",
-            }}
-            gap={2}
-          >
-            {/* SHOWING */}
-
-            <Text
-              color="#60708C"
-              fontSize="11px"
-            >
-              Showing{" "}
-              {totalItems === 0
-                ? 0
-                : startIndex + 1}
-              -
-              {Math.min(
-                startIndex +
-                  paginatedTombTypes.length,
-                totalItems
-              )}{" "}
-              of {totalItems} tomb types
-            </Text>
-
-            {/* PAGINATION BUTTONS */}
-
-            <HStack gap={1}>
-
-              {/* FIRST PAGE */}
-
-              <Button
-                variant="outline"
-                size="xs"
-                h="28px"
-                minW="28px"
-                borderColor="#DCE2EA"
-                color="#60708C"
-                disabled={safePage === 1}
-                onClick={() => setPage(1)}
-              >
-                <LuChevronsLeft size={13} />
-              </Button>
-
-              {/* PREVIOUS PAGE */}
-
-              <Button
-                variant="outline"
-                size="xs"
-                h="28px"
-                minW="28px"
-                borderColor="#DCE2EA"
-                color="#60708C"
-                disabled={safePage === 1}
-                onClick={() =>
-                  setPage((prev) =>
-                    Math.max(1, prev - 1)
-                  )
-                }
-              >
-                <LuChevronLeft size={13} />
-              </Button>
-
-              {/* PAGE NUMBERS */}
-
-              {pageNumbers.map(
-                (pageNumber) => (
-                  <Button
-                    key={pageNumber}
-                    size="xs"
-                    h="28px"
-                    minW="28px"
-                    border="1px solid"
-                    borderColor={
-                      safePage === pageNumber
-                        ? PRIMARY_MAROON
-                        : "#DCE2EA"
-                    }
-                    bg={
-                      safePage === pageNumber
-                        ? PRIMARY_MAROON
-                        : "white"
-                    }
-                    color={
-                      safePage === pageNumber
-                        ? "white"
-                        : "#60708C"
-                    }
-                    onClick={() =>
-                      setPage(pageNumber)
-                    }
-                    _hover={{
-                      bg:
-                        safePage === pageNumber
-                          ? "#650A18"
-                          : "#FFF5F7",
-                    }}
-                  >
-                    {pageNumber}
-                  </Button>
-                )
-              )}
-
-              {/* NEXT PAGE */}
-
-              <Button
-                variant="outline"
-                size="xs"
-                h="28px"
-                minW="28px"
-                borderColor="#DCE2EA"
-                color="#60708C"
-                disabled={
-                  safePage === totalPages
-                }
-                onClick={() =>
-                  setPage((prev) =>
-                    Math.min(
-                      totalPages,
-                      prev + 1
                     )
-                  )
-                }
+                  )}
+                </Box>
+              </Box>
+            </Box>
+
+            {/* ==================================================
+                PAGINATION - Like Tomb Fees
+            ================================================== */}
+
+            <Flex
+              justify="space-between"
+              align="center"
+              mt={3}
+              gap={3}
+              direction={{
+                base: "column",
+                md: "row",
+              }}
+            >
+              {/* COUNT */}
+
+              <Text
+                fontSize="11px"
+                color={MUTED}
               >
-                <LuChevronRight size={13} />
-              </Button>
+                {filteredTombTypes.length === 0
+                  ? "Showing 0 tomb types"
+                  : `Showing ${
+                      startIndex + 1
+                    }–${Math.min(
+                      startIndex +
+                        paginatedTombTypes.length,
+                      filteredTombTypes.length
+                    )} of ${
+                      filteredTombTypes.length
+                    } tomb types`}
+              </Text>
 
-              {/* LAST PAGE */}
+              {/* PAGINATION */}
 
-              <Button
-                variant="outline"
-                size="xs"
-                h="28px"
-                minW="28px"
-                borderColor="#DCE2EA"
-                color="#60708C"
-                disabled={
-                  safePage === totalPages
-                }
-                onClick={() =>
-                  setPage(totalPages)
-                }
-              >
-                <LuChevronsRight size={13} />
-              </Button>
+              <HStack gap={1}>
+                {/* PREVIOUS */}
 
-            </HStack>
-          </Flex>
+                <Button
+                  size="xs"
+                  h="30px"
+                  variant="outline"
+                  borderColor={BORDER}
+                  color={MUTED}
+                  disabled={safePage === 1}
+                  onClick={() =>
+                    setCurrentPage(
+                      Math.max(
+                        1,
+                        safePage - 1
+                      )
+                    )
+                  }
+                >
+                  <Icon
+                    as={LuChevronLeft}
+                    boxSize={3.5}
+                  />
+
+                  Previous
+                </Button>
+
+                {/* PAGE NUMBERS */}
+
+                {renderPages().map(
+                  (page, index) =>
+                    page === "..." ? (
+                      <Text
+                        key={`dots-${index}`}
+                        px={1.5}
+                        fontSize="11px"
+                        color={MUTED}
+                      >
+                        ...
+                      </Text>
+                    ) : (
+                      <Button
+                        key={page}
+                        size="xs"
+                        h="30px"
+                        minW="30px"
+                        variant={
+                          page === safePage
+                            ? "solid"
+                            : "outline"
+                        }
+                        bg={
+                          page === safePage
+                            ? PRIMARY_MAROON
+                            : "white"
+                        }
+                        color={
+                          page === safePage
+                            ? "white"
+                            : "#344054"
+                        }
+                        borderColor={
+                          page === safePage
+                            ? PRIMARY_MAROON
+                            : BORDER
+                        }
+                        onClick={() =>
+                          setCurrentPage(page)
+                        }
+                        _hover={{
+                          bg:
+                            page === safePage
+                              ? "#650A18"
+                              : "#FFF0F4",
+                        }}
+                      >
+                        {page}
+                      </Button>
+                    )
+                )}
+
+                {/* NEXT */}
+
+                <Button
+                  size="xs"
+                  h="30px"
+                  variant="outline"
+                  borderColor="#FF5A7D"
+                  color={RED}
+                  disabled={
+                    safePage === totalPages
+                  }
+                  onClick={() =>
+                    setCurrentPage(
+                      Math.min(
+                        totalPages,
+                        safePage + 1
+                      )
+                    )
+                  }
+                >
+                  Next
+
+                  <Icon
+                    as={LuChevronRight}
+                    ml={1}
+                    boxSize={3.5}
+                  />
+                </Button>
+              </HStack>
+            </Flex>
+          </Box>
         </Box>
-      </Container>
+      </Box>
+
+      {/* ======================================================
+          FOOTER
+      ====================================================== */}
 
       <Footer />
     </Box>
