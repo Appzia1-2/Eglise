@@ -188,28 +188,28 @@ const InfoRow = ({ label, value }) => {
     <Flex
       align="center"
       gap={{
-        base: "10px",
-        md: "22px",
+        base: "8px",
+        md: "16px",
       }}
-      minH="25px"
+      minH="20px"
       width="100%"
     >
       <Text
-        fontSize="13px"
+        fontSize="11px"
         color={COLORS.text}
         fontWeight="500"
         flex={{
-          base: "0 0 115px",
-          sm: "0 0 150px",
-          md: "0 0 245px",
-          lg: "0 0 250px",
+          base: "0 0 100px",
+          sm: "0 0 120px",
+          md: "0 0 150px",
+          lg: "0 0 160px",
         }}
       >
         {label}
       </Text>
 
       <Text
-        fontSize="13px"
+        fontSize="11px"
         color={COLORS.text}
         fontWeight="500"
         textAlign="left"
@@ -546,15 +546,15 @@ const SectionCard = ({
       {/* HEADER */}
 
       <HStack
-        px="18px"
-        py="11px"
-        gap="10px"
+        px="14px"
+        py="8px"
+        gap="8px"
         borderBottom="1px solid #E8ECF1"
         position="relative"
         zIndex={2}
       >
         <Box
-          boxSize="29px"
+          boxSize="24px"
           borderRadius="full"
           bg="#FFF1F4"
           display="flex"
@@ -564,13 +564,13 @@ const SectionCard = ({
         >
           <Icon
             as={icon}
-            boxSize="15px"
+            boxSize="12px"
             color={PRIMARY_MAROON}
           />
         </Box>
 
         <Heading
-          fontSize="16px"
+          fontSize="14px"
           fontWeight="700"
           color={COLORS.text}
         >
@@ -581,8 +581,8 @@ const SectionCard = ({
       {/* CONTENT */}
 
       <Box
-        px="18px"
-        py="11px"
+        px="14px"
+        py="8px"
         position="relative"
         zIndex={2}
         maxW={address ? "72%" : "100%"}
@@ -831,27 +831,28 @@ const ViewPriestPage = () => {
 
       <Box
         bg="#FFFFFF"
-        minH="calc(100vh - 74px)"
+        h="calc(100vh - 74px)"
+        overflowY="auto"
       >
         <Container
           maxW="none"
           px={{
-            base: 4,
-            md: 6,
-            xl: "29px",
+            base: 3,
+            md: 5,
+            xl: "20px",
           }}
-          py="9px"
+          py="6px"
         >
           {/* =================================================
               BREADCRUMB
           ================================================= */}
 
           <HStack
-            gap="8px"
-            mb="3px"
-            fontSize="12px"
+            gap="6px"
+            mb="2px"
+            fontSize="11px"
             color={COLORS.secondary}
-            h="19px"
+            h="16px"
           >
             <Text>Masters</Text>
 
@@ -890,16 +891,16 @@ const ViewPriestPage = () => {
             <Box>
               <Text
                 color={PRIMARY_MAROON}
-                fontSize="12px"
+                fontSize="10px"
                 fontWeight="700"
-                mb="1px"
+                mb="0px"
               >
                 PRIEST PROFILE
               </Text>
 
               <Heading
-                fontSize="27px"
-                lineHeight="32px"
+                fontSize="20px"
+                lineHeight="24px"
                 fontWeight="700"
                 color={COLORS.text}
               >
@@ -907,27 +908,26 @@ const ViewPriestPage = () => {
               </Heading>
 
               <Text
-                fontSize="12px"
+                fontSize="11px"
                 color={COLORS.secondary}
-                mt="1px"
+                mt="0px"
               >
-                View complete priest information
-                and service details.
+                View complete priest information and service details.
               </Text>
             </Box>
 
             <HStack
-              gap="14px"
+              gap="10px"
               flexWrap="wrap"
             >
               <Button
-                h="40px"
-                px="17px"
+                h="34px"
+                px="12px"
                 variant="outline"
                 borderColor={PRIMARY_MAROON}
                 color={PRIMARY_MAROON}
-                borderRadius="6px"
-                fontSize="13px"
+                borderRadius="5px"
+                fontSize="11px"
                 fontWeight="600"
                 onClick={() =>
                   navigate("/priest-master")
@@ -938,20 +938,19 @@ const ViewPriestPage = () => {
               >
                 <Icon
                   as={LuArrowLeft}
-                  mr="8px"
-                  boxSize="15px"
+                  mr="6px"
+                  boxSize="13px"
                 />
-
-                Back to Priest Master
+                Back
               </Button>
 
               <Button
-                h="40px"
-                px="22px"
+                h="34px"
+                px="14px"
                 bg={PRIMARY_MAROON}
                 color="#FFFFFF"
-                borderRadius="6px"
-                fontSize="13px"
+                borderRadius="5px"
+                fontSize="11px"
                 fontWeight="600"
                 onClick={() =>
                   navigate(
@@ -964,11 +963,10 @@ const ViewPriestPage = () => {
               >
                 <Icon
                   as={LuPencil}
-                  mr="7px"
-                  boxSize="15px"
+                  mr="5px"
+                  boxSize="13px"
                 />
-
-                Edit Priest
+                Edit
               </Button>
             </HStack>
           </Flex>
@@ -979,15 +977,15 @@ const ViewPriestPage = () => {
 
           <Box
             border="1px solid #E0E5EC"
-            borderRadius="9px"
+            borderRadius="7px"
             bg="#FFFFFF"
-            mb="10px"
+            mb="6px"
             overflow="hidden"
           >
             <Flex
               minH={{
                 base: "auto",
-                lg: "128px",
+                lg: "100px",
               }}
               align="stretch"
               direction={{
@@ -1000,17 +998,17 @@ const ViewPriestPage = () => {
               <Box
                 flex="1.65"
                 px={{
-                  base: "18px",
-                  md: "24px",
+                  base: "14px",
+                  md: "16px",
                 }}
-                py="11px"
+                py="8px"
                 display="flex"
                 alignItems="center"
               >
                 <HStack
                   gap={{
-                    base: "17px",
-                    md: "21px",
+                    base: "14px",
+                    md: "16px",
                   }}
                   align="center"
                 >
@@ -1018,8 +1016,8 @@ const ViewPriestPage = () => {
                     <Image
                       src={priestImage}
                       boxSize={{
-                        base: "78px",
-                        md: "88px",
+                        base: "60px",
+                        md: "68px",
                       }}
                       borderRadius="full"
                       objectFit="cover"
@@ -1029,8 +1027,8 @@ const ViewPriestPage = () => {
                   ) : (
                     <Box
                       boxSize={{
-                        base: "78px",
-                        md: "88px",
+                        base: "60px",
+                        md: "68px",
                       }}
                       borderRadius="full"
                       bg="#FFF1F4"
@@ -1041,7 +1039,7 @@ const ViewPriestPage = () => {
                     >
                       <Icon
                         as={LuUserRound}
-                        boxSize="36px"
+                        boxSize="28px"
                         color={PRIMARY_MAROON}
                       />
                     </Box>
@@ -1050,31 +1048,31 @@ const ViewPriestPage = () => {
                   <Box>
                     <Heading
                       fontSize={{
-                        base: "21px",
-                        md: "25px",
+                        base: "16px",
+                        md: "18px",
                       }}
-                      lineHeight="29px"
+                      lineHeight="20px"
                       fontWeight="700"
                       color={COLORS.text}
-                      mb="6px"
+                      mb="3px"
                     >
                       {priest.name ||
                         "Unnamed Priest"}
                     </Heading>
 
                     <HStack
-                      gap="9px"
+                      gap="7px"
                       flexWrap="wrap"
+                      fontSize="10px"
                     >
-                      <HStack gap="6px">
+                      <HStack gap="4px">
                         <Icon
                           as={LuFileText}
-                          boxSize="14px"
+                          boxSize="12px"
                           color={PRIMARY_MAROON}
                         />
 
                         <Text
-                          fontSize="12px"
                           color={COLORS.secondary}
                         >
                           {priestId}
@@ -1085,15 +1083,14 @@ const ViewPriestPage = () => {
                         •
                       </Text>
 
-                      <HStack gap="6px">
+                      <HStack gap="4px">
                         <Icon
                           as={LuMapPin}
-                          boxSize="14px"
+                          boxSize="12px"
                           color={PRIMARY_MAROON}
                         />
 
                         <Text
-                          fontSize="12px"
                           color={COLORS.secondary}
                         >
                           {city && state
@@ -1106,16 +1103,16 @@ const ViewPriestPage = () => {
                     </HStack>
 
                     <HStack
-                      mt="7px"
-                      gap="7px"
+                      mt="4px"
+                      gap="5px"
                     >
                       <Badge
                         bg="#F2F4F7"
                         color="#52627A"
-                        borderRadius="5px"
-                        px="9px"
-                        py="3px"
-                        fontSize="10px"
+                        borderRadius="4px"
+                        px="7px"
+                        py="2px"
+                        fontSize="9px"
                         fontWeight="600"
                       >
                         {designation}
@@ -1132,14 +1129,14 @@ const ViewPriestPage = () => {
                             ? COLORS.green
                             : "#52627A"
                         }
-                        borderRadius="5px"
-                        px="9px"
-                        py="3px"
-                        fontSize="10px"
+                        borderRadius="4px"
+                        px="7px"
+                        py="2px"
+                        fontSize="9px"
                         fontWeight="600"
                       >
                         {active
-                          ? "Currently Serving"
+                          ? "Serving"
                           : "Previous"}
                       </Badge>
                     </HStack>
@@ -1162,17 +1159,18 @@ const ViewPriestPage = () => {
                 display="flex"
                 alignItems="center"
                 justifyContent="center"
-                px="18px"
+                px="12px"
+                py="6px"
               >
-                <VStack gap="5px">
+                <VStack gap="3px">
                   <Icon
                     as={LuUsersRound}
-                    boxSize="24px"
+                    boxSize="18px"
                     color={PRIMARY_MAROON}
                   />
 
                   <Text
-                    fontSize="12px"
+                    fontSize="10px"
                     fontWeight="600"
                     color={COLORS.text}
                     textAlign="center"
@@ -1197,17 +1195,18 @@ const ViewPriestPage = () => {
                 display="flex"
                 alignItems="center"
                 justifyContent="center"
-                px="18px"
+                px="12px"
+                py="6px"
               >
-                <VStack gap="5px">
+                <VStack gap="3px">
                   <Icon
                     as={LuPhone}
-                    boxSize="24px"
+                    boxSize="18px"
                     color={PRIMARY_MAROON}
                   />
 
                   <Text
-                    fontSize="12px"
+                    fontSize="10px"
                     fontWeight="600"
                     color={COLORS.text}
                     textAlign="center"
@@ -1233,17 +1232,18 @@ const ViewPriestPage = () => {
                 display="flex"
                 alignItems="center"
                 justifyContent="center"
-                px="18px"
+                px="12px"
+                py="6px"
               >
-                <VStack gap="5px">
+                <VStack gap="3px">
                   <Icon
                     as={LuCalendarDays}
-                    boxSize="24px"
+                    boxSize="18px"
                     color={PRIMARY_MAROON}
                   />
 
                   <Text
-                    fontSize="12px"
+                    fontSize="10px"
                     fontWeight="600"
                     color={COLORS.text}
                     textAlign="center"
@@ -1272,13 +1272,13 @@ const ViewPriestPage = () => {
           >
             <Tabs.List
               borderBottom="1px solid #E1E6ED"
-              mb="14px"
+              mb="8px"
             >
               <Tabs.Trigger
                 value="overview"
-                px="25px"
-                py="9px"
-                fontSize="13px"
+                px="16px"
+                py="6px"
+                fontSize="12px"
                 color={COLORS.secondary}
                 _selected={{
                   color: PRIMARY_MAROON,
@@ -1292,9 +1292,9 @@ const ViewPriestPage = () => {
 
               <Tabs.Trigger
                 value="service"
-                px="25px"
-                py="9px"
-                fontSize="13px"
+                px="16px"
+                py="6px"
+                fontSize="12px"
                 color={COLORS.secondary}
                 _selected={{
                   color: PRIMARY_MAROON,
@@ -1308,9 +1308,9 @@ const ViewPriestPage = () => {
 
               <Tabs.Trigger
                 value="activity"
-                px="25px"
-                py="9px"
-                fontSize="13px"
+                px="16px"
+                py="6px"
+                fontSize="12px"
                 color={COLORS.secondary}
                 _selected={{
                   color: PRIMARY_MAROON,
@@ -1333,18 +1333,18 @@ const ViewPriestPage = () => {
                   base: 1,
                   lg: 2,
                 }}
-                gap="15px"
+                gap="10px"
               >
                 {/* PERSONAL INFORMATION */}
 
                 <SectionCard
                   title="Personal Information"
                   icon={LuUserRound}
-                  minH="175px"
+                  minH="130px"
                 >
                   <VStack
                     align="stretch"
-                    gap="5px"
+                    gap="3px"
                   >
                     <InfoRow
                       label="Priest Name"
@@ -1375,104 +1375,106 @@ const ViewPriestPage = () => {
                   </VStack>
                 </SectionCard>
 
-               {/* ADDRESS */}
+                {/* ADDRESS */}
 
-<SectionCard
-  title="Address"
-  icon={LuMapPin}
-  minH="180px"
->
-  <Box
-    position="relative"
-    minH="135px"
-    overflow="hidden"
-  >
-    {/* ADDRESS DETAILS */}
-    <Box
-      position="relative"
-      zIndex={2}
-      width={{
-        base: "100%",
-        md: "58%",
-        lg: "58%",
-      }}
-    >
-      <VStack
-        align="stretch"
-        gap="5px"
-      >
-        <InfoRow
-          label="Address Line 1"
-          value={addressLine1}
-        />
+                <SectionCard
+                  title="Address"
+                  icon={LuMapPin}
+                  minH="130px"
+                >
+                  <Box
+                    position="relative"
+                    minH="110px"
+                    overflow="hidden"
+                  >
+                    {/* ADDRESS DETAILS */}
+                    <Box
+                      position="relative"
+                      zIndex={2}
+                      width={{
+                        base: "100%",
+                        md: "55%",
+                        lg: "60%",
+                      }}
+                      pr="12px"
+                    >
+                      <VStack
+                        align="stretch"
+                        gap="2px"
+                      >
+                        <InfoRow
+                          label="Address Line 1"
+                          value={addressLine1}
+                        />
 
-        <InfoRow
-          label="Address Line 2"
-          value={addressLine2 || "-"}
-        />
+                        <InfoRow
+                          label="Address Line 2"
+                          value={addressLine2 || "-"}
+                        />
 
-        <InfoRow
-          label="City"
-          value={city}
-        />
+                        <InfoRow
+                          label="City"
+                          value={city}
+                        />
 
-        <InfoRow
-          label="State & Postal Code"
-          value={
-            state && postalCode
-              ? `${state} — ${postalCode}`
-              : state || postalCode || "-"
-          }
-        />
+                        <InfoRow
+                          label="State & Postal Code"
+                          value={
+                            state && postalCode
+                              ? `${state} — ${postalCode}`
+                              : state || postalCode || "-"
+                          }
+                        />
 
-        <InfoRow
-          label="Country"
-          value={country}
-        />
-      </VStack>
-    </Box>
+                        <InfoRow
+                          label="Country"
+                          value={country}
+                        />
+                      </VStack>
+                    </Box>
 
-    {/* CHURCH IMAGE */}
-    <Box
-  position="absolute"
-  right="-145px"
-  bottom="-5px"
-  width={{
-    base: "0",
-    md: "52%",
-    lg: "55%",
-  }}
-  height="165px"
-  display={{
-    base: "none",
-    md: "flex",
-  }}
-  alignItems="flex-end"
-  justifyContent="center"
-  pointerEvents="none"
->
-  <Image
-    src={logoImage}
-    alt="Church illustration"
-    width="100%"
-    height="100%"
-    objectFit="contain"
-    objectPosition="center bottom"
-  />
-</Box>
-  </Box>
-</SectionCard>
+                    {/* CHURCH IMAGE */}
+                    <Box
+                      position="absolute"
+                      right="0"
+                      bottom="0"
+                      width={{
+                        base: "0",
+                        md: "45%",
+                        lg: "40%",
+                      }}
+                      height="110px"
+                      display={{
+                        base: "none",
+                        md: "flex",
+                      }}
+                      alignItems="flex-end"
+                      justifyContent="flex-end"
+                      pointerEvents="none"
+                      overflow="hidden"
+                    >
+                      <Image
+                        src={logoImage}
+                        alt="Church illustration"
+                        width="120%"
+                        height="140%"
+                        objectFit="contain"
+                        objectPosition="right bottom"
+                      />
+                    </Box>
+                  </Box>
+                </SectionCard>
 
                 {/* SERVICE INFORMATION */}
 
                 <SectionCard
                   title="Service Information"
                   icon={LuCalendarDays}
-                  minH="145px"
+                  minH="120px"
                 >
                   <VStack
                     align="stretch"
-                    gap="5px"
+                    gap="3px"
                   >
                     <InfoRow
                       label="Serving From"
@@ -1498,20 +1500,20 @@ const ViewPriestPage = () => {
                     <Flex
                       align="center"
                       gap={{
-                        base: "10px",
-                        md: "22px",
+                        base: "8px",
+                        md: "16px",
                       }}
-                      minH="25px"
+                      minH="20px"
                     >
                       <Text
-                        fontSize="13px"
+                        fontSize="11px"
                         fontWeight="500"
                         color={COLORS.text}
                         flex={{
-                          base: "0 0 115px",
-                          sm: "0 0 150px",
-                          md: "0 0 245px",
-                          lg: "0 0 250px",
+                          base: "0 0 100px",
+                          sm: "0 0 120px",
+                          md: "0 0 150px",
+                          lg: "0 0 160px",
                         }}
                       >
                         Status
@@ -1528,10 +1530,10 @@ const ViewPriestPage = () => {
                             ? COLORS.green
                             : "#52627A"
                         }
-                        borderRadius="5px"
-                        px="9px"
-                        py="3px"
-                        fontSize="10px"
+                        borderRadius="4px"
+                        px="6px"
+                        py="2px"
+                        fontSize="9px"
                       >
                         {active
                           ? "Active"
@@ -1546,11 +1548,11 @@ const ViewPriestPage = () => {
                 <SectionCard
                   title="Record Information"
                   icon={LuFileText}
-                  minH="145px"
+                  minH="120px"
                 >
                   <VStack
                     align="stretch"
-                    gap="5px"
+                    gap="3px"
                   >
                     <InfoRow
                       label="Created"
@@ -1593,15 +1595,15 @@ const ViewPriestPage = () => {
               >
                 <Box
                   border="1px solid #E0E5EC"
-                  borderRadius="7px"
-                  p="14px"
+                  borderRadius="6px"
+                  p="10px"
                 >
                   <HStack
                     align="start"
-                    gap="14px"
+                    gap="10px"
                   >
                     <Box
-                      boxSize="40px"
+                      boxSize="32px"
                       borderRadius="full"
                       bg="#FFF1F4"
                       display="flex"
@@ -1611,14 +1613,14 @@ const ViewPriestPage = () => {
                     >
                       <Icon
                         as={LuCalendarDays}
-                        boxSize="18px"
+                        boxSize="14px"
                         color={PRIMARY_MAROON}
                       />
                     </Box>
 
                     <Box>
                       <Text
-                        fontSize="14px"
+                        fontSize="12px"
                         fontWeight="600"
                         color={COLORS.text}
                       >
@@ -1626,11 +1628,11 @@ const ViewPriestPage = () => {
                       </Text>
 
                       <Text
-                        fontSize="13px"
+                        fontSize="11px"
                         color={
                           COLORS.secondary
                         }
-                        mt="3px"
+                        mt="2px"
                       >
                         {formatDate(dateFrom)}
                         {" - "}
@@ -1640,7 +1642,7 @@ const ViewPriestPage = () => {
                       </Text>
 
                       <Badge
-                        mt="7px"
+                        mt="4px"
                         bg={
                           active
                             ? "#EAF7ED"
@@ -1651,13 +1653,13 @@ const ViewPriestPage = () => {
                             ? COLORS.green
                             : "#52627A"
                         }
-                        borderRadius="5px"
-                        px="9px"
-                        py="3px"
-                        fontSize="10px"
+                        borderRadius="4px"
+                        px="6px"
+                        py="2px"
+                        fontSize="9px"
                       >
                         {active
-                          ? "Currently Serving"
+                          ? "Serving"
                           : "Previous"}
                       </Badge>
                     </Box>
@@ -1677,7 +1679,7 @@ const ViewPriestPage = () => {
               >
                 <VStack
                   align="stretch"
-                  gap="8px"
+                  gap="3px"
                 >
                   <InfoRow
                     label="Record Created"

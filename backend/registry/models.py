@@ -1787,9 +1787,9 @@ class DeathRegister(models.Model):
         on_delete=models.CASCADE,
         related_name="death_registers"
     )
-
+ 
     reg_no = models.CharField(max_length=50, blank=True, null=True)
-
+ 
     member = models.OneToOneField(
         Member,
         on_delete=models.PROTECT,
@@ -1799,33 +1799,38 @@ class DeathRegister(models.Model):
     died_on = models.DateField()
     funeral_on = models.DateField()
     
-    tomb_type = models.ForeignKey(
-        TombType,
+    # Reference TombFee instead of storing raw charge
+    tomb_fee = models.ForeignKey(
+        TombFee,
         on_delete=models.SET_NULL,
         null=True,
-        blank=True
-    )
-    
-    tomb_charge = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2,
-        null=True, 
-        blank=True
+        blank=True,
+        related_name="death_records"
     )
     
     tomb_idn = models.CharField(max_length=100, blank=True)
     reason_of_death = models.TextField()
     remarks = models.TextField(blank=True)
-
+ 
     created_at = models.DateTimeField(auto_now_add=True)
-
+ 
     class Meta:
         unique_together = ("church", "reg_no")
         ordering = ["-created_at"]
-
+ 
     def __str__(self):
         return f"{self.member.name} ({self.reg_no or 'No Reg No'})"
-
+ 
+    @property
+    def tomb_charge(self):
+        """Get the fee amount from the selected TombFee"""
+        return self.tomb_fee.tomb_fees if self.tomb_fee else None
+    
+    @property
+    def tomb_type(self):
+        """Get the tomb type from the selected TombFee"""
+        return self.tomb_fee.tomb_type if self.tomb_fee else None
+ 
     def save(self, *args, **kwargs):
         """
         Override save to handle date conversions and register number generation
@@ -1839,13 +1844,11 @@ class DeathRegister(models.Model):
         
         # Call the parent save method
         super().save(*args, **kwargs)
-
+ 
     def _clean_dates(self):
         """
         Convert string dates to proper date objects
         """
-        from django.utils.dateparse import parse_date
-        
         # Clean died_on
         if self.died_on:
             if isinstance(self.died_on, str):
@@ -1871,7 +1874,7 @@ class DeathRegister(models.Model):
             elif not isinstance(self.funeral_on, date):
                 logger.warning(f"funeral_on is not a date object: {type(self.funeral_on)}")
                 self.funeral_on = None
-
+ 
     def _generate_register_number(self):
         """
         Safely generate register number with error handling
@@ -1887,11 +1890,9 @@ class DeathRegister(models.Model):
             
         except Exception as e:
             logger.error(f"Failed to generate register number: {e}")
-            import traceback
             logger.error(traceback.format_exc())
             
             # Fallback: Generate a temporary number
-            import time
             timestamp = int(time.time())
             self.reg_no = f"TEMP-DEATH-{timestamp}"
             logger.warning(f"Using temporary register number: {self.reg_no}")
@@ -1909,6 +1910,7 @@ class DeathRegister(models.Model):
             today = date.today()
             return (today - self.funeral_on).days
         return None
+ 
 
 class RegisterSetting(models.Model):
 

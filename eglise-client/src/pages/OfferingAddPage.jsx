@@ -4,13 +4,13 @@ import React, { useState, useEffect } from "react";
 
 import {
   Box,
-  Container,
-  Heading,
-  Text,
-  Input,
   Button,
+  Flex,
+  Grid,
+  Heading,
   HStack,
-  SimpleGrid,
+  Input,
+  Text,
 } from "@chakra-ui/react";
 
 import { useNavigate } from "react-router-dom";
@@ -25,6 +25,10 @@ import {
 } from "../api/registryServices";
 
 const PRIMARY_MAROON = "var(--primary-maroon)";
+const RED = "#D7193F";
+const DARK = "#182338";
+const MUTED = "#60708C";
+const BORDER = "#DCE2EA";
 
 const OfferingAddPage = () => {
   const navigate = useNavigate();
@@ -120,12 +124,18 @@ const OfferingAddPage = () => {
       setLoading(true);
       setError("");
 
+      console.log("Creating offering with payload:", {
+        event: parseInt(form.event),
+        member: parseInt(form.member),
+        amount: parseFloat(form.amount),
+        narration: form.narration.trim(),
+      });
+
       await createOffering({
         event: parseInt(form.event),
         member: parseInt(form.member),
         amount: parseFloat(form.amount),
         narration: form.narration.trim(),
-        // is_cancelled defaults to false on backend
       });
 
       navigate("/offerings", {
@@ -169,6 +179,68 @@ const OfferingAddPage = () => {
   };
 
   // ==========================================================
+  // CANCEL
+  // ==========================================================
+
+  const handleCancel = () => {
+    navigate("/offerings");
+  };
+
+  // ==========================================================
+  // INPUT STYLE
+  // ==========================================================
+
+  const inputStyle = {
+    h: "42px",
+    fontSize: "13px",
+    borderColor: BORDER,
+    borderRadius: "7px",
+    color: DARK,
+    bg: "white",
+
+    _placeholder: {
+      color: "#98A2B3",
+    },
+
+    _hover: {
+      borderColor: "#BFC7D4",
+    },
+
+    _focus: {
+      borderColor: PRIMARY_MAROON,
+      boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
+    },
+  };
+
+  // ==========================================================
+  // LABEL
+  // ==========================================================
+
+  const FieldLabel = ({
+    children,
+    required = true,
+  }) => (
+    <Text
+      fontSize="12px"
+      fontWeight="600"
+      color={DARK}
+      mb="8px"
+    >
+      {children}
+
+      {required && (
+        <Text
+          as="span"
+          color={RED}
+          ml="2px"
+        >
+          *
+        </Text>
+      )}
+    </Text>
+  );
+
+  // ==========================================================
   // RENDER
   // ==========================================================
 
@@ -181,11 +253,11 @@ const OfferingAddPage = () => {
         flexDirection="column"
       >
         <Navbar />
-        <Container maxW="container.xl" py={4} flex="1">
-          <Text color="#60708C" fontSize="sm">
+        <Box flex="1" w="100%" px={4} py={4}>
+          <Text color={MUTED} fontSize="12px">
             Loading options...
           </Text>
-        </Container>
+        </Box>
         <Footer />
       </Box>
     );
@@ -194,140 +266,156 @@ const OfferingAddPage = () => {
   return (
     <Box
       minH="100vh"
-      height="100vh"
-      bg="white"
+      bg="#FFFFFF"
       display="flex"
       flexDirection="column"
-      overflow="hidden"
     >
+      {/* ======================================================
+          NAVBAR
+      ====================================================== */}
+
       <Navbar />
 
-      <Box
-        flex="1"
-        minH="0"
-        overflow="hidden"
-      >
-        <Container
-          maxW="container.xl"
-          height="100%"
-          py={2}
-          overflow="auto"
+      {/* ======================================================
+          MAIN CONTENT
+      ====================================================== */}
+
+      <Box flex="1" w="100%">
+        <Box
+          w="100%"
+          px={{
+            base: 3,
+            md: 5,
+          }}
+          py={{
+            base: 3,
+            md: 5,
+          }}
         >
           {/* ==================================================
               BREADCRUMB
           ================================================== */}
 
           <HStack
-            gap={3}
+            gap={2}
             mb={3}
-            fontSize="sm"
-            color="#52627A"
+            color={MUTED}
+            fontSize="12px"
           >
-            <Text>Offerings</Text>
+            <Text>
+              Offerings
+            </Text>
+
             <Text>/</Text>
-            <Text>Member Offerings</Text>
+
+            <Text>
+              Member Offerings
+            </Text>
+
             <Text>/</Text>
-            <Text>Add Offering</Text>
+
+            <Text color={DARK}>
+              Add Offering
+            </Text>
           </HStack>
 
           {/* ==================================================
               PAGE HEADER
           ================================================== */}
 
-          <Box mb={3}>
-            <Text
-              fontSize="sm"
-              fontWeight="700"
-              color="#D7193F"
-              mb={1}
-            >
-              OFFERING MASTER
-            </Text>
+          <Flex
+            justify="space-between"
+            align={{
+              base: "flex-start",
+              md: "center",
+            }}
+            gap={3}
+            mb={4}
+            direction={{
+              base: "column",
+              md: "row",
+            }}
+          >
+            <Box>
+              <Text
+                fontSize="11px"
+                fontWeight="700"
+                color={RED}
+                mb={1}
+              >
+                OFFERING MASTER
+              </Text>
 
-            <Heading
-              fontSize={{
-                base: "24px",
-                md: "28px",
-              }}
-              lineHeight="1.2"
-              color="#182338"
-              mb={1}
-            >
-              Add Offering
-            </Heading>
+              <Heading
+                color={DARK}
+                fontSize={{
+                  base: "24px",
+                  md: "28px",
+                }}
+                lineHeight="1.2"
+                mb={1}
+              >
+                Add Offering
+              </Heading>
 
-            <Text
-              color="#60708C"
-              fontSize="sm"
-            >
-              Create a new member offering record.
-            </Text>
-          </Box>
+              <Text
+                color={MUTED}
+                fontSize="12px"
+              >
+                Create a new member offering record.
+              </Text>
+            </Box>
+          </Flex>
 
           {/* ==================================================
-              MAIN CARD
+              FORM CARD
           ================================================== */}
 
           <Box
             border="1px solid"
-            borderColor="#DCE2EA"
-            borderRadius="10px"
-            px={{
+            borderColor={BORDER}
+            borderRadius="9px"
+            bg="white"
+            p={{
               base: 4,
               md: 6,
             }}
-            py={{
-              base: 4,
-              md: 5,
-            }}
+            width="100%"
+            boxShadow="0 1px 3px rgba(16, 24, 40, 0.04)"
           >
             {/* ==================================================
-                ERROR
+                CARD HEADER
             ================================================== */}
 
-            {error && (
-              <Box
-                mb={4}
-                p={3}
-                borderRadius="8px"
-                bg="#FFF5F5"
-                border="1px solid"
-                borderColor="#FED7D7"
+            <Box mb={5}>
+              <Text
+                fontSize="13px"
+                fontWeight="700"
+                color={RED}
+                pb="10px"
+                borderBottom="2px solid"
+                borderColor={RED}
+                display="inline-block"
               >
-                <Text
-                  color="red.600"
-                  fontSize="sm"
-                  fontWeight="500"
-                >
-                  {error}
-                </Text>
-              </Box>
-            )}
+                Offering Details
+              </Text>
+            </Box>
+
+            {/* ==================================================
+                SECTION TITLE
+            ================================================== */}
+
+         
 
             <form onSubmit={handleSubmit}>
-              {/* ==================================================
-                  SECTION TITLE
-              ================================================== */}
-
-              <Heading
-                fontSize={{
-                  base: "18px",
-                  md: "20px",
-                }}
-                color="#182338"
-                mb={4}
-              >
-                1. Offering Information
-              </Heading>
-
               {/* ==================================================
                   EVENT + MEMBER
               ================================================== */}
 
-              <SimpleGrid
-                columns={{
-                  base: 1,
-                  md: 2,
+              <Grid
+                templateColumns={{
+                  base: "1fr",
+                  md: "1fr 1fr",
                 }}
                 gap={{
                   base: 4,
@@ -338,20 +426,9 @@ const OfferingAddPage = () => {
                 {/* EVENT */}
 
                 <Box>
-                  <Text
-                    fontSize="sm"
-                    fontWeight="600"
-                    color="#182338"
-                    mb={1.5}
-                  >
-                    Event{" "}
-                    <Text
-                      as="span"
-                      color="#D7193F"
-                    >
-                      *
-                    </Text>
-                  </Text>
+                  <FieldLabel>
+                    Event
+                  </FieldLabel>
 
                   <select
                     name="event"
@@ -359,12 +436,12 @@ const OfferingAddPage = () => {
                     onChange={handleChange}
                     style={{
                       width: "100%",
-                      height: "44px",
-                      fontSize: "14px",
-                      border: "1px solid #DCE2EA",
+                      height: "42px",
+                      fontSize: "13px",
+                      border: `1px solid ${BORDER}`,
                       borderRadius: "7px",
                       padding: "0 14px",
-                      color: "#344054",
+                      color: DARK,
                       backgroundColor: "white",
                       outline: "none",
                     }}
@@ -373,7 +450,7 @@ const OfferingAddPage = () => {
                       e.target.style.boxShadow = `0 0 0 1px ${PRIMARY_MAROON}`;
                     }}
                     onBlur={(e) => {
-                      e.target.style.borderColor = "#DCE2EA";
+                      e.target.style.borderColor = BORDER;
                       e.target.style.boxShadow = "none";
                     }}
                   >
@@ -393,20 +470,9 @@ const OfferingAddPage = () => {
                 {/* MEMBER */}
 
                 <Box>
-                  <Text
-                    fontSize="sm"
-                    fontWeight="600"
-                    color="#182338"
-                    mb={1.5}
-                  >
-                    Member{" "}
-                    <Text
-                      as="span"
-                      color="#D7193F"
-                    >
-                      *
-                    </Text>
-                  </Text>
+                  <FieldLabel>
+                    Member
+                  </FieldLabel>
 
                   <select
                     name="member"
@@ -414,12 +480,12 @@ const OfferingAddPage = () => {
                     onChange={handleChange}
                     style={{
                       width: "100%",
-                      height: "44px",
-                      fontSize: "14px",
-                      border: "1px solid #DCE2EA",
+                      height: "42px",
+                      fontSize: "13px",
+                      border: `1px solid ${BORDER}`,
                       borderRadius: "7px",
                       padding: "0 14px",
-                      color: "#344054",
+                      color: DARK,
                       backgroundColor: "white",
                       outline: "none",
                     }}
@@ -428,7 +494,7 @@ const OfferingAddPage = () => {
                       e.target.style.boxShadow = `0 0 0 1px ${PRIMARY_MAROON}`;
                     }}
                     onBlur={(e) => {
-                      e.target.style.borderColor = "#DCE2EA";
+                      e.target.style.borderColor = BORDER;
                       e.target.style.boxShadow = "none";
                     }}
                   >
@@ -444,16 +510,16 @@ const OfferingAddPage = () => {
                     )}
                   </select>
                 </Box>
-              </SimpleGrid>
+              </Grid>
 
               {/* ==================================================
                   AMOUNT + NARRATION
               ================================================== */}
 
-              <SimpleGrid
-                columns={{
-                  base: 1,
-                  md: 2,
+              <Grid
+                templateColumns={{
+                  base: "1fr",
+                  md: "1fr 1fr",
                 }}
                 gap={{
                   base: 4,
@@ -464,20 +530,9 @@ const OfferingAddPage = () => {
                 {/* AMOUNT */}
 
                 <Box>
-                  <Text
-                    fontSize="sm"
-                    fontWeight="600"
-                    color="#182338"
-                    mb={1.5}
-                  >
-                    Amount{" "}
-                    <Text
-                      as="span"
-                      color="#D7193F"
-                    >
-                      *
-                    </Text>
-                  </Text>
+                  <FieldLabel>
+                    Amount
+                  </FieldLabel>
 
                   <Input
                     name="amount"
@@ -487,59 +542,49 @@ const OfferingAddPage = () => {
                     value={form.amount}
                     onChange={handleChange}
                     placeholder="Enter amount"
-                    h="44px"
-                    fontSize="14px"
-                    borderColor="#DCE2EA"
-                    borderRadius="7px"
-                    color="#344054"
-                    _placeholder={{
-                      color: "#7183A3",
-                    }}
-                    _hover={{
-                      borderColor: "#B9C3D1",
-                    }}
-                    _focus={{
-                      borderColor: PRIMARY_MAROON,
-                      boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
-                    }}
+                    {...inputStyle}
                   />
                 </Box>
 
                 {/* NARRATION */}
 
                 <Box>
-                  <Text
-                    fontSize="sm"
-                    fontWeight="600"
-                    color="#182338"
-                    mb={1.5}
-                  >
+                  <FieldLabel required={false}>
                     Narration
-                  </Text>
+                  </FieldLabel>
 
                   <Input
                     name="narration"
                     value={form.narration}
                     onChange={handleChange}
                     placeholder="Enter narration (optional)"
-                    h="44px"
-                    fontSize="14px"
-                    borderColor="#DCE2EA"
-                    borderRadius="7px"
-                    color="#344054"
-                    _placeholder={{
-                      color: "#7183A3",
-                    }}
-                    _hover={{
-                      borderColor: "#B9C3D1",
-                    }}
-                    _focus={{
-                      borderColor: PRIMARY_MAROON,
-                      boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
-                    }}
+                    {...inputStyle}
                   />
                 </Box>
-              </SimpleGrid>
+              </Grid>
+
+              {/* ==================================================
+                  ERROR
+              ================================================== */}
+
+              {error && (
+                <Box
+                  mb={4}
+                  px={4}
+                  py={2.5}
+                  border="1px solid #FED7D7"
+                  bg="#FFF5F5"
+                  borderRadius="7px"
+                >
+                  <Text
+                    color="#C53030"
+                    fontSize="12px"
+                    fontWeight="500"
+                  >
+                    {error}
+                  </Text>
+                </Box>
+              )}
 
               {/* ==================================================
                   DIVIDER
@@ -547,72 +592,65 @@ const OfferingAddPage = () => {
 
               <Box
                 borderTop="1px solid"
-                borderColor="#DCE2EA"
-                mt={4}
-                pt={4}
+                borderColor="#E6EAF0"
+                mb={4}
+              />
+
+              {/* ==================================================
+                  BUTTONS
+              ================================================== */}
+
+              <Flex
+                justify="flex-end"
+                align="center"
+                gap={3}
               >
-                {/* ==================================================
-                    BUTTONS
-                ================================================== */}
-
-                <HStack
-                  justify="flex-end"
-                  gap={3}
+                <Button
+                  type="button"
+                  variant="outline"
+                  borderColor={RED}
+                  color={RED}
+                  h="38px"
+                  px={6}
+                  borderRadius="7px"
+                  fontSize="12px"
+                  fontWeight="600"
+                  onClick={handleCancel}
+                  disabled={loading}
+                  _hover={{
+                    bg: "#FFF5F7",
+                  }}
                 >
-                  {/* CANCEL */}
+                  Cancel
+                </Button>
 
-                  <Button
-                    type="button"
-                    variant="outline"
-                    h="40px"
-                    minW={{
-                      base: "100px",
-                      md: "140px",
-                    }}
-                    borderColor="#D7193F"
-                    color="#D7193F"
-                    borderRadius="7px"
-                    fontWeight="600"
-                    fontSize="14px"
-                    onClick={() =>
-                      navigate("/offerings")
-                    }
-                    disabled={loading}
-                    _hover={{
-                      bg: "#FFF5F7",
-                    }}
-                  >
-                    Cancel
-                  </Button>
-
-                  {/* SAVE */}
-
-                  <Button
-                    type="submit"
-                    h="40px"
-                    minW={{
-                      base: "100px",
-                      md: "140px",
-                    }}
-                    bg={PRIMARY_MAROON}
-                    color="white"
-                    borderRadius="7px"
-                    fontWeight="600"
-                    fontSize="14px"
-                    isLoading={loading}
-                    loadingText="Saving..."
-                    _hover={{
-                      bg: "#650A18",
-                    }}
-                  >
-                    Save
-                  </Button>
-                </HStack>
-              </Box>
+                <Button
+                  type="submit"
+                  h="38px"
+                  px={7}
+                  bg={PRIMARY_MAROON}
+                  color="white"
+                  borderRadius="7px"
+                  fontSize="12px"
+                  fontWeight="600"
+                  isLoading={loading}
+                  loadingText="Saving..."
+                  disabled={loading}
+                  _hover={{
+                    bg: "#650A18",
+                  }}
+                >
+                  Save Offering
+                </Button>
+              </Flex>
             </form>
           </Box>
-        </Container>
+        </Box>
       </Box>
+
+      {/* ======================================================
+          FOOTER
+      ====================================================== */}
 
       <Footer />
     </Box>

@@ -3,19 +3,13 @@ import React, { useState } from "react";
 import {
   Box,
   Button,
-  Container,
   Flex,
+  Grid,
   Heading,
   HStack,
   Input,
-  SimpleGrid,
   Text,
 } from "@chakra-ui/react";
-
-import {
-  LuArrowLeft,
-  LuSave,
-} from "react-icons/lu";
 
 import { useNavigate } from "react-router-dom";
 
@@ -25,6 +19,10 @@ import Footer from "../components/Footer";
 import { createWard } from "../api/registryServices";
 
 const PRIMARY_MAROON = "var(--primary-maroon)";
+const RED = "#D7193F";
+const DARK = "#182338";
+const MUTED = "#60708C";
+const BORDER = "#DCE2EA";
 
 const WardAddPage = () => {
   const navigate = useNavigate();
@@ -42,20 +40,22 @@ const WardAddPage = () => {
   // HANDLE CHANGE
   // ==========================================================
 
-  const handleChange = (field, value) => {
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+
     setFormData((prev) => ({
       ...prev,
-      [field]: value,
+      [name]: value,
     }));
 
     setError("");
   };
 
   // ==========================================================
-  // SAVE
+  // SUBMIT
   // ==========================================================
 
-  const handleSave = async () => {
+  const handleSubmit = async () => {
     const wardName = formData.ward_name.trim();
     const wardNumber = String(formData.ward_number).trim();
     const place = formData.place.trim();
@@ -90,6 +90,12 @@ const WardAddPage = () => {
       setSaving(true);
       setError("");
 
+      console.log("Creating ward with payload:", {
+        ward_name: wardName,
+        ward_number: number,
+        place: place,
+      });
+
       await createWard({
         ward_name: wardName,
         ward_number: number,
@@ -116,13 +122,75 @@ const WardAddPage = () => {
   };
 
   // ==========================================================
+  // CANCEL
+  // ==========================================================
+
+  const handleCancel = () => {
+    navigate("/ward");
+  };
+
+  // ==========================================================
+  // INPUT STYLE
+  // ==========================================================
+
+  const inputStyle = {
+    h: "42px",
+    fontSize: "13px",
+    borderColor: BORDER,
+    borderRadius: "7px",
+    color: DARK,
+    bg: "white",
+
+    _placeholder: {
+      color: "#98A2B3",
+    },
+
+    _hover: {
+      borderColor: "#BFC7D4",
+    },
+
+    _focus: {
+      borderColor: PRIMARY_MAROON,
+      boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
+    },
+  };
+
+  // ==========================================================
+  // LABEL
+  // ==========================================================
+
+  const FieldLabel = ({
+    children,
+    required = true,
+  }) => (
+    <Text
+      fontSize="12px"
+      fontWeight="600"
+      color={DARK}
+      mb="8px"
+    >
+      {children}
+
+      {required && (
+        <Text
+          as="span"
+          color={RED}
+          ml="2px"
+        >
+          *
+        </Text>
+      )}
+    </Text>
+  );
+
+  // ==========================================================
   // RENDER
   // ==========================================================
 
   return (
     <Box
       minH="100vh"
-      bg="white"
+      bg="#FFFFFF"
       display="flex"
       flexDirection="column"
     >
@@ -133,279 +201,213 @@ const WardAddPage = () => {
       <Navbar />
 
       {/* ======================================================
-          MAIN
+          MAIN CONTENT
       ====================================================== */}
 
-      <Container
-        maxW="container.xl"
-        px={{ base: 4, md: 6 }}
-        py={{ base: 4, md: 5 }}
-        flex="1"
-      >
-        {/* ==================================================
-            BREADCRUMB
-        ================================================== */}
-
-        <HStack
-          gap={2}
-          mb={5}
-          fontSize="sm"
-          color="#60708C"
-          flexWrap="wrap"
-        >
-          <Text>Masters</Text>
-
-          <Text>/</Text>
-
-          <Text>Ward Master</Text>
-
-          <Text>/</Text>
-
-          <Text color="#344054">
-            Add Ward
-          </Text>
-        </HStack>
-
-        {/* ==================================================
-            PAGE HEADER
-        ================================================== */}
-
-        <Box mb={5}>
-          <Text
-            fontSize="13px"
-            fontWeight="700"
-            color="#D7193F"
-            mb={1}
-          >
-            WARD MASTER
-          </Text>
-
-          <Heading
-            color="#182338"
-            fontSize={{
-              base: "28px",
-              md: "34px",
-            }}
-            lineHeight="1.2"
-            mb={1}
-          >
-            Add Ward
-          </Heading>
-
-          <Text
-            color="#60708C"
-            fontSize="14px"
-          >
-            Create a ward record.
-          </Text>
-        </Box>
-
-        {/* ==================================================
-            FORM CARD
-        ================================================== */}
-
+      <Box flex="1" w="100%">
         <Box
-          border="1px solid #DCE2EA"
-          borderRadius="10px"
-          overflow="hidden"
-          bg="white"
+          w="100%"
+          px={{
+            base: 3,
+            md: 5,
+          }}
+          py={{
+            base: 3,
+            md: 5,
+          }}
         >
-          {/* =================================================
-              CARD HEADER
-          ================================================= */}
+          {/* ==================================================
+              BREADCRUMB
+          ================================================== */}
 
-          <Box
-            px={{ base: 4, md: 6 }}
-            py={5}
-            borderBottom="1px solid #E6EAF0"
+          <HStack
+            gap={2}
+            mb={3}
+            color={MUTED}
+            fontSize="12px"
           >
-            <Heading
-              fontSize={{
-                base: "18px",
-                md: "20px",
-              }}
-              color="#182338"
-            >
-              1. Ward Information
-            </Heading>
-          </Box>
+            <Text>
+              Masters
+            </Text>
 
-          {/* =================================================
-              FORM BODY
-          ================================================= */}
+            <Text>/</Text>
+
+            <Text>
+              Ward Master
+            </Text>
+
+            <Text>/</Text>
+
+            <Text color={DARK}>
+              Add Ward
+            </Text>
+          </HStack>
+
+          {/* ==================================================
+              PAGE HEADER
+          ================================================== */}
+
+          <Flex
+            justify="space-between"
+            align={{
+              base: "flex-start",
+              md: "center",
+            }}
+            gap={3}
+            mb={4}
+            direction={{
+              base: "column",
+              md: "row",
+            }}
+          >
+            <Box>
+              <Text
+                fontSize="11px"
+                fontWeight="700"
+                color={RED}
+                mb={1}
+              >
+                WARD MASTER
+              </Text>
+
+              <Heading
+                color={DARK}
+                fontSize={{
+                  base: "24px",
+                  md: "28px",
+                }}
+                lineHeight="1.2"
+                mb={1}
+              >
+                Add Ward
+              </Heading>
+
+              <Text
+                color={MUTED}
+                fontSize="12px"
+              >
+                Create a ward record.
+              </Text>
+            </Box>
+          </Flex>
+
+          {/* ==================================================
+              FORM CARD
+          ================================================== */}
 
           <Box
+            border="1px solid"
+            borderColor={BORDER}
+            borderRadius="9px"
+            bg="white"
             p={{
               base: 4,
               md: 6,
             }}
+            width="100%"
+            boxShadow="0 1px 3px rgba(16, 24, 40, 0.04)"
           >
-            <SimpleGrid
-              columns={{
-                base: 1,
-                md: 3,
+            {/* ==================================================
+                CARD HEADER
+            ================================================== */}
+
+            <Box mb={5}>
+              <Text
+                fontSize="13px"
+                fontWeight="700"
+                color={RED}
+                pb="10px"
+                borderBottom="2px solid"
+                borderColor={RED}
+                display="inline-block"
+              >
+                Ward Details
+              </Text>
+            </Box>
+
+            {/* ==================================================
+                SECTION TITLE
+            ================================================== */}
+
+
+            {/* ==================================================
+                WARD NAME + WARD NUMBER + PLACE
+            ================================================== */}
+
+            <Grid
+              templateColumns={{
+                base: "1fr",
+                md: "1fr 1fr 1fr",
               }}
               gap={{
-                base: 5,
-                md: 6,
+                base: 4,
+                md: 5,
               }}
+              mb={4}
             >
-              {/* =================================================
-                  WARD NAME
-              ================================================= */}
+              {/* WARD NAME */}
 
               <Box>
-                <Text
-                  fontSize="13px"
-                  fontWeight="600"
-                  color="#182338"
-                  mb={2}
-                >
-                  Ward Name{" "}
-                  <Text
-                    as="span"
-                    color="#D7193F"
-                  >
-                    *
-                  </Text>
-                </Text>
+                <FieldLabel>
+                  Ward Name
+                </FieldLabel>
 
                 <Input
+                  name="ward_name"
                   value={formData.ward_name}
-                  onChange={(e) =>
-                    handleChange(
-                      "ward_name",
-                      e.target.value
-                    )
-                  }
+                  onChange={handleChange}
                   placeholder="Enter ward name"
-                  h="42px"
-                  fontSize="13px"
-                  borderColor="#DCE2EA"
-                  borderRadius="6px"
-                  color="#182338"
-                  _placeholder={{
-                    color: "#8B98AB",
-                  }}
-                  _hover={{
-                    borderColor: "#B8C2D0",
-                  }}
-                  _focus={{
-                    borderColor: PRIMARY_MAROON,
-                    boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
-                  }}
+                  {...inputStyle}
                 />
               </Box>
 
-              {/* =================================================
-                  WARD NUMBER
-              ================================================= */}
+              {/* WARD NUMBER */}
 
               <Box>
-                <Text
-                  fontSize="13px"
-                  fontWeight="600"
-                  color="#182338"
-                  mb={2}
-                >
-                  Ward Number{" "}
-                  <Text
-                    as="span"
-                    color="#D7193F"
-                  >
-                    *
-                  </Text>
-                </Text>
+                <FieldLabel>
+                  Ward Number
+                </FieldLabel>
 
                 <Input
+                  name="ward_number"
                   type="number"
                   min="1"
                   value={formData.ward_number}
-                  onChange={(e) =>
-                    handleChange(
-                      "ward_number",
-                      e.target.value
-                    )
-                  }
+                  onChange={handleChange}
                   placeholder="Enter ward number"
-                  h="42px"
-                  fontSize="13px"
-                  borderColor="#DCE2EA"
-                  borderRadius="6px"
-                  color="#182338"
-                  _placeholder={{
-                    color: "#8B98AB",
-                  }}
-                  _hover={{
-                    borderColor: "#B8C2D0",
-                  }}
-                  _focus={{
-                    borderColor: PRIMARY_MAROON,
-                    boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
-                  }}
+                  {...inputStyle}
                 />
               </Box>
 
-              {/* =================================================
-                  PLACE
-              ================================================= */}
+              {/* PLACE */}
 
               <Box>
-                <Text
-                  fontSize="13px"
-                  fontWeight="600"
-                  color="#182338"
-                  mb={2}
-                >
-                  Place{" "}
-                  <Text
-                    as="span"
-                    color="#D7193F"
-                  >
-                    *
-                  </Text>
-                </Text>
+                <FieldLabel>
+                  Place
+                </FieldLabel>
 
                 <Input
+                  name="place"
                   value={formData.place}
-                  onChange={(e) =>
-                    handleChange(
-                      "place",
-                      e.target.value
-                    )
-                  }
+                  onChange={handleChange}
                   placeholder="Enter place"
-                  h="42px"
-                  fontSize="13px"
-                  borderColor="#DCE2EA"
-                  borderRadius="6px"
-                  color="#182338"
-                  _placeholder={{
-                    color: "#8B98AB",
-                  }}
-                  _hover={{
-                    borderColor: "#B8C2D0",
-                  }}
-                  _focus={{
-                    borderColor: PRIMARY_MAROON,
-                    boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
-                  }}
+                  {...inputStyle}
                 />
               </Box>
-            </SimpleGrid>
+            </Grid>
 
-            {/* =================================================
+            {/* ==================================================
                 ERROR
-            ================================================= */}
+            ================================================== */}
 
             {error && (
               <Box
-                mt={5}
+                mb={4}
                 px={4}
-                py={3}
+                py={2.5}
                 border="1px solid #FED7D7"
                 bg="#FFF5F5"
-                borderRadius="6px"
+                borderRadius="7px"
               >
                 <Text
                   color="#C53030"
@@ -417,37 +419,36 @@ const WardAddPage = () => {
               </Box>
             )}
 
-            {/* =================================================
-                ACTIONS
-            ================================================= */}
+            {/* ==================================================
+                DIVIDER
+            ================================================== */}
+
+            <Box
+              borderTop="1px solid"
+              borderColor="#E6EAF0"
+              mb={4}
+            />
+
+            {/* ==================================================
+                BUTTONS
+            ================================================== */}
 
             <Flex
               justify="flex-end"
+              align="center"
               gap={3}
-              mt={7}
-              pt={5}
-              borderTop="1px solid #E6EAF0"
-              direction={{
-                base: "column-reverse",
-                sm: "row",
-              }}
             >
-              {/* CANCEL */}
-
               <Button
                 variant="outline"
-                h="42px"
-                minW={{
-                  base: "100%",
-                  sm: "130px",
-                }}
+                borderColor={RED}
+                color={RED}
+                h="38px"
                 px={6}
-                fontSize="13px"
+                borderRadius="7px"
+                fontSize="12px"
                 fontWeight="600"
-                borderColor="#D7193F"
-                color="#D7193F"
-                borderRadius="6px"
-                onClick={() => navigate("/ward")}
+                onClick={handleCancel}
+                disabled={saving}
                 _hover={{
                   bg: "#FFF5F7",
                 }}
@@ -455,41 +456,27 @@ const WardAddPage = () => {
                 Cancel
               </Button>
 
-              {/* SAVE */}
-
               <Button
+                h="38px"
+                px={7}
                 bg={PRIMARY_MAROON}
                 color="white"
-                h="42px"
-                minW={{
-                  base: "100%",
-                  sm: "150px",
-                }}
-                px={6}
-                fontSize="13px"
+                borderRadius="7px"
+                fontSize="12px"
                 fontWeight="600"
-                borderRadius="6px"
                 loading={saving}
-                onClick={handleSave}
+                disabled={saving}
+                onClick={handleSubmit}
                 _hover={{
                   bg: "#650A18",
                 }}
               >
-                {!saving && (
-                  <LuSave
-                    size={16}
-                    style={{
-                      marginRight: "8px",
-                    }}
-                  />
-                )}
-
-                {saving ? "Saving..." : "Save Ward"}
+                Save Ward
               </Button>
             </Flex>
           </Box>
         </Box>
-      </Container>
+      </Box>
 
       {/* ======================================================
           FOOTER

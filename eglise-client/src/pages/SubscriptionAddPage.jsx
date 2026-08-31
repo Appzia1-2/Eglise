@@ -3,7 +3,6 @@ import React, { useEffect, useState } from "react";
 import {
   Box,
   Button,
-  Container,
   Flex,
   Grid,
   Heading,
@@ -202,22 +201,25 @@ const SubscriptionAddPage = () => {
   };
 
   // ==========================================================
-  // COMMON INPUT STYLE
+  // INPUT STYLE
   // ==========================================================
 
   const inputStyle = {
-    h: "36px",
-    fontSize: "12px",
+    h: "42px",
+    fontSize: "13px",
     borderColor: BORDER,
-    borderRadius: "6px",
+    borderRadius: "7px",
     color: DARK,
     bg: "white",
+
     _placeholder: {
       color: "#98A2B3",
     },
+
     _hover: {
       borderColor: "#BFC7D4",
     },
+
     _focus: {
       borderColor: PRIMARY_MAROON,
       boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
@@ -230,10 +232,10 @@ const SubscriptionAddPage = () => {
 
   const FieldLabel = ({ children, required = true }) => (
     <Text
-      fontSize="11px"
+      fontSize="12px"
       fontWeight="600"
       color={DARK}
-      mb="6px"
+      mb="8px"
     >
       {children}
 
@@ -270,16 +272,16 @@ const SubscriptionAddPage = () => {
           MAIN CONTENT
       ====================================================== */}
 
-      <Box flex="1">
-        <Container
-          maxW="1200px"
+      <Box flex="1" w="100%">
+        <Box
+          w="100%"
           px={{
-            base: 4,
+            base: 3,
             md: 5,
           }}
           py={{
             base: 3,
-            md: 4,
+            md: 5,
           }}
         >
           {/* ==================================================
@@ -288,15 +290,19 @@ const SubscriptionAddPage = () => {
 
           <HStack
             gap={2}
-            mb={2}
+            mb={3}
             color={MUTED}
-            fontSize="10px"
+            fontSize="12px"
           >
-            <Text>Activities</Text>
+            <Text>
+              Activities
+            </Text>
 
             <Text>/</Text>
 
-            <Text>Subscriptions</Text>
+            <Text>
+              Subscriptions
+            </Text>
 
             <Text>/</Text>
 
@@ -315,8 +321,8 @@ const SubscriptionAddPage = () => {
               base: "flex-start",
               md: "center",
             }}
-            gap={2}
-            mb={3}
+            gap={3}
+            mb={4}
             direction={{
               base: "column",
               md: "row",
@@ -324,11 +330,10 @@ const SubscriptionAddPage = () => {
           >
             <Box>
               <Text
-                fontSize="10px"
+                fontSize="11px"
                 fontWeight="700"
                 color={RED}
-                mb="3px"
-                letterSpacing="0.3px"
+                mb={1}
               >
                 SUBSCRIPTIONS
               </Text>
@@ -336,18 +341,18 @@ const SubscriptionAddPage = () => {
               <Heading
                 color={DARK}
                 fontSize={{
-                  base: "21px",
-                  md: "25px",
+                  base: "24px",
+                  md: "28px",
                 }}
-                lineHeight="1.15"
-                mb="3px"
+                lineHeight="1.2"
+                mb={1}
               >
                 Add Subscription
               </Heading>
 
               <Text
                 color={MUTED}
-                fontSize="11px"
+                fontSize="12px"
               >
                 Create a subscription record.
               </Text>
@@ -361,25 +366,25 @@ const SubscriptionAddPage = () => {
           <Box
             border="1px solid"
             borderColor={BORDER}
-            borderRadius="8px"
+            borderRadius="9px"
             bg="white"
             p={{
               base: 4,
-              md: 5,
+              md: 6,
             }}
             width="100%"
-            boxShadow="0 1px 2px rgba(16, 24, 40, 0.02)"
+            boxShadow="0 1px 3px rgba(16, 24, 40, 0.04)"
           >
             {/* ==================================================
                 CARD HEADER
             ================================================== */}
 
-            <Box mb={4}>
+            <Box mb={5}>
               <Text
-                fontSize="12px"
+                fontSize="13px"
                 fontWeight="700"
                 color={RED}
-                pb="8px"
+                pb="10px"
                 borderBottom="2px solid"
                 borderColor={RED}
                 display="inline-block"
@@ -394,10 +399,10 @@ const SubscriptionAddPage = () => {
 
             <Flex
               align="center"
-              mb={3}
+              mb={4}
             >
               <Text
-                fontSize="12px"
+                fontSize="13px"
                 fontWeight="700"
                 color={DARK}
               >
@@ -415,10 +420,10 @@ const SubscriptionAddPage = () => {
                 md: "1fr 1fr",
               }}
               gap={{
-                base: 3,
-                md: 4,
+                base: 4,
+                md: 5,
               }}
-              mb={3}
+              mb={4}
             >
               {/* GRADE */}
 
@@ -427,44 +432,49 @@ const SubscriptionAddPage = () => {
                   Grade
                 </FieldLabel>
 
-                <Box position="relative">
-                  <select
-                    name="grade"
-                    value={formData.grade}
-                    onChange={handleChange}
-                    disabled={loadingGrades}
-                    style={{
-                      width: "100%",
-                      height: "36px",
-                      border: `1px solid ${BORDER}`,
-                      borderRadius: "6px",
-                      padding: "0 11px",
-                      fontSize: "12px",
-                      background: "white",
-                      color: DARK,
-                      outline: "none",
-                      cursor: loadingGrades
-                        ? "not-allowed"
-                        : "pointer",
-                      appearance: "auto",
-                    }}
-                  >
-                    <option value="">
-                      {loadingGrades
-                        ? "Loading grades..."
-                        : "Select grade"}
-                    </option>
+                <select
+                  name="grade"
+                  value={formData.grade}
+                  onChange={handleChange}
+                  disabled={loadingGrades}
+                  style={{
+                    width: "100%",
+                    height: "42px",
+                    fontSize: "13px",
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: "7px",
+                    padding: "0 14px",
+                    color: DARK,
+                    backgroundColor: "white",
+                    outline: "none",
+                    cursor: loadingGrades
+                      ? "not-allowed"
+                      : "pointer",
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = PRIMARY_MAROON;
+                    e.target.style.boxShadow = `0 0 0 1px ${PRIMARY_MAROON}`;
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = BORDER;
+                    e.target.style.boxShadow = "none";
+                  }}
+                >
+                  <option value="">
+                    {loadingGrades
+                      ? "Loading grades..."
+                      : "Select grade"}
+                  </option>
 
-                    {grades.map((grade) => (
-                      <option
-                        key={grade.id}
-                        value={grade.id}
-                      >
-                        {grade.name}
-                      </option>
-                    ))}
-                  </select>
-                </Box>
+                  {grades.map((grade) => (
+                    <option
+                      key={grade.id}
+                      value={grade.id}
+                    >
+                      {grade.name}
+                    </option>
+                  ))}
+                </select>
               </Box>
 
               {/* TERM */}
@@ -494,10 +504,10 @@ const SubscriptionAddPage = () => {
                 md: "1fr 1fr",
               }}
               gap={{
-                base: 3,
-                md: 4,
+                base: 4,
+                md: 5,
               }}
-              mb={3}
+              mb={4}
             >
               {/* START DATE */}
 
@@ -537,7 +547,7 @@ const SubscriptionAddPage = () => {
             ================================================== */}
 
             <Box
-              mb={4}
+              mb={5}
               maxW={{
                 base: "100%",
                 md: "50%",
@@ -550,15 +560,15 @@ const SubscriptionAddPage = () => {
               <Flex>
                 <Box
                   width="42px"
-                  height="36px"
+                  height="42px"
                   border="1px solid"
                   borderColor={BORDER}
-                  borderRadius="6px 0 0 6px"
+                  borderRadius="7px 0 0 7px"
                   display="flex"
                   alignItems="center"
                   justifyContent="center"
                   bg="#F8FAFC"
-                  fontSize="13px"
+                  fontSize="14px"
                   fontWeight="600"
                   color={MUTED}
                   flexShrink={0}
@@ -574,12 +584,13 @@ const SubscriptionAddPage = () => {
                   value={formData.amount}
                   onChange={handleChange}
                   placeholder="Enter amount"
-                  h="36px"
-                  fontSize="12px"
+                  h="42px"
+                  fontSize="13px"
                   borderColor={BORDER}
-                  borderRadius="0 6px 6px 0"
+                  borderRadius="0 7px 7px 0"
                   borderLeft="none"
                   color={DARK}
+                  bg="white"
                   _placeholder={{
                     color: "#98A2B3",
                   }}
@@ -587,8 +598,7 @@ const SubscriptionAddPage = () => {
                     borderColor: "#BFC7D4",
                   }}
                   _focus={{
-                    borderColor:
-                      PRIMARY_MAROON,
+                    borderColor: PRIMARY_MAROON,
                     boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                   }}
                 />
@@ -602,15 +612,15 @@ const SubscriptionAddPage = () => {
             {error && (
               <Box
                 mb={4}
-                px={3}
-                py={2}
+                px={4}
+                py={2.5}
                 border="1px solid #FED7D7"
                 bg="#FFF5F5"
-                borderRadius="6px"
+                borderRadius="7px"
               >
                 <Text
                   color="#C53030"
-                  fontSize="11px"
+                  fontSize="12px"
                   fontWeight="500"
                 >
                   {error}
@@ -625,7 +635,7 @@ const SubscriptionAddPage = () => {
             <Box
               borderTop="1px solid"
               borderColor="#E6EAF0"
-              mb={3}
+              mb={4}
             />
 
             {/* ==================================================
@@ -635,18 +645,19 @@ const SubscriptionAddPage = () => {
             <Flex
               justify="flex-end"
               align="center"
-              gap={2}
+              gap={3}
             >
               <Button
                 variant="outline"
                 borderColor={RED}
                 color={RED}
-                h="34px"
-                px={5}
-                borderRadius="6px"
-                fontSize="11px"
+                h="38px"
+                px={6}
+                borderRadius="7px"
+                fontSize="12px"
                 fontWeight="600"
                 onClick={handleCancel}
+                disabled={saving}
                 _hover={{
                   bg: "#FFF5F7",
                 }}
@@ -655,12 +666,12 @@ const SubscriptionAddPage = () => {
               </Button>
 
               <Button
-                h="34px"
-                px={6}
+                h="38px"
+                px={7}
                 bg={PRIMARY_MAROON}
                 color="white"
-                borderRadius="6px"
-                fontSize="11px"
+                borderRadius="7px"
+                fontSize="12px"
                 fontWeight="600"
                 loading={saving}
                 disabled={saving}
@@ -673,7 +684,7 @@ const SubscriptionAddPage = () => {
               </Button>
             </Flex>
           </Box>
-        </Container>
+        </Box>
       </Box>
 
       {/* ======================================================

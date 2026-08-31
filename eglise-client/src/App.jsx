@@ -85,6 +85,8 @@ import RegisterSettingsPage from "./pages/RegisterSettingsPage";
 
 import DeathRegisterPage from "./pages/DeathRegisterPage";
 import DeathAddPage from "./pages/DeathAddPage";
+import DeathRegisterDetailPage from "./pages/Deathregisterdetailpage";
+
 
 
 import EventsPage from "./pages/EventsPage";
@@ -131,7 +133,13 @@ function App() {
     <Router>
       <Routes>
         {/* ===== CHURCH/USER ROUTES ===== */}
-        <Route path="/login" element={<LoginPage />} />
+        <Route 
+  path="/" 
+  element={
+    import.meta.env.PROD ? <Navigate to="/login" replace /> : <LoginPage />
+  } 
+/>
+<Route path="/login" element={<LoginPage />} />
         <Route
           path="/change-password"
           element={
@@ -581,6 +589,14 @@ function App() {
           element={
             <ProtectedRoute>
               <DeathAddPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/death/:id"
+          element={
+            <ProtectedRoute>
+              <DeathRegisterDetailPage />
             </ProtectedRoute>
           }
         />

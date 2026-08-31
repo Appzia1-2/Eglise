@@ -283,7 +283,7 @@ const Navbar = () => {
         gap={6}
       >
         {/* Logo */}
-        <Box flexShrink={0} as={RouterLink} to="/">
+        <Box flexShrink={0} as={RouterLink} to="/church/dashboard/">
           <Image
             src={EgliseLogo}
             alt="Eglise Logo"

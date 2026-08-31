@@ -58,7 +58,7 @@ function App() {
   return (
     <Router>
        <Routes>
-      <Route path="/" element={<Navigate to="/admin" replace />} />
+      <Route path="/" element={<AdminLogin />} />
 
         {/* ===== ADMIN ROUTES ===== */}
         

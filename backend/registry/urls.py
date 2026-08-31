@@ -148,6 +148,7 @@ path("death-registers/<int:pk>/", DeathRegisterUpdateAPIView.as_view(), name="de
     path("death-register/",DeathRegisterListAPIView.as_view(),name="list-all-death"),
     path("death-register/create/",DeathRegisterCreateAPIView.as_view(),name="death-register-create"),
     path('members/<int:pk>/detail/', MemberDetailView.as_view(), name='member-detail'),
+    
 
     path("family-head/<int:pk>/",FamilyHeadUpdateAPIView.as_view(),name="family-head-edit"),
     path("church-members/",ChurchMembersAPIView.as_view(),name="church-members"),

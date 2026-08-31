@@ -3,18 +3,12 @@ import React, { useState } from "react";
 import {
   Box,
   Button,
-  Container,
   Flex,
   Heading,
   HStack,
   Input,
   Text,
 } from "@chakra-ui/react";
-
-import {
-  LuArrowLeft,
-  LuSave,
-} from "react-icons/lu";
 
 import { useNavigate } from "react-router-dom";
 
@@ -24,6 +18,10 @@ import Footer from "../components/Footer";
 import { createRelationship } from "../api/registryServices";
 
 const PRIMARY_MAROON = "var(--primary-maroon)";
+const RED = "#D7193F";
+const DARK = "#182338";
+const MUTED = "#60708C";
+const BORDER = "#DCE2EA";
 
 const RelationshipAddPage = () => {
   const navigate = useNavigate();
@@ -33,10 +31,10 @@ const RelationshipAddPage = () => {
   const [error, setError] = useState("");
 
   // ==========================================================
-  // SAVE
+  // SUBMIT
   // ==========================================================
 
-  const handleSave = async () => {
+  const handleSubmit = async () => {
     const trimmedName = name.trim();
 
     if (!trimmedName) {
@@ -48,16 +46,17 @@ const RelationshipAddPage = () => {
       setSaving(true);
       setError("");
 
+      console.log("Creating relationship with payload:", {
+        name: trimmedName,
+      });
+
       await createRelationship({
         name: trimmedName,
       });
 
       navigate("/relationship");
     } catch (err) {
-      console.error(
-        "Error creating relationship:",
-        err
-      );
+      console.error("Error creating relationship:", err);
 
       const apiError =
         err?.response?.data?.name?.[0] ||
@@ -71,197 +70,197 @@ const RelationshipAddPage = () => {
   };
 
   // ==========================================================
+  // CANCEL
+  // ==========================================================
+
+  const handleCancel = () => {
+    navigate("/relationship");
+  };
+
+  // ==========================================================
+  // LABEL
+  // ==========================================================
+
+  const FieldLabel = ({
+    children,
+    required = true,
+  }) => (
+    <Text
+      fontSize="12px"
+      fontWeight="600"
+      color={DARK}
+      mb="8px"
+    >
+      {children}
+
+      {required && (
+        <Text
+          as="span"
+          color={RED}
+          ml="2px"
+        >
+          *
+        </Text>
+      )}
+    </Text>
+  );
+
+  // ==========================================================
   // RENDER
   // ==========================================================
 
   return (
     <Box
       minH="100vh"
-      bg="white"
+      bg="#FFFFFF"
       display="flex"
       flexDirection="column"
     >
-      {/* =====================================================
+      {/* ======================================================
           NAVBAR
-      ===================================================== */}
+      ====================================================== */}
 
       <Navbar />
 
-      {/* =====================================================
+      {/* ======================================================
           MAIN CONTENT
-      ===================================================== */}
+      ====================================================== */}
 
-      <Container
-        maxW="1600px"
-        flex="1"
-        px={{
-          base: 4,
-          md: 6,
-          lg: 8,
-        }}
-        py={{
-          base: 4,
-          md: 5,
-          lg: 6,
-        }}
-      >
-
-        {/* ===================================================
-            BREADCRUMB
-        =================================================== */}
-
-        <HStack
-          gap={2}
-          mb={{
-            base: 4,
+      <Box flex="1" w="100%">
+        <Box
+          w="100%"
+          px={{
+            base: 3,
             md: 5,
           }}
-          color="#526B99"
-          fontSize={{
-            base: "12px",
-            md: "14px",
+          py={{
+            base: 3,
+            md: 5,
           }}
-          fontWeight="500"
         >
-          <Text>
-            Masters
-          </Text>
+          {/* ==================================================
+              BREADCRUMB
+          ================================================== */}
 
-          <Text color="#8A98AD">
-            /
-          </Text>
-
-          <Text>
-            Relationship Master
-          </Text>
-
-          <Text color="#8A98AD">
-            /
-          </Text>
-
-          <Text>
-            Add Relationship
-          </Text>
-        </HStack>
-
-        {/* ===================================================
-            PAGE HEADER
-        =================================================== */}
-
-        <Box mb={6}>
-
-          <Text
-            fontSize={{
-              base: "11px",
-              md: "13px",
-            }}
-            fontWeight="700"
-            color="#D7193F"
-            mb={1}
-            letterSpacing="0.2px"
+          <HStack
+            gap={2}
+            mb={3}
+            color={MUTED}
+            fontSize="12px"
           >
-            RELATIONSHIP MASTER
-          </Text>
+            <Text>
+              Masters
+            </Text>
 
-          <Heading
-            color="#182A4A"
-            fontSize={{
-              base: "28px",
-              md: "34px",
-              lg: "38px",
+            <Text>/</Text>
+
+            <Text>
+              Relationship Master
+            </Text>
+
+            <Text>/</Text>
+
+            <Text color={DARK}>
+              Add Relationship
+            </Text>
+          </HStack>
+
+          {/* ==================================================
+              PAGE HEADER
+          ================================================== */}
+
+          <Flex
+            justify="space-between"
+            align={{
+              base: "flex-start",
+              md: "center",
             }}
-            fontWeight="700"
-            lineHeight="1.15"
-            mb={2}
-          >
-            Add Relationship
-          </Heading>
-
-          <Text
-            color="#526B99"
-            fontSize={{
-              base: "13px",
-              md: "15px",
+            gap={3}
+            mb={4}
+            direction={{
+              base: "column",
+              md: "row",
             }}
           >
-            Create a relationship record.
-          </Text>
-
-        </Box>
-
-        {/* ===================================================
-            FORM CARD
-        =================================================== */}
-
-        <Box
-          border="1px solid #CBD8EA"
-          borderRadius="9px"
-          bg="white"
-          overflow="hidden"
-          boxShadow="0 1px 3px rgba(20, 40, 80, 0.03)"
-        >
-
-          {/* =================================================
-              CARD CONTENT
-          ================================================= */}
-
-          <Box
-            px={{
-              base: 4,
-              md: 7,
-              lg: 8,
-            }}
-            py={{
-              base: 5,
-              md: 6,
-              lg: 7,
-            }}
-          >
-
-            {/* =================================================
-                SECTION TITLE
-            ================================================= */}
-
-            <Heading
-              color="#182A4A"
-              fontSize={{
-                base: "18px",
-                md: "21px",
-              }}
-              fontWeight="700"
-              mb={{
-                base: 5,
-                md: 6,
-              }}
-            >
-              1. Relationship Information
-            </Heading>
-
-            {/* =================================================
-                FIELD
-            ================================================= */}
-
             <Box>
+              <Text
+                fontSize="11px"
+                fontWeight="700"
+                color={RED}
+                mb={1}
+              >
+                RELATIONSHIP MASTER
+              </Text>
+
+              <Heading
+                color={DARK}
+                fontSize={{
+                  base: "24px",
+                  md: "28px",
+                }}
+                lineHeight="1.2"
+                mb={1}
+              >
+                Add Relationship
+              </Heading>
 
               <Text
-                color="#182A4A"
-                fontSize={{
-                  base: "13px",
-                  md: "15px",
-                }}
-                fontWeight="600"
-                mb={2}
+                color={MUTED}
+                fontSize="12px"
               >
-                Relationship Name
-
-                <Text
-                  as="span"
-                  color="#D7193F"
-                  ml={1}
-                >
-                  *
-                </Text>
+                Create a relationship record.
               </Text>
+            </Box>
+          </Flex>
+
+          {/* ==================================================
+              FORM CARD
+          ================================================== */}
+
+          <Box
+            border="1px solid"
+            borderColor={BORDER}
+            borderRadius="9px"
+            bg="white"
+            p={{
+              base: 4,
+              md: 6,
+            }}
+            width="100%"
+            boxShadow="0 1px 3px rgba(16, 24, 40, 0.04)"
+          >
+            {/* ==================================================
+                CARD HEADER
+            ================================================== */}
+
+            <Box mb={5}>
+              <Text
+                fontSize="13px"
+                fontWeight="700"
+                color={RED}
+                pb="10px"
+                borderBottom="2px solid"
+                borderColor={RED}
+                display="inline-block"
+              >
+                Relationship Details
+              </Text>
+            </Box>
+
+            {/* ==================================================
+                SECTION TITLE
+            ================================================== */}
+
+            
+
+            {/* ==================================================
+                FIELD - RELATIONSHIP NAME
+            ================================================== */}
+
+            <Box mb={5}>
+              <FieldLabel>
+                Relationship Name
+              </FieldLabel>
 
               <Input
                 value={name}
@@ -270,117 +269,78 @@ const RelationshipAddPage = () => {
                   setError("");
                 }}
                 placeholder="Enter relationship name"
-                h={{
-                  base: "44px",
-                  md: "50px",
-                }}
-                px={{
-                  base: 4,
-                  md: 5,
-                }}
-                fontSize={{
-                  base: "14px",
-                  md: "16px",
-                }}
-                border="1px solid #CBD8EA"
+                h="42px"
+                fontSize="13px"
+                borderColor={BORDER}
                 borderRadius="7px"
-                color="#182A4A"
+                color={DARK}
                 bg="white"
                 _placeholder={{
-                  color: "#7284A3",
+                  color: "#98A2B3",
                 }}
                 _hover={{
-                  borderColor: "#AFC0D8",
+                  borderColor: "#BFC7D4",
                 }}
                 _focus={{
                   borderColor: PRIMARY_MAROON,
-                  boxShadow:
-                    `0 0 0 1px ${PRIMARY_MAROON}`,
+                  boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                 }}
               />
-
-              {/* =================================================
-                  ERROR
-              ================================================= */}
-
-              {error && (
-                <Box
-                  mt={3}
-                  px={4}
-                  py={3}
-                  bg="#FFF5F5"
-                  border="1px solid #FECACA"
-                  borderRadius="6px"
-                >
-                  <Text
-                    color="#C53030"
-                    fontSize="13px"
-                  >
-                    {error}
-                  </Text>
-                </Box>
-              )}
-
             </Box>
 
-            {/* =================================================
+            {/* ==================================================
+                ERROR
+            ================================================== */}
+
+            {error && (
+              <Box
+                mb={4}
+                px={4}
+                py={2.5}
+                border="1px solid #FED7D7"
+                bg="#FFF5F5"
+                borderRadius="7px"
+              >
+                <Text
+                  color="#C53030"
+                  fontSize="12px"
+                  fontWeight="500"
+                >
+                  {error}
+                </Text>
+              </Box>
+            )}
+
+            {/* ==================================================
                 DIVIDER
-            ================================================= */}
+            ================================================== */}
 
             <Box
-              borderTop="1px solid #CBD8EA"
-              mt={{
-                base: 7,
-                md: 9,
-              }}
-              mb={{
-                base: 5,
-                md: 6,
-              }}
+              borderTop="1px solid"
+              borderColor="#E6EAF0"
+              mb={4}
             />
 
-            {/* =================================================
-                ACTION BUTTONS
-            ================================================= */}
+            {/* ==================================================
+                BUTTONS
+            ================================================== */}
 
             <Flex
               justify="flex-end"
               align="center"
-              gap={{
-                base: 2,
-                md: 3,
-              }}
-              direction={{
-                base: "column-reverse",
-                sm: "row",
-              }}
+              gap={3}
             >
-
-              {/* CANCEL */}
-
               <Button
                 variant="outline"
-                h={{
-                  base: "42px",
-                  md: "46px",
-                }}
-                minW={{
-                  base: "100%",
-                  sm: "140px",
-                }}
+                borderColor={RED}
+                color={RED}
+                h="38px"
                 px={6}
-                border="1px solid #D7193F"
-                color="#D7193F"
-                bg="white"
                 borderRadius="7px"
-                fontSize={{
-                  base: "13px",
-                  md: "15px",
-                }}
+                fontSize="12px"
                 fontWeight="600"
-                onClick={() =>
-                  navigate("/relationship")
-                }
+                onClick={handleCancel}
+                disabled={saving}
                 _hover={{
                   bg: "#FFF5F7",
                 }}
@@ -388,56 +348,33 @@ const RelationshipAddPage = () => {
                 Cancel
               </Button>
 
-              {/* SAVE */}
-
               <Button
+                h="38px"
+                px={7}
                 bg={PRIMARY_MAROON}
                 color="white"
-                h={{
-                  base: "42px",
-                  md: "46px",
-                }}
-                minW={{
-                  base: "100%",
-                  sm: "160px",
-                }}
-                px={6}
                 borderRadius="7px"
-                fontSize={{
-                  base: "13px",
-                  md: "15px",
-                }}
+                fontSize="12px"
                 fontWeight="600"
                 loading={saving}
-                onClick={handleSave}
+                disabled={saving}
+                onClick={handleSubmit}
                 _hover={{
                   bg: "#650A18",
                 }}
               >
-                <LuSave
-                  size={17}
-                  style={{
-                    marginRight: "8px",
-                  }}
-                />
-
-                Save
+                Save Relationship
               </Button>
-
             </Flex>
-
           </Box>
-
         </Box>
+      </Box>
 
-      </Container>
-
-      {/* =====================================================
+      {/* ======================================================
           FOOTER
-      ===================================================== */}
+      ====================================================== */}
 
       <Footer />
-
     </Box>
   );
 };

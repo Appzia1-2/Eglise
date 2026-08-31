@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from django.shortcuts import get_object_or_404
 from rest_framework import generics
 from rest_framework.generics import (
@@ -1956,15 +1956,19 @@ class InactiveMembersAPIView(ListAPIView):
 
 #Death Register
 class DeathRegisterFinalizeView(APIView):
-    permission_classes=[IsAuthenticated, IsChurchUser]
-
+    """
+    Finalize a death registration (previously PENDING status)
+    Now simplified since we create directly
+    """
+    permission_classes = [IsAuthenticated, IsChurchUser]
+ 
     def post(self, request):
         serializer = DeathRegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
+ 
         member = serializer.validated_data.get("member")
-
-        # 🔥 FIX: Get member from data if not in validated_data
+ 
+        # Get member from data if not in validated_data
         if not member:
             member_id = request.data.get("member")
             if member_id:
@@ -1980,51 +1984,60 @@ class DeathRegisterFinalizeView(APIView):
                     {"error": "Member is required."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-
-        try:
-            death = DeathRegister.objects.get(
-                member=member,
-                status="PENDING"
-            )
-        except DeathRegister.DoesNotExist:
+ 
+        # Check if member already has a death record
+        if DeathRegister.objects.filter(member=member).exists():
             return Response(
-                {"error": "No pending death request found for this member."},
+                {"error": "Death record already exists for this member."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
+ 
         with transaction.atomic():
-            # 🔥 FIX: Get dates from validated_data (they'll be date objects)
+            # Get validated data
             died_on = serializer.validated_data.get("died_on")
             funeral_on = serializer.validated_data.get("funeral_on")
+            tomb_fee = serializer.validated_data.get("tomb_fee")
             
-            # 🔥 FIX: If dates are None, try to get from request data and parse
+            # Parse dates if they come as strings
             if not died_on and request.data.get("died_on"):
                 died_on = parse_date(request.data.get("died_on"))
             if not funeral_on and request.data.get("funeral_on"):
                 funeral_on = parse_date(request.data.get("funeral_on"))
-
-            # Update the pending record
-            death.died_on = died_on
-            death.funeral_on = funeral_on
-            death.tomb_type = serializer.validated_data.get("tomb_type")
-            death.tomb_charge = serializer.validated_data.get("tomb_charge")
-            death.tomb_idn = serializer.validated_data.get("tomb_idn", "")
-            death.reason_of_death = serializer.validated_data.get("reason_of_death")
-            death.remarks = serializer.validated_data.get("remarks", "")
-            death.status = "COMPLETED"
-            
-            # 🔥 FIX: Save the death record (this will trigger reg_no generation)
-            death.save()
-
-            # Spouse widow logic
+ 
+            # Create death record
+            death = DeathRegister.objects.create(
+                church=request.user.church,
+                member=member,
+                died_on=died_on,
+                funeral_on=funeral_on,
+                tomb_fee=tomb_fee,  # NEW: Use tomb_fee instead of tomb_type/tomb_charge
+                tomb_idn=serializer.validated_data.get("tomb_idn", ""),
+                reason_of_death=serializer.validated_data.get("reason_of_death"),
+                remarks=serializer.validated_data.get("remarks", ""),
+            )
+ 
+            # Mark member as deceased
+            member.expired = True
+            member.is_active = False
+            member.inactive_reason = "DECEASED"
+            member.inactive_date = date.today()
+            member.save()
+ 
+            # Deactivate user if family head
+            if member.is_family_head and hasattr(member, 'user'):
+                member.user.is_active = False
+                member.user.save()
+ 
+            # Update spouse status
             if member.spouse:
                 member.spouse.marital_status = "WIDOWED"
                 member.spouse.save(update_fields=["marital_status"])
-
+ 
         return Response(
             DeathRegisterSerializer(death).data,
-            status=status.HTTP_200_OK
+            status=status.HTTP_201_CREATED
         )
+ 
     
 #promote to head
 
@@ -2310,65 +2323,60 @@ class ChangeMemberHeadAPIView(APIView):
 # registry/views.py
 
 class DeathRegisterListAPIView(ListAPIView):
-    """List all death registers"""
-    serializer_class = DeathRegisterSerializer  # or DeathRegisterListSerializer
+    """List all death registers for a church"""
+    serializer_class = DeathRegisterSerializer
     permission_classes = [IsAuthenticated, IsChurchUser]
-
+ 
     def get_queryset(self):
         church = self.request.user.church
         queryset = DeathRegister.objects.filter(
             church=church
-        ).select_related("member", "member__family")
-        
-        # 🔥 REMOVED: status filter since no status field
-        # status_param = self.request.query_params.get("status")
-        # if status_param:
-        #     queryset = queryset.filter(status=status_param.upper())
-
+        ).select_related(
+            "member",
+            "member__family",
+            "tomb_fee",  # NEW: Include tomb_fee
+            "tomb_fee__tomb_type"  # NEW: Include related tomb type
+        )
+ 
         return queryset.order_by("-created_at")
+ 
 
 
 
 from django.utils.dateparse import parse_date
 
-class DeathRegisterUpdateAPIView(UpdateAPIView):
+class DeathRegisterUpdateAPIView(
+    RetrieveUpdateDestroyAPIView
+):
+    """
+    Retrieve, update and delete an existing death register.
+    """
+
     serializer_class = DeathRegisterSerializer
-    permission_classes = [IsAuthenticated, IsChurchUser]
+    permission_classes = [
+        IsAuthenticated,
+        IsChurchUser
+    ]
 
     def get_queryset(self):
-        return DeathRegister.objects.filter(
-            church=self.request.user.church
-        ).select_related("member")
+        return (
+            DeathRegister.objects
+            .filter(
+                church=self.request.user.church
+            )
+            .select_related(
+                "member",
+                "member__family",
+                "tomb_fee",
+                "tomb_fee__tomb_type",
+            )
+        )
 
     def perform_update(self, serializer):
-        death = self.get_object()
-        
-        # 🔥 REMOVED: No status check needed
-        # if death.status == "COMPLETED":
-        #     raise ValidationError("Cannot modify completed death record.")
-
         with transaction.atomic():
-            # Ensure dates are parsed before saving
-            validated_data = serializer.validated_data
-            
-            # Convert string dates to date objects if needed
-            if 'died_on' in validated_data and validated_data['died_on']:
-                if isinstance(validated_data['died_on'], str):
-                    validated_data['died_on'] = parse_date(validated_data['died_on'])
-            
-            if 'funeral_on' in validated_data and validated_data['funeral_on']:
-                if isinstance(validated_data['funeral_on'], str):
-                    validated_data['funeral_on'] = parse_date(validated_data['funeral_on'])
+            serializer.save()
+ 
 
-            death = serializer.save()
-
-            # Generate register number if needed (should already be generated in save())
-            if not death.reg_no:
-                death.reg_no = generate_register_number(
-                    death.church,
-                    "DEATH"
-                )
-                death.save(update_fields=["reg_no"])
 
 
 
@@ -2920,16 +2928,16 @@ from django.utils.dateparse import parse_date
 class DeathRegisterCreateAPIView(APIView):
     """Create a new death registration"""
     permission_classes = [IsAuthenticated, IsChurchUser]
-
+ 
     def post(self, request):
         member_id = request.data.get("member")
-
+ 
         if not member_id:
             return Response(
                 {"error": "member is required."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
+ 
         try:
             member = Member.objects.get(
                 pk=member_id, 
@@ -2940,16 +2948,23 @@ class DeathRegisterCreateAPIView(APIView):
                 {"error": "Member not found."},
                 status=status.HTTP_404_NOT_FOUND
             )
-
+ 
         # Check if already deceased
         if member.expired:
             return Response(
                 {"error": "Member is already marked as deceased."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
-        # Validate required fields
-        required_fields = ['died_on', 'funeral_on', 'tomb_type', 'tomb_charge', 'reason_of_death']
+ 
+        # Check if death record already exists
+        if DeathRegister.objects.filter(member=member).exists():
+            return Response(
+                {"error": "Death record already exists for this member."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+ 
+        # Validate required fields - UPDATED to use tomb_fee instead of tomb_type/tomb_charge
+        required_fields = ['died_on', 'funeral_on', 'tomb_fee', 'reason_of_death']
         missing_fields = [field for field in required_fields if not request.data.get(field)]
         
         if missing_fields:
@@ -2957,43 +2972,117 @@ class DeathRegisterCreateAPIView(APIView):
                 {field: "This field is required." for field in missing_fields},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
+ 
+        # Validate tomb_fee exists and belongs to church
+        try:
+            tomb_fee = TombFee.objects.get(
+                id=request.data.get("tomb_fee"),
+                church=request.user.church
+            )
+        except TombFee.DoesNotExist:
+            return Response(
+                {"error": "Selected tomb fee does not belong to this church."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+ 
         with transaction.atomic():
-            # 🔥 REMOVED: status field - create directly
+            # Parse dates
+            died_on = parse_date(request.data.get("died_on"))
+            funeral_on = parse_date(request.data.get("funeral_on"))
+ 
+            if not died_on or not funeral_on:
+                return Response(
+                    {"error": "Invalid date format. Use YYYY-MM-DD."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+ 
+            # =========================================================
+            # VALIDATE DATES
+                # =========================================================
+
+            today = date.today()
+
+            # ---------------------------------------------------------
+            # DATE OF DEATH
+            # Death date must be TODAY
+            # ---------------------------------------------------------
+
+            if died_on != today:
+                return Response(
+                    {
+                        "error": (
+                            "Date of death must be today."
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+# ---------------------------------------------------------
+# FUNERAL DATE
+# Funeral cannot be before death
+# ---------------------------------------------------------
+
+            if funeral_on < died_on:
+                return Response(
+                    {
+                        "error": (
+                            "Funeral date cannot be before "
+                            "the date of death."
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+# ---------------------------------------------------------
+# FUNERAL DATE
+# Maximum 4 days after death
+# ---------------------------------------------------------
+
+            max_funeral_date = died_on + timedelta(days=4)
+
+            if funeral_on > max_funeral_date:
+                return Response(
+                    {
+                        "error": (
+                            "Funeral date can be a maximum "
+                            "of 4 days after the date of death."
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+ 
+            # Create death record with tomb_fee
             death = DeathRegister.objects.create(
-                church=member.church,
+                church=request.user.church,
                 member=member,
-                died_on=request.data.get("died_on"),
-                funeral_on=request.data.get("funeral_on"),
-                tomb_type_id=request.data.get("tomb_type"),
-                tomb_charge=request.data.get("tomb_charge"),
+                died_on=died_on,
+                funeral_on=funeral_on,
+                tomb_fee=tomb_fee,  # NEW: Use tomb_fee FK instead of tomb_type_id and tomb_charge
                 tomb_idn=request.data.get("tomb_idn", ""),
                 reason_of_death=request.data.get("reason_of_death"),
                 remarks=request.data.get("remarks", ""),
             )
-            
-            # 🔥 Register number is auto-generated in the save() method
-
-            # Deactivate the member
+ 
+            # Mark member as deceased
             member.expired = True
             member.is_active = False
             member.inactive_reason = "DECEASED"
             member.inactive_date = date.today()
             member.save()
-
-            # If family head, deactivate user account
+ 
+            # Deactivate user if family head
             if member.is_family_head and hasattr(member, 'user'):
                 member.user.is_active = False
                 member.user.save()
-
+ 
             # Update spouse status
             if member.spouse:
                 member.spouse.marital_status = "WIDOWED"
                 member.spouse.save()
-
+ 
         serializer = DeathRegisterSerializer(death)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-
+ 
 
 class HeadlessHousesGroupedAPIView(APIView):
     permission_classes = [IsAuthenticated, IsChurchUser]

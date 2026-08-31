@@ -3681,155 +3681,437 @@ class InactiveMemberSerializer(serializers.ModelSerializer):
         ]
         
 #Death Register
-from django.utils.dateparse import parse_date
-from datetime import date
 class DeathRegisterSerializer(serializers.ModelSerializer):
-    # Read-only fields for display
-    member_name = serializers.CharField(source="member.name", read_only=True)
+    """
+    Main serializer for DeathRegister.
+
+    Date rules:
+    - Date of death must be today.
+    - Funeral date cannot be before date of death.
+    - Funeral date can be today or up to 4 days after death.
+    """
+
+    # ---------------------------------------------------------
+    # Read-only member information
+    # ---------------------------------------------------------
+
+    member_name = serializers.CharField(
+        source="member.name",
+        read_only=True
+    )
+
     family_name = serializers.CharField(
         source="member.family.family_name",
         read_only=True
     )
+
     house_name = serializers.CharField(
         source="member.house_name",
         read_only=True
     )
-    tomb_type_name = serializers.CharField(
-        source="tomb_type.name",
+
+    # ---------------------------------------------------------
+    # Nested TombFee details
+    # ---------------------------------------------------------
+
+    tomb_fee_details = TombFeeSerializer(
+        source="tomb_fee",
         read_only=True
     )
 
-    # Custom date fields with multiple format support
+    # ---------------------------------------------------------
+    # Backward compatibility / display fields
+    # ---------------------------------------------------------
+
+    tomb_type_name = serializers.CharField(
+        source="tomb_fee.tomb_type.name",
+        read_only=True,
+        allow_null=True
+    )
+
+    tomb_charge = serializers.DecimalField(
+        source="tomb_fee.tomb_fees",
+        max_digits=15,
+        decimal_places=3,
+        read_only=True,
+        allow_null=True
+    )
+
+    # ---------------------------------------------------------
+    # Available tomb fees
+    # ---------------------------------------------------------
+
+    available_tomb_fees = serializers.SerializerMethodField()
+
+    # ---------------------------------------------------------
+    # Date fields
+    # ---------------------------------------------------------
+
     died_on = serializers.DateField(
-        input_formats=['%Y-%m-%d', '%d-%m-%Y', '%Y/%m/%d', '%d/%m/%Y'],
+        input_formats=[
+            "%Y-%m-%d",
+            "%d-%m-%Y",
+            "%Y/%m/%d",
+            "%d/%m/%Y",
+        ],
         required=True,
         allow_null=False
     )
+
     funeral_on = serializers.DateField(
-        input_formats=['%Y-%m-%d', '%d-%m-%Y', '%Y/%m/%d', '%d/%m/%Y'],
+        input_formats=[
+            "%Y-%m-%d",
+            "%d-%m-%Y",
+            "%Y/%m/%d",
+            "%d/%m/%Y",
+        ],
         required=True,
         allow_null=False
     )
+
+    # ---------------------------------------------------------
+    # Meta
+    # ---------------------------------------------------------
 
     class Meta:
         model = DeathRegister
-        fields = "__all__"
-        read_only_fields = ("reg_no", "church", "member")
+
+        fields = [
+            "id",
+            "church",
+            "reg_no",
+
+            "member",
+            "member_name",
+            "family_name",
+            "house_name",
+
+            "died_on",
+            "funeral_on",
+
+            "tomb_fee",
+            "tomb_fee_details",
+            "tomb_type_name",
+            "tomb_charge",
+            "available_tomb_fees",
+
+            "tomb_idn",
+            "reason_of_death",
+            "remarks",
+
+            "created_at",
+        ]
+
+        read_only_fields = (
+            "reg_no",
+            "church",
+            "member",
+            "tomb_type_name",
+            "tomb_charge",
+            "tomb_fee_details",
+            "available_tomb_fees",
+        )
+
+    # =========================================================
+    # AVAILABLE TOMB FEES
+    # =========================================================
+
+    def get_available_tomb_fees(self, obj):
+        """
+        Return available TombFees for the selected TombType.
+        """
+
+        if obj.tomb_fee:
+            fees = TombFee.objects.filter(
+                church=obj.church,
+                tomb_type=obj.tomb_fee.tomb_type
+            )
+
+            return TombFeeSerializer(
+                fees,
+                many=True
+            ).data
+
+        return []
+
+    # =========================================================
+    # VALIDATION
+    # =========================================================
 
     def validate(self, data):
         """
-        Validate death registration data
+        Validate death registration data.
         """
+
         instance = self.instance
-        member = data.get("member") or (instance.member if instance else None)
+
+        # -----------------------------------------------------
+        # MEMBER
+        # -----------------------------------------------------
+
+        member = (
+            data.get("member")
+            or (
+                instance.member
+                if instance
+                else None
+            )
+        )
 
         if not member:
             raise serializers.ValidationError({
                 "member": "Member is required."
             })
 
-        # Check if member is already deceased
+        # -----------------------------------------------------
+        # CHECK IF MEMBER IS ALREADY DECEASED
+        # -----------------------------------------------------
+
         if member.expired:
             raise serializers.ValidationError({
-                "member": "Member is already marked as deceased."
+                "member": (
+                    "Member is already marked as deceased."
+                )
             })
 
-        # Get dates
+        # -----------------------------------------------------
+        # DATES
+        # -----------------------------------------------------
+
         died_on = data.get("died_on")
+
         funeral_on = data.get("funeral_on")
 
-        # Validate died_on is not in future
-        if died_on and died_on > date.today():
+        today = date.today()
+
+        # -----------------------------------------------------
+        # DATE OF DEATH
+        #
+        # Death must be TODAY.
+        #
+        # Example if today = 31 Aug:
+        #
+        # 30 Aug ❌
+        # 31 Aug ✅
+        # 01 Sep ❌
+        # -----------------------------------------------------
+
+        if died_on and died_on != today:
             raise serializers.ValidationError({
-                "died_on": "Date of death cannot be in the future."
+                "died_on": (
+                    "Date of death must be today."
+                )
             })
 
-        # Validate funeral_on is not in future
-        if funeral_on and funeral_on > date.today():
+        # -----------------------------------------------------
+        # FUNERAL DATE CANNOT BE BEFORE DEATH
+        #
+        # Example:
+        #
+        # Death   = 31 Aug
+        # Funeral = 30 Aug ❌
+        # -----------------------------------------------------
+
+        if (
+            died_on
+            and funeral_on
+            and funeral_on < died_on
+        ):
             raise serializers.ValidationError({
-                "funeral_on": "Funeral date cannot be in the future."
+                "funeral_on": (
+                    "Funeral date cannot be before "
+                    "the date of death."
+                )
             })
 
-        # Validate funeral is after death
-        if died_on and funeral_on and funeral_on < died_on:
+        # -----------------------------------------------------
+        # FUNERAL DATE MAXIMUM 4 DAYS AFTER DEATH
+        #
+        # Example:
+        #
+        # Death   = 31 Aug
+        #
+        # Funeral = 31 Aug ✅
+        # Funeral = 01 Sep ✅
+        # Funeral = 02 Sep ✅
+        # Funeral = 03 Sep ✅
+        # Funeral = 04 Sep ✅
+        # Funeral = 05 Sep ❌
+        # -----------------------------------------------------
+
+        if died_on and funeral_on:
+
+            max_funeral_date = (
+                died_on + timedelta(days=4)
+            )
+
+            if funeral_on > max_funeral_date:
+                raise serializers.ValidationError({
+                    "funeral_on": (
+                        "Funeral date can be a maximum "
+                        "of 4 days after the date of death."
+                    )
+                })
+
+        # -----------------------------------------------------
+        # TOMB FEE
+        # -----------------------------------------------------
+
+        tomb_fee = data.get("tomb_fee")
+
+        reason_of_death = data.get(
+            "reason_of_death"
+        )
+
+        if not tomb_fee:
             raise serializers.ValidationError({
-                "funeral_on": "Funeral date cannot be before death date."
+                "tomb_fee": (
+                    "Tomb fee selection is required."
+                )
             })
 
-        # Validate required fields
-        tomb_type = data.get("tomb_type")
-        tomb_charge = data.get("tomb_charge")
-        reason_of_death = data.get("reason_of_death")
+        # -----------------------------------------------------
+        # REASON OF DEATH
+        # -----------------------------------------------------
 
-        if not tomb_type:
+        if (
+            not reason_of_death
+            or not reason_of_death.strip()
+        ):
             raise serializers.ValidationError({
-                "tomb_type": "Tomb type is required."
+                "reason_of_death": (
+                    "Reason of death is required."
+                )
             })
 
-        if tomb_charge is None or tomb_charge == "":
+        # -----------------------------------------------------
+        # CHURCH
+        # -----------------------------------------------------
+
+        church = (
+            data.get("church")
+            or (
+                instance.church
+                if instance
+                else None
+            )
+        )
+
+        # -----------------------------------------------------
+        # VALIDATE TOMB FEE BELONGS TO CHURCH
+        # -----------------------------------------------------
+
+        if tomb_fee and church:
+
+            if tomb_fee.church_id != church.id:
+                raise serializers.ValidationError({
+                    "tomb_fee": (
+                        "Selected tomb fee does not "
+                        "belong to this church."
+                    )
+                })
+
+        # -----------------------------------------------------
+        # VALIDATE MEMBER BELONGS TO CHURCH
+        # -----------------------------------------------------
+
+        if member.church_id != (
+            church.id if church else None
+        ):
             raise serializers.ValidationError({
-                "tomb_charge": "Tomb charge must be provided."
+                "member": (
+                    "Member does not belong to this church."
+                )
             })
 
-        if tomb_charge is not None and tomb_charge < 0:
-            raise serializers.ValidationError({
-                "tomb_charge": "Tomb charge cannot be negative."
-            })
-        
-        if not reason_of_death or not reason_of_death.strip():
-            raise serializers.ValidationError({
-                "reason_of_death": "Reason of death is required."
-            })
-        
-        # ✅ FIXED: Validate member belongs to church (no optional chaining)
-        church = data.get("church") or (instance.church if instance else None)
-        if member.church_id != (church.id if church else None):
-            raise serializers.ValidationError({
-                "member": "Member does not belong to this church."
-            })
-            
         return data
+
+    # =========================================================
+    # CREATE
+    # =========================================================
 
     def create(self, validated_data):
         """
-        Create death register and automatically mark member as deceased
+        Create death register and automatically
+        mark member as deceased.
         """
+
         member = validated_data.get("member")
-        
-        # Mark member as deceased
+
+        # -----------------------------------------------------
+        # MARK MEMBER AS DECEASED
+        # -----------------------------------------------------
+
         member.expired = True
+
         member.is_active = False
+
         member.inactive_reason = "DECEASED"
+
         member.inactive_date = date.today()
+
         member.save()
 
-        # Update spouse status if exists
+        # -----------------------------------------------------
+        # UPDATE SPOUSE STATUS
+        # -----------------------------------------------------
+
         if member.spouse:
+
             member.spouse.marital_status = "WIDOWED"
+
             member.spouse.save()
 
-        # Create death register
-        death = DeathRegister.objects.create(**validated_data)
-        
+        # -----------------------------------------------------
+        # CREATE DEATH REGISTER
+        # -----------------------------------------------------
+
+        death = DeathRegister.objects.create(
+            **validated_data
+        )
+
         return death
-
-
-class DeathRegisterListSerializer(serializers.ModelSerializer):
+ 
+ 
+class DeathRegisterListSerializer(
+    serializers.ModelSerializer
+):
     """
-    Simplified serializer for list view
+    Simplified serializer for list view.
     """
-    member_name = serializers.CharField(source="member.name", read_only=True)
+
+    member_name = serializers.CharField(
+        source="member.name",
+        read_only=True
+    )
+
     family_name = serializers.CharField(
         source="member.family.family_name",
         read_only=True
     )
+
     house_name = serializers.CharField(
         source="member.house_name",
         read_only=True
     )
-    
+
+    tomb_type_name = serializers.CharField(
+        source="tomb_fee.tomb_type.name",
+        read_only=True,
+        allow_null=True
+    )
+
+    tomb_charge = serializers.DecimalField(
+        source="tomb_fee.tomb_fees",
+        max_digits=15,
+        decimal_places=3,
+        read_only=True,
+        allow_null=True
+    )
+
     class Meta:
         model = DeathRegister
+
         fields = [
             "id",
             "reg_no",
@@ -3839,49 +4121,131 @@ class DeathRegisterListSerializer(serializers.ModelSerializer):
             "house_name",
             "died_on",
             "funeral_on",
+            "tomb_type_name",
+            "tomb_charge",
             "created_at",
         ]
 
+ 
+ 
+class DeathRegisterDetailSerializer(
+    serializers.ModelSerializer
+):
+    """
+    Detailed serializer for single death record view.
+    """
 
-class DeathRegisterDetailSerializer(serializers.ModelSerializer):
-    """
-    Detailed serializer for single record view
-    """
-    member_name = serializers.CharField(source="member.name", read_only=True)
+    member_name = serializers.CharField(
+        source="member.name",
+        read_only=True
+    )
+
     family_name = serializers.CharField(
         source="member.family.family_name",
         read_only=True
     )
+
     house_name = serializers.CharField(
         source="member.house_name",
         read_only=True
     )
-    tomb_type_name = serializers.CharField(
-        source="tomb_type.name",
+
+    # ---------------------------------------------------------
+    # Nested TombFee
+    # ---------------------------------------------------------
+
+    tomb_fee_details = TombFeeSerializer(
+        source="tomb_fee",
         read_only=True
     )
-    
+
+    # ---------------------------------------------------------
+    # Tomb type
+    # ---------------------------------------------------------
+
+    tomb_type_name = serializers.CharField(
+        source="tomb_fee.tomb_type.name",
+        read_only=True,
+        allow_null=True
+    )
+
+    # ---------------------------------------------------------
+    # Tomb charge
+    # ---------------------------------------------------------
+
+    tomb_charge = serializers.DecimalField(
+        source="tomb_fee.tomb_fees",
+        max_digits=15,
+        decimal_places=3,
+        read_only=True,
+        allow_null=True
+    )
+
+    # ---------------------------------------------------------
+    # Days since death/funeral
+    # ---------------------------------------------------------
+
+    days_since_death = serializers.SerializerMethodField()
+
+    days_since_funeral = serializers.SerializerMethodField()
+
+    # ---------------------------------------------------------
+    # Meta
+    # ---------------------------------------------------------
+
     class Meta:
         model = DeathRegister
+
         fields = [
             "id",
             "reg_no",
             "church",
+
             "member",
             "member_name",
             "family_name",
             "house_name",
+
             "died_on",
             "funeral_on",
-            "tomb_type",
+
+            "tomb_fee",
+            "tomb_fee_details",
             "tomb_type_name",
             "tomb_charge",
+
             "tomb_idn",
             "reason_of_death",
             "remarks",
+
+            "days_since_death",
+            "days_since_funeral",
+
             "created_at",
         ]
 
+    # =========================================================
+    # DAYS SINCE DEATH
+    # =========================================================
+
+    def get_days_since_death(self, obj):
+        """
+        Get number of days since death.
+        """
+
+        return obj.get_days_since_death()
+
+    # =========================================================
+    # DAYS SINCE FUNERAL
+    # =========================================================
+
+    def get_days_since_funeral(self, obj):
+        """
+        Get number of days since funeral.
+        """
+
+        return obj.get_days_since_funeral()
+ 
 from django.contrib.auth import get_user_model
 User = get_user_model()
 

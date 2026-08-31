@@ -12,11 +12,6 @@ import {
   Text,
 } from "@chakra-ui/react";
 
-import {
-  LuArrowLeft,
-  LuSave,
-} from "react-icons/lu";
-
 import { useNavigate } from "react-router-dom";
 
 import Navbar from "../components/Navbar";
@@ -25,6 +20,10 @@ import Footer from "../components/Footer";
 import { createEvent } from "../api/registryServices";
 
 const PRIMARY_MAROON = "var(--primary-maroon)";
+const RED = "#D7193F";
+const DARK = "#182338";
+const MUTED = "#60708C";
+const BORDER = "#DCE2EA";
 
 const EventsAddPage = () => {
   const navigate = useNavigate();
@@ -34,10 +33,10 @@ const EventsAddPage = () => {
   const [error, setError] = useState("");
 
   // ==========================================================
-  // SAVE
+  // SUBMIT
   // ==========================================================
 
-  const handleSave = async () => {
+  const handleSubmit = async () => {
     const trimmedName = name.trim();
 
     if (!trimmedName) {
@@ -49,16 +48,17 @@ const EventsAddPage = () => {
       setSaving(true);
       setError("");
 
+      console.log("Creating event with payload:", {
+        name: trimmedName,
+      });
+
       await createEvent({
         name: trimmedName,
       });
 
       navigate("/events");
     } catch (err) {
-      console.error(
-        "Error creating event:",
-        err
-      );
+      console.error("Error creating event:", err);
 
       const apiError =
         err?.response?.data?.name?.[0] ||
@@ -72,149 +72,234 @@ const EventsAddPage = () => {
   };
 
   // ==========================================================
+  // CANCEL
+  // ==========================================================
+
+  const handleCancel = () => {
+    navigate("/events");
+  };
+
+  // ==========================================================
+  // INPUT STYLE
+  // ==========================================================
+
+  const inputStyle = {
+    h: "42px",
+    fontSize: "13px",
+    borderColor: BORDER,
+    borderRadius: "7px",
+    color: DARK,
+    bg: "white",
+
+    _placeholder: {
+      color: "#98A2B3",
+    },
+
+    _hover: {
+      borderColor: "#BFC7D4",
+    },
+
+    _focus: {
+      borderColor: PRIMARY_MAROON,
+      boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
+    },
+  };
+
+  // ==========================================================
+  // LABEL
+  // ==========================================================
+
+  const FieldLabel = ({
+    children,
+    required = true,
+  }) => (
+    <Text
+      fontSize="12px"
+      fontWeight="600"
+      color={DARK}
+      mb="8px"
+    >
+      {children}
+
+      {required && (
+        <Text
+          as="span"
+          color={RED}
+          ml="2px"
+        >
+          *
+        </Text>
+      )}
+    </Text>
+  );
+
+  // ==========================================================
   // RENDER
   // ==========================================================
 
   return (
     <Box
       minH="100vh"
-      bg="white"
+      bg="#FFFFFF"
       display="flex"
       flexDirection="column"
     >
-      {/* =====================================================
+      {/* ======================================================
           NAVBAR
-      ===================================================== */}
+      ====================================================== */}
 
       <Navbar />
 
-      {/* =====================================================
+      {/* ======================================================
           MAIN CONTENT
-      ===================================================== */}
+      ====================================================== */}
 
-      <Box
-        flex="1"
-        w="100%"
-        px={{
-          base: 3,
-          md: 4,
-        }}
-        py={{
-          base: 3,
-          md: 4,
-        }}
-      >
-        {/* ===================================================
-            BREADCRUMB
-        =================================================== */}
-
-        <HStack
-          gap={2}
-          mb={2}
-          color="#60708C"
-          fontSize="11px"
-        >
-          <Text>Masters</Text>
-          <Text>/</Text>
-          <Text>Events Master</Text>
-          <Text>/</Text>
-          <Text color="#182338" fontWeight="600">Add Event</Text>
-        </HStack>
-
-        {/* ===================================================
-            PAGE HEADER
-        =================================================== */}
-
-        <Box mb={3}>
-          <Text
-            fontSize="10px"
-            fontWeight="700"
-            color="#D7193F"
-            mb={1}
-          >
-            EVENTS MASTER
-          </Text>
-
-          <Heading
-            color="#182338"
-            fontSize={{
-              base: "22px",
-              md: "26px",
-            }}
-            lineHeight="1.1"
-            mb={1}
-          >
-            Add Event
-          </Heading>
-
-          <Text
-            color="#60708C"
-            fontSize="11px"
-          >
-            Create a new event record.
-          </Text>
-        </Box>
-
-        {/* ===================================================
-            FORM CARD
-        =================================================== */}
-
+      <Box flex="1" w="100%">
         <Box
-          border="1px solid #DCE2EA"
-          borderRadius="8px"
-          bg="white"
-          overflow="hidden"
+          w="100%"
+          px={{
+            base: 3,
+            md: 5,
+          }}
+          py={{
+            base: 3,
+            md: 5,
+          }}
         >
-          {/* =================================================
-              CARD CONTENT
-          ================================================= */}
+          {/* ==================================================
+              BREADCRUMB
+          ================================================== */}
 
-          <Box
-            px={{
-              base: 4,
-              md: 5,
+          <HStack
+            gap={2}
+            mb={3}
+            color={MUTED}
+            fontSize="12px"
+          >
+            <Text>
+              Masters
+            </Text>
+
+            <Text>/</Text>
+
+            <Text>
+              Events Master
+            </Text>
+
+            <Text>/</Text>
+
+            <Text color={DARK}>
+              Add Event
+            </Text>
+          </HStack>
+
+          {/* ==================================================
+              PAGE HEADER
+          ================================================== */}
+
+          <Flex
+            justify="space-between"
+            align={{
+              base: "flex-start",
+              md: "center",
             }}
-            py={{
-              base: 4,
-              md: 5,
+            gap={3}
+            mb={4}
+            direction={{
+              base: "column",
+              md: "row",
             }}
           >
-            {/* =================================================
-                SECTION TITLE
-            ================================================= */}
-
-            <Heading
-              color="#182338"
-              fontSize={{
-                base: "16px",
-                md: "18px",
-              }}
-              fontWeight="700"
-              mb={4}
-            >
-              Event Information
-            </Heading>
-
-            {/* =================================================
-                FIELD
-            ================================================= */}
-
             <Box>
               <Text
-                color="#182338"
-                fontSize="12px"
-                fontWeight="600"
-                mb={1.5}
+                fontSize="11px"
+                fontWeight="700"
+                color={RED}
+                mb={1}
               >
-                Event Name
-                <Text
-                  as="span"
-                  color="#D7193F"
-                  ml={1}
-                >
-                  *
-                </Text>
+                EVENTS MASTER
               </Text>
+
+              <Heading
+                color={DARK}
+                fontSize={{
+                  base: "24px",
+                  md: "28px",
+                }}
+                lineHeight="1.2"
+                mb={1}
+              >
+                Add Event
+              </Heading>
+
+              <Text
+                color={MUTED}
+                fontSize="12px"
+              >
+                Create a new event record.
+              </Text>
+            </Box>
+          </Flex>
+
+          {/* ==================================================
+              FORM CARD
+          ================================================== */}
+
+          <Box
+            border="1px solid"
+            borderColor={BORDER}
+            borderRadius="9px"
+            bg="white"
+            p={{
+              base: 4,
+              md: 6,
+            }}
+            width="100%"
+            boxShadow="0 1px 3px rgba(16, 24, 40, 0.04)"
+          >
+            {/* ==================================================
+                CARD HEADER
+            ================================================== */}
+
+            <Box mb={5}>
+              <Text
+                fontSize="13px"
+                fontWeight="700"
+                color={RED}
+                pb="10px"
+                borderBottom="2px solid"
+                borderColor={RED}
+                display="inline-block"
+              >
+                Event Details
+              </Text>
+            </Box>
+
+            {/* ==================================================
+                SECTION TITLE
+            ================================================== */}
+
+            <Flex
+              align="center"
+              mb={4}
+            >
+              <Text
+                fontSize="13px"
+                fontWeight="700"
+                color={DARK}
+              >
+                Event Information
+              </Text>
+            </Flex>
+
+            {/* ==================================================
+                FIELD - EVENT NAME
+            ================================================== */}
+
+            <Box mb={5}>
+              <FieldLabel>
+                Event Name
+              </FieldLabel>
 
               <Input
                 value={name}
@@ -223,129 +308,86 @@ const EventsAddPage = () => {
                   setError("");
                 }}
                 placeholder="Enter event name"
-                h="38px"
-                px={4}
-                fontSize="12px"
-                borderColor="#DCE2EA"
-                borderRadius="6px"
-                color="#182338"
-                _placeholder={{
-                  color: "#8B98AB",
-                }}
-                _focus={{
-                  borderColor: PRIMARY_MAROON,
-                  boxShadow:
-                    `0 0 0 1px ${PRIMARY_MAROON}`,
-                }}
+                {...inputStyle}
               />
-
-              {/* =================================================
-                  ERROR
-              ================================================= */}
-
-              {error && (
-                <Box
-                  mt={3}
-                  px={4}
-                  py={3}
-                  bg="#FFF5F5"
-                  border="1px solid #FECACA"
-                  borderRadius="6px"
-                >
-                  <Text
-                    color="#C53030"
-                    fontSize="12px"
-                  >
-                    {error}
-                  </Text>
-                </Box>
-              )}
             </Box>
 
-            {/* =================================================
+            {/* ==================================================
+                ERROR
+            ================================================== */}
+
+            {error && (
+              <Box
+                mb={4}
+                px={4}
+                py={2.5}
+                border="1px solid #FED7D7"
+                bg="#FFF5F5"
+                borderRadius="7px"
+              >
+                <Text
+                  color="#C53030"
+                  fontSize="12px"
+                  fontWeight="500"
+                >
+                  {error}
+                </Text>
+              </Box>
+            )}
+
+            {/* ==================================================
                 DIVIDER
-            ================================================= */}
+            ================================================== */}
 
             <Box
-              borderTop="1px solid #DCE2EA"
-              mt={6}
+              borderTop="1px solid"
+              borderColor="#E6EAF0"
               mb={4}
             />
 
-            {/* =================================================
-                ACTION BUTTONS
-            ================================================= */}
+            {/* ==================================================
+                BUTTONS
+            ================================================== */}
 
             <Flex
               justify="flex-end"
               align="center"
-              gap={2}
-              direction={{
-                base: "column-reverse",
-                sm: "row",
-              }}
+              gap={3}
             >
-              {/* CANCEL */}
-
               <Button
                 variant="outline"
+                borderColor={RED}
+                color={RED}
                 h="38px"
-                minW={{
-                  base: "100%",
-                  sm: "120px",
-                }}
-                px={4}
-                borderColor="#FF5A7D"
-                color="#D7193F"
-                bg="white"
-                borderRadius="6px"
+                px={6}
+                borderRadius="7px"
                 fontSize="12px"
                 fontWeight="600"
-                onClick={() =>
-                  navigate("/events")
-                }
+                onClick={handleCancel}
+                disabled={saving}
                 _hover={{
-                  bg: "#FFF0F4",
+                  bg: "#FFF5F7",
                 }}
               >
-                <LuArrowLeft
-                  size={15}
-                  style={{
-                    marginRight: "7px",
-                  }}
-                />
-
                 Cancel
               </Button>
 
-              {/* SAVE */}
-
               <Button
+                h="38px"
+                px={7}
                 bg={PRIMARY_MAROON}
                 color="white"
-                h="38px"
-                minW={{
-                  base: "100%",
-                  sm: "140px",
-                }}
-                px={4}
-                borderRadius="6px"
+                borderRadius="7px"
                 fontSize="12px"
                 fontWeight="600"
                 isLoading={saving}
                 loadingText="Saving..."
-                onClick={handleSave}
+                disabled={saving}
+                onClick={handleSubmit}
                 _hover={{
                   bg: "#650A18",
                 }}
               >
-                <LuSave
-                  size={15}
-                  style={{
-                    marginRight: "7px",
-                  }}
-                />
-
                 Save Event
               </Button>
             </Flex>
@@ -353,9 +395,9 @@ const EventsAddPage = () => {
         </Box>
       </Box>
 
-      {/* =====================================================
+      {/* ======================================================
           FOOTER
-      ===================================================== */}
+      ====================================================== */}
 
       <Footer />
     </Box>

@@ -782,7 +782,7 @@ const FamilyPage = () => {
                             borderBottom="1px solid #E6EAF0"
                           >
                             <HStack gap={2}>
-                              <Button
+                              {/* <Button
                                 variant="ghost"
                                 size="sm"
                                 h="30px"
@@ -810,7 +810,7 @@ const FamilyPage = () => {
                               <Box
                                 h="20px"
                                 borderLeft="1px solid #DCE2EA"
-                              />
+                              /> */}
 
                               <Button
                                 variant="ghost"

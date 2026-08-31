@@ -749,7 +749,7 @@ const RelationshipPage = () => {
                           >
                             <HStack gap={2}>
                               {/* VIEW */}
-
+{/* 
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -778,7 +778,7 @@ const RelationshipPage = () => {
                               <Box
                                 h="20px"
                                 borderLeft="1px solid #DCE2EA"
-                              />
+                              /> */}
 
                               {/* EDIT */}
 

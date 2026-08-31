@@ -993,7 +993,7 @@ const SubscriptionPage = () => {
                             <HStack gap={2}>
                               {/* VIEW */}
 
-                              <Button
+                              {/* <Button
                                 variant="ghost"
                                 size="sm"
                                 h="30px"
@@ -1023,7 +1023,7 @@ const SubscriptionPage = () => {
                               <Box
                                 h="20px"
                                 borderLeft="1px solid #DCE2EA"
-                              />
+                              /> */}
 
                               {/* EDIT */}
 

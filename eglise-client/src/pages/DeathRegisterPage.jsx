@@ -617,13 +617,7 @@ const DeathRegisterPage = () => {
                   Directory
                 </Text>
 
-                <Text
-                  color={SECONDARY_TEXT}
-                  fontSize="11px"
-                  mt={1}
-                >
-                  Parish death records
-                </Text>
+               
               </Box>
             </Flex>
 

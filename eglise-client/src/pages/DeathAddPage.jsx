@@ -23,7 +23,10 @@ import {
   listMembers,
 } from "../api/registryServices";
 
-import { listTombTypes } from "../api/churchServices";
+import {
+  listTombTypes,
+  listTombFees,
+} from "../api/churchServices";
 
 const PRIMARY_RED = "#D7193F";
 const DARK_RED = "#650A18";
@@ -43,7 +46,9 @@ const DeathAddPage = () => {
   const [families, setFamilies] = useState([]);
   const [members, setMembers] = useState([]);
   const [tombTypes, setTombTypes] = useState([]);
+  const [tombFees, setTombFees] = useState([]);
 
+  const [loadingFees, setLoadingFees] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -56,7 +61,7 @@ const DeathAddPage = () => {
     died_on: "",
     funeral_on: "",
     tomb_type: "",
-    tomb_charge: "",
+    tomb_fee: "",
     tomb_idn: "",
     reason_of_death: "",
     remarks: "",
@@ -141,6 +146,65 @@ const DeathAddPage = () => {
   }, []);
 
   // ==========================================================
+  // LOAD TOMB FEES WHEN TOMB TYPE CHANGES
+  // ==========================================================
+
+  useEffect(() => {
+    const loadTombFees = async () => {
+      if (!formData.tomb_type) {
+        setTombFees([]);
+
+        setFormData((previous) => ({
+          ...previous,
+          tomb_fee: "",
+        }));
+
+        return;
+      }
+
+      try {
+        setLoadingFees(true);
+
+        const response = await listTombFees(
+          formData.tomb_type
+        );
+
+        const feeData =
+          response?.data?.results ??
+          response?.data ??
+          [];
+
+        setTombFees(
+          Array.isArray(feeData)
+            ? feeData
+            : []
+        );
+
+        setFormData((previous) => ({
+          ...previous,
+          tomb_fee: "",
+        }));
+      } catch (error) {
+        console.error(
+          "Error loading tomb fees:",
+          error
+        );
+
+        setTombFees([]);
+
+        setFormData((previous) => ({
+          ...previous,
+          tomb_fee: "",
+        }));
+      } finally {
+        setLoadingFees(false);
+      }
+    };
+
+    loadTombFees();
+  }, [formData.tomb_type]);
+
+  // ==========================================================
   // MEMBERS FOR SELECTED FAMILY
   // ==========================================================
 
@@ -161,6 +225,25 @@ const DeathAddPage = () => {
       );
     });
   }, [members, formData.family]);
+
+  // ==========================================================
+  // SELECTED TOMB FEE
+  // ==========================================================
+
+  const selectedTombFee = useMemo(() => {
+    if (
+      !formData.tomb_fee ||
+      tombFees.length === 0
+    ) {
+      return null;
+    }
+
+    return tombFees.find(
+      (fee) =>
+        String(fee.id) ===
+        String(formData.tomb_fee)
+    );
+  }, [formData.tomb_fee, tombFees]);
 
   // ==========================================================
   // HELPERS
@@ -221,6 +304,29 @@ const DeathAddPage = () => {
   };
 
   // ==========================================================
+  // TOMB TYPE CHANGE
+  // ==========================================================
+
+  const handleTombTypeChange = (event) => {
+    const tombTypeId =
+      event.target.value;
+
+    setFormData((previous) => ({
+      ...previous,
+      tomb_type: tombTypeId,
+      tomb_fee: "",
+    }));
+
+    setFieldErrors((previous) => ({
+      ...previous,
+      tomb_type: undefined,
+      tomb_fee: undefined,
+    }));
+
+    setPageError("");
+  };
+
+  // ==========================================================
   // VALIDATION
   // ==========================================================
 
@@ -262,20 +368,9 @@ const DeathAddPage = () => {
         "Tomb type is required.";
     }
 
-    if (
-      formData.tomb_charge === "" ||
-      formData.tomb_charge === null
-    ) {
-      errors.tomb_charge =
-        "Tomb charge is required.";
-    }
-
-    if (
-      formData.tomb_charge !== "" &&
-      Number(formData.tomb_charge) < 0
-    ) {
-      errors.tomb_charge =
-        "Tomb charge cannot be negative.";
+    if (!formData.tomb_fee) {
+      errors.tomb_fee =
+        "Tomb fee selection is required.";
     }
 
     if (
@@ -309,17 +404,42 @@ const DeathAddPage = () => {
     try {
       setSaving(true);
 
+      /*
+       * Send both tomb_type and tomb_fee.
+       *
+       * tomb_type = selected TombType ID
+       * tomb_fee  = selected TombFee ID
+       */
+
       const payload = {
         member: Number(formData.member),
-        died_on: formData.died_on,
-        funeral_on: formData.funeral_on,
-        tomb_type: Number(formData.tomb_type),
-        tomb_charge: Number(formData.tomb_charge),
-        tomb_idn: formData.tomb_idn || "",
+
+        died_on:
+          formData.died_on,
+
+        funeral_on:
+          formData.funeral_on,
+
+        tomb_type:
+          Number(formData.tomb_type),
+
+        tomb_fee:
+          Number(formData.tomb_fee),
+
+        tomb_idn:
+          formData.tomb_idn || "",
+
         reason_of_death:
           formData.reason_of_death.trim(),
-        remarks: formData.remarks.trim(),
+
+        remarks:
+          formData.remarks.trim(),
       };
+
+      console.log(
+        "Death registration payload:",
+        payload
+      );
 
       await createDeathRecord(payload);
 
@@ -334,6 +454,16 @@ const DeathAddPage = () => {
 
       const responseData =
         error?.response?.data;
+
+      console.error(
+        "HTTP status:",
+        error?.response?.status
+      );
+
+      console.error(
+        "Backend response:",
+        responseData
+      );
 
       if (
         responseData &&
@@ -352,23 +482,29 @@ const DeathAddPage = () => {
           ) {
             normalizedErrors[key] =
               value;
+          } else {
+            normalizedErrors[key] =
+              JSON.stringify(value);
           }
         });
 
-        if (
-          Object.keys(
+        setFieldErrors(
+          normalizedErrors
+        );
+
+        const messages =
+          Object.entries(
             normalizedErrors
-          ).length > 0
-        ) {
-          setFieldErrors(
-            normalizedErrors
-          );
-        }
+          )
+            .map(
+              ([key, value]) =>
+                `${key}: ${value}`
+            )
+            .join("\n");
 
         setPageError(
-          responseData.error ||
-            responseData.detail ||
-            ""
+          messages ||
+            "Unable to register death record."
         );
       } else {
         setPageError(
@@ -388,7 +524,7 @@ const DeathAddPage = () => {
   // ==========================================================
 
   const handleCancel = () => {
-    navigate("/death");
+    navigate("/death-register")
   };
 
   // ==========================================================
@@ -438,9 +574,18 @@ const DeathAddPage = () => {
 
       <Container
         maxW="1400px"
-        px={{ base: 4, md: 5 }}
-        pt={{ base: 3, md: 3 }}
-        pb={{ base: 3, md: 3 }}
+        px={{
+          base: 4,
+          md: 5,
+        }}
+        pt={{
+          base: 3,
+          md: 3,
+        }}
+        pb={{
+          base: 3,
+          md: 3,
+        }}
         flex="1"
       >
         {/* ==================================================
@@ -542,6 +687,7 @@ const DeathAddPage = () => {
                 <Text
                   color="red.600"
                   fontSize="11px"
+                  whiteSpace="pre-line"
                 >
                   {pageError}
                 </Text>
@@ -564,6 +710,7 @@ const DeathAddPage = () => {
               gap={3}
               mb={2.5}
             >
+
               {/* FAMILY */}
 
               <FormField
@@ -621,8 +768,7 @@ const DeathAddPage = () => {
                   <option value="">
                     {!formData.family
                       ? "Select Family First"
-                      : familyMembers.length ===
-                        0
+                      : familyMembers.length === 0
                       ? "No active members"
                       : "Select Member"}
                   </option>
@@ -645,6 +791,7 @@ const DeathAddPage = () => {
                   )}
                 </SelectField>
               </FormField>
+
             </SimpleGrid>
 
             {/* DIVIDER */}
@@ -670,6 +817,7 @@ const DeathAddPage = () => {
               gap={3}
               mb={2.5}
             >
+
               {/* DATE OF DEATH */}
 
               <FormField
@@ -717,10 +865,10 @@ const DeathAddPage = () => {
               >
                 <SelectField
                   name="tomb_type"
-                  value={
-                    formData.tomb_type
+                  value={formData.tomb_type}
+                  onChange={
+                    handleTombTypeChange
                   }
-                  onChange={handleChange}
                   error={
                     fieldErrors.tomb_type
                   }
@@ -742,56 +890,50 @@ const DeathAddPage = () => {
                 </SelectField>
               </FormField>
 
-              {/* TOMB CHARGE */}
+              {/* TOMB FEE */}
 
               <FormField
-                label="Tomb Charge"
+                label="Tomb Fee"
                 required
                 error={
-                  fieldErrors.tomb_charge
+                  fieldErrors.tomb_fee
                 }
               >
-                <Box position="relative">
-                  <Text
-                    position="absolute"
-                    left="12px"
-                    top="50%"
-                    transform="translateY(-50%)"
-                    color={SECONDARY_TEXT}
-                    fontSize="12px"
-                    zIndex={1}
-                  >
-                    ₹
-                  </Text>
+                <SelectField
+                  name="tomb_fee"
+                  value={formData.tomb_fee}
+                  onChange={handleChange}
+                  error={
+                    fieldErrors.tomb_fee
+                  }
+                  disabled={
+                    !formData.tomb_type ||
+                    loadingFees ||
+                    tombFees.length === 0
+                  }
+                >
+                  <option value="">
+                    {!formData.tomb_type
+                      ? "Select Tomb Type First"
+                      : loadingFees
+                      ? "Loading fees..."
+                      : tombFees.length === 0
+                      ? "No fees available"
+                      : "Select Tomb Fee"}
+                  </option>
 
-                  <Input
-                    name="tomb_charge"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={
-                      formData.tomb_charge
-                    }
-                    onChange={handleChange}
-                    placeholder="Enter tomb charge"
-                    pl="28px"
-                    h="32px"
-                    borderColor={
-                      fieldErrors.tomb_charge
-                        ? "red.400"
-                        : BORDER_COLOR
-                    }
-                    borderRadius="6px"
-                    fontSize="12px"
-                    color={TEXT_COLOR}
-                    _focus={{
-                      borderColor:
-                        PRIMARY_RED,
-                      boxShadow:
-                        `0 0 0 1px ${PRIMARY_RED}`,
-                    }}
-                  />
-                </Box>
+                  {tombFees.map(
+                    (fee) => (
+                      <option
+                        key={fee.id}
+                        value={fee.id}
+                      >
+                        {fee.indication} - ₹
+                        {fee.tomb_fees}
+                      </option>
+                    )
+                  )}
+                </SelectField>
               </FormField>
 
               {/* TOMB IDN */}
@@ -826,7 +968,10 @@ const DeathAddPage = () => {
                   }}
                 />
               </FormField>
+
             </SimpleGrid>
+
+           
 
             {/* ==================================================
                 REASON
@@ -953,6 +1098,7 @@ const DeathAddPage = () => {
                 Register Death
               </Button>
             </Flex>
+
           </form>
         </Box>
       </Container>
@@ -1091,6 +1237,7 @@ const SelectField = ({
       </Box>
 
       {/* Simple dropdown arrow */}
+
       <Box
         position="absolute"
         right="11px"
@@ -1109,8 +1256,6 @@ const SelectField = ({
 
 // ==========================================================
 // DATE INPUT
-// No custom calendar icon.
-// Browser native date picker icon only.
 // ==========================================================
 
 const DateInput = ({
@@ -1169,6 +1314,14 @@ const getApiErrorMessage = (
 
   if (data.detail) {
     return data.detail;
+  }
+
+  if (data.non_field_errors) {
+    return Array.isArray(
+      data.non_field_errors
+    )
+      ? data.non_field_errors.join(" ")
+      : data.non_field_errors;
   }
 
   return fallback;

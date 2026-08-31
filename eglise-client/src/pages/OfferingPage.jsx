@@ -956,7 +956,7 @@ const OfferingPage = () => {
                             <HStack gap={2}>
                               {/* VIEW */}
 
-                              <Button
+                              {/* <Button
                                 variant="ghost"
                                 size="sm"
                                 h="30px"
@@ -984,7 +984,7 @@ const OfferingPage = () => {
                               <Box
                                 h="20px"
                                 borderLeft="1px solid #DCE2EA"
-                              />
+                              /> */}
 
                               {/* EDIT */}
 
@@ -1013,10 +1013,10 @@ const OfferingPage = () => {
                                 Edit
                               </Button>
 
-                              <Box
+                              {/* <Box
                                 h="20px"
                                 borderLeft="1px solid #DCE2EA"
-                              />
+                              /> */}
 
                               {/* DELETE */}
 
