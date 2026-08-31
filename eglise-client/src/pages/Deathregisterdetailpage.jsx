@@ -13,15 +13,25 @@ import {
   Text,
   VStack,
   useDisclosure,
+  Badge,
+  Icon,
+  Image,
+  Tabs as ChakraTabs,
 } from "@chakra-ui/react";
 
 import {
-  Tabs,
-  TabList,
-  TabPanels,
-  Tab,
-  TabPanel,
-} from "@chakra-ui/tabs";
+  LuArrowLeft,
+  LuUserRound,
+  LuCalendarDays,
+  LuMapPin,
+  LuPencil,
+  LuUsersRound,
+  LuFileText,
+  LuClock,
+  LuCross,
+  LuPrinter,
+  LuFile,
+} from "react-icons/lu";
 
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -48,156 +58,164 @@ const SECONDARY_TEXT = "#60708C";
 
 const BORDER_COLOR = "#DCE2EA";
 
-const BLUE = "#315AB5";
-
 const LIGHT_BG = "#F8FAFC";
 
 // ==========================================================
-// ICONS
+// SECTION CARD
 // ==========================================================
 
-const BackIcon = () => (
-  <svg
-    width="17"
-    height="17"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M19 12H5" />
-    <path d="M12 19l-7-7 7-7" />
-  </svg>
-);
+const SectionCard = ({
+  title,
+  icon,
+  children,
+  minH,
+  graphic = false,
+}) => {
+  return (
+    <Box
+      position="relative"
+      border={`1px solid ${BORDER_COLOR}`}
+      borderRadius="8px"
+      bg="#FFFFFF"
+      overflow="hidden"
+      minH={minH || "auto"}
+    >
+      {/* HEADER */}
 
-const PdfIcon = () => (
-  <svg
-    width="17"
-    height="17"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-    <path d="M14 2v6h6" />
-    <path d="M8 13h2a1.5 1.5 0 0 1 0 3H8v-3Z" />
-    <path d="M13 16v-3h1.5a1.5 1.5 0 0 1 0 3H13Z" />
-    <path d="M18 13h-2v3" />
-    <path d="M16 15h2" />
-  </svg>
-);
+      <HStack
+        px="14px"
+        py="8px"
+        gap="8px"
+        borderBottom={`1px solid ${BORDER_COLOR}`}
+        position="relative"
+        zIndex={2}
+        bg="#F8FAFC"
+      >
+        <Box
+          boxSize="24px"
+          borderRadius="full"
+          bg="#FFF1F4"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          flexShrink={0}
+        >
+          <Icon
+            as={icon}
+            boxSize="12px"
+            color={PRIMARY_RED}
+          />
+        </Box>
 
-const PrintIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <polyline points="6 9 6 2 18 2 18 9" />
-    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-    <rect x="6" y="14" width="12" height="8" />
-  </svg>
-);
+        <Heading
+          fontSize="14px"
+          fontWeight="700"
+          color={TEXT_COLOR}
+        >
+          {title}
+        </Heading>
+      </HStack>
 
-const UserIcon = ({ size = 22 }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="12" cy="7" r="4" />
-    <path d="M4.5 21c.7-4 3.2-6 7.5-6s6.8 2 7.5 6" />
-  </svg>
-);
+      {/* CONTENT */}
 
-const UsersIcon = ({ size = 28 }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.7"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="9" cy="8" r="3.5" />
-    <path d="M2.5 20c.6-3.5 2.7-5.5 6.5-5.5s5.9 2 6.5 5.5" />
+      <Box
+        px="14px"
+        py="12px"
+        position="relative"
+        zIndex={2}
+        maxW={graphic ? "72%" : "100%"}
+      >
+        {children}
+      </Box>
 
-    <circle cx="17" cy="7" r="3" />
-    <path d="M16 14.5c3.1.1 5 2 5.5 5.5" />
-  </svg>
-);
+      {/* CHURCH ILLUSTRATION */}
 
-const CalendarIcon = ({ size = 28 }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <rect x="3" y="4.5" width="18" height="17" rx="2" />
-    <path d="M16 2v5" />
-    <path d="M8 2v5" />
-    <path d="M3 9h18" />
-  </svg>
-);
+      {graphic && (
+        <Box
+          position="absolute"
+          right="0"
+          bottom="0"
+          width={{
+            base: "0",
+            md: "45%",
+            lg: "40%",
+          }}
+          height="100%"
+          display={{
+            base: "none",
+            md: "flex",
+          }}
+          alignItems="center"
+          justifyContent="flex-end"
+          pointerEvents="none"
+          overflow="hidden"
+        >
+          <Image
+            src={logoImage}
+            alt="Church illustration"
+            width="100%"
+            height="80%"
+            objectFit="contain"
+            objectPosition="right center"
+          />
+        </Box>
+      )}
+    </Box>
+  );
+};
 
-const FileIcon = ({ size = 23 }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-    <path d="M14 2v6h6" />
-    <path d="M8 13h8" />
-    <path d="M8 17h6" />
-  </svg>
-);
+// ==========================================================
+// INFO ROW
+// ==========================================================
 
-const TombIcon = ({ size = 24 }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M5 21h14" />
-    <path d="M7 21V8l5-4 5 4v13" />
-    <path d="M10 21v-7h4v7" />
-    <path d="M12 7v4" />
-    <path d="M10 9h4" />
-  </svg>
-);
+const InfoRow = ({
+  label,
+  value,
+  highlight = false,
+}) => {
+  return (
+    <Flex
+      align="center"
+      gap={{
+        base: "8px",
+        md: "16px",
+      }}
+      minH="20px"
+      width="100%"
+    >
+      <Text
+        fontSize="11px"
+        color={SECONDARY_TEXT}
+        fontWeight="500"
+        flex={{
+          base: "0 0 100px",
+          sm: "0 0 120px",
+          md: "0 0 150px",
+          lg: "0 0 160px",
+        }}
+      >
+        {label}
+      </Text>
+
+      <Text
+        fontSize="11px"
+        color={
+          highlight
+            ? PRIMARY_RED
+            : TEXT_COLOR
+        }
+        fontWeight={
+          highlight ? "600" : "500"
+        }
+        textAlign="left"
+        flex="1"
+        minW="0"
+      >
+        {value || "N/A"}
+      </Text>
+    </Flex>
+  );
+};
 
 // ==========================================================
 // MAIN COMPONENT
@@ -208,13 +226,21 @@ const DeathRegisterDetailPage = () => {
 
   const navigate = useNavigate();
 
-  const { isOpen, onOpen, onClose } = useDisclosure();
+  const {
+    isOpen,
+    onOpen,
+    onClose,
+  } = useDisclosure();
 
   const [death, setDeath] = useState(null);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] =
+    useState(true);
 
   const [error, setError] = useState("");
+
+  const [activeTab, setActiveTab] =
+    useState("overview");
 
   // ========================================================
   // LOAD DEATH RECORD
@@ -223,46 +249,48 @@ const DeathRegisterDetailPage = () => {
   useEffect(() => {
     const loadDeath = async () => {
       if (!id) {
-        setError("Death record ID is missing.");
+        setError(
+          "Death record ID is missing."
+        );
+
         setLoading(false);
+
         return;
       }
 
       try {
         setLoading(true);
+
         setError("");
 
-        console.log("Loading death record ID:", id);
+        console.log(
+          "Loading death record ID:",
+          id
+        );
 
-        const response = await getDeath(id);
+        const response =
+          await getDeath(id);
 
         console.log(
           "Death record response:",
           response?.data
         );
 
-        setDeath(response?.data || null);
+        setDeath(
+          response?.data || null
+        );
       } catch (err) {
         console.error(
           "Error loading death record:",
           err
         );
 
-        console.error(
-          "Status:",
-          err?.response?.status
-        );
-
-        console.error(
-          "Backend response:",
-          err?.response?.data
-        );
-
         const backendError =
           err?.response?.data;
 
         if (
-          typeof backendError === "string"
+          typeof backendError ===
+          "string"
         ) {
           setError(backendError);
         } else if (
@@ -295,11 +323,18 @@ const DeathRegisterDetailPage = () => {
   // ========================================================
 
   const handleBack = () => {
-    navigate("/death");
+    navigate("/death-register");
   };
 
   const handleEdit = () => {
     navigate(`/death/${id}/edit`);
+  };
+
+  // IMPORTANT:
+  // PDF and PRINT both open the certificate
+  // preview modal.
+  const handlePDF = () => {
+    onOpen();
   };
 
   const handlePrint = () => {
@@ -331,7 +366,9 @@ const DeathRegisterDetailPage = () => {
     }
   };
 
-  const formatDateTime = (dateValue) => {
+  const formatDateTime = (
+    dateValue
+  ) => {
     if (!dateValue) {
       return "N/A";
     }
@@ -361,40 +398,34 @@ const DeathRegisterDetailPage = () => {
   if (loading) {
     return (
       <Box
-        minH="100vh"
-        bg="white"
         display="flex"
         flexDirection="column"
+        height="100vh"
+        overflow="hidden"
       >
         <Navbar />
 
-        <Container
-          maxW="1600px"
+        <Box
           flex="1"
-          py={12}
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          bg="#FFFFFF"
         >
-          <Flex
-            minH="400px"
-            justify="center"
-            align="center"
-            direction="column"
-          >
+          <VStack gap="10px">
             <Spinner
               size="lg"
-              thickness="3px"
-              speed="0.65s"
               color={PRIMARY_RED}
             />
 
             <Text
-              mt={4}
               fontSize="13px"
               color={SECONDARY_TEXT}
             >
               Loading death record...
             </Text>
-          </Flex>
-        </Container>
+          </VStack>
+        </Box>
 
         <Footer />
       </Box>
@@ -408,50 +439,48 @@ const DeathRegisterDetailPage = () => {
   if (error || !death) {
     return (
       <Box
-        minH="100vh"
-        bg="white"
         display="flex"
         flexDirection="column"
+        height="100vh"
+        overflow="hidden"
       >
         <Navbar />
 
-        <Container
-          maxW="1600px"
+        <Box
           flex="1"
-          py={10}
+          bg="#FFFFFF"
+          px="25px"
+          py="30px"
+          overflowY="auto"
         >
-          <Box
-            p={5}
-            border="1px solid #FED7D7"
-            bg="#FFF5F5"
-            borderRadius="8px"
-          >
-            <Text
-              fontSize="13px"
-              color="red.600"
-            >
-              {error ||
-                "Death record not found."}
-            </Text>
-          </Box>
-
           <Button
-            mt={5}
-            h="38px"
-            px={5}
-            fontSize="12px"
             variant="outline"
             borderColor={PRIMARY_RED}
             color={PRIMARY_RED}
             onClick={handleBack}
           >
-            <BackIcon />
+            <Icon
+              as={LuArrowLeft}
+              mr="8px"
+            />
 
-            <Box ml={2}>
-              Back to Death Register
-            </Box>
+            Back to Death Register
           </Button>
-        </Container>
+
+          <Box
+            mt="30px"
+            textAlign="center"
+          >
+            <Text
+              fontSize="16px"
+              fontWeight="600"
+              color={TEXT_COLOR}
+            >
+              {error ||
+                "Death record not found."}
+            </Text>
+          </Box>
+        </Box>
 
         <Footer />
       </Box>
@@ -459,20 +488,36 @@ const DeathRegisterDetailPage = () => {
   }
 
   // ========================================================
-  // DATA
+  // DATA EXTRACTION
   // ========================================================
 
-  const member =
-    death?.member || {};
+  const regNo =
+    death?.reg_no || "N/A";
 
-  const family =
-    member?.family || {};
+  const memberName =
+    death?.member_name ||
+    death?.member?.name ||
+    "N/A";
+
+  const familyName =
+    death?.family_name ||
+    death?.member?.family_name ||
+    "N/A";
+
+  const houseName =
+    death?.house_name ||
+    death?.member?.house_name ||
+    death?.member?.house_no ||
+    "N/A";
+
+  const memberId =
+    death?.member ||
+    death?.member_id ||
+    death?.member?.id ||
+    null;
 
   const tombFee =
     death?.tomb_fee_details || {};
-
-  const memberName =
-    member?.name || "N/A";
 
   const memberInitials =
     memberName
@@ -485,11 +530,6 @@ const DeathRegisterDetailPage = () => {
           .toUpperCase()
       )
       .join("");
-
-  const familyName =
-    family?.family_name ||
-    family?.name ||
-    "N/A";
 
   const createdDate =
     death?.created_at
@@ -520,482 +560,647 @@ const DeathRegisterDetailPage = () => {
 
   return (
     <Box
-      minH="100vh"
-      bg="white"
       display="flex"
       flexDirection="column"
+      height="100vh"
+      overflow="hidden"
     >
-      {/* ====================================================
-          NAVBAR
-      ==================================================== */}
-
       <Navbar />
 
-      {/* ====================================================
-          MAIN
-      ==================================================== */}
-
-      <Container
-        maxW="1600px"
-        px={{
-          base: 4,
-          md: 5,
-          lg: 6,
-        }}
-        py={{
-          base: 4,
-          md: 4,
-          lg: 5,
-        }}
+      <Box
         flex="1"
+        bg="#FFFFFF"
+        overflowY="auto"
+        minHeight="0"
       >
-        {/* ==================================================
-            BREADCRUMB
-        ================================================== */}
-
-        <HStack
-          spacing={2}
-          mb={4}
-          fontSize="11px"
+        <Container
+          maxW="none"
+          px={{
+            base: 3,
+            md: 5,
+            xl: "20px",
+          }}
+          py="6px"
         >
-          <Text color={BLUE}>
-            Activities
-          </Text>
-
-          <Text color="#A5AFBD">
-            /
-          </Text>
-
-          <Text color={BLUE}>
-            Death Register
-          </Text>
-
-          <Text color="#A5AFBD">
-            /
-          </Text>
-
-          <Text color={BLUE}>
-            {death?.reg_no ||
-              "Death Record"}
-          </Text>
-        </HStack>
-
-        {/* ==================================================
-            PAGE HEADER
-        ================================================== */}
-
-        <Flex
-          justify="space-between"
-          align="flex-end"
-          mb={4}
-          gap={4}
-          flexWrap="wrap"
-        >
-          <Box>
-            <Text
-              color={PRIMARY_RED}
-              fontSize="11px"
-              fontWeight="700"
-              letterSpacing="0.2px"
-              mb={1}
-            >
-              DEATH RECORD
-            </Text>
-
-            <Heading
-              color={TEXT_COLOR}
-              fontSize={{
-                base: "24px",
-                md: "27px",
-              }}
-              fontWeight="600"
-              lineHeight="1.2"
-            >
-              Death Record Details
-            </Heading>
-
-            <Text
-              color={SECONDARY_TEXT}
-              fontSize="12px"
-              mt={1}
-            >
-              View complete death, funeral and burial information.
-            </Text>
-          </Box>
-
-          {/* ACTIONS */}
+          {/* =================================================
+              BREADCRUMB
+          ================================================= */}
 
           <HStack
-            spacing={2}
-            flexWrap="wrap"
+            gap="6px"
+            mb="2px"
+            fontSize="11px"
+            color={SECONDARY_TEXT}
+            h="16px"
           >
-            <Button
-              h="40px"
-              px={4}
-              variant="outline"
-              borderColor={PRIMARY_RED}
-              color={TEXT_COLOR}
-              fontSize="12px"
-              fontWeight="500"
-              onClick={handleBack}
-              _hover={{
-                bg: "#FFF5F7",
-              }}
-            >
-              <BackIcon />
+            <Text>
+              Activities
+            </Text>
 
-              <Box ml={2}>
-                Back to Death Register
-              </Box>
-            </Button>
+            <Text color="#9AA4B2">
+              /
+            </Text>
 
-            <Button
-              h="40px"
-              px={4}
-              variant="outline"
-              borderColor={PRIMARY_RED}
-              color={TEXT_COLOR}
-              fontSize="12px"
-              fontWeight="500"
-              onClick={handlePrint}
-              _hover={{
-                bg: "#FFF5F7",
-              }}
-            >
-              <PdfIcon />
+            <Text>
+              Death Register
+            </Text>
 
-              <Box ml={2}>
-                Generate PDF
-              </Box>
-            </Button>
+            <Text color="#9AA4B2">
+              /
+            </Text>
 
-            <Button
-              h="40px"
-              px={4}
-              variant="outline"
-              borderColor={PRIMARY_RED}
-              color={TEXT_COLOR}
-              fontSize="12px"
-              fontWeight="500"
-              onClick={() =>
-                window.print()
-              }
-              _hover={{
-                bg: "#FFF5F7",
-              }}
-            >
-              <PrintIcon />
-
-              <Box ml={2}>
-                Print
-              </Box>
-            </Button>
-
-            <Button
-              h="40px"
-              px={5}
-              bg={PRIMARY_RED}
-              color="white"
-              fontSize="12px"
-              fontWeight="600"
-              onClick={handleEdit}
-              _hover={{
-                bg: DARK_RED,
-              }}
-            >
-              Edit Record
-            </Button>
+            <Text color="#344054">
+              {regNo}
+            </Text>
           </HStack>
-        </Flex>
 
-        {/* ==================================================
-            MEMBER SUMMARY
-        ================================================== */}
+          {/* =================================================
+              PAGE HEADER
+          ================================================= */}
 
-        <Box
-          border={`1px solid ${BORDER_COLOR}`}
-          borderRadius="9px"
-          bg="white"
-          mb={4}
-          overflow="hidden"
-        >
           <Flex
-            minH="116px"
-            align="center"
-            px={{
-              base: 4,
-              md: 5,
+            justify="space-between"
+            align={{
+              base: "flex-start",
+              md: "center",
             }}
-            py={4}
-            gap={4}
-            flexWrap={{
-              base: "wrap",
-              lg: "nowrap",
+            direction={{
+              base: "column",
+              md: "row",
             }}
+            gap="12px"
+            mb="9px"
           >
-            {/* AVATAR */}
-
-            <Box
-              w="72px"
-              h="72px"
-              minW="72px"
-              borderRadius="50%"
-              bg="#FFE5E9"
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-              flexShrink={0}
-            >
+            <Box>
               <Text
                 color={PRIMARY_RED}
-                fontSize="22px"
-                fontWeight="600"
+                fontSize="10px"
+                fontWeight="700"
+                mb="0px"
               >
-                {memberInitials ||
-                  "DR"}
+                DEATH RECORD
+              </Text>
+
+              <Heading
+                fontSize="20px"
+                lineHeight="24px"
+                fontWeight="700"
+                color={TEXT_COLOR}
+              >
+                Death Record Details
+              </Heading>
+
+              <Text
+                fontSize="11px"
+                color={SECONDARY_TEXT}
+                mt="0px"
+              >
+                View complete death,
+                funeral and burial
+                information.
               </Text>
             </Box>
 
-            {/* MEMBER INFORMATION */}
-
-            <Box
-              flex="1"
-              minW="250px"
+            <HStack
+              gap="10px"
+              flexWrap="wrap"
             >
-              <Text
-                color={TEXT_COLOR}
-                fontSize="20px"
+              {/* BACK */}
+
+              <Button
+                h="34px"
+                px="14px"
+                variant="outline"
+                borderColor={
+                  PRIMARY_RED
+                }
+                color={PRIMARY_RED}
+                borderRadius="5px"
+                fontSize="11px"
                 fontWeight="600"
-                mb={1}
+                onClick={handleBack}
+                _hover={{
+                  bg: "#FFF5F7",
+                }}
               >
-                {memberName
-                  .toLowerCase()
-                  .startsWith("mr.")
-                  ? memberName
-                  : `Mr. ${memberName}`}
-              </Text>
+                <Icon
+                  as={LuArrowLeft}
+                  mr="6px"
+                  boxSize="13px"
+                />
 
-              <HStack
-                spacing={3}
-                flexWrap="wrap"
+                Back to Death Register
+              </Button>
+
+              {/* PDF */}
+
+              <Button
+                h="34px"
+                px="14px"
+                variant="outline"
+                borderColor={
+                  PRIMARY_RED
+                }
+                color={PRIMARY_RED}
+                borderRadius="5px"
+                fontSize="11px"
+                fontWeight="600"
+                onClick={handlePDF}
+                _hover={{
+                  bg: "#FFF5F7",
+                }}
               >
-                <HStack spacing={1.5}>
-                  <Box color={BLUE}>
-                    <FileIcon
-                      size={15}
-                    />
+                <Icon
+                  as={LuFile}
+                  mr="6px"
+                  boxSize="13px"
+                />
+
+                PDF
+              </Button>
+
+              {/* PRINT */}
+
+              <Button
+                h="34px"
+                px="14px"
+                variant="outline"
+                borderColor={
+                  PRIMARY_RED
+                }
+                color={PRIMARY_RED}
+                borderRadius="5px"
+                fontSize="11px"
+                fontWeight="600"
+                onClick={handlePrint}
+                _hover={{
+                  bg: "#FFF5F7",
+                }}
+              >
+                <Icon
+                  as={LuPrinter}
+                  mr="6px"
+                  boxSize="13px"
+                />
+
+                Print
+              </Button>
+
+              {/* EDIT */}
+
+              <Button
+                h="34px"
+                px="14px"
+                bg={PRIMARY_RED}
+                color="#FFFFFF"
+                borderRadius="5px"
+                fontSize="11px"
+                fontWeight="600"
+                onClick={handleEdit}
+                _hover={{
+                  bg: DARK_RED,
+                }}
+              >
+                <Icon
+                  as={LuPencil}
+                  mr="5px"
+                  boxSize="13px"
+                />
+
+                Edit
+              </Button>
+            </HStack>
+          </Flex>
+
+          {/* =================================================
+              DEATH SUMMARY
+          ================================================= */}
+
+          <Box
+            border={`1px solid ${BORDER_COLOR}`}
+            borderRadius="7px"
+            bg="#FFFFFF"
+            mb="6px"
+            overflow="hidden"
+          >
+            <Flex
+              minH={{
+                base: "auto",
+                lg: "100px",
+              }}
+              align="stretch"
+              direction={{
+                base: "column",
+                lg: "row",
+              }}
+            >
+              {/* PROFILE */}
+
+              <Box
+                flex="1.65"
+                px={{
+                  base: "14px",
+                  md: "16px",
+                }}
+                py="8px"
+                display="flex"
+                alignItems="center"
+              >
+                <HStack
+                  gap={{
+                    base: "14px",
+                    md: "16px",
+                  }}
+                  align="center"
+                >
+                  <Box
+                    boxSize={{
+                      base: "60px",
+                      md: "68px",
+                    }}
+                    borderRadius="full"
+                    bg="#FFF1F4"
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="center"
+                    flexShrink={0}
+                  >
+                    <Text
+                      fontSize="22px"
+                      fontWeight="600"
+                      color={PRIMARY_RED}
+                    >
+                      {memberInitials ||
+                        "DR"}
+                    </Text>
                   </Box>
 
-                  <Text
-                    fontSize="11px"
-                    color={SECONDARY_TEXT}
-                  >
-                    {death?.reg_no ||
-                      "N/A"}
-                  </Text>
-                </HStack>
+                  <Box>
+                    <Heading
+                      fontSize={{
+                        base: "16px",
+                        md: "18px",
+                      }}
+                      lineHeight="20px"
+                      fontWeight="700"
+                      color={TEXT_COLOR}
+                      mb="3px"
+                    >
+                      {memberName
+                        .toLowerCase()
+                        .startsWith("mr.")
+                        ? memberName
+                        : `Mr. ${memberName}`}
+                    </Heading>
 
-                <Text
-                  color="#9AA4B3"
-                  fontSize="12px"
-                >
-                  •
-                </Text>
+                    <HStack
+                      gap="7px"
+                      flexWrap="wrap"
+                      fontSize="10px"
+                    >
+                      <HStack gap="4px">
+                        <Icon
+                          as={LuFileText}
+                          boxSize="12px"
+                          color={
+                            PRIMARY_RED
+                          }
+                        />
 
-                <HStack spacing={1.5}>
-                  <Box color={BLUE}>
-                    <UserIcon
-                      size={16}
-                    />
+                        <Text color={SECONDARY_TEXT}>
+                          {regNo}
+                        </Text>
+                      </HStack>
+
+                      <Text color="#98A2B3">
+                        •
+                      </Text>
+
+                      <HStack gap="4px">
+                        <Icon
+                          as={LuUserRound}
+                          boxSize="12px"
+                          color={
+                            PRIMARY_RED
+                          }
+                        />
+
+                        <Text color={SECONDARY_TEXT}>
+                          {memberId
+                            ? `Member #${memberId}`
+                            : "N/A"}
+                        </Text>
+                      </HStack>
+
+                      <Text color="#98A2B3">
+                        •
+                      </Text>
+
+                      <HStack gap="4px">
+                        <Icon
+                          as={LuCalendarDays}
+                          boxSize="12px"
+                          color={
+                            PRIMARY_RED
+                          }
+                        />
+
+                        <Text color={SECONDARY_TEXT}>
+                          {formatDate(
+                            death?.died_on
+                          )}
+                        </Text>
+                      </HStack>
+                    </HStack>
+
+                    <HStack
+                      mt="4px"
+                      gap="5px"
+                    >
+                      <Badge
+                        bg="#F2F4F7"
+                        color="#52627A"
+                        borderRadius="4px"
+                        px="7px"
+                        py="2px"
+                        fontSize="9px"
+                        fontWeight="600"
+                      >
+                        {death?.tomb_type_name ||
+                          tombFee?.tomb_type_name ||
+                          "N/A"}
+                      </Badge>
+
+                      <Badge
+                        bg="#EAF7ED"
+                        color="#16803A"
+                        borderRadius="4px"
+                        px="7px"
+                        py="2px"
+                        fontSize="9px"
+                        fontWeight="600"
+                      >
+                        Recorded
+                      </Badge>
+                    </HStack>
                   </Box>
-
-                  <Text
-                    fontSize="11px"
-                    color={SECONDARY_TEXT}
-                  >
-                    {member?.member_no ||
-                      "N/A"}
-                  </Text>
                 </HStack>
+              </Box>
 
-                <Box
-                  bg="#EDF0F4"
-                  px={2}
-                  py={1}
-                  borderRadius="5px"
-                >
+              {/* FAMILY */}
+
+              <Box
+                flex="0.8"
+                borderLeft={{
+                  base: "none",
+                  lg: `1px solid ${BORDER_COLOR}`,
+                }}
+                borderTop={{
+                  base: `1px solid ${BORDER_COLOR}`,
+                  lg: "none",
+                }}
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                px="12px"
+                py="6px"
+              >
+                <VStack gap="3px">
+                  <Icon
+                    as={LuUsersRound}
+                    boxSize="18px"
+                    color={PRIMARY_RED}
+                  />
+
                   <Text
                     fontSize="10px"
                     fontWeight="600"
                     color={TEXT_COLOR}
+                    textAlign="center"
                   >
-                    Recorded
+                    {familyName}
+                    {" "}
+                    Family
                   </Text>
-                </Box>
-              </HStack>
-            </Box>
+                </VStack>
+              </Box>
 
-            {/* FAMILY */}
+              {/* HOUSE */}
 
-            <SummaryItem
-              icon={<UsersIcon />}
-              value={familyName}
-              label="Family"
-            />
+              <Box
+                flex="0.85"
+                borderLeft={{
+                  base: "none",
+                  lg: `1px solid ${BORDER_COLOR}`,
+                }}
+                borderTop={{
+                  base: `1px solid ${BORDER_COLOR}`,
+                  lg: "none",
+                }}
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                px="12px"
+                py="6px"
+              >
+                <VStack gap="3px">
+                  <Icon
+                    as={LuMapPin}
+                    boxSize="18px"
+                    color={PRIMARY_RED}
+                  />
 
-            {/* DEATH DATE */}
+                  <Text
+                    fontSize="10px"
+                    fontWeight="600"
+                    color={TEXT_COLOR}
+                    textAlign="center"
+                  >
+                    {houseName ||
+                      "N/A"}
+                  </Text>
+                </VStack>
+              </Box>
 
-            <SummaryItem
-              icon={<CalendarIcon />}
-              value={formatDate(
-                death?.died_on
-              )}
-              label="Date of Death"
-            />
+              {/* FUNERAL DATE */}
 
-            {/* FUNERAL DATE */}
+              <Box
+                flex="0.95"
+                borderLeft={{
+                  base: "none",
+                  lg: `1px solid ${BORDER_COLOR}`,
+                }}
+                borderTop={{
+                  base: `1px solid ${BORDER_COLOR}`,
+                  lg: "none",
+                }}
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                px="12px"
+                py="6px"
+              >
+                <VStack gap="3px">
+                  <Icon
+                    as={LuCalendarDays}
+                    boxSize="18px"
+                    color={PRIMARY_RED}
+                  />
 
-            <SummaryItem
-              icon={<CalendarIcon />}
-              value={formatDate(
-                death?.funeral_on
-              )}
-              label="Date of Funeral"
-              borderRight={false}
-            />
-          </Flex>
-        </Box>
+                  <Text
+                    fontSize="10px"
+                    fontWeight="600"
+                    color={TEXT_COLOR}
+                    textAlign="center"
+                  >
+                    {formatDate(
+                      death?.funeral_on
+                    )}
+                  </Text>
+                </VStack>
+              </Box>
+            </Flex>
+          </Box>
 
-        {/* ==================================================
-            TABS
-        ================================================== */}
+          {/* =================================================
+              TABS
+          ================================================= */}
 
-        <Tabs
-          variant="unstyled"
-          defaultIndex={0}
-        >
-          <TabList
-            borderBottom={`1px solid ${BORDER_COLOR}`}
-            mb={4}
+          <ChakraTabs.Root
+            value={activeTab}
+            onValueChange={(details) =>
+              setActiveTab(
+                details.value
+              )
+            }
+            variant="line"
           >
-            <Tab
-              px={1}
-              mr={5}
-              pb={3}
-              fontSize="12px"
-              fontWeight="500"
-              color={SECONDARY_TEXT}
-              borderBottom="2px solid transparent"
-              _selected={{
-                color: PRIMARY_RED,
-                borderBottomColor:
-                  PRIMARY_RED,
-              }}
+            <ChakraTabs.List
+              borderBottom={`1px solid ${BORDER_COLOR}`}
+              mb="8px"
             >
-              Overview
-            </Tab>
+              <ChakraTabs.Trigger
+                value="overview"
+                px="16px"
+                py="6px"
+                fontSize="12px"
+                color={SECONDARY_TEXT}
+                _selected={{
+                  color: PRIMARY_RED,
+                  borderColor:
+                    PRIMARY_RED,
+                  fontWeight: "600",
+                }}
+              >
+                Overview
+              </ChakraTabs.Trigger>
 
-            <Tab
-              px={1}
-              mr={5}
-              pb={3}
-              fontSize="12px"
-              fontWeight="500"
-              color={SECONDARY_TEXT}
-              borderBottom="2px solid transparent"
-              _selected={{
-                color: PRIMARY_RED,
-                borderBottomColor:
-                  PRIMARY_RED,
-              }}
-            >
-              Funeral &amp; Burial
-            </Tab>
+              <ChakraTabs.Trigger
+                value="funeral"
+                px="16px"
+                py="6px"
+                fontSize="12px"
+                color={SECONDARY_TEXT}
+                _selected={{
+                  color: PRIMARY_RED,
+                  borderColor:
+                    PRIMARY_RED,
+                  fontWeight: "600",
+                }}
+              >
+                Funeral & Burial
+              </ChakraTabs.Trigger>
 
-            <Tab
-              px={1}
-              pb={3}
-              fontSize="12px"
-              fontWeight="500"
-              color={SECONDARY_TEXT}
-              borderBottom="2px solid transparent"
-              _selected={{
-                color: PRIMARY_RED,
-                borderBottomColor:
-                  PRIMARY_RED,
-              }}
-            >
-              Record Activity
-            </Tab>
-          </TabList>
-
-          <TabPanels>
+              <ChakraTabs.Trigger
+                value="activity"
+                px="16px"
+                py="6px"
+                fontSize="12px"
+                color={SECONDARY_TEXT}
+                _selected={{
+                  color: PRIMARY_RED,
+                  borderColor:
+                    PRIMARY_RED,
+                  fontWeight: "600",
+                }}
+              >
+                Record Activity
+              </ChakraTabs.Trigger>
+            </ChakraTabs.List>
 
             {/* =================================================
                 OVERVIEW
             ================================================= */}
 
-            <TabPanel p={0}>
+            <ChakraTabs.Content
+              value="overview"
+            >
               <SimpleGrid
                 columns={{
                   base: 1,
                   lg: 2,
                 }}
-                spacing={4}
+                gap="10px"
+                pb="10px"
               >
                 {/* MEMBER INFORMATION */}
 
-                <InformationCard
-                  icon={
-                    <UserIcon
-                      size={23}
-                    />
-                  }
+                <SectionCard
                   title="Member Information"
+                  icon={LuUserRound}
+                  minH="130px"
                 >
-                  <InfoRow
-                    label="Family"
-                    value={familyName}
-                  />
+                  <VStack
+                    align="stretch"
+                    gap="3px"
+                  >
+                    <InfoRow
+                      label="Family"
+                      value={
+                        familyName
+                      }
+                    />
 
-                  <InfoRow
-                    label="Member Name"
-                    value={member?.name}
-                  />
+                    <InfoRow
+                      label="Member Name"
+                      value={
+                        memberName
+                      }
+                    />
 
-                  <InfoRow
-                    label="Member ID"
-                    value={
-                      member?.member_no
-                    }
-                  />
+                    <InfoRow
+                      label="Member ID"
+                      value={
+                        memberId ||
+                        "N/A"
+                      }
+                    />
 
-                  <InfoRow
-                    label="Death Record ID"
-                    value={
-                      death?.reg_no
-                    }
-                  />
-                </InformationCard>
+                    <InfoRow
+                      label="Death Record ID"
+                      value={regNo}
+                    />
+
+                    <InfoRow
+                      label="House Name"
+                      value={
+                        houseName
+                      }
+                    />
+                  </VStack>
+                </SectionCard>
 
                 {/* DEATH INFORMATION */}
 
-                <InformationCard
-                  icon={
-                    <CalendarIcon
-                      size={24}
-                    />
-                  }
+                <SectionCard
                   title="Death Information"
+                  icon={LuCalendarDays}
+                  minH="130px"
                   graphic
                 >
-                  <Box
-                    width={{
-                      base: "100%",
-                      md: "60%",
-                    }}
-                    position="relative"
-                    zIndex={2}
+                  <VStack
+                    align="stretch"
+                    gap="3px"
                   >
                     <InfoRow
                       label="Date of Death"
@@ -1007,103 +1212,244 @@ const DeathRegisterDetailPage = () => {
                     <InfoRow
                       label="Reason of Death"
                       value={
-                        death?.reason_of_death
+                        death?.reason_of_death ||
+                        "N/A"
                       }
                     />
 
-                    <Flex
-                      align="center"
-                      mt={2}
-                      gap={4}
-                    >
-                      <Text
-                        width={{
-                          base: "135px",
-                          md: "165px",
-                        }}
-                        flexShrink={0}
-                        fontSize="11px"
-                        color={
-                          SECONDARY_TEXT
-                        }
-                      >
-                        Status
-                      </Text>
-
-                      <Box
-                        bg="#EEF1F4"
-                        px={3}
-                        py={1.5}
-                        borderRadius="5px"
-                      >
-                        <Text
-                          fontSize="10px"
-                          fontWeight="600"
-                          color={
-                            TEXT_COLOR
-                          }
-                        >
-                          Recorded
-                        </Text>
-                      </Box>
-                    </Flex>
-                  </Box>
-                </InformationCard>
+                    <InfoRow
+                      label="Status"
+                      value="Recorded"
+                      highlight
+                    />
+                  </VStack>
+                </SectionCard>
 
                 {/* FUNERAL & BURIAL */}
 
-                <InformationCard
-                  icon={
-                    <TombIcon
-                      size={23}
-                    />
-                  }
+                <SectionCard
                   title="Funeral & Burial Information"
+                  icon={LuCross}
+                  minH="120px"
                 >
-                  <InfoRow
-                    label="Date of Funeral"
-                    value={formatDate(
-                      death?.funeral_on
-                    )}
-                  />
+                  <VStack
+                    align="stretch"
+                    gap="3px"
+                  >
+                    <InfoRow
+                      label="Date of Funeral"
+                      value={formatDate(
+                        death?.funeral_on
+                      )}
+                    />
 
-                  <InfoRow
-                    label="Tomb Type"
-                    value={
-                      tombFee?.tomb_type_name
-                    }
-                  />
+                    <InfoRow
+                      label="Tomb Type"
+                      value={
+                        death?.tomb_type_name ||
+                        tombFee?.tomb_type_name ||
+                        "N/A"
+                      }
+                    />
 
-                  <InfoRow
-                    label="Tomb Charge"
-                    value={
-                      tombFee?.tomb_fees
-                        ? `₹ ${tombFee.tomb_fees}`
-                        : "N/A"
-                    }
-                    highlight
-                  />
+                    <InfoRow
+                      label="Tomb Charge"
+                      value={
+                        death?.tomb_charge
+                          ? `₹ ${death.tomb_charge}`
+                          : "N/A"
+                      }
+                      highlight
+                    />
 
-                  <InfoRow
-                    label="Remarks"
-                    value={
-                      death?.remarks
-                    }
-                  />
-                </InformationCard>
+                    <InfoRow
+                      label="Tomb IDN"
+                      value={
+                        death?.tomb_idn ||
+                        "N/A"
+                      }
+                    />
+
+                    <InfoRow
+                      label="Remarks"
+                      value={
+                        death?.remarks ||
+                        "N/A"
+                      }
+                    />
+                  </VStack>
+                </SectionCard>
 
                 {/* RECORD INFORMATION */}
 
-                <InformationCard
-                  icon={
-                    <FileIcon
-                      size={22}
-                    />
-                  }
+                <SectionCard
                   title="Record Information"
+                  icon={LuFileText}
+                  minH="120px"
+                >
+                  <VStack
+                    align="stretch"
+                    gap="3px"
+                  >
+                    <InfoRow
+                      label="Created"
+                      value={
+                        createdDate
+                      }
+                    />
+
+                    <InfoRow
+                      label="Last Updated"
+                      value={
+                        updatedDate
+                      }
+                    />
+
+                    <InfoRow
+                      label="Updated By"
+                      value={
+                        updatedBy
+                      }
+                    />
+                  </VStack>
+                </SectionCard>
+              </SimpleGrid>
+            </ChakraTabs.Content>
+
+            {/* =================================================
+                FUNERAL & BURIAL
+            ================================================= */}
+
+            <ChakraTabs.Content
+              value="funeral"
+            >
+              <SimpleGrid
+                columns={{
+                  base: 1,
+                  lg: 2,
+                }}
+                gap="10px"
+                pb="10px"
+              >
+                <SectionCard
+                  title="Funeral Details"
+                  icon={LuCalendarDays}
+                  minH="120px"
+                >
+                  <VStack
+                    align="stretch"
+                    gap="3px"
+                  >
+                    <InfoRow
+                      label="Date of Funeral"
+                      value={formatDate(
+                        death?.funeral_on
+                      )}
+                    />
+
+                    <InfoRow
+                      label="Tomb Type"
+                      value={
+                        death?.tomb_type_name ||
+                        tombFee?.tomb_type_name ||
+                        "N/A"
+                      }
+                    />
+
+                    <InfoRow
+                      label="Tomb Charge"
+                      value={
+                        death?.tomb_charge
+                          ? `₹ ${death.tomb_charge}`
+                          : "N/A"
+                      }
+                      highlight
+                    />
+                  </VStack>
+                </SectionCard>
+
+                <SectionCard
+                  title="Burial Details"
+                  icon={LuCross}
+                  minH="120px"
+                >
+                  <VStack
+                    align="stretch"
+                    gap="3px"
+                  >
+                    <InfoRow
+                      label="Tomb Indication"
+                      value={
+                        tombFee?.indication ||
+                        "N/A"
+                      }
+                    />
+
+                    <InfoRow
+                      label="Specification"
+                      value={
+                        tombFee?.specification ||
+                        "N/A"
+                      }
+                    />
+
+                    <InfoRow
+                      label="Tomb IDN"
+                      value={
+                        death?.tomb_idn ||
+                        "N/A"
+                      }
+                    />
+                  </VStack>
+                </SectionCard>
+              </SimpleGrid>
+
+              {death?.remarks && (
+                <Box
+                  mt="4px"
+                  border={`1px solid ${BORDER_COLOR}`}
+                  borderRadius="8px"
+                  bg="#FFFFFF"
+                  p="14px"
+                >
+                  <Text
+                    fontSize="12px"
+                    fontWeight="600"
+                    color={TEXT_COLOR}
+                    mb="4px"
+                  >
+                    Remarks
+                  </Text>
+
+                  <Text
+                    fontSize="11px"
+                    color={SECONDARY_TEXT}
+                    lineHeight="1.6"
+                  >
+                    {death.remarks}
+                  </Text>
+                </Box>
+              )}
+            </ChakraTabs.Content>
+
+            {/* =================================================
+                RECORD ACTIVITY
+            ================================================= */}
+
+            <ChakraTabs.Content
+              value="activity"
+            >
+              <SectionCard
+                title="Record Activity"
+                icon={LuClock}
+                minH="120px"
+              >
+                <VStack
+                  align="stretch"
+                  gap="3px"
                 >
                   <InfoRow
-                    label="Created"
+                    label="Record Created"
                     value={
                       createdDate
                     }
@@ -1122,149 +1468,17 @@ const DeathRegisterDetailPage = () => {
                       updatedBy
                     }
                   />
-                </InformationCard>
-              </SimpleGrid>
-            </TabPanel>
-
-            {/* =================================================
-                FUNERAL & BURIAL TAB
-            ================================================= */}
-
-            <TabPanel p={0}>
-              <SimpleGrid
-                columns={{
-                  base: 1,
-                  lg: 2,
-                }}
-                spacing={4}
-              >
-                <InformationCard
-                  icon={
-                    <CalendarIcon
-                      size={24}
-                    />
-                  }
-                  title="Funeral Details"
-                >
-                  <InfoRow
-                    label="Date of Funeral"
-                    value={formatDate(
-                      death?.funeral_on
-                    )}
-                  />
-
-                  <InfoRow
-                    label="Tomb Type"
-                    value={
-                      tombFee?.tomb_type_name
-                    }
-                  />
-
-                  <InfoRow
-                    label="Tomb Charge"
-                    value={
-                      tombFee?.tomb_fees
-                        ? `₹ ${tombFee.tomb_fees}`
-                        : "N/A"
-                    }
-                    highlight
-                  />
-                </InformationCard>
-
-                <InformationCard
-                  icon={
-                    <TombIcon
-                      size={23}
-                    />
-                  }
-                  title="Burial Details"
-                >
-                  <InfoRow
-                    label="Tomb Indication"
-                    value={
-                      tombFee?.indication
-                    }
-                  />
-
-                  <InfoRow
-                    label="Specification"
-                    value={
-                      tombFee?.specification
-                    }
-                  />
-
-                  <InfoRow
-                    label="Tomb IDN"
-                    value={
-                      death?.tomb_idn
-                    }
-                  />
-                </InformationCard>
-              </SimpleGrid>
-
-              {death?.remarks && (
-                <Box
-                  mt={4}
-                  p={5}
-                  border={`1px solid ${BORDER_COLOR}`}
-                  borderRadius="8px"
-                  bg="white"
-                >
-                  <Text
-                    fontSize="12px"
-                    fontWeight="600"
-                    color={TEXT_COLOR}
-                    mb={2}
-                  >
-                    Remarks
-                  </Text>
-
-                  <Text
-                    fontSize="12px"
-                    color={SECONDARY_TEXT}
-                    lineHeight="1.6"
-                  >
-                    {death.remarks}
-                  </Text>
-                </Box>
-              )}
-            </TabPanel>
-
-            {/* =================================================
-                RECORD ACTIVITY
-            ================================================= */}
-
-            <TabPanel p={0}>
-              <VStack
-                align="stretch"
-                spacing={4}
-              >
-                <ActivityCard
-                  title="Record Created"
-                  date={createdDate}
-                  description="Death record was registered in the system."
-                />
-
-                <ActivityCard
-                  title="Last Updated"
-                  date={updatedDate}
-                  description={`Record was last modified by ${updatedBy}.`}
-                />
-              </VStack>
-            </TabPanel>
-          </TabPanels>
-        </Tabs>
-
-      </Container>
-
-      {/* ====================================================
-          FOOTER
-      ==================================================== */}
+                </VStack>
+              </SectionCard>
+            </ChakraTabs.Content>
+          </ChakraTabs.Root>
+        </Container>
+      </Box>
 
       <Footer />
 
       {/* ====================================================
-          PDF MODAL
+          CERTIFICATE PRINT/PDF PREVIEW
       ==================================================== */}
 
       <DeathRegisterPrintModal
@@ -1272,266 +1486,6 @@ const DeathRegisterDetailPage = () => {
         onClose={onClose}
         death={death}
       />
-    </Box>
-  );
-};
-
-// ==========================================================
-// SUMMARY ITEM
-// ==========================================================
-
-const SummaryItem = ({
-  icon,
-  value,
-  label,
-  borderRight = true,
-}) => {
-  return (
-    <Flex
-      minW={{
-        base: "180px",
-        lg: "205px",
-      }}
-      h="78px"
-      align="center"
-      justify="center"
-      borderLeft={`1px solid ${BORDER_COLOR}`}
-      borderRight={
-        borderRight
-          ? `1px solid ${BORDER_COLOR}`
-          : "none"
-      }
-      px={5}
-      flexShrink={0}
-    >
-      <VStack spacing={1}>
-        <Box color={PRIMARY_RED}>
-          {icon}
-        </Box>
-
-        <Text
-          fontSize="12px"
-          fontWeight="600"
-          color={TEXT_COLOR}
-          textAlign="center"
-          whiteSpace="nowrap"
-        >
-          {value || "N/A"}
-        </Text>
-
-        <Text
-          fontSize="10px"
-          color={SECONDARY_TEXT}
-        >
-          {label}
-        </Text>
-      </VStack>
-    </Flex>
-  );
-};
-
-// ==========================================================
-// INFORMATION CARD
-// ==========================================================
-
-const InformationCard = ({
-  icon,
-  title,
-  children,
-  graphic = false,
-}) => {
-  return (
-    <Box
-      position="relative"
-      minH="198px"
-      border={`1px solid ${BORDER_COLOR}`}
-      borderRadius="8px"
-      bg="white"
-      px={4}
-      py={4}
-      overflow="hidden"
-    >
-      {/* TITLE */}
-
-      <HStack
-        spacing={3}
-        mb={3}
-      >
-        <Box
-          w="34px"
-          h="34px"
-          borderRadius="50%"
-          bg="#FFF0F3"
-          color={PRIMARY_RED}
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          flexShrink={0}
-        >
-          {icon}
-        </Box>
-
-        <Heading
-          fontSize="14px"
-          fontWeight="600"
-          color={TEXT_COLOR}
-        >
-          {title}
-        </Heading>
-      </HStack>
-
-      {/* CONTENT */}
-
-      <Box
-        position="relative"
-        zIndex={2}
-      >
-        {children}
-      </Box>
-
-      {/* CHURCH IMAGE */}
-
-      {graphic && (
-        <ChurchGraphic />
-      )}
-    </Box>
-  );
-};
-
-// ==========================================================
-// INFO ROW
-// ==========================================================
-
-const InfoRow = ({
-  label,
-  value,
-  highlight = false,
-}) => {
-  return (
-    <Flex
-      align="flex-start"
-      gap={4}
-      mb={1.5}
-      width="100%"
-    >
-      <Text
-        width={{
-          base: "135px",
-          md: "165px",
-        }}
-        flexShrink={0}
-        fontSize="11px"
-        color={SECONDARY_TEXT}
-        lineHeight="1.6"
-      >
-        {label}
-      </Text>
-
-      <Text
-        fontSize="11px"
-        color={
-          highlight
-            ? PRIMARY_RED
-            : TEXT_COLOR
-        }
-        fontWeight={
-          highlight
-            ? "600"
-            : "400"
-        }
-        lineHeight="1.6"
-        whiteSpace="pre-wrap"
-      >
-        {value || "N/A"}
-      </Text>
-    </Flex>
-  );
-};
-
-// ==========================================================
-// CHURCH GRAPHIC IMAGE
-// ==========================================================
-
-const ChurchGraphic = () => {
-  return (
-    <Box
-      position="absolute"
-      right="8px"
-      bottom="0px"
-      width={{
-        base: "150px",
-        md: "210px",
-        lg: "245px",
-      }}
-      height={{
-        base: "120px",
-        md: "155px",
-        lg: "175px",
-      }}
-      display="flex"
-      alignItems="flex-end"
-      justifyContent="flex-end"
-      zIndex={1}
-      pointerEvents="none"
-    >
-      <Box
-        as="img"
-        src={logoImage}
-        alt="Church illustration"
-        width="100%"
-        height="100%"
-        objectFit="contain"
-        objectPosition="right bottom"
-      />
-    </Box>
-  );
-};
-
-// ==========================================================
-// ACTIVITY CARD
-// ==========================================================
-
-const ActivityCard = ({
-  title,
-  date,
-  description,
-}) => {
-  return (
-    <Box
-      p={5}
-      border={`1px solid ${BORDER_COLOR}`}
-      borderRadius="8px"
-      bg="white"
-    >
-      <Flex
-        justify="space-between"
-        align="center"
-        mb={2}
-        gap={4}
-        flexWrap="wrap"
-      >
-        <Text
-          fontSize="13px"
-          fontWeight="600"
-          color={TEXT_COLOR}
-        >
-          {title}
-        </Text>
-
-        <Text
-          fontSize="11px"
-          color={SECONDARY_TEXT}
-        >
-          {date}
-        </Text>
-      </Flex>
-
-      <Text
-        fontSize="12px"
-        color={SECONDARY_TEXT}
-      >
-        {description}
-      </Text>
     </Box>
   );
 };

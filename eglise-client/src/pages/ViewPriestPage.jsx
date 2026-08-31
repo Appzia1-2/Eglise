@@ -684,11 +684,16 @@ const ViewPriestPage = () => {
 
   if (loading) {
     return (
-      <>
+      <Box
+        display="flex"
+        flexDirection="column"
+        height="100vh"
+        overflow="hidden"
+      >
         <Navbar />
 
         <Box
-          minH="calc(100vh - 130px)"
+          flex="1"
           display="flex"
           alignItems="center"
           justifyContent="center"
@@ -710,7 +715,7 @@ const ViewPriestPage = () => {
         </Box>
 
         <Footer />
-      </>
+      </Box>
     );
   }
 
@@ -720,14 +725,20 @@ const ViewPriestPage = () => {
 
   if (error || !priest) {
     return (
-      <>
+      <Box
+        display="flex"
+        flexDirection="column"
+        height="100vh"
+        overflow="hidden"
+      >
         <Navbar />
 
         <Box
-          minH="calc(100vh - 130px)"
+          flex="1"
           bg="#FFFFFF"
           px="25px"
           py="30px"
+          overflowY="auto"
         >
           <Button
             variant="outline"
@@ -760,7 +771,7 @@ const ViewPriestPage = () => {
         </Box>
 
         <Footer />
-      </>
+      </Box>
     );
   }
 
@@ -826,13 +837,19 @@ const ViewPriestPage = () => {
   // ==========================================================
 
   return (
-    <>
+    <Box
+      display="flex"
+      flexDirection="column"
+      height="100vh"
+      overflow="hidden"
+    >
       <Navbar />
 
       <Box
+        flex="1"
         bg="#FFFFFF"
-        h="calc(100vh - 74px)"
         overflowY="auto"
+        minHeight="0"
       >
         <Container
           maxW="none"
@@ -1334,6 +1351,7 @@ const ViewPriestPage = () => {
                   lg: 2,
                 }}
                 gap="10px"
+                pb="10px"
               >
                 {/* PERSONAL INFORMATION */}
 
@@ -1714,7 +1732,7 @@ const ViewPriestPage = () => {
       </Box>
 
       <Footer />
-    </>
+    </Box>
   );
 };
 

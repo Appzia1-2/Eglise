@@ -4128,122 +4128,80 @@ class DeathRegisterListSerializer(
 
  
  
-class DeathRegisterDetailSerializer(
-    serializers.ModelSerializer
-):
-    """
-    Detailed serializer for single death record view.
-    """
-
-    member_name = serializers.CharField(
-        source="member.name",
-        read_only=True
-    )
-
-    family_name = serializers.CharField(
-        source="member.family.family_name",
-        read_only=True
-    )
-
-    house_name = serializers.CharField(
-        source="member.house_name",
-        read_only=True
-    )
-
-    # ---------------------------------------------------------
-    # Nested TombFee
-    # ---------------------------------------------------------
-
-    tomb_fee_details = TombFeeSerializer(
-        source="tomb_fee",
-        read_only=True
-    )
-
-    # ---------------------------------------------------------
-    # Tomb type
-    # ---------------------------------------------------------
-
-    tomb_type_name = serializers.CharField(
-        source="tomb_fee.tomb_type.name",
-        read_only=True,
-        allow_null=True
-    )
-
-    # ---------------------------------------------------------
-    # Tomb charge
-    # ---------------------------------------------------------
-
-    tomb_charge = serializers.DecimalField(
-        source="tomb_fee.tomb_fees",
-        max_digits=15,
-        decimal_places=3,
-        read_only=True,
-        allow_null=True
-    )
-
-    # ---------------------------------------------------------
-    # Days since death/funeral
-    # ---------------------------------------------------------
-
+class DeathRegisterDetailSerializer(serializers.ModelSerializer):
+    """Detailed serializer for single death record view."""
+    
+    # ✅ Return nested member object instead of just ID
+    member = serializers.SerializerMethodField()
+    
+    # These direct fields are already available
+    member_name = serializers.CharField(source="member.name", read_only=True)
+    family_name = serializers.CharField(source="member.family.family_name", read_only=True)
+    house_name = serializers.CharField(source="member.house_name", read_only=True)
+    
+    tomb_fee_details = TombFeeSerializer(source="tomb_fee", read_only=True)
+    tomb_type_name = serializers.CharField(source="tomb_fee.tomb_type.name", read_only=True, allow_null=True)
+    tomb_charge = serializers.DecimalField(source="tomb_fee.tomb_fees", max_digits=15, decimal_places=3, read_only=True, allow_null=True)
+    
     days_since_death = serializers.SerializerMethodField()
-
     days_since_funeral = serializers.SerializerMethodField()
-
-    # ---------------------------------------------------------
-    # Meta
-    # ---------------------------------------------------------
 
     class Meta:
         model = DeathRegister
-
         fields = [
             "id",
             "reg_no",
             "church",
-
-            "member",
+            "member",           # ✅ Now returns nested object
             "member_name",
             "family_name",
             "house_name",
-
             "died_on",
             "funeral_on",
-
             "tomb_fee",
             "tomb_fee_details",
             "tomb_type_name",
             "tomb_charge",
-
             "tomb_idn",
             "reason_of_death",
             "remarks",
-
             "days_since_death",
             "days_since_funeral",
-
             "created_at",
         ]
 
-    # =========================================================
-    # DAYS SINCE DEATH
-    # =========================================================
+    def get_member(self, obj):
+        """Return full member details as nested object"""
+        if obj.member:
+            return {
+                "id": obj.member.id,
+                "name": obj.member.name,
+                "gender": obj.member.gender,
+                "email": obj.member.email,
+                "mobile_no": obj.member.mobile_no,
+                "dob": obj.member.dob,
+                "age": obj.member.age,
+                "house_name": obj.member.house_name,
+                "house_sequence": obj.member.house_sequence,
+                "is_family_head": obj.member.is_family_head,
+                "is_active": obj.member.is_active,
+                "expired": obj.member.expired,
+                "marital_status": obj.member.marital_status,
+                "family": {
+                    "id": obj.member.family.id,
+                    "family_name": obj.member.family.family_name,
+                } if obj.member.family else None,
+                "ward": {
+                    "id": obj.member.ward.id,
+                    "ward_name": obj.member.ward.ward_name,
+                } if obj.member.ward else None,
+            }
+        return None
 
     def get_days_since_death(self, obj):
-        """
-        Get number of days since death.
-        """
-
         return obj.get_days_since_death()
 
-    # =========================================================
-    # DAYS SINCE FUNERAL
-    # =========================================================
-
     def get_days_since_funeral(self, obj):
-        """
-        Get number of days since funeral.
-        """
-
         return obj.get_days_since_funeral()
  
 from django.contrib.auth import get_user_model
