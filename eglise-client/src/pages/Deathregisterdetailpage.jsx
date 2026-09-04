@@ -12,7 +12,6 @@ import {
   Spinner,
   Text,
   VStack,
-  useDisclosure,
   Badge,
   Icon,
   Image,
@@ -226,11 +225,8 @@ const DeathRegisterDetailPage = () => {
 
   const navigate = useNavigate();
 
-  const {
-    isOpen,
-    onOpen,
-    onClose,
-  } = useDisclosure();
+  // ✅ FIXED: Use useState instead of useDisclosure
+  const [isOpen, setIsOpen] = useState(false);
 
   const [death, setDeath] = useState(null);
 
@@ -330,15 +326,19 @@ const DeathRegisterDetailPage = () => {
     navigate(`/death/${id}/edit`);
   };
 
-  // IMPORTANT:
-  // PDF and PRINT both open the certificate
-  // preview modal.
   const handlePDF = () => {
-    onOpen();
+    console.log("📄 Opening PDF preview modal");
+    setIsOpen(true);
   };
 
   const handlePrint = () => {
-    onOpen();
+    console.log("🖨️ Opening Print preview modal");
+    setIsOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    console.log("❌ Closing modal");
+    setIsOpen(false);
   };
 
   // ========================================================
@@ -786,7 +786,7 @@ const DeathRegisterDetailPage = () => {
             <Flex
               minH={{
                 base: "auto",
-                lg: "100px",
+                lg: "10px",
               }}
               align="stretch"
               direction={{
@@ -1180,13 +1180,6 @@ const DeathRegisterDetailPage = () => {
                       label="Death Record ID"
                       value={regNo}
                     />
-
-                    <InfoRow
-                      label="House Name"
-                      value={
-                        houseName
-                      }
-                    />
                   </VStack>
                 </SectionCard>
 
@@ -1483,7 +1476,7 @@ const DeathRegisterDetailPage = () => {
 
       <DeathRegisterPrintModal
         isOpen={isOpen}
-        onClose={onClose}
+        onClose={handleCloseModal}
         death={death}
       />
     </Box>

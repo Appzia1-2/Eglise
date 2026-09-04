@@ -38,7 +38,7 @@ import FamilyHeadDashboard from "./pages/FamilyHeadDashboard";
 // Family Head Pages
 import RegisterFamilyHeadPage from "./pages/RegisterFamilyHeadPage"; // 2-step form
 import FamilyHeadDetailsPage from "./pages/FamilyHeadDetailsPage";    // View + Edit button
-import EditFamilyHeadPage from "./pages/EditFamilyHeadPage";          // Full edit form
+import EditFamilyHeadPage from "./pages/Editfamilyheadpage";          // Full edit form
  
 // Member Pages
 import MemberListUnderHeadPage from "./pages/MemberListUnderHeadPage"; // List members of a head
@@ -52,10 +52,21 @@ import HeadlessPromote from "./pages/HeadlessPromote";
 
 import authService from "./auth/authService";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
+
 import BaptismPage from "./pages/BaptismPage";
+import BaptismAddPage from "./pages/BaptismAddPage";
+import BaptismEditPage from "./pages/BaptismEditPage";
+import BaptismViewPage from "./pages/BaptismViewPage";
+
+
+
+
 import ChurchInfoPage from "./pages/ChurchInfoPage";
 
 import MarriagePage from "./pages/MarriagePage";
+import MarriageAddPage from "./pages/MarriageAddPage";
+import MarriageEditPage from "./pages/MarriageEditPage";  // ✅ NEW: Marriage Edit Page
+import MarriageViewPage from "./pages/MarriageViewPage";  // ✅ NEW: Marriage View Page
 
 
 
@@ -86,6 +97,7 @@ import RegisterSettingsPage from "./pages/RegisterSettingsPage";
 import DeathRegisterPage from "./pages/DeathRegisterPage";
 import DeathAddPage from "./pages/DeathAddPage";
 import DeathRegisterDetailPage from "./pages/Deathregisterdetailpage";
+import DeathEditPage from "./pages/DeathEditPage";
 
 
 
@@ -423,6 +435,31 @@ function App() {
           }
         />
         <Route
+  path="/baptism/add"
+  element={
+    <ProtectedRoute>
+      <BaptismAddPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/baptism/:id/edit"
+  element={
+    <ProtectedRoute>
+      <BaptismEditPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/baptism/:id"
+  element={
+    <ProtectedRoute>
+      <BaptismViewPage />
+    </ProtectedRoute>
+  }
+/>
+        <Route
           path="/church-info"
           element={
             <ProtectedRoute>
@@ -435,6 +472,31 @@ function App() {
           element={
             <ProtectedRoute>
               <MarriagePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+  path="/marriage/add"
+  element={
+    <ProtectedRoute>
+      <MarriageAddPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+          path="/marriage/:id"
+          element={
+            <ProtectedRoute>
+              <MarriageViewPage />
+            </ProtectedRoute>
+          }
+        />
+        
+        <Route
+          path="/marriage/:id/edit"
+          element={
+            <ProtectedRoute>
+              <MarriageEditPage />
             </ProtectedRoute>
           }
         />
@@ -597,6 +659,14 @@ function App() {
           element={
             <ProtectedRoute>
               <DeathRegisterDetailPage />
+            </ProtectedRoute>
+          }
+        />
+         <Route
+          path="/death/:id/edit"
+          element={
+            <ProtectedRoute>
+              <DeathEditPage />
             </ProtectedRoute>
           }
         />

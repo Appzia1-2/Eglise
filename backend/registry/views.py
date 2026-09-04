@@ -1213,54 +1213,51 @@ class BaptismAPIView(APIView):
 
 
 class BaptismDetailAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsChurchUser]
 
     def get_object(self, request, pk):
-        """
-        Ensure baptism belongs to the logged-in user's church
-        """
         return get_object_or_404(
-            Baptism,
-            pk=pk,
-            church=request.user.church
-        )
-
-    # -------------------------
-    # INTERNAL SAFETY CHECK
-    # -------------------------
-    def _block_if_member_exists(self, baptism, data):
-        """
-        Prevent dangerous updates once a Member is created
-        """
-        if baptism.member:
-            blocked_fields = {
-                "baptism_category",
+            Baptism.objects.select_related(
+                "church",
                 "family",
                 "main_member",
                 "relation_with_main_member",
-            }
+                "member",
+            ),
+            pk=pk,
+            church=request.user.church,
+        )
 
-            attempted = blocked_fields.intersection(data.keys())
-            if attempted:
-                raise ValidationError(
-                    f"Cannot modify {', '.join(attempted)} after member creation."
-                )
+    # ==========================================================
+    # GET
+    # ==========================================================
 
-    # -------------------------
-    # FULL UPDATE
-    # -------------------------
+    def get(self, request, pk):
+        baptism = self.get_object(request, pk)
+
+        serializer = BaptismSerializer(
+            baptism,
+            context={"request": request}
+        )
+
+        return Response(
+            serializer.data,
+            status=status.HTTP_200_OK
+        )
+
+    # ==========================================================
+    # PUT
+    # ==========================================================
+
     def put(self, request, pk):
         baptism = self.get_object(request, pk)
 
-        data = request.data.copy()
-        data["church"] = request.user.church.id
-
-        self._block_if_member_exists(baptism, data)
-
         serializer = BaptismSerializer(
             baptism,
-            data=data
+            data=request.data,
+            context={"request": request}
         )
+
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
@@ -1269,22 +1266,20 @@ class BaptismDetailAPIView(APIView):
             status=status.HTTP_200_OK
         )
 
-    # -------------------------
-    # PARTIAL UPDATE
-    # -------------------------
+    # ==========================================================
+    # PATCH
+    # ==========================================================
+
     def patch(self, request, pk):
         baptism = self.get_object(request, pk)
 
-        data = request.data.copy()
-        data["church"] = request.user.church.id
-
-        self._block_if_member_exists(baptism, data)
-
         serializer = BaptismSerializer(
             baptism,
-            data=data,
-            partial=True
+            data=request.data,
+            partial=True,
+            context={"request": request}
         )
+
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
@@ -1293,18 +1288,27 @@ class BaptismDetailAPIView(APIView):
             status=status.HTTP_200_OK
         )
 
-    # -------------------------
+    # ==========================================================
     # DELETE
-    # -------------------------
+    # ==========================================================
+
     def delete(self, request, pk):
         baptism = self.get_object(request, pk)
 
         if baptism.member:
-            raise ValidationError(
-                "Cannot delete baptism record after member creation."
+            return Response(
+                {
+                    "detail": (
+                        "This baptism record cannot be deleted "
+                        "because a member has already been created "
+                        "from this baptism."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST
             )
 
         baptism.delete()
+
         return Response(
             status=status.HTTP_204_NO_CONTENT
         )

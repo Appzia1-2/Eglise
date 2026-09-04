@@ -1,114 +1,977 @@
+// src/pages/DeathRegisterPrintModal.jsx
+
 import React, {
+  useEffect,
   useRef,
-  useState,
 } from "react";
 
 import {
   Box,
   Button,
   HStack,
-  Select,
   Text,
   Dialog,
-  Icon,
 } from "@chakra-ui/react";
 
 import {
   LuFileDown,
   LuPrinter,
-  LuX,
 } from "react-icons/lu";
 
 import html2pdf from "html2pdf.js";
 
-// ==========================================================
-// LOGO
-// ==========================================================
-
-import logoImage from "../assets/priest2.png";
-
-// ==========================================================
+// ============================================================
 // COLORS
-// ==========================================================
+// ============================================================
 
 const PRIMARY_RED = "#B40000";
 const DARK_RED = "#8F0000";
+const GOLD = "#C99A38";
+const BORDER_RED = "#D65A4A";
+const LIGHT_BORDER = "#D9B8A8";
+const PAPER = "#FFFDF8";
 
-const GOLD = "#C99A3D";
+// ============================================================
+// CERTIFICATE STYLES
+// ============================================================
 
-const TEXT_COLOR = "#171717";
+const CERTIFICATE_STYLES = `
+  * {
+    box-sizing: border-box;
+  }
 
-// ==========================================================
+  .certificate-page {
+    width: 210mm;
+    height: 297mm;
+    min-height: 297mm;
+
+    position: relative;
+    overflow: hidden;
+
+    margin: 0 auto;
+    padding: 11mm 13mm;
+
+    background:
+      radial-gradient(
+        circle at center,
+        rgba(190, 145, 70, 0.025),
+        transparent 45%
+      ),
+      ${PAPER};
+
+    color: #171717;
+
+    font-family:
+      Georgia,
+      "Times New Roman",
+      serif;
+
+    box-sizing: border-box;
+  }
+
+  /* ========================================================
+     OUTER DECORATIVE BORDER
+     ======================================================== */
+
+  .outer-border {
+    position: absolute;
+
+    top: 5mm;
+    left: 5mm;
+    right: 5mm;
+    bottom: 5mm;
+
+    border: 1.5px solid ${BORDER_RED};
+
+    pointer-events: none;
+    z-index: 20;
+  }
+
+  .outer-border::before {
+    content: "";
+
+    position: absolute;
+
+    top: 4px;
+    left: 4px;
+    right: 4px;
+    bottom: 4px;
+
+    border: 1px solid rgba(214, 90, 74, 0.45);
+
+    pointer-events: none;
+  }
+
+  /* ========================================================
+     INNER BORDER
+     ======================================================== */
+
+  .inner-border {
+    position: absolute;
+
+    top: 8mm;
+    left: 8mm;
+    right: 8mm;
+    bottom: 8mm;
+
+    border: 1.8px solid #B92323;
+
+    pointer-events: none;
+    z-index: 19;
+  }
+
+  .inner-border::before {
+    content: "";
+
+    position: absolute;
+
+    top: 4px;
+    left: 4px;
+    right: 4px;
+    bottom: 4px;
+
+    border: 1px solid ${GOLD};
+
+    pointer-events: none;
+  }
+
+  /* ========================================================
+     CORNER ORNAMENTS
+     ======================================================== */
+
+  .corner {
+    position: absolute;
+
+    z-index: 25;
+
+    width: 34px;
+    height: 34px;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    color: ${BORDER_RED};
+
+    font-size: 24px;
+    line-height: 1;
+
+    pointer-events: none;
+  }
+
+  .corner.tl {
+    top: 5.5mm;
+    left: 5.5mm;
+  }
+
+  .corner.tr {
+    top: 5.5mm;
+    right: 5.5mm;
+    transform: scaleX(-1);
+  }
+
+  .corner.bl {
+    bottom: 5.5mm;
+    left: 5.5mm;
+    transform: scaleY(-1);
+  }
+
+  .corner.br {
+    bottom: 5.5mm;
+    right: 5.5mm;
+    transform: scale(-1);
+  }
+
+  /* ========================================================
+     HEADER
+     ======================================================== */
+
+  .header {
+    position: relative;
+
+    z-index: 10;
+
+    margin-top: 5mm;
+
+    width: 100%;
+
+    display: flex;
+    justify-content: center;
+  }
+
+  .header-inner {
+    width: 100%;
+
+    display: grid;
+
+    grid-template-columns: 75px 1fr 75px;
+
+    align-items: center;
+
+    min-height: 28mm;
+  }
+
+  .logo-space {
+    width: 70px;
+    height: 68px;
+  }
+
+  .church-heading {
+    text-align: center;
+
+    padding: 0 5px;
+  }
+
+  .church-name {
+    color: #4A1111;
+
+    font-family:
+      "Old English Text MT",
+      "UnifrakturCook",
+      "Lucida Blackletter",
+      Georgia,
+      serif;
+
+    font-size: 27px;
+
+    line-height: 1.05;
+
+    font-weight: 700;
+
+    letter-spacing: 0.1px;
+
+    white-space: nowrap;
+  }
+
+  .church-subtitle {
+    color: #4A1111;
+
+    font-family:
+      "Old English Text MT",
+      "UnifrakturCook",
+      Georgia,
+      serif;
+
+    font-size: 24px;
+
+    line-height: 1.05;
+
+    font-weight: 700;
+
+    margin-top: 2px;
+
+    white-space: nowrap;
+  }
+
+  .header-spacer {
+    width: 70px;
+    height: 68px;
+  }
+
+  /* ========================================================
+     TITLE
+     ======================================================== */
+
+  .title-area {
+    position: relative;
+
+    z-index: 10;
+
+    margin-top: 4mm;
+
+    text-align: center;
+  }
+
+  .title-banner {
+    position: relative;
+
+    display: inline-flex;
+
+    align-items: center;
+    justify-content: center;
+
+    min-width: 107mm;
+
+    height: 15mm;
+
+    padding: 2px 20px;
+
+    background:
+      linear-gradient(
+        to bottom,
+        #B30D0D,
+        #8F0000
+      );
+
+    color: white;
+
+    border: 2px solid ${GOLD};
+
+    box-shadow:
+      inset 0 0 0 1px #650000;
+
+    border-radius: 2px;
+  }
+
+  .title-banner::before,
+  .title-banner::after {
+    content: "";
+
+    position: absolute;
+
+    top: 2px;
+
+    width: 17px;
+
+    height: calc(100% - 4px);
+
+    background:
+      linear-gradient(
+        to bottom,
+        #B30D0D,
+        #8F0000
+      );
+
+    border-top: 2px solid ${GOLD};
+    border-bottom: 2px solid ${GOLD};
+  }
+
+  .title-banner::before {
+    left: -11px;
+
+    transform: skewX(-18deg);
+  }
+
+  .title-banner::after {
+    right: -11px;
+
+    transform: skewX(18deg);
+  }
+
+  .title-text {
+    position: relative;
+
+    z-index: 2;
+
+    font-family:
+      "Old English Text MT",
+      "UnifrakturCook",
+      "Lucida Blackletter",
+      Georgia,
+      serif;
+
+    font-size: 21px;
+
+    line-height: 1;
+
+    font-weight: 700;
+
+    letter-spacing: 0.2px;
+
+    white-space: nowrap;
+  }
+
+  /* ========================================================
+     CONTENT
+     ======================================================== */
+
+  .content {
+    position: relative;
+
+    z-index: 5;
+
+    margin:
+      5mm
+      8mm
+      0;
+  }
+
+  /* ========================================================
+     DIOCESE / PARISH
+     ======================================================== */
+
+  .top-table {
+    width: 88%;
+
+    margin: 0 auto 3.5mm;
+
+    border-collapse: collapse;
+
+    table-layout: fixed;
+
+    font-size: 12.5px;
+  }
+
+  .top-table td {
+    border: 1px solid ${LIGHT_BORDER};
+
+    padding: 5px 8px;
+
+    vertical-align: middle;
+
+    height: 10mm;
+  }
+
+  .top-label {
+    width: 32mm;
+
+    font-weight: 700;
+
+    white-space: nowrap;
+  }
+
+  .top-value {
+    font-weight: 500;
+
+    padding-left: 10px !important;
+  }
+
+  /* ========================================================
+     MAIN DETAILS TABLE
+     ======================================================== */
+
+  .details-table {
+    width: 100%;
+
+    border-collapse: collapse;
+
+    table-layout: fixed;
+
+    font-size: 12.5px;
+  }
+
+  .details-table td {
+    border: 1px solid ${LIGHT_BORDER};
+
+    padding: 5px 7px;
+
+    vertical-align: middle;
+
+    color: #171717;
+  }
+
+  .details-label {
+    width: 42mm;
+
+    font-weight: 700;
+
+    line-height: 1.15;
+  }
+
+  .details-value {
+    color: #171717;
+
+    font-weight: 500;
+
+    line-height: 1.25;
+
+    padding-left: 10px !important;
+  }
+
+  .name-row td {
+    height: 11mm;
+  }
+
+  /* ========================================================
+     INCREASED HEIGHT FOR THE AGE/DOB ROW (SECOND ROW)
+     ======================================================== */
+  .age-row td {
+    height: 16mm;  /* Increased from 11mm to 16mm for more space */
+  }
+
+  .address-row td {
+    height: 26mm;
+  }
+
+  .normal-row td {
+    height: 10mm;
+  }
+
+  .date-row td {
+    height: 9mm;
+  }
+
+  .age-number {
+    width: 15mm;
+
+    text-align: center;
+
+    font-size: 12px;
+  }
+
+  .dob-number {
+    width: 14mm;
+
+    text-align: center;
+
+    font-size: 12px;
+  }
+
+  .dob-separator {
+    width: 4mm;
+
+    text-align: center;
+
+    font-size: 12px;
+
+    font-weight: 600;
+  }
+
+  .sex-cell {
+    width: 31mm;
+
+    white-space: nowrap;
+
+    text-align: center;
+
+    font-size: 11.5px;
+  }
+
+  .address-value {
+    vertical-align: middle !important;
+
+    line-height: 1.45;
+  }
+
+  /* ========================================================
+     WATERMARK
+     ======================================================== */
+
+  .watermark {
+    position: absolute;
+
+    left: 50%;
+    top: 58%;
+
+    transform: translate(-50%, -50%);
+
+    width: 92mm;
+    height: 92mm;
+
+    border:
+      1.5px solid
+      rgba(155, 30, 30, 0.045);
+
+    border-radius: 50%;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    z-index: 1;
+
+    pointer-events: none;
+
+    opacity: 0.75;
+  }
+
+  .watermark::before {
+    content: "✠";
+
+    font-size: 125px;
+
+    color:
+      rgba(155, 30, 30, 0.035);
+  }
+
+  .watermark-text {
+    position: absolute;
+
+    bottom: 24px;
+
+    font-size: 7px;
+
+    color:
+      rgba(155, 30, 30, 0.045);
+
+    letter-spacing: 1.3px;
+
+    white-space: nowrap;
+  }
+
+  /* ========================================================
+     CERTIFICATION
+     ======================================================== */
+
+  .certificate-text {
+    position: relative;
+
+    z-index: 5;
+
+    text-align: center;
+
+    margin:
+      4mm
+      9mm
+      0;
+
+    font-size: 11.5px;
+
+    line-height: 1.45;
+
+    color: #171717;
+  }
+
+  /* ========================================================
+     LARGE SPACE FOR STAMP / SIGNATURE
+     ======================================================== */
+
+  .stamp-sign-gap {
+    height: 24mm;
+
+    position: relative;
+
+    z-index: 5;
+  }
+
+  /* ========================================================
+     FOOTER
+     ======================================================== */
+
+  .footer {
+    position: relative;
+
+    z-index: 5;
+
+    margin:
+      0
+      9mm;
+  }
+
+  .footer-grid {
+    display: grid;
+
+    grid-template-columns:
+      1.05fr
+      0.7fr
+      1.25fr;
+
+    gap: 8px;
+
+    align-items: end;
+  }
+
+  .footer-item {
+    font-size: 10.5px;
+
+    color: #171717;
+
+    line-height: 1.3;
+  }
+
+  .footer-center {
+    text-align: center;
+
+    padding-bottom: 0;
+  }
+
+  .footer-right {
+    text-align: center;
+  }
+
+  .signature-line {
+    width: 88%;
+
+    margin:
+      0 auto
+      4px;
+
+    border-top: 1px solid #222;
+
+    height: 13px;
+  }
+
+  .footer-label {
+    font-size: 10px;
+
+    font-weight: 500;
+
+    line-height: 1.25;
+  }
+
+  .footer-date {
+    margin-top: 6px;
+
+    font-size: 10.5px;
+  }
+
+  .bottom-decoration {
+    margin-top: 3mm;
+
+    text-align: center;
+
+    color: ${BORDER_RED};
+
+    font-size: 12px;
+
+    letter-spacing: 4px;
+  }
+
+  /* ========================================================
+     PRINT
+     ======================================================== */
+
+  @media print {
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+
+      margin: 0;
+      padding: 0;
+
+      background: white;
+    }
+
+    .certificate-page {
+      margin: 0 !important;
+
+      width: 210mm;
+      height: 297mm;
+
+      min-height: 297mm;
+
+      box-shadow: none !important;
+    }
+  }
+`;
+
+// ============================================================
 // COMPONENT
-// ==========================================================
+// ============================================================
 
 const DeathRegisterPrintModal = ({
   isOpen,
   onClose,
   death,
 }) => {
-  const printRef =
-    useRef(null);
+  const printRef = useRef(null);
 
-  const [pageSize, setPageSize] =
-    useState("A4");
+  // ==========================================================
+  // INJECT STYLES
+  // ==========================================================
 
-  const [orientation, setOrientation] =
-    useState("Portrait");
+  useEffect(() => {
+    if (!isOpen) return;
 
-  // ========================================================
+    let styleTag =
+      document.getElementById(
+        "death-cert-styles-ref"
+      );
+
+    if (!styleTag) {
+      styleTag =
+        document.createElement("style");
+
+      styleTag.id =
+        "death-cert-styles-ref";
+
+      styleTag.innerHTML =
+        CERTIFICATE_STYLES;
+
+      document.head.appendChild(
+        styleTag
+      );
+    }
+
+    return () => {
+      const existing =
+        document.getElementById(
+          "death-cert-styles-ref"
+        );
+
+      if (existing) {
+        existing.remove();
+      }
+    };
+  }, [isOpen]);
+
+  // ==========================================================
+  // DEBUG
+  // ==========================================================
+
+  useEffect(() => {
+    if (isOpen && death) {
+      console.log(
+        "Death Register Data:",
+        death
+      );
+
+      console.log(
+        "Member Data:",
+        death?.member
+      );
+    }
+  }, [isOpen, death]);
+
+  // ==========================================================
   // MEMBER DATA
-  // ========================================================
+  // ==========================================================
 
   const member =
     death?.member || {};
 
+  // ==========================================================
+  // HELPER
+  // ==========================================================
+
+  const isNotEmpty = (value) => {
+    if (
+      value === null ||
+      value === undefined
+    ) {
+      return false;
+    }
+
+    if (typeof value === "string") {
+      if (value.trim() === "") {
+        return false;
+      }
+
+      if (
+        value.toLowerCase() ===
+          "null" ||
+        value.toLowerCase() ===
+          "undefined"
+      ) {
+        return false;
+      }
+
+      return true;
+    }
+
+    return true;
+  };
+
+  // ==========================================================
+  // MEMBER NAME
+  // ==========================================================
+
   const memberName =
-    death?.member_name ||
-    member?.name ||
-    "N/A";
+    isNotEmpty(death?.member_name)
+      ? death.member_name
+      : isNotEmpty(member?.name)
+      ? member.name
+      : "N/A";
 
-  const familyName =
-    death?.family_name ||
-    member?.family_name ||
-    "N/A";
+  // ==========================================================
+  // HOUSE NO.
+  // USE MEMBER REGISTER ID
+  // ==========================================================
 
-  const houseName =
-    death?.house_name ||
-    member?.house_name ||
-    member?.house_no ||
-    "N/A";
+  const memberRegisterId =
+    isNotEmpty(
+      member?.id
+    )
+      ? member.id
+      : isNotEmpty(
+          death?.member_id
+        )
+      ? death.member_id
+      : isNotEmpty(
+          death?.member
+        ) &&
+        typeof death.member !==
+          "object"
+      ? death.member
+      : "N/A";
 
-  const address =
-    death?.address ||
-    death?.address_line1 ||
-    member?.address ||
-    member?.address_line1 ||
-    [
-      member?.address_line1,
-      member?.address_line2,
-      member?.city,
-      member?.state,
-      member?.country,
-      member?.postal_code,
-    ]
-      .filter(Boolean)
-      .join(", ") ||
-    "N/A";
+  // ==========================================================
+  // GENDER
+  // ==========================================================
 
   const gender =
-    death?.gender ||
-    member?.gender ||
-    "N/A";
+    isNotEmpty(death?.gender)
+      ? death.gender
+      : isNotEmpty(member?.gender)
+      ? member.gender
+      : "N/A";
+
+  // ==========================================================
+  // DATE OF BIRTH
+  // ==========================================================
 
   const dateOfBirth =
     death?.date_of_birth ||
+    member?.dob ||
     member?.date_of_birth ||
     null;
 
-  // ========================================================
+  // ==========================================================
+  // ADDRESS
+  // ==========================================================
+
+  const address =
+    isNotEmpty(
+      death?.member_address
+    )
+      ? death.member_address
+      : isNotEmpty(
+          death?.address
+        )
+      ? death.address
+      : isNotEmpty(
+          member?.address
+        )
+      ? member.address
+      : "N/A";
+
+  // ==========================================================
+  // CHURCH
+  // ==========================================================
+
+  const churchName =
+    isNotEmpty(
+      death?.church_name
+    )
+      ? death.church_name
+      : isNotEmpty(
+          death?.church?.name
+        )
+      ? death.church.name
+      : "N/A";
+
+  const churchCity =
+    isNotEmpty(
+      death?.church_city
+    )
+      ? death.church_city
+      : isNotEmpty(
+          death?.church?.city
+        )
+      ? death.church.city
+      : "N/A";
+
+  // ==========================================================
+  // DIOCESE
+  // ==========================================================
+
+  const dioceseName =
+    isNotEmpty(
+      death?.diocese_name
+    )
+      ? death.diocese_name
+      : isNotEmpty(
+          death?.church?.diocese?.name
+        )
+      ? death.church.diocese.name
+      : "N/A";
+
+  // ==========================================================
+  // VICAR
+  // ==========================================================
+
+  const vicarName =
+    isNotEmpty(
+      death?.vicar_name
+    )
+      ? death.vicar_name
+      : "N/A";
+
+  // ==========================================================
   // DATE FORMAT
-  // ========================================================
+  // ==========================================================
 
   const getDateFormatted = (
     dateString
@@ -120,6 +983,14 @@ const DeathRegisterPrintModal = ({
     try {
       const date =
         new Date(dateString);
+
+      if (
+        Number.isNaN(
+          date.getTime()
+        )
+      ) {
+        return dateString;
+      }
 
       return date.toLocaleDateString(
         "en-IN",
@@ -134,58 +1005,52 @@ const DeathRegisterPrintModal = ({
     }
   };
 
-  // ========================================================
-  // DATE PARTS
-  // ========================================================
+  // ==========================================================
+  // DOB FORMAT
+  // DD:MM:YYYY
+  // ==========================================================
 
-  const getDateParts = (
+  const getDOBFormatted = (
     dateString
   ) => {
     if (!dateString) {
-      return {
-        day: "--",
-        month: "--",
-        year: "----",
-      };
+      return "--:--:----";
     }
 
     try {
       const date =
         new Date(dateString);
 
-      return {
-        day: String(
+      if (
+        Number.isNaN(
+          date.getTime()
+        )
+      ) {
+        return dateString;
+      }
+
+      const day =
+        String(
           date.getDate()
-        ).padStart(2, "0"),
+        ).padStart(2, "0");
 
-        month: String(
+      const month =
+        String(
           date.getMonth() + 1
-        ).padStart(2, "0"),
+        ).padStart(2, "0");
 
-        year: date.getFullYear(),
-      };
+      const year =
+        date.getFullYear();
+
+      return `${day}:${month}:${year}`;
     } catch {
-      return {
-        day: "--",
-        month: "--",
-        year: "----",
-      };
+      return "--:--:----";
     }
   };
 
-  const deathParts =
-    getDateParts(
-      death?.died_on
-    );
-
-  const dobParts =
-    getDateParts(
-      dateOfBirth
-    );
-
-  // ========================================================
+  // ==========================================================
   // AGE
-  // ========================================================
+  // ==========================================================
 
   const getMemberAge = () => {
     if (
@@ -197,14 +1062,23 @@ const DeathRegisterPrintModal = ({
 
     try {
       const birthDate =
-        new Date(
-          dateOfBirth
-        );
+        new Date(dateOfBirth);
 
       const deathDate =
         new Date(
           death.died_on
         );
+
+      if (
+        Number.isNaN(
+          birthDate.getTime()
+        ) ||
+        Number.isNaN(
+          deathDate.getTime()
+        )
+      ) {
+        return "N/A";
+      }
 
       let age =
         deathDate.getFullYear() -
@@ -233,15 +1107,19 @@ const DeathRegisterPrintModal = ({
     }
   };
 
-  // ========================================================
+  // ==========================================================
   // PRINT
-  // ========================================================
+  // ==========================================================
 
   const handlePrint = () => {
     const element =
       printRef.current;
 
     if (!element) {
+      console.error(
+        "Print element not found"
+      );
+
       return;
     }
 
@@ -267,13 +1145,13 @@ const DeathRegisterPrintModal = ({
       <!DOCTYPE html>
 
       <html>
-
         <head>
 
           <title>
-            Death/Funeral Certificate -
-            ${death?.reg_no || ""}
+            Death/Funeral Certificate
           </title>
+
+          <meta charset="UTF-8">
 
           <style>
 
@@ -287,10 +1165,9 @@ const DeathRegisterPrintModal = ({
             body {
               margin: 0;
               padding: 0;
-              background: white;
-            }
 
-            body {
+              background: white;
+
               font-family:
                 Georgia,
                 "Times New Roman",
@@ -298,795 +1175,26 @@ const DeathRegisterPrintModal = ({
             }
 
             @page {
-              size:
-                ${pageSize}
-                ${
-                  orientation ===
-                  "Portrait"
-                    ? "portrait"
-                    : "landscape"
-                };
-
+              size: A4 portrait;
               margin: 0;
             }
 
             @media print {
-
               html,
               body {
                 width: 100%;
                 height: 100%;
               }
-
-              body {
-                padding: 0;
-              }
-
-              .certificate-page {
-                margin: 0 !important;
-                box-shadow: none !important;
-              }
-
             }
 
-            .certificate-page {
-              width: 210mm;
-              height: 297mm;
-              min-height: 297mm;
-
-              margin: 0 auto;
-
-              position: relative;
-
-              overflow: hidden;
-
-              background:
-                linear-gradient(
-                  rgba(255,253,247,0.97),
-                  rgba(255,253,247,0.97)
-                );
-
-              padding:
-                12mm
-                13mm;
-
-              font-family:
-                Georgia,
-                "Times New Roman",
-                serif;
-            }
-
-            /* ========================================
-               BORDERS
-            ======================================== */
-
-            .outer-border {
-              position: absolute;
-
-              top: 5mm;
-              left: 5mm;
-              right: 5mm;
-              bottom: 5mm;
-
-              border:
-                1.5px solid
-                #d66b6b;
-
-              pointer-events: none;
-            }
-
-            .outer-border::before {
-              content: "";
-
-              position: absolute;
-
-              top: 4px;
-              left: 4px;
-              right: 4px;
-              bottom: 4px;
-
-              border:
-                1px solid
-                #e5aaaa;
-            }
-
-            .inner-border {
-              position: absolute;
-
-              top: 8mm;
-              left: 8mm;
-              right: 8mm;
-              bottom: 8mm;
-
-              border:
-                2px solid
-                #a81414;
-
-              pointer-events: none;
-            }
-
-            .inner-border::before {
-              content: "";
-
-              position: absolute;
-
-              top: 4px;
-              left: 4px;
-              right: 4px;
-              bottom: 4px;
-
-              border:
-                1px solid
-                #dca248;
-            }
-
-            /* ========================================
-               CORNER ORNAMENTS
-            ======================================== */
-
-            .corner {
-              position: absolute;
-
-              z-index: 10;
-
-              color: #c53d3d;
-
-              font-size: 23px;
-
-              line-height: 1;
-
-              width: 30px;
-              height: 30px;
-
-              text-align: center;
-            }
-
-            .corner.tl {
-              top: 6mm;
-              left: 6mm;
-            }
-
-            .corner.tr {
-              top: 6mm;
-              right: 6mm;
-              transform: scaleX(-1);
-            }
-
-            .corner.bl {
-              bottom: 6mm;
-              left: 6mm;
-              transform: scaleY(-1);
-            }
-
-            .corner.br {
-              bottom: 6mm;
-              right: 6mm;
-              transform: scale(-1);
-            }
-
-            /* ========================================
-               TOP HEADER
-            ======================================== */
-
-            .header {
-              position: relative;
-
-              z-index: 5;
-
-              margin-top: 7mm;
-
-              text-align: center;
-            }
-
-            .header-row {
-              display: flex;
-
-              align-items: center;
-
-              justify-content: center;
-
-              gap: 14px;
-            }
-
-            .logo-box {
-              width: 66px;
-              height: 66px;
-
-              flex-shrink: 0;
-
-              display: flex;
-
-              align-items: center;
-
-              justify-content: center;
-            }
-
-            .logo-image {
-              width: 62px;
-              height: 62px;
-
-              object-fit: contain;
-            }
-
-            .fallback-cross {
-              width: 58px;
-              height: 58px;
-
-              border:
-                2px solid
-                #d79a36;
-
-              border-radius: 50%;
-
-              display: flex;
-
-              align-items: center;
-
-              justify-content: center;
-
-              color:
-                #a50000;
-
-              font-size: 38px;
-            }
-
-            .church-heading {
-              text-align: center;
-            }
-
-            .church-name {
-              color:
-                #4a1111;
-
-              font-size:
-                29px;
-
-              line-height:
-                1.05;
-
-              font-weight:
-                700;
-
-              letter-spacing:
-                0.2px;
-            }
-
-            .church-subtitle {
-              color:
-                #4a1111;
-
-              font-size:
-                21px;
-
-              line-height:
-                1.1;
-
-              font-weight:
-                700;
-
-              margin-top:
-                3px;
-            }
-
-            /* ========================================
-               TITLE
-            ======================================== */
-
-            .title-area {
-              position: relative;
-
-              z-index: 5;
-
-              margin-top:
-                6mm;
-
-              text-align:
-                center;
-            }
-
-            .title-banner {
-              display:
-                inline-block;
-
-              position:
-                relative;
-
-              background:
-                #a40000;
-
-              color:
-                #ffffff;
-
-              border:
-                2px solid
-                #d6a03d;
-
-              padding:
-                6px 38px 7px;
-
-              min-width:
-                390px;
-
-              box-shadow:
-                inset 0 0 0 1px
-                #710000;
-            }
-
-            .title-banner::before,
-            .title-banner::after {
-              content:
-                "";
-
-              position:
-                absolute;
-
-              top:
-                4px;
-
-              width:
-                18px;
-
-              height:
-                calc(100% - 8px);
-
-              background:
-                #a40000;
-
-              border-top:
-                2px solid
-                #d6a03d;
-
-              border-bottom:
-                2px solid
-                #d6a03d;
-            }
-
-            .title-banner::before {
-              left:
-                -12px;
-
-              transform:
-                skewX(-18deg);
-            }
-
-            .title-banner::after {
-              right:
-                -12px;
-
-              transform:
-                skewX(18deg);
-            }
-
-            .title-text {
-              position:
-                relative;
-
-              z-index:
-                2;
-
-              font-size:
-                24px;
-
-              line-height:
-                1.1;
-
-              font-weight:
-                700;
-
-              letter-spacing:
-                0.3px;
-            }
-
-            /* ========================================
-               SERIAL NUMBERS
-            ======================================== */
-
-            .serial {
-              position:
-                absolute;
-
-              top:
-                46mm;
-
-              z-index:
-                8;
-
-              color:
-                #171717;
-
-              font-size:
-                10px;
-
-              font-weight:
-                600;
-
-              writing-mode:
-                vertical-rl;
-
-              transform:
-                rotate(180deg);
-
-              letter-spacing:
-                0.5px;
-            }
-
-            .serial.left {
-              left:
-                10mm;
-            }
-
-            .serial.right {
-              right:
-                10mm;
-            }
-
-            .serial-value {
-              margin-top:
-                4px;
-
-              font-size:
-                12px;
-
-              font-weight:
-                700;
-            }
-
-            /* ========================================
-               CONTENT
-            ======================================== */
-
-            .content {
-              position:
-                relative;
-
-              z-index:
-                4;
-
-              margin:
-                7mm 10mm 0;
-            }
-
-            /* ========================================
-               DIOCESE/PARISH
-            ======================================== */
-
-            .top-table {
-              width:
-                88%;
-
-              margin:
-                0 auto 4mm;
-
-              border-collapse:
-                collapse;
-
-              font-size:
-                13px;
-            }
-
-            .top-table td {
-              border:
-                1px solid
-                #cbb9a8;
-
-              padding:
-                6px 9px;
-            }
-
-            .top-label {
-              width:
-                95px;
-
-              font-weight:
-                700;
-            }
-
-            .top-value {
-              font-weight:
-                500;
-            }
-
-            /* ========================================
-               MAIN DETAILS TABLE
-            ======================================== */
-
-            .details-table {
-              width:
-                100%;
-
-              border-collapse:
-                collapse;
-
-              font-size:
-                13px;
-            }
-
-            .details-table td {
-              border:
-                1px solid
-                #c7b8aa;
-
-              padding:
-                7px 8px;
-
-              vertical-align:
-                middle;
-            }
-
-            .details-label {
-              width:
-                160px;
-
-              font-weight:
-                700;
-
-              color:
-                #171717;
-            }
-
-            .details-value {
-              color:
-                #171717;
-
-              font-weight:
-                500;
-            }
-
-            .name-row td {
-              height:
-                38px;
-            }
-
-            .age-row td {
-              height:
-                38px;
-            }
-
-            .address-row td {
-              height:
-                78px;
-            }
-
-            .date-row td {
-              height:
-                37px;
-            }
-
-            .age-number {
-              width:
-                55px;
-
-              text-align:
-                center;
-            }
-
-            .sex-cell {
-              width:
-                115px;
-            }
-
-            /* ========================================
-               WATERMARK
-            ======================================== */
-
-            .watermark {
-              position:
-                absolute;
-
-              left:
-                50%;
-
-              top:
-                57%;
-
-              transform:
-                translate(
-                  -50%,
-                  -50%
-                );
-
-              width:
-                220px;
-
-              height:
-                220px;
-
-              border:
-                2px solid
-                rgba(
-                  155,
-                  30,
-                  30,
-                  0.055
-                );
-
-              border-radius:
-                50%;
-
-              display:
-                flex;
-
-              align-items:
-                center;
-
-              justify-content:
-                center;
-
-              z-index:
-                1;
-
-              pointer-events:
-                none;
-            }
-
-            .watermark::before {
-              content:
-                "✠";
-
-              font-size:
-                155px;
-
-              color:
-                rgba(
-                  155,
-                  30,
-                  30,
-                  0.045
-                );
-            }
-
-            .watermark-text {
-              position:
-                absolute;
-
-              bottom:
-                31px;
-
-              font-size:
-                9px;
-
-              color:
-                rgba(
-                  155,
-                  30,
-                  30,
-                  0.055
-                );
-
-              letter-spacing:
-                1.5px;
-            }
-
-            /* ========================================
-               CERTIFICATION
-            ======================================== */
-
-            .certificate-text {
-              position:
-                relative;
-
-              z-index:
-                4;
-
-              text-align:
-                center;
-
-              margin:
-                4mm 12mm 5mm;
-
-              font-size:
-                13px;
-
-              line-height:
-                1.5;
-
-              color:
-                #171717;
-            }
-
-            /* ========================================
-               FOOTER
-            ======================================== */
-
-            .footer {
-              position:
-                relative;
-
-              z-index:
-                5;
-
-              margin:
-                0 10mm;
-            }
-
-            .footer-grid {
-              display:
-                grid;
-
-              grid-template-columns:
-                1fr 1fr 1fr;
-
-              gap:
-                16px;
-
-              align-items:
-                end;
-            }
-
-            .footer-item {
-              font-size:
-                12px;
-
-              color:
-                #171717;
-            }
-
-            .footer-center {
-              text-align:
-                center;
-            }
-
-            .footer-right {
-              text-align:
-                right;
-            }
-
-            .signature-line {
-              width:
-                90%;
-
-              margin:
-                0 auto 7px;
-
-              border-top:
-                1px solid
-                #222222;
-
-              height:
-                18px;
-            }
-
-            .footer-label {
-              font-size:
-                11px;
-
-              font-weight:
-                600;
-            }
-
-            .footer-date {
-              margin-top:
-                7px;
-
-              font-size:
-                12px;
-            }
-
-            .bottom-decoration {
-              margin-top:
-                3mm;
-
-              text-align:
-                center;
-
-              color:
-                #b72d2d;
-
-              font-size:
-                15px;
-
-              letter-spacing:
-                5px;
-            }
+            ${CERTIFICATE_STYLES}
 
           </style>
 
         </head>
 
         <body>
-
           ${content}
-
         </body>
 
       </html>
@@ -1105,9 +1213,9 @@ const DeathRegisterPrintModal = ({
     }, 700);
   };
 
-  // ========================================================
+  // ==========================================================
   // DOWNLOAD PDF
-  // ========================================================
+  // ==========================================================
 
   const handleDownloadPDF =
     async () => {
@@ -1115,12 +1223,15 @@ const DeathRegisterPrintModal = ({
         printRef.current;
 
       if (!element) {
+        console.error(
+          "PDF element not found"
+        );
+
         return;
       }
 
       const fileName =
         `Death-Funeral-Certificate-${
-          death?.reg_no ||
           death?.id ||
           "Record"
         }.pdf`;
@@ -1128,8 +1239,7 @@ const DeathRegisterPrintModal = ({
       const options = {
         margin: 0,
 
-        filename:
-          fileName,
+        filename: fileName,
 
         image: {
           type: "jpeg",
@@ -1147,19 +1257,16 @@ const DeathRegisterPrintModal = ({
           logging: false,
 
           allowTaint: true,
+
+          imageTimeout: 5000,
         },
 
         jsPDF: {
-          orientation:
-            orientation ===
-            "Portrait"
-              ? "p"
-              : "l",
+          orientation: "p",
 
           unit: "mm",
 
-          format:
-            pageSize,
+          format: "a4",
 
           compress: true,
         },
@@ -1174,10 +1281,18 @@ const DeathRegisterPrintModal = ({
       };
 
       try {
+        console.log(
+          "Starting PDF generation..."
+        );
+
         await html2pdf()
           .set(options)
           .from(element)
           .save();
+
+        console.log(
+          "PDF generated successfully"
+        );
       } catch (error) {
         console.error(
           "PDF generation error:",
@@ -1190,434 +1305,403 @@ const DeathRegisterPrintModal = ({
       }
     };
 
-  // ========================================================
+  // ==========================================================
   // CERTIFICATE
-  // ========================================================
+  // ==========================================================
 
-  const renderCertificate =
-    () => {
-      return (
-        <div className="certificate-page">
+  const renderCertificate = () => {
+    return (
+      <div className="certificate-page">
 
-          {/* ==========================================
-              BORDERS
-          ========================================== */}
+        {/* ==================================================
+            OUTER BORDER
+        ================================================== */}
 
-          <div className="outer-border" />
+        <div className="outer-border" />
 
-          <div className="inner-border" />
+        {/* ==================================================
+            INNER BORDER
+        ================================================== */}
 
-          {/* ==========================================
-              CORNERS
-          ========================================== */}
+        <div className="inner-border" />
 
-          <div className="corner tl">
-            ❧
-          </div>
+        {/* ==================================================
+            CORNERS
+        ================================================== */}
 
-          <div className="corner tr">
-            ❧
-          </div>
+        <div className="corner tl">
+          ❧
+        </div>
 
-          <div className="corner bl">
-            ❧
-          </div>
+        <div className="corner tr">
+          ❧
+        </div>
 
-          <div className="corner br">
-            ❧
-          </div>
+        <div className="corner bl">
+          ❧
+        </div>
 
-          {/* ==========================================
-              SERIAL NUMBERS
-          ========================================== */}
+        <div className="corner br">
+          ❧
+        </div>
 
-          <div className="serial left">
+        {/* ==================================================
+            HEADER
+        ================================================== */}
 
-            <span>
-              Sl. No.
-            </span>
+        <div className="header">
 
-            <span className="serial-value">
-              {death?.serial_no ||
-                death?.sl_no ||
-                death?.id ||
-                "N/A"}
-            </span>
+          <div className="header-inner">
 
-          </div>
+            <div className="logo-space" />
 
-          <div className="serial right">
+            <div className="church-heading">
 
-            <span>
-              Reg. No.
-            </span>
-
-            <span className="serial-value">
-              {death?.reg_no ||
-                "N/A"}
-            </span>
-
-          </div>
-
-          {/* ==========================================
-              HEADER
-          ========================================== */}
-
-          <div className="header">
-
-            <div className="header-row">
-
-              <div className="logo-box">
-
-                {logoImage ? (
-                  <img
-                    src={logoImage}
-                    alt="Church"
-                    className="logo-image"
-                  />
-                ) : (
-                  <div className="fallback-cross">
-                    ✠
-                  </div>
-                )}
-
+              <div className="church-name">
+                Malankara Orthodox
               </div>
 
-              <div className="church-heading">
-
-                <div className="church-name">
-                  Malankara Orthodox
-                </div>
-
-                <div className="church-subtitle">
-                  Syrian Church
-                </div>
-
+              <div className="church-subtitle">
+                Syrian Church
               </div>
 
             </div>
 
-          </div>
-
-          {/* ==========================================
-              TITLE
-          ========================================== */}
-
-          <div className="title-area">
-
-            <div className="title-banner">
-
-              <div className="title-text">
-                Death/Funeral Certificate
-              </div>
-
-            </div>
+            <div className="header-spacer" />
 
           </div>
 
-          {/* ==========================================
-              CONTENT
-          ========================================== */}
+        </div>
 
-          <div className="content">
+        {/* ==================================================
+            TITLE
+        ================================================== */}
 
-            {/* DIOCESE / PARISH */}
+        <div className="title-area">
 
-            <table className="top-table">
+          <div className="title-banner">
 
-              <tbody>
-
-                <tr>
-
-                  <td className="top-label">
-                    Diocese
-                  </td>
-
-                  <td className="top-value">
-                    {death?.diocese ||
-                      "Diocese of Sulthan Bathery"}
-                  </td>
-
-                </tr>
-
-                <tr>
-
-                  <td className="top-label">
-                    Parish
-                  </td>
-
-                  <td className="top-value">
-                    {death?.parish ||
-                      "St. George Orthodox Church, Bathery"}
-                  </td>
-
-                </tr>
-
-              </tbody>
-
-            </table>
-
-            {/* ========================================
-                WATERMARK
-            ======================================== */}
-
-            <div className="watermark">
-
-              <div className="watermark-text">
-                MALANKARA ORTHODOX SYRIAN CHURCH
-              </div>
-
-            </div>
-
-            {/* ========================================
-                DETAILS TABLE
-            ======================================== */}
-
-            <table className="details-table">
-
-              <tbody>
-
-                {/* NAME */}
-
-                <tr className="name-row">
-
-                  <td className="details-label">
-                    Name
-                  </td>
-
-                  <td
-                    className="details-value"
-                    colSpan="4"
-                  >
-                    {memberName}
-                  </td>
-
-                </tr>
-
-                {/* AGE / DOB / SEX */}
-
-                <tr className="age-row">
-
-                  <td className="details-label">
-                    Age, Date of Birth
-                  </td>
-
-                  <td className="age-number">
-                    {getMemberAge()}
-                  </td>
-
-                  <td className="age-number">
-                    {dobParts.day}
-                  </td>
-
-                  <td className="age-number">
-                    {dobParts.month}
-                  </td>
-
-                  <td className="sex-cell">
-
-                    <strong>
-                      Sex :
-                    </strong>
-
-                    {" "}
-
-                    {gender}
-
-                  </td>
-
-                </tr>
-
-                {/* ADDRESS */}
-
-                <tr className="address-row">
-
-                  <td className="details-label">
-                    Address
-                  </td>
-
-                  <td
-                    className="details-value"
-                    colSpan="4"
-                  >
-                    {address}
-                  </td>
-
-                </tr>
-
-                {/* HOUSE */}
-
-                <tr>
-
-                  <td className="details-label">
-                    House No. in the Church Register
-                  </td>
-
-                  <td
-                    className="details-value"
-                    colSpan="4"
-                  >
-                    {houseName}
-                  </td>
-
-                </tr>
-
-                {/* DATE OF DEATH */}
-
-                <tr className="date-row">
-
-                  <td className="details-label">
-                    Date of Death
-                  </td>
-
-                  <td
-                    className="details-value"
-                    colSpan="4"
-                  >
-                    {getDateFormatted(
-                      death?.died_on
-                    )}
-                  </td>
-
-                </tr>
-
-                {/* DATE OF FUNERAL */}
-
-                <tr className="date-row">
-
-                  <td className="details-label">
-                    Date of Funeral
-                  </td>
-
-                  <td
-                    className="details-value"
-                    colSpan="4"
-                  >
-                    {getDateFormatted(
-                      death?.funeral_on
-                    )}
-                  </td>
-
-                </tr>
-
-                {/* CHIEF CELEBRANT */}
-
-                <tr className="date-row">
-
-                  <td className="details-label">
-                    Chief Celebrant
-                  </td>
-
-                  <td
-                    className="details-value"
-                    colSpan="4"
-                  >
-                    {death?.chief_celebrant ||
-                      "Rev. Fr. Thomas Mathew"}
-                  </td>
-
-                </tr>
-
-              </tbody>
-
-            </table>
-
-          </div>
-
-          {/* ==========================================
-              CERTIFICATION
-          ========================================== */}
-
-          <div className="certificate-text">
-
-            I do hereby certify that the
-            above is a true copy of an
-            entry in the
-
-            <br />
-
-            Funeral Register maintained
-            at this Parish.
-
-          </div>
-
-          {/* ==========================================
-              FOOTER
-          ========================================== */}
-
-          <div className="footer">
-
-            <div className="footer-grid">
-
-              {/* PLACE / DATE */}
-
-              <div className="footer-item">
-
-                <strong>
-                  Place :
-                </strong>
-
-                {" "}
-
-                {death?.place ||
-                  "Sulthan Bathery"}
-
-                <div className="footer-date">
-
-                  <strong>
-                    Date :
-                  </strong>
-
-                  {" "}
-
-                  {getDateFormatted(
-                    death?.funeral_on ||
-                    death?.died_on
-                  )}
-
-                </div>
-
-              </div>
-
-              {/* SEAL */}
-
-              <div className="footer-item footer-center">
-
-                <div className="signature-line" />
-
-                <div className="footer-label">
-                  SEAL
-                </div>
-
-              </div>
-
-              {/* VICAR */}
-
-              <div className="footer-item footer-right">
-
-                <div className="signature-line" />
-
-                <div className="footer-label">
-                  Name and Signature of Vicar
-                </div>
-
-              </div>
-
-            </div>
-
-            <div className="bottom-decoration">
-              ❧ ❧ ❧ ❧ ❧
+            <div className="title-text">
+              Death/Funeral Certificate
             </div>
 
           </div>
 
         </div>
-      );
-    };
 
-  // ========================================================
+        {/* ==================================================
+            CONTENT
+        ================================================== */}
+
+        <div className="content">
+
+          {/* =================================================
+              DIOCESE / PARISH
+          ================================================= */}
+
+          <table className="top-table">
+
+            <tbody>
+
+              <tr>
+
+                <td className="top-label">
+                  Diocese
+                </td>
+
+                <td className="top-value">
+                  {dioceseName}
+                </td>
+
+              </tr>
+
+              <tr>
+
+                <td className="top-label">
+                  Parish
+                </td>
+
+                <td className="top-value">
+                  {churchName}
+                </td>
+
+              </tr>
+
+            </tbody>
+
+          </table>
+
+          {/* =================================================
+              WATERMARK
+          ================================================= */}
+
+          <div className="watermark">
+
+            <div className="watermark-text">
+              MALANKARA ORTHODOX SYRIAN CHURCH
+            </div>
+
+          </div>
+
+          {/* =================================================
+              MAIN DETAILS
+          ================================================= */}
+
+          <table className="details-table">
+
+            <tbody>
+
+              {/* NAME - First Row */}
+
+              <tr className="name-row">
+
+                <td className="details-label">
+                  Name
+                </td>
+
+                <td
+                  className="details-value"
+                  colSpan="6"
+                >
+                  {memberName}
+                </td>
+
+              </tr>
+
+              {/* AGE / DOB / SEX - Second Row (INCREASED HEIGHT) */}
+
+              <tr className="age-row">
+
+                <td className="details-label">
+                  Age, Date of Birth
+                </td>
+
+                <td className="age-number">
+                  {getMemberAge()}
+                </td>
+
+                <td
+                  className="details-value"
+                  colSpan="3"
+                  style={{
+                    textAlign: "center",
+                  }}
+                >
+                  {getDOBFormatted(
+                    dateOfBirth
+                  )}
+                </td>
+
+                <td className="dob-separator">
+                  Sex :
+                </td>
+
+                <td className="sex-cell">
+                  {gender}
+                </td>
+
+              </tr>
+
+              {/* ADDRESS - Third Row */}
+
+              <tr className="address-row">
+
+                <td className="details-label">
+                  Address
+                </td>
+
+                <td
+                  className="details-value address-value"
+                  colSpan="6"
+                >
+                  {address}
+                </td>
+
+              </tr>
+
+              {/* HOUSE NO. - Fourth Row */}
+
+              <tr className="normal-row">
+
+                <td className="details-label">
+                  House No. in the Church Register
+                </td>
+
+                <td
+                  className="details-value"
+                  colSpan="6"
+                >
+                  {memberRegisterId}
+                </td>
+
+              </tr>
+
+              {/* DATE OF DEATH - Fifth Row */}
+
+              <tr className="date-row">
+
+                <td className="details-label">
+                  Date of Death
+                </td>
+
+                <td
+                  className="details-value"
+                  colSpan="6"
+                >
+                  {getDateFormatted(
+                    death?.died_on
+                  )}
+                </td>
+
+              </tr>
+
+              {/* DATE OF FUNERAL - Sixth Row */}
+
+              <tr className="date-row">
+
+                <td className="details-label">
+                  Date of Funeral
+                </td>
+
+                <td
+                  className="details-value"
+                  colSpan="6"
+                >
+                  {getDateFormatted(
+                    death?.funeral_on
+                  )}
+                </td>
+
+              </tr>
+
+              {/* CHIEF CELEBRANT - Seventh Row */}
+
+              <tr className="date-row">
+
+                <td className="details-label">
+                  Chief Celebrant
+                </td>
+
+                <td
+                  className="details-value"
+                  colSpan="6"
+                >
+                  Rev. Fr. {vicarName}
+                </td>
+
+              </tr>
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+        {/* ==================================================
+            CERTIFICATION
+        ================================================== */}
+
+        <div className="certificate-text">
+
+          I do hereby certify that the above is a true copy of an entry in the
+
+          <br />
+
+          Funeral Register maintained at this Parish.
+
+        </div>
+
+        {/* ==================================================
+            LARGE EMPTY SPACE
+            FOR PHYSICAL STAMP AND SIGNATURE
+        ================================================== */}
+
+        <div className="stamp-sign-gap" />
+
+        {/* ==================================================
+            FOOTER
+        ================================================== */}
+
+        <div className="footer">
+
+          <div className="footer-grid">
+
+            {/* PLACE / DATE */}
+
+            <div className="footer-item">
+
+              <strong>
+                Place :
+              </strong>{" "}
+
+              {
+                isNotEmpty(
+                  death?.place
+                )
+                  ? death.place
+                  : (
+                      churchCity !==
+                      "N/A"
+                        ? churchCity
+                        : "N/A"
+                    )
+              }
+
+              <div className="footer-date">
+
+                <strong>
+                  Date :
+                </strong>{" "}
+
+                {getDateFormatted(
+                  death?.funeral_on ||
+                  death?.died_on
+                )}
+
+              </div>
+
+            </div>
+
+            {/* SEAL */}
+
+            <div className="footer-item footer-center">
+
+              {/* <div className="signature-line" /> */}
+
+              <div className="footer-label">
+                SEAL
+              </div>
+
+            </div>
+
+            {/* VICAR */}
+
+            <div className="footer-item footer-right">
+
+              {/* <div className="signature-line" /> */}
+
+              <div className="footer-label">
+
+                <br />
+
+                Name and Signature of Vicar
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+    );
+  };
+
+  // ==========================================================
   // MODAL
-  // ========================================================
+  // CHAKRA UI v3
+  // ==========================================================
 
   return (
     <Dialog.Root
@@ -1633,214 +1717,166 @@ const DeathRegisterPrintModal = ({
 
       <Dialog.Backdrop />
 
-      <Dialog.Content
-        maxW="100vw"
-        maxH="100vh"
-        h="100vh"
-        m={0}
-        borderRadius="0"
-        overflow="hidden"
-        bg="#F1EFEF"
-      >
+      <Dialog.Positioner>
 
-        {/* ==========================================
-            TOP TOOLBAR
-        ========================================== */}
-
-        <Box
-          h="58px"
-          bg="#FFFFFF"
-          borderBottom="1px solid #E5E5E5"
-          px={{
-            base: 4,
-            md: 7,
-          }}
-          display="flex"
-          alignItems="center"
-          justifyContent="space-between"
-          flexShrink={0}
-        >
-
-          {/* TITLE */}
-
-          <Text
-            fontSize={{
-              base: "17px",
-              md: "20px",
-            }}
-            fontWeight="700"
-            color="#182338"
-          >
-            Print Preview
-          </Text>
-
-          {/* CONTROLS */}
-
-          <HStack
-            gap={{
-              base: 2,
-              md: 3,
-            }}
-          >
-
-            {/* A4 */}
-
-            <Select
-              value={pageSize}
-              onChange={(event) =>
-                setPageSize(
-                  event.target.value
-                )
-              }
-              size="sm"
-              w={{
-                base: "82px",
-                md: "108px",
-              }}
-              h="38px"
-              border="1px solid #CAD5E2"
-              borderRadius="5px"
-              bg="#FFFFFF"
-              fontSize="13px"
-            >
-              <option value="A4">
-                A4
-              </option>
-
-              <option value="A3">
-                A3
-              </option>
-
-              <option value="Letter">
-                Letter
-              </option>
-            </Select>
-
-            {/* ORIENTATION */}
-
-            <Select
-              value={orientation}
-              onChange={(event) =>
-                setOrientation(
-                  event.target.value
-                )
-              }
-              size="sm"
-              w={{
-                base: "100px",
-                md: "128px",
-              }}
-              h="38px"
-              border="1px solid #CAD5E2"
-              borderRadius="5px"
-              bg="#FFFFFF"
-              fontSize="13px"
-            >
-              <option value="Portrait">
-                Portrait
-              </option>
-
-              <option value="Landscape">
-                Landscape
-              </option>
-            </Select>
-
-            {/* CLOSE */}
-
-            <Button
-              h="38px"
-              minW={{
-                base: "70px",
-                md: "94px",
-              }}
-              variant="outline"
-              borderColor="#263B73"
-              color="#182A5A"
-              bg="#FFFFFF"
-              fontSize="13px"
-              onClick={onClose}
-            >
-              Close
-            </Button>
-
-            {/* DOWNLOAD PDF */}
-
-            <Button
-              h="38px"
-              px={5}
-              variant="outline"
-              borderColor="#E32626"
-              color="#E32626"
-              bg="#FFFFFF"
-              fontSize="13px"
-              fontWeight="600"
-              onClick={
-                handleDownloadPDF
-              }
-            >
-              <Icon
-                as={LuFileDown}
-                mr="7px"
-              />
-
-              Download PDF
-            </Button>
-
-            {/* PRINT */}
-
-            <Button
-              h="38px"
-              px={6}
-              bg={PRIMARY_RED}
-              color="#FFFFFF"
-              fontSize="13px"
-              fontWeight="600"
-              onClick={handlePrint}
-              _hover={{
-                bg: DARK_RED,
-              }}
-            >
-              <Icon
-                as={LuPrinter}
-                mr="7px"
-              />
-
-              Print
-            </Button>
-
-          </HStack>
-
-        </Box>
-
-        {/* ==========================================
-            PREVIEW AREA
-        ========================================== */}
-
-        <Box
-          flex="1"
-          overflow="auto"
+        <Dialog.Content
+          maxW="100vw"
+          maxH="100vh"
+          h="100vh"
+          m={0}
+          borderRadius="0"
+          overflow="hidden"
           bg="#F1EFEF"
-          display="flex"
-          justifyContent="center"
-          alignItems="flex-start"
-          p={{
-            base: 3,
-            md: 5,
-          }}
         >
+
+          {/* ==================================================
+              TOP TOOLBAR
+          ================================================== */}
 
           <Box
-            ref={printRef}
-            flexShrink={0}
+            h="58px"
             bg="#FFFFFF"
-            boxShadow="0 3px 15px rgba(0,0,0,0.25)"
+            borderBottom="1px solid #E5E5E5"
+            px={{
+              base: 4,
+              md: 7,
+            }}
+            display="flex"
+            alignItems="center"
+            justifyContent="space-between"
+            flexShrink={0}
           >
-            {renderCertificate()}
+
+            {/* TITLE */}
+
+            <Text
+              fontSize={{
+                base: "17px",
+                md: "20px",
+              }}
+              fontWeight="700"
+              color="#182338"
+            >
+              Print Preview
+            </Text>
+
+            {/* CONTROLS */}
+
+            <HStack
+              gap={{
+                base: 2,
+                md: 3,
+              }}
+            >
+
+              {/* CLOSE */}
+
+              <Button
+                h="38px"
+                minW={{
+                  base: "70px",
+                  md: "94px",
+                }}
+                variant="outline"
+                borderColor="#263B73"
+                color="#182A5A"
+                bg="#FFFFFF"
+                fontSize="13px"
+                onClick={onClose}
+              >
+                Close
+              </Button>
+
+              {/* DOWNLOAD PDF */}
+
+              <Button
+                h="38px"
+                px={5}
+                variant="outline"
+                borderColor="#E32626"
+                color="#E32626"
+                bg="#FFFFFF"
+                fontSize="13px"
+                fontWeight="600"
+                onClick={
+                  handleDownloadPDF
+                }
+              >
+
+                <LuFileDown
+                  size={17}
+                />
+
+                <Box ml="7px">
+                  Download PDF
+                </Box>
+
+              </Button>
+
+              {/* PRINT */}
+
+              <Button
+                h="38px"
+                px={6}
+                bg={PRIMARY_RED}
+                color="#FFFFFF"
+                fontSize="13px"
+                fontWeight="600"
+                onClick={
+                  handlePrint
+                }
+                _hover={{
+                  bg: DARK_RED,
+                }}
+              >
+
+                <LuPrinter
+                  size={17}
+                />
+
+                <Box ml="7px">
+                  Print
+                </Box>
+
+              </Button>
+
+            </HStack>
+
           </Box>
 
-        </Box>
+          {/* ==================================================
+              PREVIEW AREA
+          ================================================== */}
 
-      </Dialog.Content>
+          <Box
+            flex="1"
+            overflow="auto"
+            bg="#F1EFEF"
+            display="flex"
+            justifyContent="center"
+            alignItems="flex-start"
+            p={{
+              base: 3,
+              md: 5,
+            }}
+          >
+
+            <Box
+              ref={printRef}
+              flexShrink={0}
+              bg="#FFFFFF"
+              boxShadow="0 3px 15px rgba(0,0,0,0.25)"
+            >
+
+              {renderCertificate()}
+
+            </Box>
+
+          </Box>
+
+        </Dialog.Content>
+
+      </Dialog.Positioner>
 
     </Dialog.Root>
   );

@@ -458,7 +458,7 @@ const OfferingPage = () => {
             color={MUTED}
             fontSize="11px"
           >
-            <Text>Offerings</Text>
+            <Text>Masters</Text>
             <Text>/</Text>
             <Text>Member Offerings</Text>
           </HStack>

@@ -1591,6 +1591,7 @@ class Baptism(models.Model):
         )
 
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = ("church", "register_number")
@@ -1699,6 +1700,7 @@ class Marriage(models.Model):
     remarks = models.TextField(blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = ("church", "register_number")

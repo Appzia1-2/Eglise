@@ -1803,120 +1803,220 @@ class UpgradeRequestSerializer(serializers.ModelSerializer):
         
         return attrs
 #Baptism
+
 class BaptismSerializer(serializers.ModelSerializer):
-
+ 
+    # =========================================================
+    # STRING REPRESENTATIONS
+    # =========================================================
+ 
     house_name = serializers.SerializerMethodField()
-    family_name = serializers.CharField(source="family.family_name", read_only=True)
-
+    
+    family_name = serializers.CharField(
+        source="family.family_name",
+        read_only=True
+    )
+ 
+    main_member_name = serializers.CharField(
+        source="main_member",
+        read_only=True,
+        allow_null=True
+    )
+ 
+    relation_with_main_member_name = serializers.CharField(
+        source="relation_with_main_member",
+        read_only=True,
+        allow_null=True
+    )
+ 
+    ward_name = serializers.SerializerMethodField()
+ 
+    parish_of_baptism = serializers.CharField(
+        read_only=False,
+        required=False,
+        allow_blank=True
+    )
+ 
+    # =========================================================
+    # META
+    # =========================================================
+ 
     class Meta:
         model = Baptism
         fields = "__all__"
         read_only_fields = ("register_number", "church")
-
-    # ---------------------------------
+ 
+    # =========================================================
     # HOUSE NAME
-    # ---------------------------------
+    # =========================================================
+ 
     def get_house_name(self, obj):
+        """Get house name from associated member"""
         if obj.member:
             return obj.member.house_name
         return None
-
-    # ---------------------------------
+ 
+    # =========================================================
+    # WARD NAME (NEW)
+    # =========================================================
+ 
+    def get_ward_name(self, obj):
+        """
+        Get ward name from member's ward relationship.
+        Works for both PARISH and OTHER category baptisms.
+        """
+        # Try member's ward first (primary source)
+        if obj.member and obj.member.ward:
+            return obj.member.ward.ward_name
+ 
+        # Fallback: try main_member's ward (for PARISH baptism)
+        if obj.main_member and obj.main_member.ward:
+            return obj.main_member.ward.ward_name
+ 
+        return None
+ 
+    # =========================================================
     # VALIDATION
-    # ---------------------------------
+    # =========================================================
+ 
     def validate(self, data):
-
+        """
+        Validate baptism data based on category.
+        PARISH: requires family, main_member, relation_with_main_member
+        OTHER: must NOT have family, main_member, relation_with_main_member
+        """
+ 
         instance = self.instance
         request = self.context.get("request")
-
+ 
         church = request.user.church if request else None
-
+ 
+        # =====================================================
+        # Get values from request or existing instance
+        # =====================================================
+ 
         category = data.get(
             "baptism_category",
             instance.baptism_category if instance else None
         )
-
+ 
         family = data.get(
             "family",
             instance.family if instance else None
         )
-
+ 
         main_member = data.get(
             "main_member",
             instance.main_member if instance else None
         )
-
+ 
         relation = data.get(
             "relation_with_main_member",
             instance.relation_with_main_member if instance else None
         )
-
+ 
         priest_name = data.get(
             "priest_name",
             instance.priest_name if instance else None
         )
-
+ 
         panchayath = data.get(
             "panchayath",
             instance.panchayath if instance else None
         )
-
-        # -------------------------
-        # Required fields
-        # -------------------------
+ 
+        address = data.get(
+            "address",
+            instance.address if instance else None
+        )
+ 
+        # =====================================================
+        # Required fields (all categories)
+        # =====================================================
+ 
         if not priest_name:
             raise serializers.ValidationError({
                 "priest_name": "Priest name is required."
             })
-
+ 
         if not panchayath:
             raise serializers.ValidationError({
                 "panchayath": "Panchayath name is required."
             })
-
-        # -------------------------
-        # Parish baptism validation
-        # -------------------------
+ 
+        # =====================================================
+        # PARISH BAPTISM VALIDATION
+        # =====================================================
+ 
         if category == "PARISH":
-
+ 
             if not family:
                 raise serializers.ValidationError({
                     "family": "Family is required for parish baptism."
                 })
-
+ 
             if not main_member:
                 raise serializers.ValidationError({
                     "main_member": "Main member is required for parish baptism."
                 })
-
+ 
             if not relation:
                 raise serializers.ValidationError({
                     "relation_with_main_member": "Relationship is required for parish baptism."
                 })
-
-            # main_member must be head
+ 
+            # Main member must be family head
             if main_member and not main_member.is_family_head:
                 raise serializers.ValidationError({
                     "main_member": "Main member must be a family head."
                 })
-
-            # ensure family belongs to church
+ 
+            # Family must belong to this church
             if church and family and family.church != church:
                 raise serializers.ValidationError({
                     "family": "Selected family does not belong to this church."
                 })
-
-        # -------------------------
-        # Outsider baptism validation
-        # -------------------------
+ 
+        # =====================================================
+        # OTHER PARISH MEMBER VALIDATION
+        # =====================================================
+ 
         if category == "OTHER":
-
+ 
             if family or main_member or relation:
                 raise serializers.ValidationError(
                     "Family, main member, and relationship must be empty for outsider baptism."
                 )
-
+ 
+            # Address is required for OTHER category
+            if not address:
+                raise serializers.ValidationError({
+                    "address": "Address is required for outsider baptism."
+                })
+ 
         return data
+ 
+    # =========================================================
+    # CREATE
+    # =========================================================
+ 
+    def create(self, validated_data):
+        """Create baptism with church from request user"""
+        request = self.context.get("request")
+ 
+        if request and request.user:
+            validated_data["church"] = request.user.church
+ 
+        return super().create(validated_data)
+ 
+    # =========================================================
+    # UPDATE
+    # =========================================================
+ 
+    def update(self, instance, validated_data):
+        """Preserve church on update"""
+        validated_data["church"] = instance.church
+        return super().update(instance, validated_data)
     
 # registry/serializers.py - Complete corrected FamilyHeadCreateSerializer
 
@@ -3711,6 +3811,104 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
     )
 
     # ---------------------------------------------------------
+    # Member additional details
+    # ---------------------------------------------------------
+
+    register_number = serializers.CharField(
+        source="member.register_number",
+        read_only=True,
+        default=None,
+        allow_null=True,
+        allow_blank=True
+    )
+
+    folio_number = serializers.CharField(
+        source="member.folio_number",
+        read_only=True,
+        default=None,
+        allow_null=True,
+        allow_blank=True
+    )
+
+    marital_status = serializers.CharField(
+        source="member.marital_status",
+        read_only=True,
+        default=None,
+        allow_null=True,
+        allow_blank=True
+    )
+
+    profession = serializers.CharField(
+        source="member.profession",
+        read_only=True,
+        default=None,
+        allow_null=True,
+        allow_blank=True
+    )
+
+    gender = serializers.CharField(
+        source="member.gender",
+        read_only=True,
+        default=None,
+        allow_null=True,
+        allow_blank=True
+    )
+
+    date_of_birth = serializers.DateField(
+        source="member.dob",
+        read_only=True,
+        default=None,
+        allow_null=True
+    )
+
+    member_address = serializers.CharField(
+        source="member.address",
+        read_only=True,
+        default=None,
+        allow_null=True,
+        allow_blank=True
+    )
+
+    # ---------------------------------------------------------
+    # Church information
+    # ---------------------------------------------------------
+
+    church_name = serializers.CharField(
+        source="church.name",
+        read_only=True,
+        default=None,
+        allow_null=True,
+        allow_blank=True
+    )
+
+    church_city = serializers.CharField(
+        source="church.city",
+        read_only=True,
+        default=None,
+        allow_null=True,
+        allow_blank=True
+    )
+
+    # ---------------------------------------------------------
+    # Diocese information (through church)
+    # ---------------------------------------------------------
+
+    diocese_name = serializers.CharField(
+        source="church.diocese.name",
+        read_only=True,
+        default=None,
+        allow_null=True,
+        allow_blank=True
+    )
+
+    # ---------------------------------------------------------
+    # Vicar information (through church)
+    # ---------------------------------------------------------
+
+    vicar_name = serializers.SerializerMethodField()
+    vicar_designation = serializers.SerializerMethodField()
+
+    # ---------------------------------------------------------
     # Nested TombFee details
     # ---------------------------------------------------------
 
@@ -3786,6 +3984,26 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
             "family_name",
             "house_name",
 
+            # Member additional details
+            "register_number",
+            "folio_number",
+            "marital_status",
+            "profession",
+            "gender",
+            "date_of_birth",
+            "member_address",
+
+            # Church details
+            "church_name",
+            "church_city",
+
+            # Diocese details
+            "diocese_name",
+
+            # Vicar details
+            "vicar_name",
+            "vicar_designation",
+
             "died_on",
             "funeral_on",
 
@@ -3811,6 +4029,48 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
             "tomb_fee_details",
             "available_tomb_fees",
         )
+
+    # =========================================================
+    # VICAR INFORMATION
+    # =========================================================
+
+    def get_vicar_name(self, obj):
+        """
+        Get the current active MAIN vicar for the church.
+        """
+        if not obj.church:
+            return None
+
+        try:
+            vicar = Priest.objects.filter(
+                church=obj.church,
+                designation="MAIN",
+                is_active=True
+            ).first()
+
+            return vicar.name if vicar else None
+        except Priest.DoesNotExist:
+            return None
+
+    def get_vicar_designation(self, obj):
+        """
+        Get the vicar's designation label.
+        """
+        if not obj.church:
+            return None
+
+        try:
+            vicar = Priest.objects.filter(
+                church=obj.church,
+                designation="MAIN",
+                is_active=True
+            ).first()
+
+            if vicar:
+                return vicar.get_designation_display()
+            return None
+        except Priest.DoesNotExist:
+            return None
 
     # =========================================================
     # AVAILABLE TOMB FEES
