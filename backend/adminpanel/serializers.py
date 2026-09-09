@@ -317,8 +317,6 @@ class DioceseSerializer(serializers.ModelSerializer):
         if value and not value.startswith(('http://', 'https://')):
             value = 'https://' + value
         return value
-
-
 class PackageSerializer(serializers.ModelSerializer):
     """Admin Package Serializer"""
     is_in_use = serializers.BooleanField(read_only=True)
@@ -345,7 +343,32 @@ class PackageSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
     
+    def validate_member_limit(self, value):
+        """Validate member_limit is required and unique"""
+        if value is None:
+            raise serializers.ValidationError("Member limit is required")
+        if value < 0:
+            raise serializers.ValidationError("Member limit cannot be negative")
+        
+        # Check for uniqueness
+        instance = getattr(self, 'instance', None)
+        if instance:
+            # For update operations - exclude current instance
+            if Package.objects.exclude(pk=instance.pk).filter(member_limit=value).exists():
+                raise serializers.ValidationError(
+                    f"Member limit {value} is already in use by another package. Please use a different limit."
+                )
+        else:
+            # For create operations
+            if Package.objects.filter(member_limit=value).exists():
+                raise serializers.ValidationError(
+                    f"Member limit {value} is already in use. Please use a different limit."
+                )
+        
+        return value
+    
     def validate(self, data):
+        # Validate upgrade rates
         if data.get('upgrade_rate_monthly') and data.get('upgrade_rate_monthly') < 0:
             raise serializers.ValidationError({
                 'upgrade_rate_monthly': 'Upgrade rate cannot be negative'
@@ -354,6 +377,7 @@ class PackageSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 'upgrade_rate_yearly': 'Upgrade rate cannot be negative'
             })
+        
         return data
 
 

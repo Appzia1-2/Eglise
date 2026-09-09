@@ -1,5 +1,8 @@
+// src/admin/pages/DioceseAdd.jsx
+
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+
 import {
   Box,
   Container,
@@ -15,17 +18,20 @@ import {
   Icon,
   Spinner,
 } from "@chakra-ui/react";
-import { 
-  LuSave, 
-  LuCircleHelp, 
-  LuMail, 
-  LuGlobe, 
-  LuChevronDown, 
-  LuCheck, 
+
+import {
+  LuSave,
+  LuCircleHelp,
+  LuMail,
+  LuGlobe,
+  LuChevronDown,
+  LuCheck,
   LuX,
   LuSearch,
   LuHash,
+  LuArrowLeft,
 } from "react-icons/lu";
+
 import { Country, State } from "country-state-city";
 import AdminLayout from "../components/AdminLayout";
 import { toaster } from "../../components/ui/toaster";
@@ -33,17 +39,10 @@ import adminApi from "../services/adminApi";
 import ReactCountryFlag from "react-country-flag";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 
-// Country code to emoji flag mapping (fallback if ReactCountryFlag fails)
-const getFlagEmoji = (countryCode) => {
-  if (!countryCode) return "🌍";
-  const codePoints = countryCode
-    .toUpperCase()
-    .split('')
-    .map(char => 127397 + char.charCodeAt(0));
-  return String.fromCodePoint(...codePoints);
-};
+/* =========================================================
+   COUNTRY DROPDOWN
+========================================================= */
 
-// Country Dropdown (no phone code, just country name)
 const CountryDropdown = ({
   options,
   value,
@@ -57,31 +56,50 @@ const CountryDropdown = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+
   const containerRef = useRef(null);
   const searchRef = useRef(null);
 
-  const selectedOption = options.find((opt) => opt.value === value);
+  const selectedOption = options.find(
+    (opt) => opt.value === value
+  );
 
   const filteredOptions = searchTerm
     ? options.filter((opt) =>
-        opt.label.toLowerCase().includes(searchTerm.toLowerCase())
+        opt.label
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase())
       )
     : options;
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target)
+      ) {
         setIsOpen(false);
         setSearchTerm("");
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+
+    document.addEventListener(
+      "mousedown",
+      handleClickOutside
+    );
+
+    return () =>
+      document.removeEventListener(
+        "mousedown",
+        handleClickOutside
+      );
   }, []);
 
   useEffect(() => {
     if (isOpen && searchRef.current) {
-      setTimeout(() => searchRef.current.focus(), 100);
+      setTimeout(() => {
+        searchRef.current.focus();
+      }, 100);
     }
   }, [isOpen]);
 
@@ -92,31 +110,72 @@ const CountryDropdown = ({
   };
 
   const getDisplayValue = () => {
-    if (selectedOption && selectedOption.value !== "") {
+    if (
+      selectedOption &&
+      selectedOption.value !== ""
+    ) {
       return (
-        <Flex align="center" gap={2} flex="1" overflow="hidden">
-          <Text noOfLines={1} textAlign="left" fontWeight="500" fontSize="13px">
+        <Flex
+          align="center"
+          gap={2}
+          flex="1"
+          overflow="hidden"
+        >
+          <Text
+            noOfLines={1}
+            textAlign="left"
+            fontWeight="500"
+            fontSize="13px"
+          >
             {selectedOption.label}
           </Text>
         </Flex>
       );
     }
-    return <Text color="gray.400" fontWeight="400" fontSize="13px">{placeholder}</Text>;
+
+    return (
+      <Text
+        color="gray.400"
+        fontWeight="400"
+        fontSize="13px"
+      >
+        {placeholder}
+      </Text>
+    );
   };
 
   return (
-    <Box ref={containerRef} position="relative" width="100%">
+    <Box
+      ref={containerRef}
+      position="relative"
+      width="100%"
+    >
       {label && (
-        <Text fontSize="xs" fontWeight="600" color="gray.700" mb={0.5}>
+        <Text
+          fontSize="xs"
+          fontWeight="600"
+          color="gray.700"
+          mb={0.5}
+        >
           {label}
         </Text>
       )}
-      
+
       <Box
-        onClick={() => !isDisabled && setIsOpen(!isOpen)}
-        cursor={isDisabled ? "not-allowed" : "pointer"}
+        onClick={() =>
+          !isDisabled && setIsOpen(!isOpen)
+        }
+        cursor={
+          isDisabled ? "not-allowed" : "pointer"
+        }
         border="1.5px solid"
-        borderColor={isInvalid ? "#e53e3e" : isOpen ? "#ae2050" : "#e2e8f0"}
+        borderColor={
+          isInvalid
+            ? "#e53e3e"
+            : isOpen
+            ? "#ae2050"
+            : "#e2e8f0"
+        }
         borderRadius="md"
         height={height}
         px={3}
@@ -124,22 +183,32 @@ const CountryDropdown = ({
         alignItems="center"
         justifyContent="space-between"
         bg={isDisabled ? "gray.50" : "white"}
-        _hover={{ borderColor: isInvalid ? "#e53e3e" : "#cbd5e0" }}
+        _hover={{
+          borderColor: isInvalid
+            ? "#e53e3e"
+            : "#cbd5e0",
+        }}
         transition="all 0.2s"
         role="button"
         aria-expanded={isOpen}
         aria-haspopup="listbox"
       >
         {getDisplayValue()}
-        <LuChevronDown 
-          size={14} 
-          style={{ 
-            transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-            transition: 'transform 0.25s ease',
-            color: isOpen ? '#ae2050' : '#718096',
+
+        <LuChevronDown
+          size={14}
+          style={{
+            transform: isOpen
+              ? "rotate(180deg)"
+              : "rotate(0deg)",
+            transition:
+              "transform 0.25s ease",
+            color: isOpen
+              ? "#ae2050"
+              : "#718096",
             flexShrink: 0,
-            marginLeft: '6px'
-          }} 
+            marginLeft: "6px",
+          }}
         />
       </Box>
 
@@ -158,37 +227,57 @@ const CountryDropdown = ({
           maxHeight="300px"
           overflow="hidden"
         >
-          <Box p={2} borderBottom="1px solid" borderColor="gray.100" bg="gray.50">
-            <Flex 
-              align="center" 
-              gap={2} 
-              bg="white" 
-              px={2} 
-              py={1} 
-              borderRadius="md" 
-              border="1px solid" 
+          <Box
+            p={2}
+            borderBottom="1px solid"
+            borderColor="gray.100"
+            bg="gray.50"
+          >
+            <Flex
+              align="center"
+              gap={2}
+              bg="white"
+              px={2}
+              py={1}
+              borderRadius="md"
+              border="1px solid"
               borderColor="gray.200"
             >
-              <LuSearch size={14} color="#718096" />
+              <LuSearch
+                size={14}
+                color="#718096"
+              />
+
               <Input
                 ref={searchRef}
                 placeholder="Search country..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) =>
+                  setSearchTerm(e.target.value)
+                }
                 border="none"
-                _focus={{ boxShadow: "none" }}
+                _focus={{
+                  boxShadow: "none",
+                }}
                 bg="transparent"
                 px={0}
                 height="26px"
                 fontSize="13px"
-                _placeholder={{ color: "gray.400" }}
+                _placeholder={{
+                  color: "gray.400",
+                }}
               />
+
               {searchTerm && (
                 <Box
                   as="button"
-                  onClick={() => setSearchTerm("")}
+                  onClick={() =>
+                    setSearchTerm("")
+                  }
                   color="gray.400"
-                  _hover={{ color: "gray.600" }}
+                  _hover={{
+                    color: "gray.600",
+                  }}
                 >
                   <LuX size={12} />
                 </Box>
@@ -196,18 +285,34 @@ const CountryDropdown = ({
             </Flex>
           </Box>
 
-          <Box 
-            maxHeight="220px" 
+          <Box
+            maxHeight="220px"
             overflowY="auto"
             css={{
-              '&::-webkit-scrollbar': { width: '4px' },
-              '&::-webkit-scrollbar-track': { background: 'gray.50' },
-              '&::-webkit-scrollbar-thumb': { background: '#cbd5e0', borderRadius: '24px' },
+              "&::-webkit-scrollbar": {
+                width: "4px",
+              },
+              "&::-webkit-scrollbar-track": {
+                background: "gray.50",
+              },
+              "&::-webkit-scrollbar-thumb": {
+                background: "#cbd5e0",
+                borderRadius: "24px",
+              },
             }}
           >
             {filteredOptions.length === 0 ? (
-              <Box px={4} py={6} textAlign="center">
-                <Text fontSize="sm" color="gray.400">No countries found</Text>
+              <Box
+                px={4}
+                py={6}
+                textAlign="center"
+              >
+                <Text
+                  fontSize="sm"
+                  color="gray.400"
+                >
+                  No countries found
+                </Text>
               </Box>
             ) : (
               filteredOptions.map((option) => (
@@ -216,9 +321,17 @@ const CountryDropdown = ({
                   px={3}
                   py={2}
                   cursor="pointer"
-                  _hover={{ bg: "gray.50" }}
-                  onClick={() => handleSelect(option)}
-                  bg={option.value === value ? "purple.50" : "transparent"}
+                  _hover={{
+                    bg: "gray.50",
+                  }}
+                  onClick={() =>
+                    handleSelect(option)
+                  }
+                  bg={
+                    option.value === value
+                      ? "purple.50"
+                      : "transparent"
+                  }
                   transition="all 0.15s"
                   display="flex"
                   alignItems="center"
@@ -226,16 +339,29 @@ const CountryDropdown = ({
                   borderBottom="1px solid"
                   borderColor="gray.50"
                 >
-                  <Text 
-                    fontSize="13px" 
-                    color={option.value === value ? "#ae2050" : "gray.700"} 
-                    fontWeight={option.value === value ? "600" : "400"}
+                  <Text
+                    fontSize="13px"
+                    color={
+                      option.value === value
+                        ? "#ae2050"
+                        : "gray.700"
+                    }
+                    fontWeight={
+                      option.value === value
+                        ? "600"
+                        : "400"
+                    }
                     noOfLines={1}
                   >
                     {option.label}
                   </Text>
+
                   {option.value === value && (
-                    <LuCheck size={16} color="#ae2050" flexShrink={0} />
+                    <LuCheck
+                      size={16}
+                      color="#ae2050"
+                      flexShrink={0}
+                    />
                   )}
                 </Box>
               ))
@@ -243,9 +369,13 @@ const CountryDropdown = ({
           </Box>
         </Box>
       )}
-      
+
       {error && (
-        <Text fontSize="xs" color="red.500" mt={0.5}>
+        <Text
+          fontSize="xs"
+          color="red.500"
+          mt={0.5}
+        >
           {error}
         </Text>
       )}
@@ -253,7 +383,10 @@ const CountryDropdown = ({
   );
 };
 
-// Simple Dropdown for State
+/* =========================================================
+   SIMPLE STATE DROPDOWN
+========================================================= */
+
 const SimpleDropdown = ({
   options,
   value,
@@ -268,47 +401,79 @@ const SimpleDropdown = ({
   return (
     <Box width="100%">
       {label && (
-        <Text fontSize="xs" fontWeight="600" color="gray.700" mb={0.5}>
+        <Text
+          fontSize="xs"
+          fontWeight="600"
+          color="gray.700"
+          mb={0.5}
+        >
           {label}
         </Text>
       )}
+
       <select
         value={value || ""}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) =>
+          onChange(e.target.value)
+        }
         disabled={isDisabled}
         style={{
           width: "100%",
           height: height,
           fontSize: "13px",
           borderRadius: "6px",
-          border: `1.5px solid ${isInvalid ? "#e53e3e" : "#e2e8f0"}`,
+          border: `1.5px solid ${
+            isInvalid
+              ? "#e53e3e"
+              : "#e2e8f0"
+          }`,
           padding: "0 10px",
           color: "#1a202c",
-          background: isDisabled ? "#f7fafc" : "white",
-          cursor: isDisabled ? "not-allowed" : "pointer",
+          background: isDisabled
+            ? "#f7fafc"
+            : "white",
+          cursor: isDisabled
+            ? "not-allowed"
+            : "pointer",
           outline: "none",
-          transition: "border-color 0.2s",
+          transition:
+            "border-color 0.2s",
         }}
         onFocus={(e) => {
           if (!isDisabled) {
-            e.target.style.borderColor = "#ae2050";
+            e.target.style.borderColor =
+              "#ae2050";
           }
         }}
         onBlur={(e) => {
           if (!isDisabled) {
-            e.target.style.borderColor = isInvalid ? "#e53e3e" : "#e2e8f0";
+            e.target.style.borderColor =
+              isInvalid
+                ? "#e53e3e"
+                : "#e2e8f0";
           }
         }}
       >
-        <option value="">{placeholder}</option>
+        <option value="">
+          {placeholder}
+        </option>
+
         {options.map((option) => (
-          <option key={option.value} value={option.value}>
+          <option
+            key={option.value}
+            value={option.value}
+          >
             {option.label}
           </option>
         ))}
       </select>
+
       {error && (
-        <Text fontSize="xs" color="red.500" mt={0.5}>
+        <Text
+          fontSize="xs"
+          color="red.500"
+          mt={0.5}
+        >
           {error}
         </Text>
       )}
@@ -316,137 +481,286 @@ const SimpleDropdown = ({
   );
 };
 
-// Phone Input with Country Selection
-const PhoneInputWithCountry = ({ value, onChange, placeholder, isInvalid, error }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+/* =========================================================
+   PHONE INPUT
+========================================================= */
+
+const PhoneInputWithCountry = ({
+  value,
+  onChange,
+  placeholder,
+  isInvalid,
+  error,
+}) => {
+  const [isOpen, setIsOpen] =
+    useState(false);
+
+  const [searchTerm, setSearchTerm] =
+    useState("");
+
   const containerRef = useRef(null);
   const searchRef = useRef(null);
-  const [selectedCountry, setSelectedCountry] = useState(null);
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [phoneError, setPhoneError] = useState("");
 
-  // Get all countries with flags
+  const [selectedCountry, setSelectedCountry] =
+    useState(null);
+
+  // IMPORTANT:
+  // This contains ONLY the local phone number.
+  const [phoneNumber, setPhoneNumber] =
+    useState("");
+
+  const [phoneError, setPhoneError] =
+    useState("");
+
+  /* ---------------------------------------------------------
+     Countries
+  --------------------------------------------------------- */
+
   const countryList = useMemo(() => {
-    const countries = Country.getAllCountries();
-    return countries.map((country) => ({
-      value: country.isoCode,
-      label: country.name,
-      flag: country.isoCode,
-      phoneCode: country.phonecode,
-    }));
+    const countries =
+      Country.getAllCountries();
+
+    return countries
+      .map((country) => ({
+        value: country.isoCode,
+        label: country.name,
+        flag: country.isoCode,
+        phoneCode: country.phonecode,
+      }))
+      .sort((a, b) =>
+        a.label.localeCompare(b.label)
+      );
   }, []);
 
-  // Set default country to US
+  /* ---------------------------------------------------------
+     Default country
+  --------------------------------------------------------- */
+
   useEffect(() => {
-    const defaultCountry = countryList.find(c => c.value === 'US') || countryList[0];
-    if (defaultCountry) {
+    const defaultCountry =
+      countryList.find(
+        (c) => c.value === "IN"
+      ) || countryList[0];
+
+    if (
+      defaultCountry &&
+      !selectedCountry
+    ) {
       setSelectedCountry(defaultCountry);
     }
-  }, [countryList]);
+  }, [
+    countryList,
+    selectedCountry,
+  ]);
 
-  // Update phone number when country changes
+  /* ---------------------------------------------------------
+     Existing phone value
+     Convert +919876543210
+     to 9876543210 in visible input
+  --------------------------------------------------------- */
+
   useEffect(() => {
-    if (selectedCountry && !value) {
-      const newNumber = `+${selectedCountry.phoneCode}`;
-      setPhoneNumber(newNumber);
-      onChange(newNumber);
+    if (!value) {
+      setPhoneNumber("");
+      return;
     }
-  }, [selectedCountry]);
+
+    try {
+      const parsed =
+        parsePhoneNumberFromString(value);
+
+      if (parsed) {
+        const country =
+          countryList.find(
+            (c) =>
+              c.value === parsed.country
+          );
+
+        if (country) {
+          setSelectedCountry(country);
+          setPhoneNumber(
+            parsed.nationalNumber || ""
+          );
+          return;
+        }
+      }
+    } catch (err) {
+      // Ignore parsing errors while typing
+    }
+
+    setPhoneNumber(
+      value.replace(/\D/g, "")
+    );
+  }, [value, countryList]);
+
+  /* ---------------------------------------------------------
+     Close dropdown
+  --------------------------------------------------------- */
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
+    const handleClickOutside = (
+      event
+    ) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(
+          event.target
+        )
+      ) {
         setIsOpen(false);
         setSearchTerm("");
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+
+    document.addEventListener(
+      "mousedown",
+      handleClickOutside
+    );
+
+    return () =>
+      document.removeEventListener(
+        "mousedown",
+        handleClickOutside
+      );
   }, []);
 
+  /* ---------------------------------------------------------
+     Search focus
+  --------------------------------------------------------- */
+
   useEffect(() => {
-    if (isOpen && searchRef.current) {
-      setTimeout(() => searchRef.current.focus(), 100);
+    if (
+      isOpen &&
+      searchRef.current
+    ) {
+      setTimeout(() => {
+        searchRef.current.focus();
+      }, 100);
     }
   }, [isOpen]);
 
-  const filteredCountries = searchTerm
-    ? countryList.filter((c) =>
-        c.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.phoneCode.includes(searchTerm)
-      )
-    : countryList;
+  /* ---------------------------------------------------------
+     Filter countries
+  --------------------------------------------------------- */
 
-  const handleCountrySelect = (country) => {
+  const filteredCountries =
+    searchTerm
+      ? countryList.filter(
+          (country) =>
+            country.label
+              .toLowerCase()
+              .includes(
+                searchTerm.toLowerCase()
+              ) ||
+            country.phoneCode.includes(
+              searchTerm
+            )
+        )
+      : countryList;
+
+  /* ---------------------------------------------------------
+     Country selection
+  --------------------------------------------------------- */
+
+  const handleCountrySelect = (
+    country
+  ) => {
     setSelectedCountry(country);
+
     setIsOpen(false);
     setSearchTerm("");
-    const newNumber = `+${country.phoneCode}`;
-    setPhoneNumber(newNumber);
-    onChange(newNumber);
     setPhoneError("");
+
+    const cleanNumber =
+      phoneNumber.replace(/\D/g, "");
+
+    setPhoneNumber(cleanNumber);
+
+    if (cleanNumber) {
+      onChange(
+        `+${country.phoneCode}${cleanNumber}`
+      );
+    } else {
+      onChange("");
+    }
   };
+
+  /* ---------------------------------------------------------
+     Phone change
+  --------------------------------------------------------- */
 
   const handlePhoneChange = (e) => {
-    const rawValue = e.target.value;
-    // Remove all non-digit characters except +
-    let digits = rawValue.replace(/[^0-9+]/g, "");
-    
-    // If it starts with +, keep it, otherwise add country code
-    if (!digits.startsWith('+') && selectedCountry) {
-      digits = `+${selectedCountry.phoneCode}${digits}`;
+    const localNumber =
+      e.target.value.replace(
+        /\D/g,
+        ""
+      );
+
+    setPhoneNumber(localNumber);
+    setPhoneError("");
+
+    if (!selectedCountry) {
+      onChange(localNumber);
+      return;
     }
-    
-    setPhoneNumber(digits);
-    onChange(digits);
-    
-    // Validate phone number
-    if (digits.length > 3) { // At least country code + 1 digit
+
+    const fullNumber = localNumber
+      ? `+${selectedCountry.phoneCode}${localNumber}`
+      : "";
+
+    // Backend receives complete number
+    onChange(fullNumber);
+
+    if (localNumber.length >= 4) {
       try {
-        const phone = parsePhoneNumberFromString(digits);
-        if (phone && phone.isValid()) {
+        const phone =
+          parsePhoneNumberFromString(
+            fullNumber
+          );
+
+        if (
+          phone &&
+          phone.isValid()
+        ) {
           setPhoneError("");
         } else {
-          setPhoneError("Invalid phone number format");
+          setPhoneError(
+            "Invalid phone number"
+          );
         }
       } catch (err) {
-        setPhoneError("Invalid phone number");
+        setPhoneError(
+          "Invalid phone number"
+        );
       }
-    } else {
-      setPhoneError("");
     }
-  };
-
-  const getDisplayValue = () => {
-    if (!selectedCountry) {
-      return <Text fontSize="12px" color="gray.400">Select</Text>;
-    }
-
-    return (
-      <Flex align="center" gap={1.5}>
-        <ReactCountryFlag
-          countryCode={selectedCountry.value}
-          svg
-          style={{ width: "20px", height: "20px", borderRadius: "2px" }}
-        />
-        <Text fontSize="12px" fontWeight="600" color="gray.700">
-          +{selectedCountry.phoneCode}
-        </Text>
-      </Flex>
-    );
   };
 
   return (
     <Box width="100%">
       <Flex gap={2}>
-        {/* Country Selector */}
-        <Box ref={containerRef} position="relative" flexShrink={0}>
+
+        {/* COUNTRY SELECTOR */}
+
+        <Box
+          ref={containerRef}
+          position="relative"
+          flexShrink={0}
+        >
           <Box
-            onClick={() => setIsOpen(!isOpen)}
+            onClick={() =>
+              setIsOpen(!isOpen)
+            }
             cursor="pointer"
             border="1.5px solid"
-            borderColor={isInvalid || phoneError ? "#e53e3e" : isOpen ? "#ae2050" : "#e2e8f0"}
+            borderColor={
+              isInvalid ||
+              phoneError
+                ? "#e53e3e"
+                : isOpen
+                ? "#ae2050"
+                : "#e2e8f0"
+            }
             borderRadius="md"
             height="36px"
             px={2.5}
@@ -454,27 +768,72 @@ const PhoneInputWithCountry = ({ value, onChange, placeholder, isInvalid, error 
             alignItems="center"
             justifyContent="center"
             bg="white"
-            _hover={{ borderColor: isInvalid || phoneError ? "#e53e3e" : "#cbd5e0" }}
+            minW="90px"
+            _hover={{
+              borderColor:
+                isInvalid ||
+                phoneError
+                  ? "#e53e3e"
+                  : "#cbd5e0",
+            }}
             transition="all 0.2s"
-            minW="80px"
           >
-            {getDisplayValue()}
-            <LuChevronDown 
-              size={12} 
-              style={{ 
-                transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: 'transform 0.25s ease',
-                color: isOpen ? '#ae2050' : '#718096',
-                marginLeft: '4px'
-              }} 
-            />
+            {selectedCountry && (
+              <Flex
+                align="center"
+                gap={1.5}
+              >
+                <ReactCountryFlag
+                  countryCode={
+                    selectedCountry.value
+                  }
+                  svg
+                  style={{
+                    width: "20px",
+                    height: "15px",
+                    objectFit: "cover",
+                    borderRadius:
+                      "2px",
+                  }}
+                />
+
+                <Text
+                  fontSize="12px"
+                  fontWeight="600"
+                  color="gray.700"
+                >
+                  +
+                  {
+                    selectedCountry.phoneCode
+                  }
+                </Text>
+
+                <LuChevronDown
+                  size={12}
+                  color={
+                    isOpen
+                      ? "#ae2050"
+                      : "#718096"
+                  }
+                  style={{
+                    transform:
+                      isOpen
+                        ? "rotate(180deg)"
+                        : "rotate(0deg)",
+                    transition:
+                      "transform 0.2s ease",
+                  }}
+                />
+              </Flex>
+            )}
           </Box>
+
+          {/* COUNTRY MENU */}
 
           {isOpen && (
             <Box
               position="absolute"
               left="0"
-              right="0"
               top="calc(100% + 4px)"
               bg="white"
               border="1px solid"
@@ -482,126 +841,190 @@ const PhoneInputWithCountry = ({ value, onChange, placeholder, isInvalid, error 
               borderRadius="md"
               boxShadow="xl"
               zIndex={1000}
+              width="260px"
               maxHeight="320px"
               overflow="hidden"
-              minW="240px"
             >
-              <Box p={2} borderBottom="1px solid" borderColor="gray.100" bg="gray.50">
-                <Flex 
-                  align="center" 
-                  gap={2} 
-                  bg="white" 
-                  px={2} 
-                  py={1} 
-                  borderRadius="md" 
-                  border="1px solid" 
+              <Box
+                p={2}
+                borderBottom="1px solid"
+                borderColor="gray.100"
+                bg="gray.50"
+              >
+                <Flex
+                  align="center"
+                  gap={2}
+                  bg="white"
+                  px={2}
+                  borderRadius="md"
+                  border="1px solid"
                   borderColor="gray.200"
                 >
-                  <LuSearch size={14} color="#718096" />
+                  <LuSearch
+                    size={14}
+                    color="#718096"
+                  />
+
                   <Input
                     ref={searchRef}
                     placeholder="Search country..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) =>
+                      setSearchTerm(
+                        e.target.value
+                      )
+                    }
                     border="none"
-                    _focus={{ boxShadow: "none" }}
-                    bg="transparent"
-                    px={0}
-                    height="26px"
+                    _focus={{
+                      boxShadow:
+                        "none",
+                    }}
+                    height="28px"
                     fontSize="13px"
-                    _placeholder={{ color: "gray.400" }}
+                    px={0}
                   />
-                  {searchTerm && (
-                    <Box
-                      as="button"
-                      onClick={() => setSearchTerm("")}
-                      color="gray.400"
-                      _hover={{ color: "gray.600" }}
-                    >
-                      <LuX size={12} />
-                    </Box>
-                  )}
                 </Flex>
               </Box>
 
-              <Box 
-                maxHeight="230px" 
+              <Box
+                maxHeight="230px"
                 overflowY="auto"
-                css={{
-                  '&::-webkit-scrollbar': { width: '4px' },
-                  '&::-webkit-scrollbar-track': { background: 'gray.50' },
-                  '&::-webkit-scrollbar-thumb': { background: '#cbd5e0', borderRadius: '24px' },
-                }}
               >
-                {filteredCountries.length === 0 ? (
-                  <Box px={4} py={6} textAlign="center">
-                    <Text fontSize="sm" color="gray.400">No countries found</Text>
+                {filteredCountries.length ===
+                0 ? (
+                  <Box
+                    px={4}
+                    py={6}
+                    textAlign="center"
+                  >
+                    <Text
+                      fontSize="sm"
+                      color="gray.400"
+                    >
+                      No countries found
+                    </Text>
                   </Box>
                 ) : (
-                  filteredCountries.map((country) => (
-                    <Box
-                      key={country.value}
-                      px={3}
-                      py={2}
-                      cursor="pointer"
-                      _hover={{ bg: "gray.50" }}
-                      onClick={() => handleCountrySelect(country)}
-                      bg={country.value === selectedCountry?.value ? "purple.50" : "transparent"}
-                      transition="all 0.15s"
-                      display="flex"
-                      alignItems="center"
-                      justifyContent="space-between"
-                      borderBottom="1px solid"
-                      borderColor="gray.50"
-                    >
-                      <Flex align="center" gap={2} flex="1" overflow="hidden">
-                        <ReactCountryFlag
-                          countryCode={country.value}
-                          svg
-                          style={{ width: "22px", height: "22px", borderRadius: "2px" }}
-                        />
-                        <Flex direction="column" flex="1" overflow="hidden">
-                          <Text 
-                            fontSize="13px" 
-                            color={country.value === selectedCountry?.value ? "#ae2050" : "gray.700"} 
-                            fontWeight={country.value === selectedCountry?.value ? "600" : "400"}
-                            noOfLines={1}
-                          >
-                            {country.label}
-                          </Text>
-                          <Text fontSize="10px" color="gray.400">
-                            +{country.phoneCode}
-                          </Text>
+                  filteredCountries.map(
+                    (country) => (
+                      <Box
+                        key={
+                          country.value
+                        }
+                        px={3}
+                        py={2}
+                        cursor="pointer"
+                        _hover={{
+                          bg: "gray.50",
+                        }}
+                        onClick={() =>
+                          handleCountrySelect(
+                            country
+                          )
+                        }
+                        display="flex"
+                        alignItems="center"
+                        justifyContent="space-between"
+                      >
+                        <Flex
+                          align="center"
+                          gap={2}
+                        >
+                          <ReactCountryFlag
+                            countryCode={
+                              country.value
+                            }
+                            svg
+                            style={{
+                              width:
+                                "22px",
+                              height:
+                                "16px",
+                              objectFit:
+                                "cover",
+                              borderRadius:
+                                "2px",
+                            }}
+                          />
+
+                          <Box>
+                            <Text fontSize="13px">
+                              {
+                                country.label
+                              }
+                            </Text>
+
+                            <Text
+                              fontSize="10px"
+                              color="gray.400"
+                            >
+                              +
+                              {
+                                country.phoneCode
+                              }
+                            </Text>
+                          </Box>
                         </Flex>
-                      </Flex>
-                      {country.value === selectedCountry?.value && (
-                        <LuCheck size={16} color="#ae2050" flexShrink={0} />
-                      )}
-                    </Box>
-                  ))
+
+                        {country.value ===
+                          selectedCountry?.value && (
+                          <LuCheck
+                            size={16}
+                            color="#ae2050"
+                          />
+                        )}
+                      </Box>
+                    )
+                  )
                 )}
               </Box>
             </Box>
           )}
         </Box>
 
-        {/* Phone Number Input */}
+        {/* PHONE INPUT ONLY LOCAL NUMBER */}
+
         <Box flex="1">
           <Input
             value={phoneNumber}
-            onChange={handlePhoneChange}
-            placeholder={placeholder || "Enter phone number"}
-            size="md"
+            onChange={
+              handlePhoneChange
+            }
+            placeholder={
+              placeholder ||
+              "Enter phone number"
+            }
             height="36px"
             fontSize="13px"
-            borderColor={isInvalid || phoneError ? "red.500" : "gray.200"}
+            borderColor={
+              isInvalid ||
+              phoneError
+                ? "red.500"
+                : "gray.200"
+            }
             borderWidth="1.5px"
             pl={2.5}
-            _focus={{ borderColor: isInvalid || phoneError ? "red.500" : "#ae2050", boxShadow: "0 0 0 1px #ae2050" }}
-            _hover={{ borderColor: isInvalid || phoneError ? "red.500" : "gray.300" }}
+            _focus={{
+              borderColor:
+                isInvalid ||
+                phoneError
+                  ? "red.500"
+                  : "#ae2050",
+              boxShadow:
+                "0 0 0 1px rgba(174,32,80,0.15)",
+            }}
           />
-          {(error || phoneError) && (
-            <Text fontSize="xs" color="red.500" mt={0.5}>{error || phoneError}</Text>
+
+          {(error ||
+            phoneError) && (
+            <Text
+              fontSize="xs"
+              color="red.500"
+              mt={0.5}
+            >
+              {error ||
+                phoneError}
+            </Text>
           )}
         </Box>
       </Flex>
@@ -609,213 +1032,542 @@ const PhoneInputWithCountry = ({ value, onChange, placeholder, isInvalid, error 
   );
 };
 
+/* =========================================================
+   DIOCESE ADD
+========================================================= */
+
 const DioceseAdd = () => {
-  const navigate = useNavigate();
-  const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingStates, setIsLoadingStates] = useState(false);
-  const [formData, setFormData] = useState({
-    name: "",
-    metropolitan_name: "",
-    email: "",
-    phone_number: "",
-    address_line1: "",
-    address_line2: "",
-    city: "",
-    state: "",
-    country: "",
-    postal_code: "",
-    website: "",
-    is_active: true,
-  });
-  const [errors, setErrors] = useState({});
-  const [countryOptions, setCountryOptions] = useState([]);
-  const [stateOptions, setStateOptions] = useState([]);
-  const [dioceseCount, setDioceseCount] = useState(0);
+  const navigate =
+    useNavigate();
 
-  const primaryMaroon = "#ae2050";
+  const [isLoading, setIsLoading] =
+    useState(false);
 
-  // Load countries on component mount
+  const [
+    isLoadingStates,
+    setIsLoadingStates,
+  ] = useState(false);
+
+  const [formData, setFormData] =
+    useState({
+      name: "",
+      metropolitan_name: "",
+      email: "",
+      phone_number: "",
+      address_line1: "",
+      address_line2: "",
+      city: "",
+      state: "",
+      country: "",
+      postal_code: "",
+      website: "",
+      is_active: true,
+    });
+
+  const [errors, setErrors] =
+    useState({});
+
+  const [countryOptions, setCountryOptions] =
+    useState([]);
+
+  const [stateOptions, setStateOptions] =
+    useState([]);
+
+  const [dioceseCount, setDioceseCount] =
+    useState(0);
+
+  const primaryMaroon =
+    "#ae2050";
+
+  /* =========================================================
+     LOAD COUNTRIES
+  ========================================================= */
+
   useEffect(() => {
-    const loadCountries = async () => {
-      try {
-        const countries = Country.getAllCountries();
-        const options = countries.map((country) => ({
-          value: country.isoCode,
-          label: country.name,
-        }));
-        options.sort((a, b) => a.label.localeCompare(b.label));
-        setCountryOptions(options);
-
+    const loadCountries =
+      async () => {
         try {
-          const response = await adminApi.getDioceses();
-          setDioceseCount(response.data?.length || 0);
+          const countries =
+            Country.getAllCountries();
+
+          const options =
+            countries
+              .map((country) => ({
+                value:
+                  country.isoCode,
+                label:
+                  country.name,
+              }))
+              .sort((a, b) =>
+                a.label.localeCompare(
+                  b.label
+                )
+              );
+
+          setCountryOptions(
+            options
+          );
+
+          try {
+            const response =
+              await adminApi.getDioceses();
+
+            setDioceseCount(
+              response.data
+                ?.length || 0
+            );
+          } catch (error) {
+            console.error(
+              "Error fetching diocese count:",
+              error
+            );
+          }
         } catch (error) {
-          console.error("Error fetching diocese count:", error);
+          console.error(
+            "Error loading countries:",
+            error
+          );
+
+          toaster.create({
+            title: "Error",
+            description:
+              "Failed to load countries. Please refresh the page.",
+            type: "error",
+            duration: 5000,
+          });
         }
-      } catch (error) {
-        console.error("Error loading countries:", error);
-        toaster.create({
-          title: "Error",
-          description: "Failed to load countries. Please refresh the page.",
-          type: "error",
-          duration: 5000,
-        });
-      }
-    };
+      };
+
     loadCountries();
   }, []);
 
-  // Load states when country changes
+  /* =========================================================
+     LOAD STATES WHEN COUNTRY CHANGES
+  ========================================================= */
+
   useEffect(() => {
     if (formData.country) {
-      setIsLoadingStates(true);
+      setIsLoadingStates(
+        true
+      );
+
       try {
-        const states = State.getStatesOfCountry(formData.country);
-        if (states && states.length > 0) {
-          const options = states.map((state) => ({
-            value: state.isoCode || state.name,
-            label: state.name,
-          }));
-          options.sort((a, b) => a.label.localeCompare(b.label));
-          setStateOptions(options);
+        const states =
+          State.getStatesOfCountry(
+            formData.country
+          );
+
+        if (
+          states &&
+          states.length > 0
+        ) {
+          const options =
+            states
+              .map((state) => ({
+                value:
+                  state.isoCode ||
+                  state.name,
+                label:
+                  state.name,
+              }))
+              .sort((a, b) =>
+                a.label.localeCompare(
+                  b.label
+                )
+              );
+
+          setStateOptions(
+            options
+          );
         } else {
           setStateOptions([]);
         }
-        setFormData((prev) => ({ ...prev, state: "", city: "" }));
+
+        setFormData((prev) => ({
+          ...prev,
+          state: "",
+          city: "",
+        }));
       } catch (error) {
-        console.error("Error loading states:", error);
+        console.error(
+          "Error loading states:",
+          error
+        );
+
         setStateOptions([]);
+
         toaster.create({
           title: "Error",
-          description: "Failed to load states for the selected country.",
+          description:
+            "Failed to load states for the selected country.",
           type: "error",
           duration: 4000,
         });
       } finally {
-        setIsLoadingStates(false);
+        setIsLoadingStates(
+          false
+        );
       }
     } else {
       setStateOptions([]);
-      setFormData((prev) => ({ ...prev, state: "", city: "" }));
+
+      setFormData((prev) => ({
+        ...prev,
+        state: "",
+        city: "",
+      }));
     }
   }, [formData.country]);
 
+  /* =========================================================
+     INPUT CHANGE
+  ========================================================= */
+
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    const {
+      name,
+      value,
+    } = e.target;
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+
     if (errors[name]) {
-      setErrors({ ...errors, [name]: "" });
+      setErrors((prev) => ({
+        ...prev,
+        [name]: "",
+      }));
     }
   };
 
-  const handlePhoneChange = (value) => {
-    setFormData({ ...formData, phone_number: value });
+  /* =========================================================
+     PHONE CHANGE
+  ========================================================= */
+
+  const handlePhoneChange = (
+    value
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      phone_number: value,
+    }));
+
     if (errors.phone_number) {
-      setErrors({ ...errors, phone_number: "" });
+      setErrors((prev) => ({
+        ...prev,
+        phone_number: "",
+      }));
     }
   };
 
-  const handleSelectChange = (name, value) => {
-    setFormData({ ...formData, [name]: value });
+  /* =========================================================
+     DROPDOWN CHANGE
+  ========================================================= */
+
+  const handleSelectChange = (
+    name,
+    value
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+
     if (name === "country") {
-      setFormData((prev) => ({ ...prev, state: "", city: "" }));
+      setFormData((prev) => ({
+        ...prev,
+        country: value,
+        state: "",
+        city: "",
+      }));
+
       setStateOptions([]);
     }
+
     if (errors[name]) {
-      setErrors({ ...errors, [name]: "" });
+      setErrors((prev) => ({
+        ...prev,
+        [name]: "",
+      }));
     }
   };
+
+  /* =========================================================
+     VALIDATION
+  ========================================================= */
 
   const validate = () => {
     const newErrors = {};
-    if (!formData.name.trim()) newErrors.name = "Diocese name is required";
-    if (!formData.country) newErrors.country = "Country is required";
+
+    /* Diocese name */
+
+    if (!formData.name.trim()) {
+      newErrors.name =
+        "Diocese name is required";
+    }
+
+    /* Country */
+
+    if (!formData.country) {
+      newErrors.country =
+        "Country is required";
+    }
+
+    /* Email */
+
     if (!formData.email.trim()) {
-      newErrors.email = "Email is required";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = "Invalid email format";
+      newErrors.email =
+        "Email is required";
+    } else if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        formData.email.trim()
+      )
+    ) {
+      newErrors.email =
+        "Invalid email format";
     }
-    if (formData.website && !/^https?:\/\/[^\s]+$/.test(formData.website)) {
-      newErrors.website = "Please enter a valid URL (e.g., https://example.com)";
-    }
-    
-    // Phone validation
-    if (!formData.phone_number) {
-      newErrors.phone_number = "Phone number is required";
-    } else {
+
+    /* Website */
+
+    if (
+      formData.website.trim()
+    ) {
+      let website =
+        formData.website.trim();
+
+      if (
+        !/^https?:\/\//i.test(
+          website
+        )
+      ) {
+        website =
+          `https://${website}`;
+      }
+
       try {
-        const phone = parsePhoneNumberFromString(formData.phone_number);
-        if (!phone || !phone.isValid()) {
-          newErrors.phone_number = "Invalid phone number";
+        const url =
+          new URL(website);
+
+        if (
+          !url.hostname ||
+          !url.hostname.includes(".")
+        ) {
+          newErrors.website =
+            "Please enter a valid website URL";
         }
-      } catch (err) {
-        newErrors.phone_number = "Invalid phone number format";
+      } catch (error) {
+        newErrors.website =
+          "Please enter a valid website URL";
       }
     }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+
+    /* Phone */
+
+    if (!formData.phone_number) {
+      newErrors.phone_number =
+        "Phone number is required";
+    } else {
+      try {
+        const phone =
+          parsePhoneNumberFromString(
+            formData.phone_number
+          );
+
+        if (
+          !phone ||
+          !phone.isValid()
+        ) {
+          newErrors.phone_number =
+            "Invalid phone number";
+        }
+      } catch (error) {
+        newErrors.phone_number =
+          "Invalid phone number format";
+      }
+    }
+
+    setErrors(
+      newErrors
+    );
+
+    return (
+      Object.keys(newErrors)
+        .length === 0
+    );
   };
 
-  const handleSubmit = async (e) => {
+  /* =========================================================
+     SUBMIT
+  ========================================================= */
+
+  const handleSubmit = async (
+    e
+  ) => {
     e.preventDefault();
-    if (!validate()) return;
+
+    if (!validate()) {
+      return;
+    }
 
     setIsLoading(true);
+
     try {
-      const code = `DIO-${String(dioceseCount + 1).padStart(3, '0')}`;
-      
+      const code = `DIO-${String(
+        dioceseCount + 1
+      ).padStart(3, "0")}`;
+
+      /* Normalize website */
+
+      let website =
+        formData.website.trim();
+
+      if (
+        website &&
+        !/^https?:\/\//i.test(
+          website
+        )
+      ) {
+        website =
+          `https://${website}`;
+      }
+
       const submitData = {
-        name: formData.name.trim(),
-        metropolitan_name: formData.metropolitan_name.trim(),
-        email: formData.email.trim(),
-        phone_number: formData.phone_number,
-        address_line1: formData.address_line1.trim(),
-        address_line2: formData.address_line2.trim(),
-        city: formData.city.trim(),
-        state: formData.state,
-        country: formData.country,
-        postal_code: formData.postal_code.trim(),
-        website: formData.website.trim(),
-        code: code,
-        is_active: formData.is_active,
+        name:
+          formData.name.trim(),
+
+        metropolitan_name:
+          formData.metropolitan_name.trim(),
+
+        email:
+          formData.email.trim(),
+
+        phone_number:
+          formData.phone_number,
+
+        address_line1:
+          formData.address_line1.trim(),
+
+        address_line2:
+          formData.address_line2.trim(),
+
+        city:
+          formData.city.trim(),
+
+        state:
+          formData.state,
+
+        country:
+          formData.country,
+
+        postal_code:
+          formData.postal_code.trim(),
+
+        website:
+          website,
+
+        code:
+          code,
+
+        is_active:
+          formData.is_active,
       };
 
-      await adminApi.createDiocese(submitData);
+      await adminApi.createDiocese(
+        submitData
+      );
+
       toaster.create({
         title: "Success",
-        description: `Diocese ${code} created successfully.`,
+        description:
+          `Diocese ${code} created successfully.`,
         type: "success",
         duration: 3000,
       });
-      navigate("/admin/dioceses");
+
+      navigate(
+        "/admin/dioceses"
+      );
     } catch (error) {
-      console.error("Error creating diocese:", error);
-      let errorMsg = "Failed to create diocese.";
-      if (error.response?.data) {
-        if (typeof error.response.data === "object") {
+      console.error(
+        "Error creating diocese:",
+        error
+      );
+
+      let errorMsg =
+        "Failed to create diocese.";
+
+      if (
+        error.response?.data
+      ) {
+        if (
+          typeof error.response
+            .data === "object"
+        ) {
           const errs = [];
-          Object.entries(error.response.data).forEach(([field, value]) => {
-            if (field !== "status" && field !== "message") {
-              errs.push(`${field}: ${Array.isArray(value) ? value.join(", ") : value}`);
+
+          Object.entries(
+            error.response.data
+          ).forEach(
+            ([field, value]) => {
+              if (
+                field !== "status" &&
+                field !== "message"
+              ) {
+                errs.push(
+                  `${field}: ${
+                    Array.isArray(
+                      value
+                    )
+                      ? value.join(
+                          ", "
+                        )
+                      : value
+                  }`
+                );
+              }
             }
-          });
+          );
+
           if (errs.length > 0) {
-            errorMsg = errs.join("; ");
-          } else if (error.response.data.message) {
-            errorMsg = error.response.data.message;
-          } else if (error.response.data.error) {
-            errorMsg = error.response.data.error;
-          } else if (error.response.data.detail) {
-            errorMsg = error.response.data.detail;
+            errorMsg =
+              errs.join("; ");
+          } else if (
+            error.response.data
+              .message
+          ) {
+            errorMsg =
+              error.response.data
+                .message;
+          } else if (
+            error.response.data
+              .error
+          ) {
+            errorMsg =
+              error.response.data
+                .error;
+          } else if (
+            error.response.data
+              .detail
+          ) {
+            errorMsg =
+              error.response.data
+                .detail;
           }
-        } else if (typeof error.response.data === "string") {
-          errorMsg = error.response.data;
+        } else if (
+          typeof error.response
+            .data === "string"
+        ) {
+          errorMsg =
+            error.response.data;
         }
       }
+
       toaster.create({
         title: "Error",
-        description: errorMsg,
+        description:
+          errorMsg,
         type: "error",
         duration: 5000,
       });
@@ -824,43 +1576,119 @@ const DioceseAdd = () => {
     }
   };
 
-  const previewCode = `DIO-${String(dioceseCount + 1).padStart(3, '0')}`;
+  /* =========================================================
+     PREVIEW CODE
+  ========================================================= */
+
+  const previewCode =
+    `DIO-${String(
+      dioceseCount + 1
+    ).padStart(3, "0")}`;
+
+  /* =========================================================
+     UI
+  ========================================================= */
 
   return (
     <AdminLayout>
-      <Container maxW="container.xl" py={0}>
-        <Text fontSize="10px" color="gray.400" fontWeight="600" mb={0.5} textTransform="uppercase" letterSpacing="0.05em">
-          Churches / Dioceses / Register Diocese
+      <Container
+        maxW="container.xl"
+        py={0}
+      >
+        {/* Breadcrumb */}
+
+        <Text
+          fontSize="10px"
+          color="gray.400"
+          fontWeight="600"
+          mb={0.5}
+          textTransform="uppercase"
+          letterSpacing="0.05em"
+        >
+          Churches / Dioceses /
+          Register Diocese
         </Text>
 
-        <VStack align="start" spacing={0} mb={0.5}>
-          <Text fontSize="10px" fontWeight="700" color={primaryMaroon} textTransform="uppercase" letterSpacing="0.08em">
+        {/* Page Header */}
+
+        <VStack
+          align="start"
+          spacing={0}
+          mb={0.5}
+        >
+          <Text
+            fontSize="10px"
+            fontWeight="700"
+            color={
+              primaryMaroon
+            }
+            textTransform="uppercase"
+            letterSpacing="0.08em"
+          >
             Diocese Management
           </Text>
-          <Heading fontSize="sm" fontWeight="800" color="#1a1a2e" mb={0}>
+
+          <Heading
+            fontSize="sm"
+            fontWeight="800"
+            color="#1a1a2e"
+            mb={0}
+          >
             Register New Diocese
           </Heading>
-          <Text color="gray.500" fontSize="10px">
-            Create a diocese profile with metropolitan, contact and address information.
+
+          <Text
+            color="gray.500"
+            fontSize="10px"
+          >
+            Create a diocese profile
+            with metropolitan,
+            contact and address
+            information.
           </Text>
         </VStack>
 
-        <Box 
-          bg="white" 
-          borderRadius="md" 
-          border="1px solid" 
-          borderColor="gray.200" 
-          p={2.5} 
+        {/* Main Card */}
+
+        <Box
+          bg="white"
+          borderRadius="md"
+          border="1px solid"
+          borderColor="gray.200"
+          p={2.5}
           boxShadow="0 1px 3px rgba(0,0,0,0.05)"
         >
-          <form onSubmit={handleSubmit}>
-            <VStack spacing={2} align="stretch">
-              {/* Row 1: Diocese Code and Name */}
-              <Grid templateColumns={{ base: "1fr", md: "1fr 1.5fr" }} gap={2}>
+          <form
+            onSubmit={handleSubmit}
+          >
+            <VStack
+              spacing={2}
+              align="stretch"
+            >
+
+              {/* =====================================================
+                  ROW 1
+              ===================================================== */}
+
+              <Grid
+                templateColumns={{
+                  base: "1fr",
+                  md: "1fr 1.5fr",
+                }}
+                gap={2}
+              >
+                {/* Diocese Code */}
+
                 <GridItem>
-                  <Text fontSize="xs" fontWeight="600" color="gray.700" mb={0.5}>
+                  <Text
+                    fontSize="xs"
+                    fontWeight="600"
+                    color="gray.700"
+                    mb={0.5}
+                  >
                     Diocese Code
                   </Text>
+
                   <Box
                     bg="gray.50"
                     px={3}
@@ -873,217 +1701,572 @@ const DioceseAdd = () => {
                     alignItems="center"
                   >
                     <HStack spacing={2}>
-                      <Icon as={LuHash} color="gray.400" boxSize={4} />
-                      <Text fontSize="sm" fontWeight="600" color={primaryMaroon}>
+                      <Icon
+                        as={LuHash}
+                        color="gray.400"
+                        boxSize={4}
+                      />
+
+                      <Text
+                        fontSize="sm"
+                        fontWeight="600"
+                        color={
+                          primaryMaroon
+                        }
+                      >
                         {previewCode}
                       </Text>
-                      <Text fontSize="xs" color="gray.400">
+
+                      <Text
+                        fontSize="xs"
+                        color="gray.400"
+                      >
                         (Auto)
                       </Text>
                     </HStack>
                   </Box>
                 </GridItem>
+
+                {/* Diocese Name */}
+
                 <GridItem>
-                  <Text fontSize="xs" fontWeight="600" color="gray.700" mb={0.5}>
-                    Diocese Name <span style={{ color: '#e53e3e' }}>*</span>
+                  <Text
+                    fontSize="xs"
+                    fontWeight="600"
+                    color="gray.700"
+                    mb={0.5}
+                  >
+                    Diocese Name{" "}
+                    <span
+                      style={{
+                        color:
+                          "#e53e3e",
+                      }}
+                    >
+                      *
+                    </span>
                   </Text>
+
                   <Input
                     name="name"
-                    value={formData.name}
-                    onChange={handleChange}
+                    value={
+                      formData.name
+                    }
+                    onChange={
+                      handleChange
+                    }
                     placeholder="e.g., Archdiocese of Mumbai"
-                    borderColor={errors.name ? "red.500" : "gray.200"}
-                    size="md"
+                    borderColor={
+                      errors.name
+                        ? "red.500"
+                        : "gray.200"
+                    }
                     height="36px"
                     fontSize="13px"
                     borderWidth="1.5px"
                     bg="white"
-                    _focus={{ borderColor: "#ae2050", boxShadow: "0 0 0 1px rgba(174,32,80,0.1)" }}
-                    _hover={{ borderColor: !errors.name ? "gray.300" : "red.500" }}
+                    _focus={{
+                      borderColor:
+                        "#ae2050",
+                      boxShadow:
+                        "0 0 0 1px rgba(174,32,80,0.1)",
+                    }}
                   />
-                  {errors.name && <Text fontSize="xs" color="red.500" mt={0.5}>{errors.name}</Text>}
+
+                  {errors.name && (
+                    <Text
+                      fontSize="xs"
+                      color="red.500"
+                      mt={0.5}
+                    >
+                      {errors.name}
+                    </Text>
+                  )}
                 </GridItem>
               </Grid>
 
-              {/* Row 2: Metropolitan Name */}
-              <Grid templateColumns={{ base: "1fr" }} gap={2}>
+              {/* =====================================================
+                  METROPOLITAN
+              ===================================================== */}
+
+              <Grid
+                templateColumns={{
+                  base: "1fr",
+                }}
+                gap={2}
+              >
                 <GridItem>
-                  <Text fontSize="xs" fontWeight="600" color="gray.700" mb={0.5}>
+                  <Text
+                    fontSize="xs"
+                    fontWeight="600"
+                    color="gray.700"
+                    mb={0.5}
+                  >
                     Metropolitan Name
                   </Text>
+
                   <Input
                     name="metropolitan_name"
-                    value={formData.metropolitan_name}
-                    onChange={handleChange}
+                    value={
+                      formData.metropolitan_name
+                    }
+                    onChange={
+                      handleChange
+                    }
                     placeholder="e.g., Most Rev. Dr. John Mathew"
-                    size="md"
                     height="36px"
                     fontSize="13px"
                     borderWidth="1.5px"
                     bg="white"
-                    _focus={{ borderColor: "#ae2050", boxShadow: "0 0 0 1px rgba(174,32,80,0.1)" }}
-                    _hover={{ borderColor: "gray.300" }}
+                    _focus={{
+                      borderColor:
+                        "#ae2050",
+                      boxShadow:
+                        "0 0 0 1px rgba(174,32,80,0.1)",
+                    }}
                   />
                 </GridItem>
               </Grid>
 
-              {/* Row 3: Contact Section - Email, Website, Phone */}
-              <Grid templateColumns={{ base: "1fr", md: "1fr 1fr 1fr" }} gap={2}>
+              {/* =====================================================
+                  CONTACT
+              ===================================================== */}
+
+              <Grid
+                templateColumns={{
+                  base: "1fr",
+                  md: "1fr 1fr 1fr",
+                }}
+                gap={2}
+              >
+                {/* EMAIL */}
+
                 <GridItem>
-                  <Text fontSize="xs" fontWeight="600" color="gray.700" mb={0.5}>
-                    Email <span style={{ color: '#e53e3e' }}>*</span>
+                  <Text
+                    fontSize="xs"
+                    fontWeight="600"
+                    color="gray.700"
+                    mb={0.5}
+                  >
+                    Email{" "}
+                    <span
+                      style={{
+                        color:
+                          "#e53e3e",
+                      }}
+                    >
+                      *
+                    </span>
                   </Text>
-                  <Box position="relative">
-                    <Box position="absolute" left={3} top="50%" transform="translateY(-50%)" pointerEvents="none">
-                      <LuMail color="#a0aec0" size={16} />
-                    </Box>
+
+                  <Box
+                    position="relative"
+                  >
+                    <Icon
+                      as={LuMail}
+                      position="absolute"
+                      left="10px"
+                      top="50%"
+                      transform="translateY(-50%)"
+                      boxSize="16px"
+                      color="gray.400"
+                      zIndex={1}
+                      pointerEvents="none"
+                    />
+
                     <Input
                       name="email"
                       type="email"
-                      value={formData.email}
-                      onChange={handleChange}
+                      value={
+                        formData.email
+                      }
+                      onChange={
+                        handleChange
+                      }
                       placeholder="metropolitan@diocese.org"
-                      borderColor={errors.email ? "red.500" : "gray.200"}
-                      size="md"
+                      borderColor={
+                        errors.email
+                          ? "red.500"
+                          : "gray.200"
+                      }
                       height="36px"
                       fontSize="13px"
-                      pl={9}
+                      pl="34px"
                       borderWidth="1.5px"
                       bg="white"
-                      _focus={{ borderColor: "#ae2050", boxShadow: "0 0 0 1px rgba(174,32,80,0.1)" }}
-                      _hover={{ borderColor: !errors.email ? "gray.300" : "red.500" }}
+                      _focus={{
+                        borderColor:
+                          "#ae2050",
+                        boxShadow:
+                          "0 0 0 1px rgba(174,32,80,0.1)",
+                      }}
                     />
                   </Box>
-                  {errors.email && <Text fontSize="xs" color="red.500" mt={0.5}>{errors.email}</Text>}
+
+                  {errors.email && (
+                    <Text
+                      fontSize="xs"
+                      color="red.500"
+                      mt={0.5}
+                    >
+                      {errors.email}
+                    </Text>
+                  )}
                 </GridItem>
 
+                {/* WEBSITE */}
+
                 <GridItem>
-                  <Text fontSize="xs" fontWeight="600" color="gray.700" mb={0.5}>
+                  <Text
+                    fontSize="xs"
+                    fontWeight="600"
+                    color="gray.700"
+                    mb={0.5}
+                  >
                     Website
                   </Text>
-                  <Box position="relative">
-                    <Box position="absolute" left={3} top="50%" transform="translateY(-50%)" pointerEvents="none">
-                      <LuGlobe color="#a0aec0" size={16} />
-                    </Box>
+
+                  <Box
+                    position="relative"
+                  >
+                    <Icon
+                      as={LuGlobe}
+                      position="absolute"
+                      left="10px"
+                      top="50%"
+                      transform="translateY(-50%)"
+                      boxSize="16px"
+                      color="gray.400"
+                      zIndex={1}
+                      pointerEvents="none"
+                    />
+
                     <Input
                       name="website"
-                      value={formData.website}
-                      onChange={handleChange}
+                      type="text"
+                      value={
+                        formData.website
+                      }
+                      onChange={
+                        handleChange
+                      }
                       placeholder="https://www.diocese.org"
-                      size="md"
+                      borderColor={
+                        errors.website
+                          ? "red.500"
+                          : "gray.200"
+                      }
                       height="36px"
                       fontSize="13px"
-                      borderColor={errors.website ? "red.500" : "gray.200"}
-                      pl={9}
+                      pl="34px"
                       borderWidth="1.5px"
                       bg="white"
-                      _focus={{ borderColor: "#ae2050", boxShadow: "0 0 0 1px rgba(174,32,80,0.1)" }}
-                      _hover={{ borderColor: !errors.website ? "gray.300" : "red.500" }}
+                      _focus={{
+                        borderColor:
+                          "#ae2050",
+                        boxShadow:
+                          "0 0 0 1px rgba(174,32,80,0.1)",
+                      }}
                     />
                   </Box>
-                  {errors.website && <Text fontSize="xs" color="red.500" mt={0.5}>{errors.website}</Text>}
+
+                  {errors.website && (
+                    <Text
+                      fontSize="xs"
+                      color="red.500"
+                      mt={0.5}
+                    >
+                      {
+                        errors.website
+                      }
+                    </Text>
+                  )}
                 </GridItem>
 
+                {/* PHONE */}
+
                 <GridItem>
-                  <Text fontSize="xs" fontWeight="600" color="gray.700" mb={0.5}>
-                    Contact <span style={{ color: '#e53e3e' }}>*</span>
+                  <Text
+                    fontSize="xs"
+                    fontWeight="600"
+                    color="gray.700"
+                    mb={0.5}
+                  >
+                    Contact{" "}
+                    <span
+                      style={{
+                        color:
+                          "#e53e3e",
+                      }}
+                    >
+                      *
+                    </span>
                   </Text>
+
                   <PhoneInputWithCountry
-                    value={formData.phone_number}
-                    onChange={handlePhoneChange}
+                    value={
+                      formData.phone_number
+                    }
+                    onChange={
+                      handlePhoneChange
+                    }
                     placeholder="Phone number"
-                    isInvalid={!!errors.phone_number}
-                    error={errors.phone_number}
+                    isInvalid={
+                      !!errors.phone_number
+                    }
+                    error={
+                      errors.phone_number
+                    }
                   />
                 </GridItem>
               </Grid>
 
-              {/* Address Section Header */}
+              {/* =====================================================
+                  ADDRESS HEADER
+              ===================================================== */}
+
               <Box pt={1}>
-                <Heading size="sm" fontWeight="700" color="gray.800" mb={0.5}>
+                <Heading
+                  size="sm"
+                  fontWeight="700"
+                  color="gray.800"
+                  mb={0.5}
+                >
                   Address Information
                 </Heading>
               </Box>
 
-              {/* Address Line 1 & 2 */}
-              <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={2}>
+              {/* =====================================================
+                  ADDRESS LINES
+              ===================================================== */}
+
+              <Grid
+                templateColumns={{
+                  base: "1fr",
+                  md: "1fr 1fr",
+                }}
+                gap={2}
+              >
+                {/* Address Line 1 */}
+
                 <GridItem>
-                  <Text fontSize="xs" fontWeight="600" color="gray.700" mb={0.5}>
+                  <Text
+                    fontSize="xs"
+                    fontWeight="600"
+                    color="gray.700"
+                    mb={0.5}
+                  >
                     Address Line 1
                   </Text>
+
                   <Input
                     name="address_line1"
-                    value={formData.address_line1}
-                    onChange={handleChange}
+                    value={
+                      formData.address_line1
+                    }
+                    onChange={
+                      handleChange
+                    }
                     placeholder="Street address, building name"
-                    size="md"
                     height="36px"
                     fontSize="13px"
                     borderWidth="1.5px"
                     bg="white"
-                    _focus={{ borderColor: "#ae2050", boxShadow: "0 0 0 1px rgba(174,32,80,0.1)" }}
-                    _hover={{ borderColor: "gray.300" }}
+                    _focus={{
+                      borderColor:
+                        "#ae2050",
+                      boxShadow:
+                        "0 0 0 1px rgba(174,32,80,0.1)",
+                    }}
                   />
                 </GridItem>
+
+                {/* Address Line 2 */}
+
                 <GridItem>
-                  <Text fontSize="xs" fontWeight="600" color="gray.700" mb={0.5}>
+                  <Text
+                    fontSize="xs"
+                    fontWeight="600"
+                    color="gray.700"
+                    mb={0.5}
+                  >
                     Address Line 2
                   </Text>
+
                   <Input
                     name="address_line2"
-                    value={formData.address_line2}
-                    onChange={handleChange}
+                    value={
+                      formData.address_line2
+                    }
+                    onChange={
+                      handleChange
+                    }
                     placeholder="Apartment, suite, unit"
-                    size="md"
                     height="36px"
                     fontSize="13px"
                     borderWidth="1.5px"
                     bg="white"
-                    _focus={{ borderColor: "#ae2050", boxShadow: "0 0 0 1px rgba(174,32,80,0.1)" }}
-                    _hover={{ borderColor: "gray.300" }}
+                    _focus={{
+                      borderColor:
+                        "#ae2050",
+                      boxShadow:
+                        "0 0 0 1px rgba(174,32,80,0.1)",
+                    }}
                   />
                 </GridItem>
               </Grid>
 
-              {/* City, State, Country, Postal */}
-              <Grid templateColumns={{ base: "1fr", md: "1fr 1fr 1fr 1fr" }} gap={2.5}>
+              {/* =====================================================
+                  CITY | COUNTRY | STATE | POSTAL
+              ===================================================== */}
+
+              <Grid
+                templateColumns={{
+                  base: "1fr",
+                  md: "1fr 1fr 1fr 1fr",
+                }}
+                gap={2.5}
+              >
+                {/* CITY */}
+
                 <GridItem>
-                  <Text fontSize="xs" fontWeight="600" color="gray.700" mb={0.5}>
+                  <Text
+                    fontSize="xs"
+                    fontWeight="600"
+                    color="gray.700"
+                    mb={0.5}
+                  >
                     City
                   </Text>
+
                   <Input
                     name="city"
-                    value={formData.city}
-                    onChange={handleChange}
+                    value={
+                      formData.city
+                    }
+                    onChange={
+                      handleChange
+                    }
                     placeholder="Enter city"
-                    size="md"
                     height="36px"
                     fontSize="13px"
                     borderWidth="1.5px"
                     bg="white"
-                    _focus={{ borderColor: "#ae2050", boxShadow: "0 0 0 1px rgba(174,32,80,0.1)" }}
-                    _hover={{ borderColor: "gray.300" }}
+                    _focus={{
+                      borderColor:
+                        "#ae2050",
+                      boxShadow:
+                        "0 0 0 1px rgba(174,32,80,0.1)",
+                    }}
                   />
                 </GridItem>
 
+                {/* COUNTRY */}
+
                 <GridItem>
-                  <Text fontSize="xs" fontWeight="600" color="gray.700" mb={0.5}>
+                  <Text
+                    fontSize="xs"
+                    fontWeight="600"
+                    color="gray.700"
+                    mb={0.5}
+                  >
+                    Country{" "}
+                    <span
+                      style={{
+                        color:
+                          "#e53e3e",
+                      }}
+                    >
+                      *
+                    </span>
+                  </Text>
+
+                  <CountryDropdown
+                    options={
+                      countryOptions
+                    }
+                    value={
+                      formData.country
+                    }
+                    onChange={(value) =>
+                      handleSelectChange(
+                        "country",
+                        value
+                      )
+                    }
+                    placeholder="Select Country"
+                    isInvalid={
+                      !!errors.country
+                    }
+                    error={
+                      errors.country
+                    }
+                    height="36px"
+                  />
+                </GridItem>
+
+                {/* STATE */}
+
+                <GridItem>
+                  <Text
+                    fontSize="xs"
+                    fontWeight="600"
+                    color="gray.700"
+                    mb={0.5}
+                  >
                     State / Province
                   </Text>
+
                   {isLoadingStates ? (
-                    <Flex align="center" gap={2} height="36px" bg="gray.50" px={3} borderRadius="md" border="1px solid" borderColor="gray.200">
-                      <Spinner size="xs" color={primaryMaroon} />
-                      <Text fontSize="xs" color="gray.500">Loading...</Text>
+                    <Flex
+                      align="center"
+                      gap={2}
+                      height="36px"
+                      bg="gray.50"
+                      px={3}
+                      borderRadius="md"
+                      border="1px solid"
+                      borderColor="gray.200"
+                    >
+                      <Spinner
+                        size="xs"
+                        color={
+                          primaryMaroon
+                        }
+                      />
+
+                      <Text
+                        fontSize="xs"
+                        color="gray.500"
+                      >
+                        Loading...
+                      </Text>
                     </Flex>
-                  ) : stateOptions.length > 0 ? (
+                  ) : stateOptions.length >
+                    0 ? (
                     <SimpleDropdown
-                      options={stateOptions}
-                      value={formData.state}
-                      onChange={(value) => handleSelectChange("state", value)}
-                      placeholder={formData.country ? "Select State" : "Select country first"}
-                      isDisabled={!formData.country}
-                      isInvalid={!!errors.state}
-                      error={errors.state}
+                      options={
+                        stateOptions
+                      }
+                      value={
+                        formData.state
+                      }
+                      onChange={(value) =>
+                        handleSelectChange(
+                          "state",
+                          value
+                        )
+                      }
+                      placeholder="Select State"
+                      isDisabled={
+                        !formData.country
+                      }
+                      isInvalid={
+                        !!errors.state
+                      }
+                      error={
+                        errors.state
+                      }
                       height="36px"
                     />
                   ) : (
@@ -1097,49 +2280,57 @@ const DioceseAdd = () => {
                       display="flex"
                       alignItems="center"
                     >
-                      <Text color="gray.500" fontSize="xs">
-                        {formData.country ? "No states available" : "Select country first"}
+                      <Text
+                        color="gray.500"
+                        fontSize="xs"
+                      >
+                        {formData.country
+                          ? "No states available"
+                          : "Select country first"}
                       </Text>
                     </Box>
                   )}
                 </GridItem>
 
-                <GridItem>
-                  <Text fontSize="xs" fontWeight="600" color="gray.700" mb={0.5}>
-                    Country <span style={{ color: '#e53e3e' }}>*</span>
-                  </Text>
-                  <CountryDropdown
-                    options={countryOptions}
-                    value={formData.country}
-                    onChange={(value) => handleSelectChange("country", value)}
-                    placeholder="Select Country"
-                    isInvalid={!!errors.country}
-                    error={errors.country}
-                    height="36px"
-                  />
-                </GridItem>
+                {/* POSTAL CODE */}
 
                 <GridItem>
-                  <Text fontSize="xs" fontWeight="600" color="gray.700" mb={0.5}>
+                  <Text
+                    fontSize="xs"
+                    fontWeight="600"
+                    color="gray.700"
+                    mb={0.5}
+                  >
                     Postal Code
                   </Text>
+
                   <Input
                     name="postal_code"
-                    value={formData.postal_code}
-                    onChange={handleChange}
+                    value={
+                      formData.postal_code
+                    }
+                    onChange={
+                      handleChange
+                    }
                     placeholder="Enter postal code"
-                    size="md"
                     height="36px"
                     fontSize="13px"
                     borderWidth="1.5px"
                     bg="white"
-                    _focus={{ borderColor: "#ae2050", boxShadow: "0 0 0 1px rgba(174,32,80,0.1)" }}
-                    _hover={{ borderColor: "gray.300" }}
+                    _focus={{
+                      borderColor:
+                        "#ae2050",
+                      boxShadow:
+                        "0 0 0 1px rgba(174,32,80,0.1)",
+                    }}
                   />
                 </GridItem>
               </Grid>
 
-              {/* Info Box */}
+              {/* =====================================================
+                  INFO BOX
+              ===================================================== */}
+
               <Box
                 bg="rgba(174,32,80,0.04)"
                 p={2.5}
@@ -1147,29 +2338,110 @@ const DioceseAdd = () => {
                 border="1px solid"
                 borderColor="rgba(174,32,80,0.12)"
               >
-                <Flex align="flex-start" gap={2}>
-                  <Icon as={LuCircleHelp} boxSize={3.5} color={primaryMaroon} flexShrink={0} mt={0.5} />
-                  <Text fontSize="xs" color="gray.700" lineHeight="1.4">
-                    The diocese will be assigned code <strong>{previewCode}</strong> and can be assigned to churches after registration.
+                <Flex
+                  align="flex-start"
+                  gap={2}
+                >
+                  <Icon
+                    as={LuCircleHelp}
+                    boxSize={3.5}
+                    color={
+                      primaryMaroon
+                    }
+                    flexShrink={0}
+                    mt={0.5}
+                  />
+
+                  <Text
+                    fontSize="xs"
+                    color="gray.700"
+                    lineHeight="1.4"
+                  >
+                    The diocese will be
+                    assigned code{" "}
+                    <strong>
+                      {previewCode}
+                    </strong>{" "}
+                    and can be assigned
+                    to churches after
+                    registration.
                   </Text>
                 </Flex>
               </Box>
 
-              {/* Actions */}
-              <Flex gap={2} pt={2.5} borderTop="1px solid" borderColor="gray.100" justify="flex-end">
+              {/* =====================================================
+                  ACTIONS
+              ===================================================== */}
+
+              <Flex
+                gap={2}
+                pt={2.5}
+                borderTop="1px solid"
+                borderColor="gray.100"
+                justify="space-between"
+              >
+                {/* BACK BUTTON */}
+
                 <Button
-                  bg={primaryMaroon}
+                  type="button"
+                  variant="outline"
+                  borderColor="gray.300"
+                  color="gray.700"
+                  height="36px"
+                  px={5}
+                  fontSize="sm"
+                  fontWeight="600"
+                  onClick={() =>
+                    navigate(
+                      "/admin/dioceses"
+                    )
+                  }
+                  _hover={{
+                    bg: "gray.50",
+                    borderColor:
+                      "gray.400",
+                  }}
+                  leftIcon={
+                    <LuArrowLeft
+                      size={15}
+                    />
+                  }
+                >
+                  Back
+                </Button>
+
+                {/* REGISTER */}
+
+                <Button
+                  bg={
+                    primaryMaroon
+                  }
                   color="white"
-                  _hover={{ bg: "#8a1a3e", transform: "translateY(-1px)", boxShadow: "0 4px 12px rgba(174,32,80,0.3)" }}
-                  _active={{ transform: "translateY(0)" }}
+                  _hover={{
+                    bg: "#8a1a3e",
+                    transform:
+                      "translateY(-1px)",
+                    boxShadow:
+                      "0 4px 12px rgba(174,32,80,0.3)",
+                  }}
+                  _active={{
+                    transform:
+                      "translateY(0)",
+                  }}
                   type="submit"
-                  isLoading={isLoading}
+                  isLoading={
+                    isLoading
+                  }
                   loadingText="Creating..."
-                  size="md"
+                  height="36px"
                   px={8}
                   fontSize="sm"
                   fontWeight="600"
-                  leftIcon={<LuSave size={16} />}
+                  leftIcon={
+                    <LuSave
+                      size={16}
+                    />
+                  }
                   transition="all 0.2s"
                 >
                   Register Diocese

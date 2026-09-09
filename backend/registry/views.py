@@ -673,6 +673,7 @@ class UpgradeAPIView(APIView):
             },
             status=status.HTTP_201_CREATED
         )
+    
 class ChurchDashboardAPIView(APIView):
     permission_classes = [IsAuthenticated, IsChurchAuthenticated]
 

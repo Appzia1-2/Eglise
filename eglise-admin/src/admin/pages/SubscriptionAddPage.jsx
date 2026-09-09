@@ -1,6 +1,7 @@
 // src/admin/pages/SubscriptionAddPage.jsx
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
+
 import {
   Box,
   Container,
@@ -465,6 +466,7 @@ const PackageDropdown = ({ options, value, onChange, placeholder, isInvalid, err
 
 const SubscriptionAddPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();               // 🔥 ADD THIS
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [churches, setChurches] = useState([]);
@@ -472,40 +474,41 @@ const SubscriptionAddPage = () => {
   const [selectedChurch, setSelectedChurch] = useState(null);
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [billingCycle, setBillingCycle] = useState("YEARLY");
-  // 🔥 FIX: durationMonths is removed from UI, but we'll use a default value
-  // This is ONLY for end_date calculation, NOT for pricing
-  const durationMonths = 12; // Default to 12 months
+  const durationMonths = 12;
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [location.key]);   // 🔥 CHANGE FROM [] TO [location.key]
 
   const fetchData = async () => {
-    setIsLoading(true);
-    try {
-      const [churchesRes, packagesRes] = await Promise.all([
-        adminApi.getChurches(),
-        adminApi.getPackages({ is_active: true }),
-      ]);
+  setIsLoading(true);
+  try {
+    const [churchesRes, packagesRes] = await Promise.all([
+      adminApi.getChurches(),
+      adminApi.getPackages({ is_active: true }),
+    ]);
 
-      let churchesData = churchesRes.data || [];
-      let packagesData = packagesRes.results || packagesRes.data || [];
+    let churchesData = churchesRes.data || [];
+    let packagesData = packagesRes.results || packagesRes.data || [];
 
-      setChurches(churchesData);
-      setPackages(packagesData);
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      toaster.create({
-        title: "Error",
-        description: "Failed to load data.",
-        type: "error",
-        duration: 4000,
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    // 🔥 Only show churches that don't already have an active (paid) subscription
+    churchesData = churchesData.filter((c) => !c.is_active);
+
+    setChurches(churchesData);
+    setPackages(packagesData);
+  } catch (error) {
+    console.error("Error fetching data:", error);
+    toaster.create({
+      title: "Error",
+      description: "Failed to load data.",
+      type: "error",
+      duration: 4000,
+    });
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleChurchSelect = (churchId) => {
     const church = churches.find(c => c.id === churchId);
@@ -543,14 +546,21 @@ const SubscriptionAddPage = () => {
       : selectedPackage.rate_per_member_yearly;
   };
 
-  // 🔥 FIX: Amount = capacity × rate per member
-  // NO duration_months multiplication!
-  const calculateAmount = () => {
+  // 🔥 FIX: Calculate price (without tax)
+  // Tax will be added during bill payments
+  // YEARLY: rate × 12 × capacity
+  // MONTHLY: rate × capacity
+  const calculateTotalAmount = () => {
     if (!selectedPackage) return 0;
     const capacity = selectedPackage.member_limit || 0;
     const rate = getRatePerMember();
-    return capacity * rate;
-  };
+    
+    if (billingCycle === "YEARLY") {
+      return capacity * rate * 12; // ← MULTIPLY BY 12
+    } else {
+      return capacity * rate;
+    }
+  };;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -601,7 +611,8 @@ const SubscriptionAddPage = () => {
     }).format(amount || 0);
   };
 
-  const totalAmount = calculateAmount();
+  // 🔥 FIX: Get subscription amount (tax added during bill payments)
+  const totalAmount = calculateTotalAmount();
   const ratePerMember = getRatePerMember();
   const capacity = selectedPackage?.member_limit || 0;
 
@@ -894,7 +905,7 @@ const SubscriptionAddPage = () => {
                 </Grid>
               )}
 
-              {/* Row 5: Amount - WITH DYNAMIC CALCULATION */}
+              {/* Row 5: Amount Display - WITHOUT TAX (added during bill payments) */}
               {selectedPackage && (
                 <Box
                   bg="rgba(174,32,80,0.06)"
@@ -903,36 +914,29 @@ const SubscriptionAddPage = () => {
                   borderRadius="lg"
                   p={4}
                 >
-                  <HStack spacing={3} mb={2}>
+                  <HStack spacing={3} mb={4}>
                     <Circle size="36px" bg="rgba(174,32,80,0.1)" color={primaryMaroon}>
                       <Icon as={LuCalculator} boxSize={4} />
                     </Circle>
                     <Text fontWeight="700" color="#1a1a2e">
                       {billingCycle === "YEARLY" ? "Yearly" : "Monthly"} Subscription Amount
                     </Text>
-                    {/* ✅ FIX: Dynamic calculation instead of hardcoded */}
-                    <Badge
-                      bg="blue.50"
-                      color="blue.600"
-                      fontSize="10px"
-                      px={2}
-                      py={0.5}
-                      borderRadius="full"
-                    >
-                      {formatCurrency(ratePerMember)} × {capacity} = {formatCurrency(totalAmount)}
-                    </Badge>
                   </HStack>
-                  <Text fontSize="3xl" fontWeight="800" color={primaryMaroon} lineHeight="1">
-                    {formatCurrency(totalAmount)}
-                  </Text>
-                  <Text fontSize="sm" color="gray.600" mt={1}>
-                    {capacity.toLocaleString()} member limit × {formatCurrency(ratePerMember)} per member ({billingCycle === "YEARLY" ? "yearly" : "monthly"})
-                  </Text>
-                  {billingCycle === "YEARLY" && selectedPackage?.rate_per_member_monthly && (
-                    <Text fontSize="xs" color="gray.400" mt={1}>
-                      (Monthly equivalent: {formatCurrency(selectedPackage.rate_per_member_monthly)} × {capacity} = {formatCurrency(selectedPackage.rate_per_member_monthly * capacity)})
+
+                  {/* Subscription Amount (without tax) */}
+                  <Flex justify="space-between" align="center" mb={3}>
+                    <Text fontSize="sm" color="gray.600">
+                      {capacity.toLocaleString()} members × {formatCurrency(ratePerMember)}{billingCycle === "YEARLY" ? " × 12 months" : ""}
                     </Text>
-                  )}
+                    <Text fontSize="3xl" fontWeight="800" color={primaryMaroon} lineHeight="1">
+                      {formatCurrency(totalAmount)}
+                    </Text>
+                  </Flex>
+
+                  {/* Helper text */}
+                  <Text fontSize="xs" color="gray.500">
+                    💡 Tax will be added during bill payments
+                  </Text>
                 </Box>
               )}
 

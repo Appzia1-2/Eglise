@@ -180,39 +180,59 @@ const adminApi = {
   },
 
   updateChurch: async (id, data) => {
-    try {
-      const token = getAdminToken();
-      const payload = {};
-      
-      if (data.name !== undefined) payload.name = data.name;
-      if (data.diocese !== undefined) payload.diocese = data.diocese;
-      if (data.established_year !== undefined) payload.established_year = data.established_year;
-      if (data.registration_number !== undefined) payload.registration_number = data.registration_number;
-      if (data.currency !== undefined) payload.currency = data.currency;
-      if (data.address !== undefined) payload.address = data.address;
-      if (data.address_line1 !== undefined) payload.address_line1 = data.address_line1;
-      if (data.city !== undefined) payload.city = data.city;
-      if (data.state !== undefined) payload.state = data.state;
-      if (data.country !== undefined) payload.country = data.country;
-      if (data.postal_code !== undefined) payload.postal_code = data.postal_code;
-      if (data.email !== undefined) payload.email = data.email;
-      if (data.phone_number !== undefined) payload.phone_number = data.phone_number;
-      if (data.alternate_phone !== undefined) payload.alternate_phone = data.alternate_phone;
-      if (data.website !== undefined) payload.website = data.website;
-      if (data.is_active !== undefined) payload.is_active = data.is_active;
-      
-      const response = await apiClient.patch(`/api/admin/churches/${id}/`, payload, {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        }
-      });
-      return response.data;
-    } catch (error) {
-      console.error("API Error - Update Church:", error.response?.data || error.message);
-      throw error;
+  try {
+    const token = getAdminToken();
+    
+    // Build FormData to handle file uploads properly
+    const formData = new FormData();
+    
+    // Add all fields to FormData
+    for (const [key, value] of Object.entries(data)) {
+      if (value instanceof File) {
+        // Handle file uploads
+        formData.append(key, value);
+      } else if (value === null || value === undefined) {
+        // Send null/undefined as 'null' string for clarity
+        formData.append(key, 'null');
+      } else {
+        // Convert everything else to string
+        formData.append(key, String(value));
+      }
     }
-  },
+ 
+    console.log("Sending FormData to PATCH /api/admin/churches/", id);
+    
+    const response = await apiClient.patch(`/api/admin/churches/${id}/`, formData, {
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        // DO NOT set Content-Type - let browser handle multipart/form-data
+      }
+    });
+    
+    console.log("Church updated successfully:", response.data);
+    return response.data;
+    
+  } catch (error) {
+    // Detailed error logging
+    console.error("API Error - Update Church:");
+    console.error("Status:", error.response?.status);
+    console.error("Status Text:", error.response?.statusText);
+    console.error("Error Data:", error.response?.data);
+    console.error("Full Error:", error);
+    
+    // Log specific error fields
+    if (error.response?.data) {
+      if (error.response.data.error) {
+        console.error("Backend error message:", error.response.data.error);
+      }
+      if (error.response.data.detail) {
+        console.error("Backend detail:", error.response.data.detail);
+      }
+    }
+    
+    throw error;
+  }
+},
 
   deleteChurch: async (id) => {
     try {
@@ -667,6 +687,9 @@ const adminApi = {
   // src/admin/services/adminApi.js - Add these methods
 
 // ============ PAYMENTS (BILLS) ============
+// src/admin/services/adminApi.js
+
+// ============ PAYMENTS (BILLS) ============
 getBills: async (params = {}) => {
   try {
     const token = getAdminToken();
@@ -674,7 +697,36 @@ getBills: async (params = {}) => {
       params,
       headers: { Authorization: `Bearer ${token}` }
     });
-    return response.data;
+    
+    // Normalize response: return the data array directly or with results wrapper
+    // The frontend expects either an array or { results: [...] }
+    const responseData = response.data;
+    
+    // If the response has a 'data' field that's an array, return it as 'results'
+    if (responseData && responseData.data && Array.isArray(responseData.data)) {
+      return {
+        results: responseData.data,
+        count: responseData.count || responseData.data.length,
+        ...responseData
+      };
+    }
+    
+    // If the response is already an array, wrap it
+    if (Array.isArray(responseData)) {
+      return {
+        results: responseData,
+        count: responseData.length
+      };
+    }
+    
+    // If the response has 'results' already, return as-is
+    if (responseData && responseData.results) {
+      return responseData;
+    }
+    
+    // Fallback: return empty array
+    return { results: [], count: 0 };
+    
   } catch (error) {
     console.error("API Error - Get Bills:", error.response?.data || error.message);
     throw error;

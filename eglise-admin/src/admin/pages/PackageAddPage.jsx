@@ -78,16 +78,35 @@ const PackageAddPage = () => {
 
   const validate = () => {
     const newErrors = {};
-    if (!formData.name.trim()) newErrors.name = "Package name is required";
-    if (!formData.rate_per_member_monthly || parseFloat(formData.rate_per_member_monthly) <= 0) {
-      newErrors.rate_per_member_monthly = "Monthly rate is required and must be greater than 0";
+    
+    // Validate name
+    if (!formData.name.trim()) {
+      newErrors.name = "Package name is required";
     }
-    if (!formData.rate_per_member_yearly || parseFloat(formData.rate_per_member_yearly) <= 0) {
-      newErrors.rate_per_member_yearly = "Yearly rate is required and must be greater than 0";
-    }
-    if (formData.member_limit && parseInt(formData.member_limit) < 0) {
+    
+    // Validate member_limit - now required
+    if (!formData.member_limit || formData.member_limit === '') {
+      newErrors.member_limit = "Member limit is required";
+    } else if (parseInt(formData.member_limit) < 0) {
       newErrors.member_limit = "Member limit cannot be negative";
+    } else if (isNaN(parseInt(formData.member_limit))) {
+      newErrors.member_limit = "Member limit must be a valid number";
     }
+    
+    // Validate monthly rate
+    if (!formData.rate_per_member_monthly || formData.rate_per_member_monthly === '') {
+      newErrors.rate_per_member_monthly = "Monthly rate is required";
+    } else if (parseFloat(formData.rate_per_member_monthly) <= 0) {
+      newErrors.rate_per_member_monthly = "Monthly rate must be greater than 0";
+    }
+    
+    // Validate yearly rate
+    if (!formData.rate_per_member_yearly || formData.rate_per_member_yearly === '') {
+      newErrors.rate_per_member_yearly = "Yearly rate is required";
+    } else if (parseFloat(formData.rate_per_member_yearly) <= 0) {
+      newErrors.rate_per_member_yearly = "Yearly rate must be greater than 0";
+    }
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -100,7 +119,7 @@ const PackageAddPage = () => {
     try {
       const data = {
         name: formData.name.trim(),
-        member_limit: formData.member_limit ? parseInt(formData.member_limit) : null,
+        member_limit: parseInt(formData.member_limit),
         rate_per_member_monthly: parseFloat(formData.rate_per_member_monthly) || 0,
         rate_per_member_yearly: parseFloat(formData.rate_per_member_yearly) || 0,
         is_active: formData.is_active,

@@ -801,6 +801,65 @@ const EditPriestPage = () => {
 
 
   // ==========================================================
+  // ARCHIVE / DELETE
+  // ==========================================================
+
+  const handleArchive = async () => {
+    const confirmed = window.confirm(
+      `Archive ${form.name || "this priest"} record? They will remain in service history.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      const apiBase =
+        import.meta.env.VITE_API_BASE_URL ||
+        "http://127.0.0.1:8000";
+
+      const response = await fetch(
+        `${apiBase}/api/priests/${id}/`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `HTTP error! status: ${response.status}`
+        );
+      }
+
+      navigate(
+        "/priest-master",
+        {
+          replace: true,
+        }
+      );
+    } catch (error) {
+      console.error(
+        "ERROR ARCHIVING PRIEST:",
+        error
+      );
+
+      setErrors({
+        detail:
+          "Unable to archive priest record. Please try again.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+
+  // ==========================================================
   // LOADING
   // ==========================================================
 
@@ -2086,41 +2145,39 @@ const EditPriestPage = () => {
                   Danger Zone
                 </Text>
 
-                <HStack
-                  align="start"
-                  gap="14px"
+                <Button
+                  variant="outline"
+                  height="38px"
+                  width="100%"
+                  borderColor="#D7193F"
+                  color="#D7193F"
+                  bg="#FFFFFF"
+                  borderWidth="1px"
+                  borderRadius="7px"
+                  fontSize="13px"
+                  fontWeight="600"
+                  _hover={{
+                    bg: "#FEF2F2",
+                  }}
+                  onClick={handleArchive}
+                  disabled={saving}
+                  loading={saving}
                 >
-
                   <Icon
                     as={LuBan}
-                    boxSize="21px"
-                    color="#D7193F"
-                    mt="1px"
+                    mr="8px"
+                    boxSize="16px"
                   />
+                  Archive Priest Record
+                </Button>
 
-                  <Box>
-
-                    <Text
-                      fontSize="13px"
-                      fontWeight="600"
-                      color="#D7193F"
-                    >
-                      Archive Priest Record
-                    </Text>
-
-                    <Text
-                      fontSize="11px"
-                      color={COLORS.muted}
-                      mt="4px"
-                      lineHeight="16px"
-                    >
-                      This priest will remain
-                      in service history.
-                    </Text>
-
-                  </Box>
-
-                </HStack>
+                <Text
+                  fontSize="11px"
+                  color={COLORS.muted}
+                  mt="8px"
+                >
+                  This priest will remain in service history.
+                </Text>
 
               </Box>
 

@@ -112,10 +112,11 @@ const PackageEditPage = () => {
     }
   };
 
+  // REDUCED FIELD HEIGHTS
   const fieldProps = {
-    h: "44px",
-    fontSize: "sm",
-    borderRadius: "lg",
+    h: "28px", // Reduced from 44px
+    fontSize: "12px", // Reduced from sm
+    borderRadius: "md", // Reduced from lg
     borderWidth: "1.5px",
     borderColor: "gray.200",
     bg: "white",
@@ -123,20 +124,22 @@ const PackageEditPage = () => {
     _focus: { borderColor: primaryMaroon, boxShadow: `0 0 0 1px ${primaryMaroon}` },
   };
 
+  // REDUCED LABEL SIZE
   const Label = ({ children, required }) => (
-    <Text fontSize="sm" fontWeight="600" color="gray.700" mb={2}>
+    <Text fontSize="2xs" fontWeight="600" color="gray.700" mb={0.5}> {/* Reduced from sm and mb 2 */}
       {children}
       {required && <Box as="span" color="#e53e3e" ml={1}>*</Box>}
     </Text>
   );
 
+  // REDUCED RECORD ROW
   const RecordRow = ({ icon, label, value }) => (
-    <Flex align="center" justify="space-between" py={2.5}>
-      <HStack spacing={2.5} color="gray.500">
-        <Icon as={icon} boxSize={4} color={primaryMaroon} />
-        <Text fontSize="sm">{label}</Text>
+    <Flex align="center" justify="space-between" py={1.5}> {/* Reduced from 2.5 */}
+      <HStack spacing={2} color="gray.500"> {/* Reduced from 2.5 */}
+        <Icon as={icon} boxSize={3.5} color={primaryMaroon} /> {/* Reduced from 4 */}
+        <Text fontSize="2xs">{label}</Text> {/* Reduced from sm */}
       </HStack>
-      <Text fontSize="sm" fontWeight="600" color="#333">
+      <Text fontSize="2xs" fontWeight="600" color="#333"> {/* Reduced from sm */}
         {value}
       </Text>
     </Flex>
@@ -144,169 +147,173 @@ const PackageEditPage = () => {
 
   return (
     <AdminLayout>
-      <Container maxW="container.xl" py={4}>
-        {/* Breadcrumb */}
-        <HStack spacing={2} mb={3} color="gray.400" fontSize="sm" fontWeight="600">
+      <Container maxW="container.xl" py={2}> {/* Reduced from 4 */}
+        {/* Breadcrumb - REDUCED SIZES */}
+        <HStack spacing={2} mb={2} color="gray.400" fontSize="2xs" fontWeight="600"> {/* Reduced from sm and mb 3 */}
           <Box as="button" display="flex" alignItems="center" _hover={{ color: primaryMaroon }} onClick={() => navigate("/admin/dashboard")}>
-            <LuHouse size={15} />
+            <LuHouse size={13} /> {/* Reduced from 15 */}
           </Box>
-          <LuChevronRight size={13} />
+          <LuChevronRight size={11} /> {/* Reduced from 13 */}
           <Box as="button" _hover={{ color: primaryMaroon }} onClick={() => navigate("/admin/packages")}>
             Packages
           </Box>
-          <LuChevronRight size={13} />
+          <LuChevronRight size={11} />
           <Text color="gray.600">{pkg[F.name] || "Edit"}</Text>
-          <LuChevronRight size={13} />
+          <LuChevronRight size={11} />
           <Text color="gray.600">Edit</Text>
         </HStack>
 
-        {/* Header */}
-        <VStack align="start" spacing={1} mb={3}>
-          <Text fontSize="xs" fontWeight="700" color={primaryMaroon} textTransform="uppercase" letterSpacing="0.08em">
+        {/* Header - REDUCED SPACING */}
+        <VStack align="start" spacing={0.5} mb={2}> {/* Reduced from 1 and mb 3 */}
+          <Text fontSize="2xs" fontWeight="700" color={primaryMaroon} textTransform="uppercase" letterSpacing="0.08em"> {/* Reduced from xs */}
             Package Management
           </Text>
-          <Heading fontSize="2xl" fontWeight="800" color="#1a1a2e">
+          <Heading fontSize="xl" fontWeight="800" color="#1a1a2e"> {/* Reduced from 2xl */}
             Edit Package
           </Heading>
-          <Text color="gray.500" fontSize="sm">
+          <Text color="gray.500" fontSize="2xs"> {/* Reduced from sm */}
             Update package pricing, capacity and availability.
           </Text>
         </VStack>
 
-        {/* Summary strip */}
+        {/* Summary strip - REDUCED SIZES */}
         <Flex
           bg="white"
-          borderRadius="2xl"
+          borderRadius="xl" // Reduced from 2xl
           border="1px solid"
           borderColor="gray.100"
           boxShadow="0 4px 20px -8px rgba(0,0,0,0.06)"
-          p={4}
-          mb={4}
+          p={2.5} // Reduced from 4
+          mb={3} // Reduced from 4
           align="center"
           justify="space-between"
           flexWrap="wrap"
-          gap={4}
+          gap={3} // Reduced from 4
         >
-          <HStack spacing={4}>
-            <Circle size="56px" bg="rgba(174,32,80,0.08)" color={primaryMaroon}>
-              <Icon as={LuBox} boxSize={7} />
+          <HStack spacing={3}> {/* Reduced from 4 */}
+            <Circle size="44px" bg="rgba(174,32,80,0.08)" color={primaryMaroon}> {/* Reduced from 56px */}
+              <Icon as={LuBox} boxSize={5} /> {/* Reduced from 7 */}
             </Circle>
             <Box>
-              <HStack spacing={3}>
-                <Heading fontSize="2xl" fontWeight="800" color="#1a1a2e">
+              <HStack spacing={2}> {/* Reduced from 3 */}
+                <Heading fontSize="lg" fontWeight="800" color="#1a1a2e"> {/* Reduced from 2xl */}
                   {pkg[F.name] || form[F.name] || "Package"}
                 </Heading>
                 <Badge
                   bg={form[F.active] ? "rgba(56,161,105,0.10)" : "gray.100"}
                   color={form[F.active] ? "#2f855a" : "gray.500"}
                   borderRadius="full"
-                  px={3}
-                  py={1}
-                  fontSize="xs"
+                  px={2} // Reduced from 3
+                  py={0.5} // Reduced from 1
+                  fontSize="2xs" // Reduced from xs
                   fontWeight="700"
                 >
                   {form[F.active] ? "Active" : "Inactive"}
                 </Badge>
               </HStack>
-              <Text fontSize="sm" color="gray.500" mt={0.5}>
+              <Text fontSize="2xs" color="gray.500" mt={0}> {/* Reduced from sm and mt 0.5 */}
                 {pkg[F.code] || "—"}
               </Text>
             </Box>
           </HStack>
 
-          <HStack spacing={4} borderLeft="1px solid" borderColor="gray.100" pl={6}>
+          <HStack spacing={3} borderLeft="1px solid" borderColor="gray.100" pl={4}> {/* Reduced from spacing 4 and pl 6 */}
             <Box textAlign="right">
-              <Heading fontSize="3xl" fontWeight="800" color="#1a1a2e">
+              <Heading fontSize="2xl" fontWeight="800" color="#1a1a2e"> {/* Reduced from 3xl */}
                 {subscribedCount}
               </Heading>
-              <Text fontSize="sm" color="gray.500">
+              <Text fontSize="2xs" color="gray.500"> {/* Reduced from sm */}
                 Subscribed Churches
               </Text>
             </Box>
           </HStack>
         </Flex>
 
-        {/* Body: form + side cards */}
-        <Flex gap={5} align="start" flexWrap={{ base: "wrap", lg: "nowrap" }}>
-          {/* Form card */}
+        {/* Body: form + side cards - REDUCED GAP */}
+        <Flex gap={3} align="start" flexWrap={{ base: "wrap", lg: "nowrap" }}> {/* Reduced from 5 */}
+          {/* Form card - REDUCED PADDING */}
           <Box
             as="form"
             onSubmit={handleSave}
             flex="1"
             minW={{ base: "100%", lg: "auto" }}
             bg="white"
-            borderRadius="2xl"
+            borderRadius="xl" // Reduced from 2xl
             border="1px solid"
             borderColor="gray.100"
             boxShadow="0 4px 20px -8px rgba(0,0,0,0.06)"
-            p={{ base: 4, md: 6 }}
+            p={{ base: 3, md: 4 }} // Reduced from 4,6
           >
-            <Heading fontSize="lg" fontWeight="700" color="#1a1a2e" mb={4}>
+            <Heading fontSize="md" fontWeight="700" color="#1a1a2e" mb={2.5}> {/* Reduced from lg and mb 4 */}
               Package Information
             </Heading>
 
-            <Flex gap={5} flexWrap="wrap">
+            <Flex gap={3} flexWrap="wrap"> {/* Reduced from 5 */}
               {/* Package Code (read-only) */}
-              <Box flex="1" minW="240px">
+              <Box flex="1" minW="200px"> {/* Reduced from 240px */}
                 <Label required>Package Code</Label>
                 <Box position="relative">
-                  <Input value={pkg[F.code] || ""} readOnly {...fieldProps} bg="gray.50" color="gray.500" pr="40px" cursor="not-allowed" />
-                  <Box position="absolute" right="12px" top="50%" transform="translateY(-50%)" color="gray.400">
-                    <LuLock size={15} />
+                  <Input value={pkg[F.code] || ""} readOnly {...fieldProps} bg="gray.50" color="gray.500" pr="32px" cursor="not-allowed" /> {/* Reduced from 40px */}
+                  <Box position="absolute" right="10px" top="50%" transform="translateY(-50%)" color="gray.400"> {/* Reduced from 12px */}
+                    <LuLock size={13} /> {/* Reduced from 15 */}
                   </Box>
                 </Box>
               </Box>
 
               {/* Package Name */}
-              <Box flex="1" minW="240px">
+              <Box flex="1" minW="200px"> {/* Reduced from 240px */}
                 <Label required>Package Name</Label>
                 <Input value={form[F.name]} onChange={(e) => set(F.name, e.target.value)} placeholder="Package name" {...fieldProps} />
               </Box>
             </Flex>
 
-            <Flex gap={5} flexWrap="wrap" mt={4}>
+            <Flex gap={3} flexWrap="wrap" mt={2.5}> {/* Reduced from 5 and mt 4 */}
               {/* Monthly */}
-              <Box flex="1" minW="240px">
+              <Box flex="1" minW="200px"> {/* Reduced from 240px */}
                 <Label required>Rate per Member (Monthly)</Label>
                 <Box position="relative">
-                  <Box position="absolute" left="12px" top="50%" transform="translateY(-50%)" color="gray.400" zIndex={1}>
-                    <LuIndianRupee size={15} />
+                  <Box position="absolute" left="10px" top="50%" transform="translateY(-50%)" color="gray.400" zIndex={1}> {/* Reduced from 12px */}
+                    <LuIndianRupee size={13} /> {/* Reduced from 15 */}
                   </Box>
-                  <Input type="number" min="0" step="0.01" value={form[F.monthly]} onChange={(e) => set(F.monthly, e.target.value)} pl="34px" {...fieldProps} />
+                  <Input type="number" min="0" step="0.01" value={form[F.monthly]} onChange={(e) => set(F.monthly, e.target.value)} pl="30px" {...fieldProps} /> {/* Reduced from 34px */}
                 </Box>
-                <Text fontSize="xs" color="gray.400" mt={1.5}>Per member / month</Text>
+                <Text fontSize="2xs" color="gray.400" mt={1}> {/* Reduced from xs and mt 1.5 */}
+                  Per member / month
+                </Text>
               </Box>
 
               {/* Yearly */}
-              <Box flex="1" minW="240px">
+              <Box flex="1" minW="200px"> {/* Reduced from 240px */}
                 <Label required>Rate per Member (Yearly)</Label>
                 <Box position="relative">
-                  <Box position="absolute" left="12px" top="50%" transform="translateY(-50%)" color="gray.400" zIndex={1}>
-                    <LuIndianRupee size={15} />
+                  <Box position="absolute" left="10px" top="50%" transform="translateY(-50%)" color="gray.400" zIndex={1}> {/* Reduced from 12px */}
+                    <LuIndianRupee size={13} /> {/* Reduced from 15 */}
                   </Box>
-                  <Input type="number" min="0" step="0.01" value={form[F.yearly]} onChange={(e) => set(F.yearly, e.target.value)} pl="34px" {...fieldProps} />
+                  <Input type="number" min="0" step="0.01" value={form[F.yearly]} onChange={(e) => set(F.yearly, e.target.value)} pl="30px" {...fieldProps} /> {/* Reduced from 34px */}
                 </Box>
-                <Text fontSize="xs" color="gray.400" mt={1.5}>Per member / year</Text>
+                <Text fontSize="2xs" color="gray.400" mt={1}> {/* Reduced from xs and mt 1.5 */}
+                  Per member / year
+                </Text>
               </Box>
             </Flex>
 
-            <Flex gap={5} flexWrap="wrap" mt={4} align="start">
+            <Flex gap={3} flexWrap="wrap" mt={2.5} align="start"> {/* Reduced from 5 and mt 4 */}
               {/* Member limit */}
-              <Box flex="1" minW="240px">
+              <Box flex="1" minW="200px"> {/* Reduced from 240px */}
                 <Label required>Member Limit</Label>
                 <Input type="number" min="0" value={form[F.limit]} onChange={(e) => set(F.limit, e.target.value)} {...fieldProps} />
               </Box>
 
-              {/* Status toggle */}
-              <Box flex="1" minW="240px">
+              {/* Status toggle - REDUCED HEIGHT */}
+              <Box flex="1" minW="200px"> {/* Reduced from 240px */}
                 <Label required>Status</Label>
-                <HStack spacing={3} h="48px">
+                <HStack spacing={2} h="32px"> {/* Reduced from 3 and h 48px */}
                   <Box
                     as="button"
                     type="button"
                     onClick={() => set(F.active, !form[F.active])}
-                    w="46px"
-                    h="26px"
+                    w="38px" // Reduced from 46px
+                    h="22px" // Reduced from 26px
                     borderRadius="full"
                     bg={form[F.active] ? "#38a169" : "gray.300"}
                     position="relative"
@@ -315,33 +322,34 @@ const PackageEditPage = () => {
                   >
                     <Box
                       position="absolute"
-                      top="3px"
-                      left={form[F.active] ? "23px" : "3px"}
-                      w="20px"
-                      h="20px"
+                      top="2px" // Reduced from 3px
+                      left={form[F.active] ? "19px" : "2px"} // Adjusted from 23px/3px
+                      w="18px" // Reduced from 20px
+                      h="18px" // Reduced from 20px
                       borderRadius="full"
                       bg="white"
                       transition="left 0.2s"
                       boxShadow="sm"
                     />
                   </Box>
-                  <Text fontSize="sm" fontWeight="600" color="#333">
+                  <Text fontSize="2xs" fontWeight="600" color="#333"> {/* Reduced from sm */}
                     {form[F.active] ? "Active" : "Inactive"}
                   </Text>
                 </HStack>
               </Box>
             </Flex>
 
-            {/* Actions */}
-            <Flex justify="flex-end" gap={3} mt={5}>
+            {/* Actions - REDUCED SIZES */}
+            <Flex justify="flex-end" gap={2.5} mt={3}> {/* Reduced from 3 and mt 5 */}
               <Button
                 type="button"
                 variant="outline"
                 borderColor={primaryMaroon}
                 color={primaryMaroon}
-                borderRadius="lg"
-                px={8}
-                h="46px"
+                borderRadius="md" // Reduced from lg
+                px={5} // Reduced from 8
+                h="32px" // Reduced from 46px
+                fontSize="2xs" // Added
                 _hover={{ bg: "rgba(174,32,80,0.05)" }}
                 onClick={() => navigate("/admin/packages")}
               >
@@ -350,9 +358,10 @@ const PackageEditPage = () => {
               <Button
                 type="submit"
                 color="white"
-                borderRadius="lg"
-                px={8}
-                h="46px"
+                borderRadius="md" // Reduced from lg
+                px={5} // Reduced from 8
+                h="32px" // Reduced from 46px
+                fontSize="2xs" // Added
                 fontWeight="700"
                 style={{ background: "linear-gradient(100deg,#c11a4c 0%,#7a1236 100%)" }}
                 _hover={{ filter: "brightness(0.95)" }}
@@ -364,31 +373,31 @@ const PackageEditPage = () => {
             </Flex>
           </Box>
 
-          {/* Side cards */}
-          <VStack spacing={4} align="stretch" w={{ base: "100%", lg: "320px" }} flexShrink={0}>
+          {/* Side cards - REDUCED SIZES */}
+          <VStack spacing={3} align="stretch" w={{ base: "100%", lg: "260px" }} flexShrink={0}> {/* Reduced from 4 and 320px */}
             {/* Record Information */}
-            <Box bg="white" borderRadius="2xl" border="1px solid" borderColor="gray.100" boxShadow="0 4px 20px -8px rgba(0,0,0,0.06)" p={4}>
-              <Heading fontSize="md" fontWeight="700" color="#1a1a2e" mb={2}>
+            <Box bg="white" borderRadius="xl" border="1px solid" borderColor="gray.100" boxShadow="0 4px 20px -8px rgba(0,0,0,0.06)" p={3}> {/* Reduced from 2xl and p4 */}
+              <Heading fontSize="sm" fontWeight="700" color="#1a1a2e" mb={1.5}> {/* Reduced from md and mb 2 */}
                 Record Information
               </Heading>
               <RecordRow icon={LuCalendar} label="Created" value={formatDate(pkg[F.created])} />
               <RecordRow icon={LuClock} label="Last Updated" value={formatDate(pkg[F.updated])} />
             </Box>
 
-            {/* Subscription Summary */}
-            <Box bg="white" borderRadius="2xl" border="1px solid" borderColor="gray.100" boxShadow="0 4px 20px -8px rgba(0,0,0,0.06)" p={4}>
-              <Heading fontSize="md" fontWeight="700" color="#1a1a2e" mb={3}>
+            {/* Subscription Summary - REDUCED SIZES */}
+            <Box bg="white" borderRadius="xl" border="1px solid" borderColor="gray.100" boxShadow="0 4px 20px -8px rgba(0,0,0,0.06)" p={3}> {/* Reduced from 2xl and p4 */}
+              <Heading fontSize="sm" fontWeight="700" color="#1a1a2e" mb={2}> {/* Reduced from md and mb 3 */}
                 Subscription Summary
               </Heading>
-              <HStack spacing={4} mb={4}>
-                <Circle size="52px" bg="rgba(174,32,80,0.08)" color={primaryMaroon}>
-                  <Icon as={LuUsers} boxSize={6} />
+              <HStack spacing={3} mb={2.5}> {/* Reduced from 4 and mb 4 */}
+                <Circle size="44px" bg="rgba(174,32,80,0.08)" color={primaryMaroon}> {/* Reduced from 52px */}
+                  <Icon as={LuUsers} boxSize={5} /> {/* Reduced from 6 */}
                 </Circle>
                 <Box>
-                  <Heading fontSize="3xl" fontWeight="800" color="#1a1a2e">
+                  <Heading fontSize="2xl" fontWeight="800" color="#1a1a2e"> {/* Reduced from 3xl */}
                     {activeChurches}
                   </Heading>
-                  <Text fontSize="sm" color="gray.500">
+                  <Text fontSize="2xs" color="gray.500"> {/* Reduced from sm */}
                     Active Churches
                   </Text>
                 </Box>
@@ -398,15 +407,15 @@ const PackageEditPage = () => {
                 type="button"
                 display="flex"
                 alignItems="center"
-                gap={2}
+                gap={1.5} // Reduced from 2
                 color={primaryMaroon}
                 fontWeight="600"
-                fontSize="sm"
+                fontSize="2xs" // Reduced from sm
                 _hover={{ textDecoration: "underline" }}
                 onClick={() => navigate(`/admin/packages/${packageId}/churches`, { state: { package: pkg } })}
               >
                 View subscribed churches
-                <LuArrowRight size={16} />
+                <LuArrowRight size={13} /> {/* Reduced from 16 */}
               </Box>
             </Box>
           </VStack>

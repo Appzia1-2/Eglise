@@ -277,24 +277,12 @@ class Church(models.Model):
             parts.append(str(self.country.name))
         return ", ".join(parts)
 
-from django.db import models
-from django.core.exceptions import ValidationError
-from datetime import date
-from dateutil.relativedelta import relativedelta
-
 class Package(models.Model):
-    code = models.CharField(max_length=50, unique=True, help_text="Unique package code (e.g., PKG-001)")
+    code = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=100)
-    member_limit = models.PositiveIntegerField(
-        null=True, 
-        blank=True,
-        help_text="Maximum members allowed. Leave blank for unlimited"
-    )
-    
-    # Pricing (only monthly and yearly rates)
+    member_limit = models.PositiveIntegerField(unique=True)  # Add unique=True
     rate_per_member_monthly = models.DecimalField(max_digits=8, decimal_places=2)
     rate_per_member_yearly = models.DecimalField(max_digits=8, decimal_places=2)
-    
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -309,12 +297,8 @@ class Package(models.Model):
         """Count of churches using this package"""
         return self.subscriptions.filter(is_active=True).count()
     
-    def can_delete(self):
-        """Check if package can be deleted (hard delete)"""
-        return not self.is_in_use
-    
-    def can_edit(self):
-        """Check if package can be edited"""
+    def can_edit_or_delete(self):
+        """Single method - no duplication"""
         return not self.is_in_use
     
     def __str__(self):
@@ -326,52 +310,79 @@ class Package(models.Model):
 from decimal import Decimal
 from datetime import date, datetime
 
+from datetime import date, datetime
+from decimal import Decimal
+
+from dateutil.relativedelta import relativedelta
+from django.db import models
+
+
 class ChurchSubscription(models.Model):
     BILLING_CHOICES = (
         ('MONTHLY', 'Monthly'),
         ('YEARLY', 'Yearly'),
     )
+
     PAYMENT_CHOICES = (
         ('PAID', 'Paid'),
         ('UNPAID', 'Unpaid'),
         ('EXPIRED', 'Expired'),
     )
+
     ORIGIN_CHOICES = (
         ('BASE', 'Base Purchase'),
         ('UPGRADE', 'Upgrade Purchase'),
     )
+
+    # ============================================================
+    # CHURCH & PACKAGE
+    # ============================================================
 
     church = models.OneToOneField(
         'Church',
         on_delete=models.CASCADE,
         related_name='subscription'
     )
+
     package = models.ForeignKey(
         'Package',
         on_delete=models.PROTECT,
         related_name='subscriptions'
     )
 
+    # ============================================================
+    # BILLING
+    # ============================================================
+
     billing_cycle = models.CharField(
         max_length=10,
         choices=BILLING_CHOICES,
         default='YEARLY'
     )
+
     payment_status = models.CharField(
         max_length=10,
         choices=PAYMENT_CHOICES,
         default='UNPAID'
     )
 
-    # 🔥 duration_months ONLY for end_date calculation.
-    # It should NEVER be multiplied into price calculations.
+    # Duration is used ONLY for calculating end_date.
+    # It is NOT multiplied into pricing except where the
+    # yearly package rate itself is defined as a monthly rate.
     duration_months = models.PositiveIntegerField(
         default=12,
-        help_text="Number of months purchased - ONLY affects end_date, NOT price"
+        help_text="Number of months purchased - only affects end_date"
     )
 
     start_date = models.DateField(auto_now_add=True)
-    end_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(
+        null=True,
+        blank=True
+    )
+
+    # ============================================================
+    # CAPACITY
+    # ============================================================
 
     custom_capacity = models.PositiveIntegerField(
         null=True,
@@ -379,10 +390,14 @@ class ChurchSubscription(models.Model):
         help_text="Custom member capacity if different from package limit"
     )
 
-    # 🔥 PRICING SNAPSHOT — captured once, at purchase.
-    # Without this, editing a Package silently rewrites what every existing
-    # church already bought, because get_rate()/get_capacity() read the
-    # package live. Nullable so pre-existing rows keep working unchanged.
+    # ============================================================
+    # PRICING SNAPSHOT
+    # ============================================================
+
+    # These values are captured when the subscription is purchased.
+    # This prevents future Package edits from changing existing
+    # subscription pricing.
+
     locked_rate = models.DecimalField(
         max_digits=8,
         decimal_places=2,
@@ -390,30 +405,43 @@ class ChurchSubscription(models.Model):
         blank=True,
         help_text="Rate per member at time of purchase"
     )
+
     locked_capacity = models.PositiveIntegerField(
         null=True,
         blank=True,
         help_text="Member capacity at time of purchase"
     )
+
     locked_package_name = models.CharField(
         max_length=100,
         blank=True,
         help_text="Package name at time of purchase"
     )
 
-    is_active = models.BooleanField(default=False)
+    # ============================================================
+    # STATUS & CREDIT
+    # ============================================================
+
+    is_active = models.BooleanField(
+        default=False
+    )
+
     credit_balance = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         default=0
     )
+
     pricing_origin = models.CharField(
         max_length=10,
         choices=ORIGIN_CHOICES,
         default='BASE'
     )
 
-    # Upgrade tracking
+    # ============================================================
+    # UPGRADE TRACKING
+    # ============================================================
+
     previous_subscription = models.ForeignKey(
         'self',
         on_delete=models.SET_NULL,
@@ -421,6 +449,7 @@ class ChurchSubscription(models.Model):
         blank=True,
         related_name='upgraded_to'
     )
+
     upgrade_from_package = models.ForeignKey(
         'Package',
         on_delete=models.SET_NULL,
@@ -428,16 +457,29 @@ class ChurchSubscription(models.Model):
         blank=True,
         related_name='upgraded_from'
     )
-    upgrade_date = models.DateField(null=True, blank=True)
+
+    upgrade_date = models.DateField(
+        null=True,
+        blank=True
+    )
+
     pro_rata_credit = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         default=0
     )
 
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    # ============================================================
+    # TIMESTAMPS
+    # ============================================================
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
 
     class Meta:
         ordering = ['-created_at']
@@ -447,211 +489,428 @@ class ChurchSubscription(models.Model):
     def __str__(self):
         return f"{self.church.name} - {self.package.name} ({self.billing_cycle})"
 
+    # ============================================================
+    # SAVE
+    # ============================================================
+
     def save(self, *args, **kwargs):
-        """Snapshot pricing on purchase, then auto-calculate end date"""
-        # 🔥 Capture the package's terms once. The API clears locked_rate
-        # deliberately when a church switches package or billing cycle,
-        # which counts as a fresh purchase and re-snapshots here.
+        """
+        Snapshot package pricing on purchase and automatically
+        calculate the subscription end date.
+
+        TAX IS NOT CALCULATED HERE.
+        Tax is handled separately by the Bill model.
+        """
+
+        # Capture package terms once at purchase.
+        #
+        # The API can clear locked_rate when the church changes
+        # package or billing cycle. That represents a fresh purchase,
+        # so the package pricing is captured again.
         if self.locked_rate is None and self.package_id:
+
             if self.billing_cycle == 'MONTHLY':
-                self.locked_rate = self.package.rate_per_member_monthly
+                self.locked_rate = (
+                    self.package.rate_per_member_monthly
+                )
             else:
-                self.locked_rate = self.package.rate_per_member_yearly
+                self.locked_rate = (
+                    self.package.rate_per_member_yearly
+                )
+
             self.locked_capacity = self.package.member_limit
             self.locked_package_name = self.package.name
 
+        # Calculate subscription end date.
         if self.start_date and self.duration_months:
+
             # Ensure start_date is a date object
             if isinstance(self.start_date, datetime):
                 self.start_date = self.start_date.date()
-            self.end_date = self.start_date + relativedelta(months=self.duration_months)
+
+            self.end_date = (
+                self.start_date
+                + relativedelta(months=self.duration_months)
+            )
+
         super().save(*args, **kwargs)
 
-    # ============ DATE & EXPIRATION METHODS ============
+    # ============================================================
+    # DATE & EXPIRATION METHODS
+    # ============================================================
 
     def is_expired(self):
-        """Check if subscription has expired"""
+        """Check if subscription has expired."""
+
         if not self.end_date:
             return False
+
         return self.end_date < date.today()
 
     def expires_in_days(self):
-        """Get number of days until expiration"""
+        """Get number of days until expiration."""
+
         if not self.end_date:
             return None
-        days_left = (self.end_date - date.today()).days
+
+        days_left = (
+            self.end_date - date.today()
+        ).days
+
         return max(0, days_left)
 
     def get_used_days(self):
-        """Get number of days used in current subscription"""
+        """Get number of days used in current subscription."""
+
         if not self.start_date:
             return 0
+
         today = date.today()
+
         if today < self.start_date:
             return 0
-        return (today - self.start_date).days
+
+        return (
+            today - self.start_date
+        ).days
 
     def get_remaining_days(self):
-        """Get number of days remaining in current subscription"""
+        """Get number of days remaining in current subscription."""
+
         if not self.end_date:
             return 0
+
         today = date.today()
+
         if today > self.end_date:
             return 0
-        return (self.end_date - today).days
+
+        return (
+            self.end_date - today
+        ).days
 
     def get_total_days(self):
-        """Get total days in subscription period"""
+        """Get total number of days in subscription period."""
+
         if not self.start_date or not self.end_date:
             return 0
-        return (self.end_date - self.start_date).days
+
+        return (
+            self.end_date - self.start_date
+        ).days
 
     def get_progress_percentage(self):
-        """Get percentage of subscription completed"""
+        """Get percentage of subscription completed."""
+
         total_days = self.get_total_days()
+
         if total_days <= 0:
             return 0
-        used_days = self.get_used_days()
-        percentage = (used_days / total_days) * 100
-        return round(min(100, percentage), 2)
 
-    # ============ PRICING METHODS ============
+        used_days = self.get_used_days()
+
+        percentage = (
+            used_days / total_days
+        ) * 100
+
+        return round(
+            min(100, percentage),
+            2
+        )
+
+    # ============================================================
+    # PRICING METHODS
+    # ============================================================
 
     def get_rate(self):
         """
-        Rate per member. The purchase-time snapshot wins over the live
-        package, so admin edits to a Package never change what an existing
-        church is paying.
+        Get rate per member.
+
+        Purchase-time snapshot takes priority over the live package.
+
+        This means editing a Package later does not change the
+        price of an existing subscription.
         """
+
         if self.locked_rate is not None:
             return self.locked_rate
-        # Fallback for rows created before snapshots existed
+
+        # Fallback for old subscriptions created before snapshots
+        # existed.
         if self.billing_cycle == 'MONTHLY':
             return self.package.rate_per_member_monthly
+
         return self.package.rate_per_member_yearly
 
     def get_capacity(self):
         """
-        Member capacity. Precedence: custom_capacity > snapshot > live package.
+        Get member capacity.
+
+        Priority:
+
+        1. custom_capacity
+        2. locked_capacity
+        3. current package member_limit
         """
+
         if self.custom_capacity:
             return self.custom_capacity
+
         if self.locked_capacity is not None:
             return self.locked_capacity
+
         return self.package.member_limit
+
+    def get_base_price(self):
+        """
+        Get subscription base price WITHOUT TAX.
+
+        YEARLY:
+            rate × 12 × capacity
+
+        MONTHLY:
+            rate × capacity
+
+        Tax is NOT calculated here.
+        """
+
+        capacity = self.get_capacity()
+        rate = self.get_rate()
+
+        if self.billing_cycle == 'YEARLY':
+            return rate * 12 * capacity
+
+        return rate * capacity
 
     def get_total_price(self):
         """
-        Calculate total price for this subscription.
-        CRITICAL: duration_months is NOT multiplied here.
-        duration_months ONLY controls the subscription end_date.
+        Get total subscription price WITHOUT TAX.
 
-        Formula:
-        - YEARLY: rate_per_member_yearly × capacity
-        - MONTHLY: rate_per_member_monthly × capacity
+        YEARLY:
+            rate × 12 × capacity
 
-        Example:
-        - rate = 1800, capacity = 25
-        - total = 1800 × 25 = 45,000
+        MONTHLY:
+            rate × capacity
+
+        Tax is handled separately by the Bill model.
         """
-        capacity = self.get_capacity()
-        rate = self.get_rate()
-        return rate * capacity
 
-    # 🔥 These two were near-duplicates that read the live package directly,
-    # bypassing the snapshot entirely (get_member_limit is used by to_dict).
-    # They now just delegate to the canonical methods above.
+        return self.get_base_price()
+
     def get_amount_per_member(self):
-        """Alias for get_rate()"""
+        """Get rate per member."""
+
         return self.get_rate()
 
     def get_member_limit(self):
-        """Alias for get_capacity()"""
+        """Get subscription member capacity."""
+
         return self.get_capacity()
 
-    # ============ UPGRADE METHODS ============
+    # ============================================================
+    # UPGRADE METHODS
+    # ============================================================
 
-    def calculate_upgrade_cost(self, new_package, new_billing_cycle):
+    def calculate_upgrade_cost(
+        self,
+        new_package,
+        new_billing_cycle
+    ):
         """
-        Calculate upgrade cost with pro-rata credit.
+        Calculate upgrade cost using pro-rata credit.
 
-        The NEW package is priced at its current live rate (it's a new
-        purchase). The credit is derived from get_total_price(), which uses
-        the OLD snapshot — so the church is credited what they actually paid.
+        IMPORTANT:
+        No tax is calculated here.
 
-        Args:
-            new_package: The package to upgrade to
-            new_billing_cycle: 'MONTHLY' or 'YEARLY'
+        The new package price is calculated first.
+        Then the unused portion of the old subscription is
+        deducted as pro-rata credit.
 
-        Returns:
-            dict: Contains new_price, credit_amount, final_amount, etc.
+        Tax should be calculated later by the Bill model.
         """
+
         capacity = self.get_capacity()
 
+        # --------------------------------------------------------
+        # Calculate NEW subscription base price
+        # --------------------------------------------------------
+
         if new_billing_cycle == 'MONTHLY':
-            rate = new_package.rate_per_member_monthly
+
+            rate = (
+                new_package.rate_per_member_monthly
+            )
+
+            new_base_price = (
+                rate * capacity
+            )
+
         else:
-            rate = new_package.rate_per_member_yearly
 
-        new_price = rate * capacity
+            rate = (
+                new_package.rate_per_member_yearly
+            )
 
+            new_base_price = (
+                rate * 12 * capacity
+            )
+
+        # No tax here.
+        new_price = new_base_price
+
+        # --------------------------------------------------------
         # Calculate pro-rata credit
+        # --------------------------------------------------------
+
         total_days = self.get_total_days()
         remaining_days = self.get_remaining_days()
 
         if total_days > 0:
-            remaining_percentage = remaining_days / total_days
-            original_price = self.get_total_price()
-            credit = original_price * Decimal(str(remaining_percentage))
+
+            remaining_percentage = (
+                remaining_days / total_days
+            )
+
+            # This uses the OLD subscription's
+            # purchase-time pricing snapshot.
+            original_price = (
+                self.get_total_price()
+            )
+
+            credit = (
+                original_price
+                * Decimal(str(remaining_percentage))
+            )
+
         else:
+
             credit = Decimal('0')
 
-        final_amount = max(Decimal('0'), new_price - credit)
+        # --------------------------------------------------------
+        # Final upgrade amount
+        # --------------------------------------------------------
+
+        final_amount = max(
+            Decimal('0'),
+            new_price - credit
+        )
 
         return {
-            'new_price': round(new_price, 2),
-            'credit_amount': round(credit, 2),
-            'final_amount': round(final_amount, 2),
-            'used_percentage': round(((total_days - remaining_days) / total_days) * 100, 2) if total_days > 0 else 0,
-            'remaining_percentage': round((remaining_days / total_days) * 100, 2) if total_days > 0 else 0,
+            'new_base_price': round(
+                new_base_price,
+                2
+            ),
+
+            'new_price': round(
+                new_price,
+                2
+            ),
+
+            'credit_amount': round(
+                credit,
+                2
+            ),
+
+            'final_amount': round(
+                final_amount,
+                2
+            ),
+
+            'used_percentage': round(
+                (
+                    (total_days - remaining_days)
+                    / total_days
+                ) * 100,
+                2
+            ) if total_days > 0 else 0,
+
+            'remaining_percentage': round(
+                (
+                    remaining_days
+                    / total_days
+                ) * 100,
+                2
+            ) if total_days > 0 else 0,
+
             'billing_cycle': new_billing_cycle,
+
             'capacity': capacity,
+
             'duration_months': self.duration_months
         }
 
     def is_upgradable(self):
-        """Check if subscription can be upgraded"""
-        return self.is_active and not self.is_expired()
+        """Check if subscription can be upgraded."""
+
+        return (
+            self.is_active
+            and not self.is_expired()
+        )
 
     def get_upgrade_history(self):
-        """Get full upgrade history for this subscription"""
+        """Get full upgrade history for this subscription."""
+
         history = []
+
         current = self
+
         while current.previous_subscription:
+
             prev = current.previous_subscription
+
             history.append({
-                'from_package': prev.locked_package_name or (prev.package.name if prev.package else "Unknown"),
-                'to_package': current.locked_package_name or (current.package.name if current.package else "Unknown"),
+                'from_package': (
+                    prev.locked_package_name
+                    or (
+                        prev.package.name
+                        if prev.package
+                        else "Unknown"
+                    )
+                ),
+
+                'to_package': (
+                    current.locked_package_name
+                    or (
+                        current.package.name
+                        if current.package
+                        else "Unknown"
+                    )
+                ),
+
                 'upgrade_date': current.upgrade_date,
-                'pro_rata_credit': float(current.pro_rata_credit) if current.pro_rata_credit else 0,
+
+                'pro_rata_credit': (
+                    float(current.pro_rata_credit)
+                    if current.pro_rata_credit
+                    else 0
+                ),
             })
+
             current = prev
+
         return history
 
-    # ============ STATUS METHODS ============
+    # ============================================================
+    # STATUS METHODS
+    # ============================================================
 
     def get_status(self):
-        """Get machine-readable status"""
+        """Get machine-readable subscription status."""
+
         if self.is_expired():
             return 'EXPIRED'
+
         if self.is_active:
             return 'ACTIVE'
+
         if self.payment_status == 'PAID':
             return 'PAID'
+
         return 'INACTIVE'
 
     def get_status_display(self):
-        """Get display-friendly status"""
+        """Get display-friendly subscription status."""
+
         status_map = {
             'ACTIVE': 'Active',
             'EXPIRED': 'Expired',
@@ -660,51 +919,177 @@ class ChurchSubscription(models.Model):
             'UNPAID': 'Unpaid',
             'PENDING': 'Pending',
         }
-        return status_map.get(self.get_status(), 'Unknown')
+
+        return status_map.get(
+            self.get_status(),
+            'Unknown'
+        )
 
     def can_renew(self):
-        """Check if subscription can be renewed"""
-        return self.is_expired() or self.get_remaining_days() <= 30
+        """Check if subscription can be renewed."""
+
+        return (
+            self.is_expired()
+            or self.get_remaining_days() <= 30
+        )
 
     def needs_renewal(self):
-        """Check if subscription needs renewal (expiring within 30 days)"""
+        """
+        Check if subscription needs renewal.
+
+        Returns True when the subscription is active and has
+        30 or fewer days remaining.
+        """
+
         if not self.end_date:
             return False
-        days_left = self.expires_in_days()
-        return days_left is not None and days_left <= 30 and not self.is_expired()
 
-    # ============ JSON SERIALIZATION ============
+        days_left = self.expires_in_days()
+
+        return (
+            days_left is not None
+            and days_left <= 30
+            and not self.is_expired()
+        )
+
+    # ============================================================
+    # JSON SERIALIZATION
+    # ============================================================
 
     def to_dict(self):
-        """Convert subscription to dictionary for API responses"""
+        """
+        Convert subscription to dictionary for API responses.
+
+        TAX IS NOT INCLUDED because tax is calculated by the
+        Bill model.
+        """
+
         return {
             'id': self.id,
-            'church_id': self.church.id if self.church else None,
-            'church_name': self.church.name if self.church else None,
-            'church_code': self.church.code if self.church else None,
-            'package_id': self.package.id if self.package else None,
-            'package_name': self.package.name if self.package else None,
-            # 🔥 What the package was called at purchase, in case it was renamed
-            'purchased_package_name': self.locked_package_name or None,
-            'package_code': self.package.code if self.package else None,
+
+            'church_id': (
+                self.church.id
+                if self.church
+                else None
+            ),
+
+            'church_name': (
+                self.church.name
+                if self.church
+                else None
+            ),
+
+            'church_code': (
+                self.church.code
+                if self.church
+                else None
+            ),
+
+            'package_id': (
+                self.package.id
+                if self.package
+                else None
+            ),
+
+            'package_name': (
+                self.package.name
+                if self.package
+                else None
+            ),
+
+            # Package name at purchase time
+            'purchased_package_name': (
+                self.locked_package_name
+                or None
+            ),
+
+            'package_code': (
+                self.package.code
+                if self.package
+                else None
+            ),
+
             'billing_cycle': self.billing_cycle,
+
             'duration_months': self.duration_months,
+
             'payment_status': self.payment_status,
+
             'is_active': self.is_active,
-            'start_date': self.start_date.isoformat() if self.start_date else None,
-            'end_date': self.end_date.isoformat() if self.end_date else None,
-            'total_price': float(self.get_total_price()),
-            'rate_per_member': float(self.get_rate()),
-            'member_limit': self.get_member_limit(),
-            'progress_percentage': self.get_progress_percentage(),
-            'remaining_days': self.get_remaining_days(),
-            'is_expired': self.is_expired(),
-            'status': self.get_status_display(),
-            'pricing_origin': self.pricing_origin,
-            'upgrade_date': self.upgrade_date.isoformat() if self.upgrade_date else None,
-            'pro_rata_credit': float(self.pro_rata_credit) if self.pro_rata_credit else 0,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+
+            'start_date': (
+                self.start_date.isoformat()
+                if self.start_date
+                else None
+            ),
+
+            'end_date': (
+                self.end_date.isoformat()
+                if self.end_date
+                else None
+            ),
+
+            # Price WITHOUT TAX
+            'base_price': float(
+                self.get_base_price()
+            ),
+
+            # Total subscription price WITHOUT TAX
+            'total_price': float(
+                self.get_total_price()
+            ),
+
+            'rate_per_member': float(
+                self.get_rate()
+            ),
+
+            'member_limit': (
+                self.get_member_limit()
+            ),
+
+            'progress_percentage': (
+                self.get_progress_percentage()
+            ),
+
+            'remaining_days': (
+                self.get_remaining_days()
+            ),
+
+            'is_expired': (
+                self.is_expired()
+            ),
+
+            'status': (
+                self.get_status_display()
+            ),
+
+            'pricing_origin': (
+                self.pricing_origin
+            ),
+
+            'upgrade_date': (
+                self.upgrade_date.isoformat()
+                if self.upgrade_date
+                else None
+            ),
+
+            'pro_rata_credit': (
+                float(self.pro_rata_credit)
+                if self.pro_rata_credit
+                else 0
+            ),
+
+            'created_at': (
+                self.created_at.isoformat()
+                if self.created_at
+                else None
+            ),
+
+            'updated_at': (
+                self.updated_at.isoformat()
+                if self.updated_at
+                else None
+            ),
         }
     
 # registry/models.py - Tax Type Model

@@ -14,6 +14,7 @@ import AdminDashboard from "./admin/pages/AdminDashboard";
 import DioceseManagement from "./admin/pages/DioceseManagement";
 import DioceseAdd from "./admin/pages/DioceseAdd";
 import DioceseEdit from "./admin/pages/DioceseEdit";
+import DioceseViewPage from "./admin/pages/DioceseViewPage";
 import ChurchesPage from "./admin/pages/ChurchesPage";
 import ChurchAdd from "./admin/pages/ChurchAdd";
 import ChurchEdit from "./admin/pages/ChurchEdit";
@@ -97,6 +98,14 @@ function App() {
           element={
             <AdminProtectedRoute>
               <DioceseManagement />
+            </AdminProtectedRoute>
+          }
+        />
+         <Route
+          path="/admin/dioceses/view/:id"
+          element={
+            <AdminProtectedRoute>
+              <DioceseViewPage  />
             </AdminProtectedRoute>
           }
         />

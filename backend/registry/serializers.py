@@ -12,93 +12,134 @@ from django.utils import timezone
 from rest_framework import serializers
 from registry.models import Diocese
 
+from rest_framework import serializers
+from registry.models import Diocese
+
+
 class DioceseSerializer(serializers.ModelSerializer):
-    """
-    Full Diocese serializer with all fields
-    """
     country_name = serializers.SerializerMethodField()
     full_address = serializers.SerializerMethodField()
-    
+    church_count = serializers.SerializerMethodField()
+    code = serializers.SerializerMethodField()
+
     class Meta:
         model = Diocese
         fields = [
             'id',
+            'code',
             'name',
             'metropolitan_name',
             'email',
-            'contact_details',
-            'address',
+            'phone_number',
+            'address_line1',
+            'address_line2',
             'city',
             'state',
             'country',
             'country_name',
+            'postal_code',
+            'website',
             'full_address',
             'is_active',
+            'church_count',
             'created_at',
-            'updated_at'
+            'updated_at',
         ]
-        read_only_fields = ['created_at', 'updated_at']
-    
+
+        read_only_fields = [
+            'id',
+            'code',
+            'church_count',
+            'created_at',
+            'updated_at',
+        ]
+
+    def get_code(self, obj):
+        return f"DIO-{obj.id:03d}"
+
     def get_country_name(self, obj):
-        """Get the country name from the country field"""
         return obj.country.name if obj.country else None
-    
+
     def get_full_address(self, obj):
-        """Get the complete formatted address"""
         return obj.get_full_address()
+
+    def get_church_count(self, obj):
+        return obj.churches.count()
+
 
 class DioceseListSerializer(serializers.ModelSerializer):
     """
-    Simplified Diocese serializer for list views
+    Simplified Diocese serializer for list views.
     """
     country_name = serializers.SerializerMethodField()
-    
+    church_count = serializers.SerializerMethodField()
+    code = serializers.SerializerMethodField()
+
     class Meta:
         model = Diocese
         fields = [
             'id',
+            'code',
             'name',
             'metropolitan_name',
             'city',
             'state',
             'country',
             'country_name',
-            'is_active'
+            'church_count',
+            'is_active',
+            'created_at',
+            'updated_at',
         ]
-    
+
+        read_only_fields = [
+            'id',
+            'code',
+            'church_count',
+            'created_at',
+            'updated_at',
+        ]
+
+    def get_code(self, obj):
+        return f"DIO-{obj.id:03d}"
+
     def get_country_name(self, obj):
         return obj.country.name if obj.country else None
 
+    def get_church_count(self, obj):
+        return obj.churches.count()
+
+
 class DioceseCreateUpdateSerializer(serializers.ModelSerializer):
-    """
-    Serializer for creating and updating Diocese
-    """
     class Meta:
         model = Diocese
         fields = [
             'name',
             'metropolitan_name',
             'email',
-            'contact_details',
-            'address',
+            'phone_number',
+            'address_line1',
+            'address_line2',
             'city',
             'state',
             'country',
+            'postal_code',
+            'website',
+            'is_active',
         ]
-    
+
     def validate_email(self, value):
-        """Validate that email is unique"""
-        if Diocese.objects.filter(email=value).exists():
-            raise serializers.ValidationError("A diocese with this email already exists.")
+        qs = Diocese.objects.filter(email=value)
+
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+
+        if qs.exists():
+            raise serializers.ValidationError(
+                "A diocese with this email already exists."
+            )
+
         return value
-    
-    def validate(self, data):
-        """Validate that required fields are present"""
-        required_fields = ['name', 'email', 'address', 'city', 'state', 'country']
-        for field in required_fields:
-            if not data.get(field):
-                raise serializers.ValidationError({field: f"{field} is required."})
-        return data
 
 class ChurchListSerializer(serializers.ModelSerializer):
     class Meta:
@@ -115,41 +156,173 @@ class ChurchListSerializer(serializers.ModelSerializer):
         ]
 
 
+# registry/serializers.py - Update ChurchDetailSerializer
+
 class ChurchDetailSerializer(serializers.ModelSerializer):
+    subscription = serializers.SerializerMethodField()
+    administrators = serializers.SerializerMethodField()
+    member_count = serializers.SerializerMethodField()
+    admin_count = serializers.SerializerMethodField()
+    document_count = serializers.SerializerMethodField()
+    current_package = serializers.SerializerMethodField()
+    diocese_name = serializers.SerializerMethodField()
+    is_verified = serializers.SerializerMethodField()
+    logo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Church
         fields = "__all__"
+        read_only_fields = ['id', 'code', 'created_at', 'updated_at']
+
+    def get_subscription(self, obj):
+        subscription = getattr(obj, 'subscription', None)
+        if not subscription:
+            return None
+        
+        today = timezone.now().date()
+        days_remaining = None
+        progress_pct = 0
+        
+        if subscription.end_date:
+            days_remaining = (subscription.end_date - today).days
+            if days_remaining < 0:
+                days_remaining = 0
+            
+            total_days = (subscription.end_date - subscription.start_date).days if subscription.start_date else 1
+            used_days = (today - subscription.start_date).days if subscription.start_date else 0
+            if total_days > 0:
+                progress_pct = round((used_days / total_days) * 100, 2)
+                if progress_pct > 100:
+                    progress_pct = 100
+                if progress_pct < 0:
+                    progress_pct = 0
+
+        return {
+            'id': subscription.id,
+            'package_name': subscription.package.name if subscription.package else None,
+            'locked_package_name': subscription.locked_package_name,
+            'package_id': subscription.package.id if subscription.package else None,
+            'billing_cycle': subscription.billing_cycle,
+            'payment_status': subscription.payment_status,
+            'is_active': subscription.is_active,
+            'start_date': subscription.start_date,
+            'end_date': subscription.end_date,
+            'started_on': subscription.start_date,
+            'renews_on': subscription.end_date,
+            'next_billing_date': subscription.end_date,
+            'created_at': subscription.created_at,
+            'days_remaining': days_remaining,
+            'progress_pct': progress_pct,
+            'duration_months': subscription.duration_months,
+            'custom_capacity': subscription.custom_capacity,
+            'credit_balance': float(subscription.credit_balance) if subscription.credit_balance else 0,
+            'annual_value': float(subscription.get_total_price()) if subscription.get_total_price() else None,
+        }
+
+    def get_administrators(self, obj):
+        # Get admin users for this church
+        users = User.objects.filter(church=obj, role='CHURCH', is_active=True)
+        return [
+            {
+                'id': user.id,
+                'name': user.get_full_name() or user.email,
+                'email': user.email,
+                'role': 'Administrator',
+                'status': 'Active' if user.is_active else 'Inactive'
+            }
+            for user in users
+        ]
+
+    def get_member_count(self, obj):
+        return obj.members.filter(is_active=True, expired=False).count()
+
+    def get_admin_count(self, obj):
+        return User.objects.filter(church=obj, role='CHURCH', is_active=True).count()
+
+    def get_document_count(self, obj):
+        # Placeholder - implement if you have a Document model
+        return 0
+
+    def get_current_package(self, obj):
+        subscription = getattr(obj, 'subscription', None)
+        if subscription and subscription.package:
+            return subscription.package.name
+        return None
+
+    def get_diocese_name(self, obj):
+        if obj.diocese:
+            return obj.diocese.name
+        return None
+
+    def get_is_verified(self, obj):
+        return obj.is_active
+
+    def get_logo_url(self, obj):
+        request = self.context.get('request')
+        if obj.logo and hasattr(obj.logo, 'url'):
+            try:
+                if request:
+                    return request.build_absolute_uri(obj.logo.url)
+                return obj.logo.url
+            except Exception:
+                return None
+        return None
 
 
 from rest_framework import serializers
 from .models import Package, Church, ChurchSubscription, Bill
 
 class PackageSerializer(serializers.ModelSerializer):
-    """Admin Package Serializer"""
-    is_in_use = serializers.BooleanField(read_only=True)
-    church_count = serializers.IntegerField(read_only=True)
-    can_delete = serializers.BooleanField(read_only=True)
-    can_edit = serializers.BooleanField(read_only=True)
+    is_in_use = serializers.SerializerMethodField()
+    church_count = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
+    can_delete = serializers.SerializerMethodField()
     
     class Meta:
         model = Package
         fields = [
-            "id",
-            "code",
-            "name",
-            "member_limit",
-            "rate_per_member_monthly",
-            "rate_per_member_yearly",
-            "is_active",
-            "is_in_use",
-            "church_count",
-            "can_delete",
-            "can_edit",
-            "created_at",
-            "updated_at",
+            "id", "code", "name", "member_limit",
+            "rate_per_member_monthly", "rate_per_member_yearly",
+            "is_active", "is_in_use", "church_count",
+            "can_edit", "can_delete", "created_at", "updated_at",
         ]
         read_only_fields = ['code', 'created_at', 'updated_at']
+    
+    def get_is_in_use(self, obj):
+        return obj.is_in_use
+    
+    def get_church_count(self, obj):
+        return obj.church_count
+    
+    def get_can_edit(self, obj):
+        return obj.can_edit_or_delete()
+    
+    def get_can_delete(self, obj):
+        return obj.can_edit_or_delete()
+    
+    def validate_member_limit(self, value):
+        """Validate member_limit is required and unique"""
+        if value is None:
+            raise serializers.ValidationError("Member limit is required")
+        if value < 0:
+            raise serializers.ValidationError("Member limit cannot be negative")
+        
+        # Check for uniqueness
+        instance = getattr(self, 'instance', None)
+        if instance:
+            # For update operations - exclude current instance
+            if Package.objects.exclude(pk=instance.pk).filter(member_limit=value).exists():
+                raise serializers.ValidationError(
+                    f"Member limit {value} is already in use by another package. Please use a different limit."
+                )
+        else:
+            # For create operations
+            if Package.objects.filter(member_limit=value).exists():
+                raise serializers.ValidationError(
+                    f"Member limit {value} is already in use. Please use a different limit."
+                )
+        
+        return value
 
 class SubscribeSerializer(serializers.Serializer):
     package_id = serializers.IntegerField()
@@ -308,98 +481,98 @@ from registry.models import Priest
 
 
 class PriestSerializer(serializers.ModelSerializer):
-
+ 
     # ========================================================
     # DESIGNATION
     # ========================================================
-
+ 
     designation_label = serializers.CharField(
         source="get_designation_display",
         read_only=True
     )
-
+ 
     # ========================================================
     # IMAGE URL
     # ========================================================
-
+ 
     image_url = serializers.SerializerMethodField(
         read_only=True
     )
-
+ 
     # ========================================================
     # STATUS
     # ========================================================
-
+ 
     status = serializers.SerializerMethodField(
         read_only=True
     )
-
+ 
     class Meta:
         model = Priest
-
+ 
         fields = [
             # ==================================================
             # ID / CHURCH
             # ==================================================
-
+ 
             "id",
             "church",
-
+ 
             # ==================================================
             # IMAGE
             # ==================================================
-
+ 
             "image",
             "image_url",
-
+ 
             # ==================================================
             # BASIC INFORMATION
             # ==================================================
-
+ 
             "name",
             "family_name",
             "designation",
             "designation_label",
             "phone_number",
-
+ 
             # ==================================================
             # SERVICE INFORMATION
             # ==================================================
-
+ 
             "date_from",
             "date_to",
-
+ 
             # ==================================================
             # ADDRESS
             # ==================================================
-
+ 
             "address_line1",
             "address_line2",
             "city",
             "state",
             "country",
             "postal_code",
-
+ 
             # ==================================================
             # ACTIVE
             # ==================================================
-
+ 
             "is_active",
-
+ 
             # ==================================================
             # CALCULATED
             # ==================================================
-
+ 
             "status",
-
+ 
             # ==================================================
             # RECORD INFORMATION
             # ==================================================
-
+ 
             "created_at",
             "updated_at",
         ]
-
+ 
         read_only_fields = [
             "id",
             "church",
@@ -409,98 +582,98 @@ class PriestSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-
+ 
     # ========================================================
     # IMAGE URL
     # ========================================================
-
+ 
     def get_image_url(self, obj):
-
+ 
         request = self.context.get("request")
-
+ 
         if not obj.image:
             return None
-
+ 
         try:
             url = obj.image.url
-
+ 
             if request:
                 return request.build_absolute_uri(url)
-
+ 
             return url
-
+ 
         except Exception:
             return None
-
+ 
     # ========================================================
     # STATUS
     # ========================================================
-
+ 
     def get_status(self, obj):
-
+ 
         today = date_cls.today()
-
+ 
         # ----------------------------------------------------
         # Manually inactive
         # ----------------------------------------------------
-
+ 
         if not obj.is_active:
             return "PREVIOUS"
-
+ 
         # ----------------------------------------------------
         # Service hasn't started
         # ----------------------------------------------------
-
+ 
         if obj.date_from and obj.date_from > today:
             return "UPCOMING"
-
+ 
         # ----------------------------------------------------
         # Currently serving
         # ----------------------------------------------------
-
+ 
         if obj.date_from and obj.date_from <= today:
-
+ 
             # Ongoing
             if obj.date_to is None:
                 return "CURRENT"
-
+ 
             # End date has not passed
             if obj.date_to >= today:
                 return "CURRENT"
-
+ 
         # ----------------------------------------------------
         # Previous
         # ----------------------------------------------------
-
+ 
         return "PREVIOUS"
-
+ 
     # ========================================================
     # VALIDATION
     # ========================================================
-
+ 
     def validate(self, data):
-
+ 
         request = self.context.get("request")
-
+ 
         if not request or not request.user.is_authenticated:
             return data
-
+ 
         church = getattr(
             request.user,
             "church",
             None
         )
-
+ 
         if not church:
             raise serializers.ValidationError({
                 "detail":
                     "No church is associated with this account."
             })
-
+ 
         # ====================================================
         # VALUES
         # ====================================================
-
+ 
         designation = data.get(
             "designation",
             getattr(
@@ -509,7 +682,7 @@ class PriestSerializer(serializers.ModelSerializer):
                 "MAIN"
             )
         )
-
+ 
         date_from = data.get(
             "date_from",
             getattr(
@@ -518,7 +691,7 @@ class PriestSerializer(serializers.ModelSerializer):
                 None
             )
         )
-
+ 
         date_to = data.get(
             "date_to",
             getattr(
@@ -527,7 +700,7 @@ class PriestSerializer(serializers.ModelSerializer):
                 None
             )
         )
-
+ 
         is_active = data.get(
             "is_active",
             getattr(
@@ -536,58 +709,58 @@ class PriestSerializer(serializers.ModelSerializer):
                 True
             )
         )
-
+ 
         today = date_cls.today()
-
+ 
         # ====================================================
         # DATE FROM REQUIRED
         # ====================================================
-
+ 
         if not date_from:
-
+ 
             raise serializers.ValidationError({
                 "date_from":
                     "Serving-from date is required."
             })
-
+ 
         # ====================================================
         # DATE VALIDATION
         # ====================================================
-
+ 
         if date_to and date_from:
-
+ 
             if date_to < date_from:
-
+ 
                 raise serializers.ValidationError({
                     "date_to":
                         "Serving-to date cannot be earlier "
                         "than serving-from date."
                 })
-
+ 
         # ====================================================
         # CURRENTLY SERVING
         # ====================================================
-
+ 
         if is_active and date_to:
-
+ 
             raise serializers.ValidationError({
                 "date_to":
                     "A currently serving vicar cannot have "
                     "a Serving To date."
             })
-
+ 
         # ====================================================
         # PREVIOUS VICAR
         # ====================================================
-
+ 
         if not is_active and not date_to:
-
+ 
             raise serializers.ValidationError({
                 "date_to":
                     "Serving-to date is required for a "
                     "previous vicar."
             })
-
+ 
         # ====================================================
         # ASSISTANT VICAR
         #
@@ -595,14 +768,14 @@ class PriestSerializer(serializers.ModelSerializer):
         #
         # Assistants CAN overlap.
         # ====================================================
-
+ 
         if designation == "ASSISTANT" and is_active:
-
+ 
             assistant_count = Priest.objects.filter(
                 church=church,
                 designation="ASSISTANT",
                 is_active=True,
-
+ 
                 # Already started serving
                 date_from__isnull=False,
                 date_from__lte=today
@@ -611,22 +784,22 @@ class PriestSerializer(serializers.ModelSerializer):
                 Q(date_to__isnull=True) |
                 Q(date_to__gte=today)
             )
-
+ 
             # Don't count the same record when editing
             if self.instance:
-
+ 
                 assistant_count = assistant_count.exclude(
                     pk=self.instance.pk
                 )
-
+ 
             if assistant_count.count() >= 3:
-
+ 
                 raise serializers.ValidationError({
                     "designation":
                         "Maximum of 3 active Assistant "
                         "Vicars are allowed."
                 })
-
+ 
         # ====================================================
         # VICAR
         #
@@ -634,67 +807,89 @@ class PriestSerializer(serializers.ModelSerializer):
         #
         # Assistant Vicars are completely ignored here.
         # ====================================================
-
+ 
         if designation == "MAIN":
-
-            existing_vicars = Priest.objects.filter(
-                church=church,
-                designation="MAIN"
+ 
+            # ================================================
+            # CHECK IF THIS VICAR WILL BE IN ACTIVE PERIOD
+            # ================================================
+ 
+            is_serving_period = (
+                date_from and
+                date_from <= today and
+                (date_to is None or date_to >= today)
             )
-
-            # Don't compare with itself during edit
-            if self.instance:
-
-                existing_vicars = existing_vicars.exclude(
-                    pk=self.instance.pk
+ 
+            # Only validate overlap if this vicar is/will be actively serving
+            if is_serving_period:
+ 
+                existing_vicars = Priest.objects.filter(
+                    church=church,
+                    designation="MAIN"
                 )
-
-            for existing in existing_vicars:
-
-                existing_start = existing.date_from
-                existing_end = existing.date_to
-
-                if not existing_start:
-                    continue
-
-                # ============================================
-                # EXISTING VICAR IS ONGOING
-                # ============================================
-
-                if existing_end is None:
-
-                    raise serializers.ValidationError({
-                        "date_from": (
-                            f"{existing.name} is already "
-                            "serving as Vicar until ongoing. "
-                            "The service period cannot overlap."
-                        )
-                    })
-
-                # ============================================
-                # EXISTING VICAR HAS AN END DATE
-                # ============================================
-
-                # New Vicar starts on or before old Vicar ends
-                if date_from <= existing_end:
-
-                    until = existing_end.strftime(
-                        "%d %b %Y"
+ 
+                # Don't compare with itself during edit
+                if self.instance:
+ 
+                    existing_vicars = existing_vicars.exclude(
+                        pk=self.instance.pk
                     )
-
-                    raise serializers.ValidationError({
-                        "date_from": (
-                            f"{existing.name} is already "
-                            f"serving as Vicar until {until}. "
-                            "The service period cannot overlap."
+ 
+                for existing in existing_vicars:
+ 
+                    existing_start = existing.date_from
+                    existing_end = existing.date_to
+ 
+                    if not existing_start:
+                        continue
+ 
+                    # ========================================
+                    # SKIP PAST VICARS
+                    # ========================================
+ 
+                    # If existing vicar already finished, no conflict
+                    if existing_end and existing_end < today:
+                        continue
+ 
+                    # ========================================
+                    # EXISTING VICAR IS ONGOING
+                    # ========================================
+ 
+                    if existing_end is None:
+ 
+                        raise serializers.ValidationError({
+                            "date_from": (
+                                f"{existing.name} is already "
+                                "serving as Vicar until ongoing. "
+                                "The service period cannot overlap."
+                            )
+                        })
+ 
+                    # ========================================
+                    # EXISTING VICAR HAS AN END DATE
+                    # ========================================
+ 
+                    # New Vicar starts on or before old Vicar ends
+                    if date_from < existing_end:
+ 
+                        until = existing_end.strftime(
+                            "%d %b %Y"
                         )
-                    })
-
+ 
+                        raise serializers.ValidationError({
+                            "date_from": (
+                                f"{existing.name} is already "
+                                f"serving as Vicar until {until}. "
+                                "The service period cannot overlap."
+                            )
+                        })
+ 
         # ====================================================
         # DONE
         # ====================================================
-
+ 
         return data
+    
 from datetime import date
 
 from django.db import DataError, IntegrityError

@@ -323,7 +323,6 @@ class ChurchListAPIView(APIView):
  
             data = []
             for church in churches:
-                # 🔥 related_name is 'subscription' (see FIX 3)
                 subscription = getattr(church, 'subscription', None)
                 package_name = (
                     subscription.package.name
@@ -335,8 +334,16 @@ class ChurchListAPIView(APIView):
                 )
                 subscription_status = subscription.payment_status if subscription else None
                 renewal_date = subscription.end_date if subscription else None
- 
-                # ---- derived display status -------------------------------
+
+                # Get logo URL
+                logo_url = None
+                if church.logo and hasattr(church.logo, 'url'):
+                    try:
+                        logo_url = request.build_absolute_uri(church.logo.url)
+                    except Exception:
+                        logo_url = None
+
+                # derived display status
                 if not church.is_active:
                     if (
                         subscription
@@ -356,8 +363,7 @@ class ChurchListAPIView(APIView):
                         church_status = 'active'
                 else:
                     church_status = 'active'
-                # -----------------------------------------------------------
- 
+
                 full_address = church.get_full_address() if hasattr(church, 'get_full_address') else None
  
                 data.append({
@@ -382,14 +388,14 @@ class ChurchListAPIView(APIView):
                     'is_active': church.is_active,
                     'created_at': church.created_at,
                     'full_address': full_address,
- 
-                    # 🔥 data the Churches table / stat cards need
-                    'package': package_name,          # kept for backward compatibility
-                    'package_name': package_name,     # used by the table
-                    'package_id': package_id,         # used by the Package filter
+                    'logo': logo_url,  # Add logo URL
+                    'logo_url': logo_url,  # Add logo URL
+                    'package': package_name,
+                    'package_name': package_name,
+                    'package_id': package_id,
                     'subscription_status': subscription_status,
-                    'renewal_date': renewal_date,     # subscription end date
-                    'status': church_status,          # active / trial / expiring / expired / suspended
+                    'renewal_date': renewal_date,
+                    'status': church_status,
                 })
  
             return Response({
@@ -404,7 +410,6 @@ class ChurchListAPIView(APIView):
                 {"error": "Failed to fetch churches"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
 
 class ChurchCreateAPIView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
@@ -570,26 +575,111 @@ class ChurchCreateAPIView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
+# adminpanel/views_api.py - Update ChurchDetailAPIView
+
 class ChurchDetailAPIView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
-
-    # 🔥 FIX 7: fields that must only be overwritten when the client actually
-    # sends them. Previously PUT used request.data.get(field, '') for all of
-    # these, so any form omitting a key silently blanked the stored value.
-    TEXT_FIELDS = [
-        'address', 'address_line1', 'city', 'state', 'postal_code',
-        'phone_number', 'alternate_phone', 'registration_number',
-        'currency', 'website',
-    ]
-
+    
     def get(self, request, pk):
         try:
             church = Church.objects.select_related('diocese').get(pk=pk, is_deleted=False)
-
-            # 🔥 FIX 3: related_name is 'subscription', not 'churchsubscription'
+            
             subscription = getattr(church, 'subscription', None)
             full_address = church.get_full_address() if hasattr(church, 'get_full_address') else None
-
+            
+            # Get logo URL
+            logo_url = None
+            if church.logo and hasattr(church.logo, 'url'):
+                try:
+                    logo_url = request.build_absolute_uri(church.logo.url)
+                except Exception:
+                    logo_url = None
+            
+            # Build subscription data
+            subscription_data = None
+            if subscription:
+                today = timezone.now().date()
+                days_remaining = None
+                progress_pct = 0
+                annual_value = None
+                
+                if subscription.end_date:
+                    days_remaining = (subscription.end_date - today).days
+                    if days_remaining < 0:
+                        days_remaining = 0
+                    
+                    total_days = (subscription.end_date - subscription.start_date).days if subscription.start_date else 1
+                    used_days = (today - subscription.start_date).days if subscription.start_date else 0
+                    if total_days > 0:
+                        progress_pct = round((used_days / total_days) * 100, 2)
+                        if progress_pct > 100:
+                            progress_pct = 100
+                        if progress_pct < 0:
+                            progress_pct = 0
+                
+                try:
+                    annual_value = float(subscription.get_total_price()) if subscription.get_total_price() else None
+                except:
+                    annual_value = None
+                
+                subscription_data = {
+                    'id': subscription.id,
+                    'package_name': subscription.package.name if subscription.package else None,
+                    'locked_package_name': subscription.locked_package_name,
+                    'package_id': subscription.package.id if subscription.package else None,
+                    'billing_cycle': subscription.billing_cycle,
+                    'payment_status': subscription.payment_status,
+                    'is_active': subscription.is_active,
+                    'start_date': subscription.start_date,
+                    'end_date': subscription.end_date,
+                    'started_on': subscription.start_date,
+                    'renews_on': subscription.end_date,
+                    'next_billing_date': subscription.end_date,
+                    'created_at': subscription.created_at,
+                    'days_remaining': days_remaining,
+                    'progress_pct': progress_pct,
+                    'duration_months': subscription.duration_months,
+                    'custom_capacity': subscription.custom_capacity,
+                    'credit_balance': float(subscription.credit_balance) if subscription.credit_balance else 0,
+                    'annual_value': annual_value,
+                }
+            
+            # Get administrators
+            administrators = []
+            users = User.objects.filter(church=church, role='CHURCH', is_active=True)
+            for user in users:
+                administrators.append({
+                    'id': user.id,
+                    'name': user.get_full_name() or user.email,
+                    'email': user.email,
+                    'role': 'Administrator',
+                    'status': 'Active' if user.is_active else 'Inactive'
+                })
+            
+            # Get member count
+            member_count = church.members.filter(is_active=True, expired=False).count()
+            admin_count = User.objects.filter(church=church, role='CHURCH', is_active=True).count()
+            document_count = 0  # Placeholder
+            
+            # Get current package name
+            current_package = subscription.package.name if subscription and subscription.package else None
+            
+            # Get bills for this church
+            bills = Bill.objects.filter(church=church).order_by('-created_at')
+            bills_data = []
+            for bill in bills:
+                bills_data.append({
+                    'id': bill.id,
+                    'bill_number': bill.bill_number,
+                    'bill_type': bill.bill_type,
+                    'amount': float(bill.amount),
+                    'total_amount': float(bill.total_amount),
+                    'status': bill.status,
+                    'payment_method': bill.payment_method,
+                    'created_at': bill.created_at,
+                    'paid_at': bill.paid_at,
+                })
+            
             return Response({
                 "status": "success",
                 "data": {
@@ -606,6 +696,7 @@ class ChurchDetailAPIView(APIView):
                         'id': church.diocese.id,
                         'name': church.diocese.name
                     } if church.diocese else None,
+                    'diocese_name': church.diocese.name if church.diocese else None,
                     'established_year': church.established_year,
                     'registration_number': church.registration_number,
                     'currency': church.currency,
@@ -614,21 +705,25 @@ class ChurchDetailAPIView(APIView):
                     'alternate_phone': church.alternate_phone,
                     'website': church.website,
                     'is_active': church.is_active,
+                    'is_verified': church.is_active,
                     'created_at': church.created_at,
+                    'updated_at': church.updated_at,
                     'full_address': full_address,
-                    'subscription': {
-                        'id': subscription.id,
-                        'package': subscription.package.name if subscription.package else None,
-                        'package_id': subscription.package.id if subscription.package else None,
-                        'billing_cycle': subscription.billing_cycle,
-                        'payment_status': subscription.payment_status,
-                        'is_active': subscription.is_active,
-                        'start_date': subscription.start_date,
-                        'end_date': subscription.end_date,
-                    } if subscription else None
+                    'logo': logo_url,
+                    'logo_url': logo_url,
+                    'current_package': current_package,
+                    'member_count': member_count,
+                    'admin_count': admin_count,
+                    'document_count': document_count,
+                    'administrators': administrators,
+                    'subscription': subscription_data,
+                    'bills': bills_data,
+                    'stats': {
+                        'members_count': member_count,
+                    }
                 }
             }, status=status.HTTP_200_OK)
-
+            
         except Church.DoesNotExist:
             return Response(
                 {"error": "Church not found"},
@@ -637,190 +732,25 @@ class ChurchDetailAPIView(APIView):
         except Exception as e:
             logger.error(f"Error fetching church {pk}: {str(e)}", exc_info=True)
             return Response(
-                {"error": "Failed to fetch church"},
+                {"error": f"Failed to fetch church: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
-    def put(self, request, pk):
-        """Full update (PUT)"""
-        try:
-            church = Church.objects.get(pk=pk, is_deleted=False)
-
-            name = request.data.get('name', '').strip()
-            email = request.data.get('email', '').strip()
-
-            if not name:
-                return Response({
-                    "name": "Church name is required"
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-            if not email:
-                return Response({
-                    "email": "Email is required"
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-            if Church.objects.filter(email=email, is_deleted=False).exclude(pk=pk).exists():
-                return Response({
-                    "email": f"A church with email '{email}' already exists"
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-            church.name = name
-            church.email = email
-
-            # 🔥 FIX 7: only overwrite fields the client actually sent
-            for field in self.TEXT_FIELDS:
-                if field in request.data:
-                    value = request.data.get(field)
-                    setattr(church, field, (value or '').strip())
-
-            if 'country' in request.data:
-                church.country = request.data.get('country', '')
-
-            if 'established_year' in request.data:
-                church.established_year = request.data.get('established_year')
-
-            if 'diocese' in request.data:
-                diocese_id = request.data.get('diocese')
-                if diocese_id:
-                    try:
-                        church.diocese = Diocese.objects.get(id=diocese_id)
-                    except Diocese.DoesNotExist:
-                        return Response({
-                            "diocese": "Selected diocese does not exist"
-                        }, status=status.HTTP_400_BAD_REQUEST)
-                else:
-                    church.diocese = None
-
-            if 'is_active' in request.data:
-                church.is_active = request.data['is_active']
-
-            church.save()
-
-            return Response({
-                "status": "success",
-                "message": "Church updated successfully",
-                "data": self._church_payload(church)
-            }, status=status.HTTP_200_OK)
-
-        except Church.DoesNotExist:
-            return Response(
-                {"error": "Church not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        except Exception as e:
-            logger.error(f"Error updating church {pk}: {str(e)}", exc_info=True)
-            return Response(
-                {"error": f"Failed to update church: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    def patch(self, request, pk):
-        """Partial update (PATCH) - only updates provided fields"""
-        try:
-            church = Church.objects.get(pk=pk, is_deleted=False)
-
-            if 'name' in request.data:
-                name = request.data.get('name', '').strip()
-                if not name:
-                    return Response({
-                        "name": "Church name cannot be empty"
-                    }, status=status.HTTP_400_BAD_REQUEST)
-                church.name = name
-
-            if 'email' in request.data:
-                email = request.data.get('email', '').strip()
-                if not email:
-                    return Response({
-                        "email": "Email cannot be empty"
-                    }, status=status.HTTP_400_BAD_REQUEST)
-
-                if Church.objects.filter(email=email, is_deleted=False).exclude(pk=pk).exists():
-                    return Response({
-                        "email": f"A church with email '{email}' already exists"
-                    }, status=status.HTTP_400_BAD_REQUEST)
-                church.email = email
-
-            for field in self.TEXT_FIELDS:
-                if field in request.data:
-                    value = request.data.get(field)
-                    setattr(church, field, (value or '').strip())
-
-            if 'country' in request.data:
-                church.country = request.data.get('country', '')
-
-            if 'established_year' in request.data:
-                church.established_year = request.data.get('established_year')
-
-            if 'diocese' in request.data:
-                diocese_id = request.data.get('diocese')
-                if diocese_id:
-                    try:
-                        church.diocese = Diocese.objects.get(id=diocese_id)
-                    except Diocese.DoesNotExist:
-                        return Response({
-                            "diocese": "Selected diocese does not exist"
-                        }, status=status.HTTP_400_BAD_REQUEST)
-                else:
-                    church.diocese = None
-
-            if 'is_active' in request.data:
-                church.is_active = request.data['is_active']
-
-            church.save()
-
-            return Response({
-                "status": "success",
-                "message": "Church updated successfully",
-                "data": self._church_payload(church)
-            }, status=status.HTTP_200_OK)
-
-        except Church.DoesNotExist:
-            return Response(
-                {"error": "Church not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        except Exception as e:
-            logger.error(f"Error updating church {pk}: {str(e)}", exc_info=True)
-            return Response(
-                {"error": f"Failed to update church: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    def delete(self, request, pk):
-        """Soft delete church"""
-        try:
-            church = Church.objects.get(pk=pk, is_deleted=False)
-
-            # 🔥 Deactivate the linked login too, otherwise the account stays
-            # usable after the church is "deleted".
-            with transaction.atomic():
-                church.is_deleted = True
-                church.is_active = False
-                church.deleted_at = timezone.now()
-                church.save()
-
-                User.objects.filter(church=church).update(is_active=False)
-
-            return Response({
-                "status": "success",
-                "message": f"Church '{church.name}' deleted successfully"
-            }, status=status.HTTP_200_OK)
-
-        except Church.DoesNotExist:
-            return Response(
-                {"error": "Church not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        except Exception as e:
-            logger.error(f"Error deleting church {pk}: {str(e)}", exc_info=True)
-            return Response(
-                {"error": f"Failed to delete church: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    def _church_payload(self, church):
-        """Shared response body for PUT/PATCH"""
+ 
+    def _church_payload(self, church, request=None):
+        """Shared response body for PUT/PATCH with logo URL"""
         full_address = church.get_full_address() if hasattr(church, 'get_full_address') else None
+        
+        # Get logo URL
+        logo_url = None
+        if church.logo and hasattr(church.logo, 'url'):
+            try:
+                if request:
+                    logo_url = request.build_absolute_uri(church.logo.url)
+                else:
+                    logo_url = church.logo.url
+            except Exception:
+                logo_url = None
+        
         return {
             'id': church.id,
             'name': church.name,
@@ -844,7 +774,224 @@ class ChurchDetailAPIView(APIView):
             'website': church.website,
             'is_active': church.is_active,
             'full_address': full_address,
+            'logo': logo_url,
+            'logo_url': logo_url,
         }
+ 
+    def put(self, request, pk):
+        """Full update (PUT)"""
+        try:
+            church = Church.objects.get(pk=pk, is_deleted=False)
+ 
+            name = request.data.get('name', '').strip()
+            email = request.data.get('email', '').strip()
+ 
+            if not name:
+                return Response({
+                    "name": "Church name is required"
+                }, status=status.HTTP_400_BAD_REQUEST)
+ 
+            if not email:
+                return Response({
+                    "email": "Email is required"
+                }, status=status.HTTP_400_BAD_REQUEST)
+ 
+            if Church.objects.filter(email=email, is_deleted=False).exclude(pk=pk).exists():
+                return Response({
+                    "email": f"A church with email '{email}' already exists"
+                }, status=status.HTTP_400_BAD_REQUEST)
+ 
+            church.name = name
+            church.email = email
+ 
+            # Handle text fields
+            for field in self.TEXT_FIELDS:
+                if field in request.data:
+                    value = request.data.get(field)
+                    if value is not None:
+                        setattr(church, field, str(value).strip())
+ 
+            if 'country' in request.data:
+                church.country = request.data.get('country', '')
+ 
+            if 'established_year' in request.data:
+                try:
+                    church.established_year = int(request.data.get('established_year')) if request.data.get('established_year') else None
+                except (ValueError, TypeError):
+                    church.established_year = None
+ 
+            if 'diocese' in request.data:
+                diocese_id = request.data.get('diocese')
+                if diocese_id:
+                    try:
+                        church.diocese = Diocese.objects.get(id=diocese_id)
+                    except Diocese.DoesNotExist:
+                        return Response({
+                            "diocese": "Selected diocese does not exist"
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    church.diocese = None
+ 
+            if 'is_active' in request.data:
+                church.is_active = request.data['is_active'] in [True, 'true', 'True', 1, '1']
+ 
+            # Handle logo if provided
+            if request.FILES and 'logo' in request.FILES:
+                church.logo = request.FILES['logo']
+            elif request.data.get('logo') == 'null' or request.data.get('logo') == '':
+                church.logo = None
+ 
+            church.save()
+ 
+            return Response({
+                "status": "success",
+                "message": "Church updated successfully",
+                "data": self._church_payload(church, request)
+            }, status=status.HTTP_200_OK)
+ 
+        except Church.DoesNotExist:
+            return Response(
+                {"error": "Church not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Error updating church {pk}: {str(e)}", exc_info=True)
+            return Response(
+                {"error": f"Failed to update church: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+ 
+    def patch(self, request, pk):
+        """Partial update (PATCH) - only updates provided fields"""
+        try:
+            church = Church.objects.get(pk=pk, is_deleted=False)
+ 
+        # Handle name
+            if 'name' in request.data:
+                name = request.data.get('name', '').strip()
+                if not name:
+                    return Response({
+                        "name": "Church name cannot be empty"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                church.name = name
+ 
+        # Handle email
+            if 'email' in request.data:
+                email = request.data.get('email', '').strip()
+                if not email:
+                    return Response({
+                        "email": "Email cannot be empty"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+ 
+                if Church.objects.filter(email=email, is_deleted=False).exclude(pk=pk).exists():
+                    return Response({
+                        "email": f"A church with email '{email}' already exists"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                church.email = email
+ 
+        # Handle text fields
+            for field in self.TEXT_FIELDS:
+                if field in request.data:
+                    value = request.data.get(field)
+                    if value is not None and value != '':
+                        setattr(church, field, str(value).strip())
+                    elif value == '':
+                        setattr(church, field, None)
+ 
+        # Handle country - explicitly handle CountryField
+            if 'country' in request.data:
+                country_value = request.data.get('country', '').strip()
+                if country_value and country_value != 'null':
+                    church.country = country_value
+                else:
+                    church.country = None
+ 
+        # Handle established_year
+            if 'established_year' in request.data:
+                try:
+                    year_value = request.data.get('established_year')
+                    church.established_year = int(year_value) if year_value else None
+                except (ValueError, TypeError):
+                    church.established_year = None
+ 
+        # Handle diocese
+            if 'diocese' in request.data:
+                diocese_id = request.data.get('diocese')
+                if diocese_id and str(diocese_id).strip():
+                    try:
+                        church.diocese = Diocese.objects.get(id=diocese_id)
+                    except Diocese.DoesNotExist:
+                        return Response({
+                            "diocese": "Selected diocese does not exist"
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    church.diocese = None
+ 
+        # Handle is_active
+            if 'is_active' in request.data:
+                is_active_value = request.data.get('is_active')
+                church.is_active = is_active_value in [True, 'true', 'True', 1, '1']
+ 
+        # Handle logo if provided in FILES
+            if request.FILES and 'logo' in request.FILES:
+                church.logo = request.FILES['logo']
+        # Handle logo removal via form data
+            elif 'logo' in request.data:
+                logo_value = request.data.get('logo', '').strip()
+                if logo_value in ['null', '', 'undefined', 'None']:
+                    if church.logo:
+                        church.logo.delete()
+                    church.logo = None
+ 
+            church.save()
+ 
+            return Response({
+                "status": "success",
+                "message": "Church updated successfully",
+                "data": self._church_payload(church, request)
+            }, status=status.HTTP_200_OK)
+ 
+        except Church.DoesNotExist:
+            return Response(
+                {"error": "Church not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Error updating church {pk}: {str(e)}", exc_info=True)
+            return Response(
+                {"error": f"Failed to update church: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+ 
+    def delete(self, request, pk):
+        """Soft delete church"""
+        try:
+            church = Church.objects.get(pk=pk, is_deleted=False)
+ 
+            with transaction.atomic():
+                church.is_deleted = True
+                church.is_active = False
+                church.deleted_at = timezone.now()
+                church.save()
+ 
+                User.objects.filter(church=church).update(is_active=False)
+ 
+            return Response({
+                "status": "success",
+                "message": f"Church '{church.name}' deleted successfully"
+            }, status=status.HTTP_200_OK)
+ 
+        except Church.DoesNotExist:
+            return Response(
+                {"error": "Church not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Error deleting church {pk}: {str(e)}", exc_info=True)
+            return Response(
+                {"error": f"Failed to delete church: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class ChurchActivateAPIView(APIView):
@@ -949,6 +1096,18 @@ class ChurchSuspendAPIView(APIView):
 
 
 # ============ PACKAGE VIEWS ============
+import re
+import logging
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from django.contrib.auth.models import User
+
+
+
+logger = logging.getLogger(__name__)
+
 
 class PackageListAPIView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
@@ -1029,6 +1188,35 @@ class PackageCreateAPIView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+            # Validate member_limit
+            member_limit = request.data.get('member_limit')
+            if member_limit is None or member_limit == '':
+                return Response(
+                    {"error": "Member limit is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            try:
+                member_limit = int(member_limit)
+                if member_limit < 0:
+                    return Response(
+                        {"error": "Member limit cannot be negative"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Check for duplicate member_limit
+                if Package.objects.filter(member_limit=member_limit).exists():
+                    return Response(
+                        {"error": f"Member limit {member_limit} is already in use. Please use a different limit."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                    
+            except (ValueError, TypeError):
+                return Response(
+                    {"error": "Member limit must be a valid number"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             rate_monthly = request.data.get('rate_per_member_monthly')
             rate_yearly = request.data.get('rate_per_member_yearly')
 
@@ -1049,7 +1237,7 @@ class PackageCreateAPIView(APIView):
             package = Package.objects.create(
                 code=code,
                 name=name,
-                member_limit=request.data.get('member_limit'),
+                member_limit=member_limit,
                 rate_per_member_monthly=rate_monthly,
                 rate_per_member_yearly=rate_yearly,
                 is_active=request.data.get('is_active', True),
@@ -1149,7 +1337,37 @@ class PackageDetailAPIView(APIView):
                 package.name = name
 
             if 'member_limit' in request.data:
-                package.member_limit = request.data['member_limit']
+                member_limit = request.data['member_limit']
+                
+                # Validate member_limit
+                if member_limit is None or member_limit == '':
+                    return Response(
+                        {"error": "Member limit cannot be empty"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                try:
+                    member_limit = int(member_limit)
+                    if member_limit < 0:
+                        return Response(
+                            {"error": "Member limit cannot be negative"},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    
+                    # Check for duplicate (excluding current package)
+                    if Package.objects.exclude(pk=pk).filter(member_limit=member_limit).exists():
+                        return Response(
+                            {"error": f"Member limit {member_limit} is already in use by another package. Please use a different limit."},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                        
+                except (ValueError, TypeError):
+                    return Response(
+                        {"error": "Member limit must be a valid number"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                package.member_limit = member_limit
 
             if 'rate_per_member_monthly' in request.data:
                 package.rate_per_member_monthly = request.data['rate_per_member_monthly']
@@ -1192,8 +1410,38 @@ class PackageDetailAPIView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+            member_limit = request.data.get('member_limit')
+            
+            # Validate member_limit
+            if member_limit is None or member_limit == '':
+                return Response(
+                    {"error": "Member limit is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            try:
+                member_limit = int(member_limit)
+                if member_limit < 0:
+                    return Response(
+                        {"error": "Member limit cannot be negative"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Check for duplicate (excluding current package)
+                if Package.objects.exclude(pk=pk).filter(member_limit=member_limit).exists():
+                    return Response(
+                        {"error": f"Member limit {member_limit} is already in use by another package. Please use a different limit."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                    
+            except (ValueError, TypeError):
+                return Response(
+                    {"error": "Member limit must be a valid number"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             package.name = name
-            package.member_limit = request.data.get('member_limit')
+            package.member_limit = member_limit
             package.rate_per_member_monthly = request.data.get('rate_per_member_monthly', 0)
             package.rate_per_member_yearly = request.data.get('rate_per_member_yearly', 0)
             package.is_active = request.data.get('is_active', True)
@@ -1271,12 +1519,6 @@ class PackageDetailAPIView(APIView):
         }
 
 
-# 🔥 FIX 8: PackageUpdateAPIView and PackageDeleteAPIView were byte-for-byte
-# duplicates of PackageDetailAPIView's put/patch/delete. They are removed here.
-# Check urls.py — if any route points at them, repoint it at
-# PackageDetailAPIView instead.
-
-
 class PackageChurchesAPIView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
 
@@ -1316,7 +1558,6 @@ class PackageChurchesAPIView(APIView):
                 {"error": "Failed to fetch churches"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
 
 # ============ SUBSCRIPTION VIEWS ============
 
@@ -1410,50 +1651,36 @@ class SubscriptionCreateAPIView(APIView):
                     "error": "church_id and package_id are required"
                 }, status=status.HTTP_400_BAD_REQUEST)
 
+            # ✅ Check if church already has a subscription
             church = Church.objects.get(id=church_id, is_deleted=False)
+            
+            existing_sub = ChurchSubscription.objects.filter(
+                church=church,
+                is_active=True  # Only check active subscriptions
+            ).exists()
+            
+            if existing_sub:
+                return Response({
+                    "error": "This church already has an active subscription"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
             package = Package.objects.get(id=package_id, is_active=True)
 
-            existing_sub = ChurchSubscription.objects.filter(church=church).first()
+            subscription = ChurchSubscription.objects.create(
+                church=church,
+                package=package,
+                billing_cycle=billing_cycle,
+                duration_months=duration_months,
+                start_date=timezone.now().date(),
+                payment_status='UNPAID',
+                is_active=False,
+            )
 
-            if existing_sub:
-                subscription = existing_sub
-                subscription.package = package
-                subscription.billing_cycle = billing_cycle
-                subscription.duration_months = duration_months
-                subscription.start_date = timezone.now().date()
-                subscription.payment_status = 'UNPAID'
-                subscription.is_active = False
-                # 🔥 Switching package or billing cycle is a NEW purchase, so
-                # the old pricing snapshot must be discarded. Clearing these
-                # makes ChurchSubscription.save() re-capture the current
-                # package's rate, capacity and name.
-                subscription.locked_rate = None
-                subscription.locked_capacity = None
-                subscription.save()
-                message = "Subscription updated successfully"
-                created = False
-            else:
-                subscription = ChurchSubscription.objects.create(
-                    church=church,
-                    package=package,
-                    billing_cycle=billing_cycle,
-                    duration_months=duration_months,
-                    start_date=timezone.now().date(),
-                    payment_status='UNPAID',
-                    is_active=False,
-                )
-                message = "Subscription created successfully"
-                created = True
-
-            # 🔥 Single source of truth: model method.
-            # duration_months is NEVER involved here — it only drives end_date
-            # inside ChurchSubscription.save(), already applied above.
-            # get_total_price() now reads the locked snapshot, not the live package.
             amount = float(subscription.get_total_price())
 
             return Response({
                 "status": "success",
-                "message": message,
+                "message": "Subscription created successfully",
                 "data": {
                     "subscription_id": subscription.id,
                     "church_name": church.name,
@@ -1467,7 +1694,7 @@ class SubscriptionCreateAPIView(APIView):
                     "payment_status": subscription.payment_status,
                     "start_date": subscription.start_date,
                     "end_date": subscription.end_date,
-                    "is_new": created,
+                    "is_new": True,
                 }
             }, status=status.HTTP_201_CREATED)
 
@@ -2258,8 +2485,9 @@ class TaxRateDetailAPIView(APIView):
 
 # ============ BILL (PAYMENT) VIEWS ============
 
+# adminpanel/views_api.py - Update BillListAPIView to support church filtering
+
 class BillListAPIView(APIView):
-    """List all bills (payments)"""
     permission_classes = [IsAuthenticated, IsAdminUser]
 
     def get(self, request):
@@ -2267,12 +2495,25 @@ class BillListAPIView(APIView):
             bills = Bill.objects.select_related(
                 'church', 'subscription__package'
             ).order_by('-created_at')
+            
+            # Add church filtering
+            church_id = request.query_params.get('church')
+            if church_id:
+                try:
+                    bills = bills.filter(church_id=church_id)
+                except ValueError:
+                    return Response(
+                        {"error": "Invalid church ID"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
             data = []
             for bill in bills:
                 package_name = None
                 if bill.subscription and bill.subscription.package:
                     package_name = bill.subscription.package.name
+                elif bill.breakdown and bill.breakdown.get('package_name'):
+                    package_name = bill.breakdown.get('package_name')
 
                 data.append({
                     'id': bill.id,
@@ -2301,7 +2542,7 @@ class BillListAPIView(APIView):
             return Response({
                 "status": "success",
                 "count": len(data),
-                "data": data
+                "data": data  # For admin panel, use 'data' key
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -2312,141 +2553,602 @@ class BillListAPIView(APIView):
             )
 
 
+from decimal import Decimal, InvalidOperation
+
+from django.utils import timezone
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+
+# Keep your existing imports for:
+# Church
+# ChurchSubscription
+# Bill
+# TaxType
+# TaxRate
+# IsAdminUser
+# logger
+
+
 class BillCreateAPIView(APIView):
-    """Create a new bill (payment)"""
+    """
+    Create a new bill.
+
+    IMPORTANT:
+    - ChurchSubscription calculates the PRE-TAX subscription amount.
+    - Bill selects the tax.
+    - Bill.save() calculates tax_amount and total_amount.
+    """
+
     permission_classes = [IsAuthenticated, IsAdminUser]
 
     def post(self, request):
+
         try:
+            # ============================================================
+            # REQUEST DATA
+            # ============================================================
+
             church_id = request.data.get('church_id')
             subscription_id = request.data.get('subscription_id')
-            bill_type = request.data.get('bill_type', 'NEW')
-            billing_cycle = request.data.get('billing_cycle')
-            duration_months = request.data.get('duration_months')
-            amount = request.data.get('amount')
-            payment_method = request.data.get('payment_method', 'CASH')
-            transaction_id = request.data.get('transaction_id')
-            note = request.data.get('note')
-            tax_type_id = request.data.get('tax_type_id')
-            tax_rate_id = request.data.get('tax_rate_id')
+
+            bill_type = request.data.get(
+                'bill_type',
+                'NEW'
+            )
+
+            billing_cycle = request.data.get(
+                'billing_cycle'
+            )
+
+            duration_months = request.data.get(
+                'duration_months'
+            )
+
+            # Amount can be supplied by frontend for display,
+            # but we should NOT blindly trust it.
+            requested_amount = request.data.get(
+                'amount'
+            )
+
+            payment_method = request.data.get(
+                'payment_method',
+                'CASH'
+            )
+
+            transaction_id = request.data.get(
+                'transaction_id'
+            )
+
+            note = request.data.get(
+                'note'
+            )
+
+            tax_type_id = request.data.get(
+                'tax_type_id'
+            )
+
+            tax_rate_id = request.data.get(
+                'tax_rate_id'
+            )
+
+            # ============================================================
+            # BASIC VALIDATION
+            # ============================================================
 
             if not church_id:
-                return Response({
-                    "error": "church_id is required"
-                }, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {
+                        "error": "church_id is required"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
             if not subscription_id:
-                return Response({
-                    "error": "subscription_id is required"
-                }, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {
+                        "error": "subscription_id is required"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-            if not amount:
-                return Response({
-                    "error": "amount is required"
-                }, status=status.HTTP_400_BAD_REQUEST)
+            if bill_type not in [
+                'NEW',
+                'UPGRADE',
+                'EXTENSION',
+                'RENEW'
+            ]:
+                return Response(
+                    {
+                        "error": "Invalid bill_type"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # ============================================================
+            # GET CHURCH
+            # ============================================================
 
             try:
-                church = Church.objects.get(id=church_id, is_deleted=False)
+                church = Church.objects.get(
+                    id=church_id,
+                    is_deleted=False
+                )
+
             except Church.DoesNotExist:
-                return Response({
-                    "error": "Church not found"
-                }, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {
+                        "error": "Church not found"
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # ============================================================
+            # GET SUBSCRIPTION
+            # ============================================================
 
             try:
-                subscription = ChurchSubscription.objects.select_related(
-                    'package'
-                ).get(id=subscription_id)
-            except ChurchSubscription.DoesNotExist:
-                return Response({
-                    "error": "Subscription not found"
-                }, status=status.HTTP_404_NOT_FOUND)
+                subscription = (
+                    ChurchSubscription.objects
+                    .select_related('package')
+                    .get(id=subscription_id)
+                )
 
-            # 🔥 Guard against billing a subscription belonging to another church
+            except ChurchSubscription.DoesNotExist:
+                return Response(
+                    {
+                        "error": "Subscription not found"
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # ============================================================
+            # VERIFY SUBSCRIPTION BELONGS TO CHURCH
+            # ============================================================
+
             if subscription.church_id != church.id:
-                return Response({
-                    "error": "Subscription does not belong to the selected church"
-                }, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {
+                        "error": (
+                            "Subscription does not belong "
+                            "to the selected church"
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # ============================================================
+            # BILLING DETAILS
+            # ============================================================
+
+            # If billing_cycle was not supplied, use the subscription's
+            # billing cycle.
+            if not billing_cycle:
+                billing_cycle = subscription.billing_cycle
+
+            if billing_cycle not in [
+                'MONTHLY',
+                'YEARLY'
+            ]:
+                return Response(
+                    {
+                        "error": "Invalid billing_cycle"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # If duration was not supplied, use subscription duration.
+            if duration_months is None:
+                duration_months = subscription.duration_months
+
+            # ============================================================
+            # CALCULATE PRE-TAX AMOUNT
+            # ============================================================
+
+            amount = Decimal('0')
+
+            # ------------------------------------------------------------
+            # NEW SUBSCRIPTION
+            # ------------------------------------------------------------
+
+            if bill_type == 'NEW':
+
+                # Subscription calculates price.
+                #
+                # IMPORTANT:
+                # ChurchSubscription.get_total_price()
+                # does NOT include tax.
+                amount = Decimal(
+                    subscription.get_total_price()
+                )
+
+            # ------------------------------------------------------------
+            # RENEWAL
+            # ------------------------------------------------------------
+
+            elif bill_type == 'RENEW':
+
+                # Renewal uses the subscription's current price.
+                amount = Decimal(
+                    subscription.get_total_price()
+                )
+
+            # ------------------------------------------------------------
+            # EXTENSION
+            # ------------------------------------------------------------
+
+            elif bill_type == 'EXTENSION':
+
+                # For now use subscription price.
+                #
+                # If your extension has a different pricing rule,
+                # replace this calculation with the extension logic.
+                amount = Decimal(
+                    subscription.get_total_price()
+                )
+
+            # ------------------------------------------------------------
+            # UPGRADE
+            # ------------------------------------------------------------
+
+            elif bill_type == 'UPGRADE':
+
+                # For an upgrade, the frontend should send the new
+                # package ID.
+                new_package_id = request.data.get(
+                    'new_package_id'
+                )
+
+                if not new_package_id:
+                    return Response(
+                        {
+                            "error": (
+                                "new_package_id is required "
+                                "for upgrade"
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                try:
+                    new_package = Package.objects.get(
+                        id=new_package_id
+                    )
+
+                except Package.DoesNotExist:
+                    return Response(
+                        {
+                            "error": "New package not found"
+                        },
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+
+                # Calculate upgrade price using subscription logic.
+                #
+                # This gives:
+                # new_price
+                # - pro-rata credit
+                # = amount before tax
+                upgrade_data = (
+                    subscription.calculate_upgrade_cost(
+                        new_package=new_package,
+                        new_billing_cycle=billing_cycle
+                    )
+                )
+
+                amount = Decimal(
+                    str(
+                        upgrade_data['final_amount']
+                    )
+                )
+
+            # ============================================================
+            # AMOUNT VALIDATION
+            # ============================================================
+
+            if amount < 0:
+                amount = Decimal('0')
+
+            # Optional frontend amount verification.
+            #
+            # We calculate the real amount on the backend, so the
+            # frontend cannot change the bill amount.
+            if requested_amount is not None:
+
+                try:
+                    requested_amount_decimal = Decimal(
+                        str(requested_amount)
+                    )
+
+                    # Only compare if frontend supplied a valid value.
+                    if requested_amount_decimal != amount:
+
+                        return Response(
+                            {
+                                "error": "Amount mismatch",
+                                "message": (
+                                    "The submitted amount does not "
+                                    "match the calculated subscription amount."
+                                ),
+                                "calculated_amount": float(amount)
+                            },
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+
+                except (InvalidOperation, ValueError):
+                    return Response(
+                        {
+                            "error": "Invalid amount"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # ============================================================
+            # TAX
+            # ============================================================
 
             tax_type = None
             tax_rate = None
+
+            # ------------------------------------------------------------
+            # Tax type
+            # ------------------------------------------------------------
+
             if tax_type_id:
+
                 try:
-                    tax_type = TaxType.objects.get(id=tax_type_id)
+                    tax_type = TaxType.objects.get(
+                        id=tax_type_id
+                    )
+
                 except TaxType.DoesNotExist:
-                    return Response({
-                        "error": "Tax type not found"
-                    }, status=status.HTTP_404_NOT_FOUND)
+                    return Response(
+                        {
+                            "error": "Tax type not found"
+                        },
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+
+            # ------------------------------------------------------------
+            # Tax rate
+            # ------------------------------------------------------------
 
             if tax_rate_id:
+
                 try:
-                    tax_rate = TaxRate.objects.get(id=tax_rate_id)
+                    tax_rate = TaxRate.objects.get(
+                        id=tax_rate_id
+                    )
+
                 except TaxRate.DoesNotExist:
-                    return Response({
-                        "error": "Tax rate not found"
-                    }, status=status.HTTP_404_NOT_FOUND)
+                    return Response(
+                        {
+                            "error": "Tax rate not found"
+                        },
+                        status=status.HTTP_404_NOT_FOUND
+                    )
 
-            # 🔥 A tax rate without its parent type means Bill.save() skips the
-            # tax calculation entirely and silently bills without tax.
+            # ------------------------------------------------------------
+            # Require tax type and rate together
+            # ------------------------------------------------------------
+
+            if tax_type and not tax_rate:
+                return Response(
+                    {
+                        "error": (
+                            "tax_rate_id is required when "
+                            "tax_type_id is supplied"
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             if tax_rate and not tax_type:
-                return Response({
-                    "error": "tax_type_id is required when a tax_rate_id is supplied"
-                }, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {
+                        "error": (
+                            "tax_type_id is required when "
+                            "tax_rate_id is supplied"
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-            if tax_rate and tax_type and tax_rate.tax_type_id != tax_type.id:
-                return Response({
-                    "error": "Selected tax rate does not belong to the selected tax type"
-                }, status=status.HTTP_400_BAD_REQUEST)
+            # ------------------------------------------------------------
+            # Verify tax rate belongs to tax type
+            # ------------------------------------------------------------
+
+            if tax_rate and tax_type:
+
+                if tax_rate.tax_type_id != tax_type.id:
+
+                    return Response(
+                        {
+                            "error": (
+                                "Selected tax rate does not belong "
+                                "to the selected tax type"
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # ============================================================
+            # CREATE BILL
+            # ============================================================
+
+            breakdown = {
+                'church_name': church.name,
+
+                'package_name': (
+                    subscription.package.name
+                    if subscription.package
+                    else None
+                ),
+
+                'billing_cycle': billing_cycle,
+
+                'duration_months': duration_months,
+
+                # PRE-TAX AMOUNT
+                'amount': float(amount),
+
+                'payment_method': payment_method,
+
+                'transaction_id': transaction_id,
+
+                'bill_type': bill_type,
+
+                # Tax snapshot information
+                'tax_type_id': (
+                    tax_type.id
+                    if tax_type
+                    else None
+                ),
+
+                'tax_type_name': (
+                    str(tax_type)
+                    if tax_type
+                    else None
+                ),
+
+                'tax_rate_id': (
+                    tax_rate.id
+                    if tax_rate
+                    else None
+                ),
+
+                'tax_percentage': (
+                    float(tax_rate.rate_percentage)
+                    if tax_rate
+                    else 0
+                ),
+            }
 
             bill = Bill.objects.create(
                 church=church,
                 subscription=subscription,
+
                 bill_type=bill_type,
+
                 billing_cycle=billing_cycle,
+
                 duration_months=duration_months,
+
+                # IMPORTANT:
+                # This is BEFORE TAX.
                 amount=amount,
+
                 payment_method=payment_method,
+
                 transaction_id=transaction_id,
+
                 note=note,
+
                 tax_type=tax_type,
+
                 tax_rate=tax_rate,
+
                 status='UNPAID',
-                breakdown={
-                    'church_name': church.name,
-                    'package_name': subscription.package.name if subscription.package else None,
-                    'billing_cycle': billing_cycle,
-                    'duration_months': duration_months,
-                    'amount': float(amount),
-                    'payment_method': payment_method,
-                    'transaction_id': transaction_id,
-                }
+
+                breakdown=breakdown
             )
 
-            return Response({
-                "status": "success",
-                "message": "Bill created successfully",
-                "data": {
-                    'id': bill.id,
-                    'bill_number': bill.bill_number,
-                    'invoice_number': bill.invoice_number,
-                    'church_name': church.name,
-                    'package_name': subscription.package.name if subscription.package else None,
-                    'amount': float(bill.amount),
-                    'tax_percentage': float(bill.tax_percentage),
-                    'tax_amount': float(bill.tax_amount),
-                    'total_amount': float(bill.total_amount),
-                    'status': bill.status,
-                    'payment_method': bill.payment_method,
-                    'transaction_id': bill.transaction_id,
-                    'created_at': bill.created_at,
-                }
-            }, status=status.HTTP_201_CREATED)
+            # ============================================================
+            # RESPONSE
+            # ============================================================
+
+            return Response(
+                {
+                    "status": "success",
+
+                    "message": "Bill created successfully",
+
+                    "data": {
+                        'id': bill.id,
+
+                        'bill_number': bill.bill_number,
+
+                        'invoice_number': bill.invoice_number,
+
+                        'church_name': church.name,
+
+                        'package_name': (
+                            subscription.package.name
+                            if subscription.package
+                            else None
+                        ),
+
+                        'bill_type': bill.bill_type,
+
+                        'billing_cycle': bill.billing_cycle,
+
+                        'duration_months': (
+                            bill.duration_months
+                        ),
+
+                        # BEFORE TAX
+                        'amount': float(
+                            bill.amount
+                        ),
+
+                        # SELECTED TAX
+                        'tax_type': (
+                            str(bill.tax_type)
+                            if bill.tax_type
+                            else None
+                        ),
+
+                        'tax_rate': (
+                            str(bill.tax_rate)
+                            if bill.tax_rate
+                            else None
+                        ),
+
+                        'tax_percentage': float(
+                            bill.tax_percentage
+                        ),
+
+                        'tax_amount': float(
+                            bill.tax_amount
+                        ),
+
+                        # FINAL AMOUNT INCLUDING TAX
+                        'total_amount': float(
+                            bill.total_amount
+                        ),
+
+                        'status': bill.status,
+
+                        'payment_method': (
+                            bill.payment_method
+                        ),
+
+                        'transaction_id': (
+                            bill.transaction_id
+                        ),
+
+                        'created_at': (
+                            bill.created_at
+                        ),
+                    }
+                },
+                status=status.HTTP_201_CREATED
+            )
 
         except Exception as e:
-            logger.error(f"Error creating bill: {str(e)}", exc_info=True)
-            return Response({
-                "error": str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
 
+            logger.error(
+                f"Error creating bill: {str(e)}",
+                exc_info=True
+            )
+
+            return Response(
+                {
+                    "error": str(e)
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 class BillDetailAPIView(APIView):
     """Get bill details"""
