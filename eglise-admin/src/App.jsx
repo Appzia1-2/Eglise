@@ -24,11 +24,13 @@ import ChurchView from "./admin/pages/ChurchView";
 import PackagesPage from "./admin/pages/PackagesPage";
 import PackageAddPage from "./admin/pages/PackageAddPage";
 import PackageEditPage from "./admin/pages/PackageEditPage";
+import PackageViewPage from "./admin/pages/PackageViewPage";
 
 // Subscription Imports
 import SubscriptionsPage from "./admin/pages/SubscriptionsPage";
 import SubscriptionAddPage from "./admin/pages/SubscriptionAddPage";
 import SubscriptionDetailPage from "./admin/pages/SubscriptionDetailPage";
+import EditSubscriptionPage from "./admin/pages/EditSubscriptionPage";
 
 // Tax Type & Tax Rate Imports
 import TaxTypesPage from "./admin/pages/TaxTypesPage";
@@ -169,6 +171,14 @@ function App() {
             </AdminProtectedRoute>
           }
         />
+        <Route
+  path="/admin/packages/view/:id"
+  element={
+    <AdminProtectedRoute>
+      <PackageViewPage />
+    </AdminProtectedRoute>
+  }
+/>
         
         
         {/* Admin Subscription Routes */}
@@ -193,6 +203,14 @@ function App() {
           element={
             <AdminProtectedRoute>
               <SubscriptionDetailPage />
+            </AdminProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/subscriptions/edit/:id"
+          element={
+            <AdminProtectedRoute>
+              <EditSubscriptionPage  />
             </AdminProtectedRoute>
           }
         />

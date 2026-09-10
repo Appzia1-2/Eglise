@@ -1884,13 +1884,16 @@ class BillListSerializer(serializers.ModelSerializer):
             "status",
             "created_at",
             "breakdown",
+            "payment_receipt",
         ]
+
 
 class BillDetailSerializer(serializers.ModelSerializer):
     package_name = serializers.CharField(
         source="subscription.package.name",
         read_only=True
     )
+
     church_name = serializers.CharField(
         source="church.name",
         read_only=True
@@ -1910,6 +1913,7 @@ class BillDetailSerializer(serializers.ModelSerializer):
             "created_at",
             "paid_at",
             "breakdown",
+            "payment_receipt",
         ]
 
 #expire

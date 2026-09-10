@@ -1,7 +1,15 @@
 // src/admin/pages/PaymentAddPage.jsx
 
-import React, { useEffect, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import React, {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
+import {
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
 
 import {
   Box,
@@ -19,6 +27,7 @@ import {
   Circle,
   Badge,
   Textarea,
+  Image,
 } from "@chakra-ui/react";
 
 import {
@@ -36,9 +45,11 @@ import {
   LuUser,
   LuPackage,
   LuDollarSign,
-  LuInfo,
   LuWallet,
   LuCreditCard,
+  LuImage,
+  LuUpload,
+  LuTrash2,
 } from "react-icons/lu";
 
 import AdminLayout from "../components/AdminLayout";
@@ -62,11 +73,11 @@ const ChurchDropdown = ({
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const containerRef = React.useRef(null);
-  const searchRef = React.useRef(null);
+  const containerRef = useRef(null);
+  const searchRef = useRef(null);
 
   const selectedOption = options.find(
-    (opt) => opt.id === value
+    (opt) => Number(opt.id) === Number(value)
   );
 
   const filteredOptions = searchTerm
@@ -264,6 +275,9 @@ const ChurchDropdown = ({
                 onChange={(e) =>
                   setSearchTerm(e.target.value)
                 }
+                onClick={(e) =>
+                  e.stopPropagation()
+                }
                 border="none"
                 _focus={{
                   boxShadow: "none",
@@ -339,7 +353,8 @@ const ChurchDropdown = ({
                     handleSelect(option)
                   }
                   bg={
-                    option.id === value
+                    Number(option.id) ===
+                    Number(value)
                       ? "purple.50"
                       : "transparent"
                   }
@@ -357,12 +372,14 @@ const ChurchDropdown = ({
                     <Text
                       fontSize="sm"
                       color={
-                        option.id === value
+                        Number(option.id) ===
+                        Number(value)
                           ? primaryMaroon
                           : "gray.700"
                       }
                       fontWeight={
-                        option.id === value
+                        Number(option.id) ===
+                        Number(value)
                           ? "600"
                           : "500"
                       }
@@ -380,7 +397,8 @@ const ChurchDropdown = ({
                     </Text>
                   </Flex>
 
-                  {option.id === value && (
+                  {Number(option.id) ===
+                    Number(value) && (
                     <LuCheck
                       size={16}
                       color={primaryMaroon}
@@ -420,10 +438,10 @@ const SubscriptionDropdown = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
-  const containerRef = React.useRef(null);
+  const containerRef = useRef(null);
 
   const selectedOption = options.find(
-    (opt) => opt.id === value
+    (opt) => Number(opt.id) === Number(value)
   );
 
   useEffect(() => {
@@ -643,7 +661,8 @@ const SubscriptionDropdown = ({
                   handleSelect(option)
                 }
                 bg={
-                  option.id === value
+                  Number(option.id) ===
+                  Number(value)
                     ? "purple.50"
                     : "transparent"
                 }
@@ -661,12 +680,14 @@ const SubscriptionDropdown = ({
                   <Text
                     fontSize="sm"
                     color={
-                      option.id === value
+                      Number(option.id) ===
+                      Number(value)
                         ? primaryMaroon
                         : "gray.700"
                     }
                     fontWeight={
-                      option.id === value
+                      Number(option.id) ===
+                      Number(value)
                         ? "600"
                         : "500"
                     }
@@ -709,7 +730,8 @@ const SubscriptionDropdown = ({
                     {cycleLabel}
                   </Badge>
 
-                  {option.id === value && (
+                  {Number(option.id) ===
+                    Number(value) && (
                     <LuCheck
                       size={16}
                       color={primaryMaroon}
@@ -736,7 +758,7 @@ const SubscriptionDropdown = ({
 };
 
 /* =========================================================
-   STATIC CURRENCY HELPER
+   CURRENCY
 ========================================================= */
 
 const formatCurrencyStatic = (amount) => {
@@ -789,6 +811,21 @@ const PaymentAddPage = () => {
   const [selectedTaxRate, setSelectedTaxRate] =
     useState(null);
 
+  /* =========================================================
+     EXISTING BILL.payment_receipt FIELD
+
+     NO NEW DATABASE FIELD
+========================================================= */
+
+  const [paymentReceipt, setPaymentReceipt] =
+    useState(null);
+
+  const [paymentReceiptPreview, setPaymentReceiptPreview] =
+    useState("");
+
+  const paymentReceiptInputRef =
+    useRef(null);
+
   const [formData, setFormData] =
     useState({
       amount: "",
@@ -803,9 +840,7 @@ const PaymentAddPage = () => {
 
   /* =========================================================
      PAYMENT OPTIONS
-
-     These match the Bill model.
-  ========================================================= */
+========================================================= */
 
   const paymentMethods = [
     {
@@ -843,11 +878,11 @@ const PaymentAddPage = () => {
 
   /* =========================================================
      INITIAL DATA
-  ========================================================= */
+========================================================= */
 
   useEffect(() => {
     fetchData();
-  }, [location.key]);
+  }, []);
 
   const generateTransactionId = () => {
     const date = new Date();
@@ -872,77 +907,107 @@ const PaymentAddPage = () => {
   };
 
   const fetchData = async () => {
-  setIsLoading(true);
+    setIsLoading(true);
 
-  try {
-    const [churchesRes, subscriptionsRes, taxTypesRes, taxRatesRes] =
-      await Promise.all([
+    try {
+      const [
+        churchesRes,
+        subscriptionsRes,
+        taxTypesRes,
+        taxRatesRes,
+      ] = await Promise.all([
         adminApi.getChurches(),
         adminApi.getSubscriptions(),
         adminApi.getTaxTypes(),
         adminApi.getTaxRates(),
       ]);
 
-    const allChurchesData = churchesRes.data || [];
-    const subscriptionsData = subscriptionsRes.data || [];
-    const taxTypesData = taxTypesRes.data || [];
-    const taxRatesData = taxRatesRes.data || [];
+      const allChurchesData =
+        churchesRes.data || [];
 
-    // 🔥 Only show churches that have an UNPAID subscription.
-    // Once a subscription is marked PAID, that church should
-    // disappear from this dropdown — nothing left to collect.
-    const churchIdsWithUnpaidSubs = new Set(
-      subscriptionsData
-        .filter((s) => s.payment_status === "UNPAID")
-        .map((s) => Number(s.church_id))
-    );
+      const subscriptionsData =
+        subscriptionsRes.data || [];
 
-    const churchesData = allChurchesData.filter((c) =>
-      churchIdsWithUnpaidSubs.has(Number(c.id))
-    );
+      const taxTypesData =
+        taxTypesRes.data || [];
 
-    setChurches(churchesData);
-    setAllSubscriptions(subscriptionsData);
-    setTaxTypes(taxTypesData);
-    setTaxRates(taxRatesData);
+      const taxRatesData =
+        taxRatesRes.data || [];
 
-    setFormData((prev) => ({
-      ...prev,
-      transaction_id: generateTransactionId(),
-    }));
-  } catch (error) {
-    console.error("Error fetching data:", error);
-    toaster.create({
-      title: "Error",
-      description: "Failed to load data.",
-      type: "error",
-      duration: 4000,
-    });
-  } finally {
-    setIsLoading(false);
-  }
-};
+      const churchIdsWithUnpaidSubs =
+        new Set(
+          subscriptionsData
+            .filter(
+              (s) =>
+                s.payment_status ===
+                "UNPAID"
+            )
+            .map((s) =>
+              Number(s.church_id)
+            )
+        );
+
+      const churchesData =
+        allChurchesData.filter((c) =>
+          churchIdsWithUnpaidSubs.has(
+            Number(c.id)
+          )
+        );
+
+      setChurches(churchesData);
+      setAllSubscriptions(
+        subscriptionsData
+      );
+      setTaxTypes(taxTypesData);
+      setTaxRates(taxRatesData);
+
+      setFormData((prev) => ({
+        ...prev,
+        transaction_id:
+          generateTransactionId(),
+      }));
+    } catch (error) {
+      console.error(
+        "Error fetching data:",
+        error
+      );
+
+      toaster.create({
+        title: "Error",
+        description:
+          "Failed to load data.",
+        type: "error",
+        duration: 4000,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   /* =========================================================
      CHURCH SELECT
-  ========================================================= */
+========================================================= */
 
-  const handleChurchSelect = (churchId) => {
+  const handleChurchSelect = (
+    churchId
+  ) => {
     const church = churches.find(
-      (c) => c.id === churchId
+      (c) =>
+        Number(c.id) ===
+        Number(churchId)
     );
 
     setSelectedChurch(church);
 
     setSelectedSubscription(null);
 
-    setFilteredSubscriptions([]);
-
     const churchSubs =
       allSubscriptions.filter(
         (s) =>
           Number(s.church_id) ===
-          Number(churchId)
+            Number(churchId) &&
+          s.payment_status ===
+            "UNPAID"
       );
 
     setFilteredSubscriptions(
@@ -976,7 +1041,7 @@ const PaymentAddPage = () => {
 
   /* =========================================================
      SUBSCRIPTION SELECT
-  ========================================================= */
+========================================================= */
 
   const handleSubscriptionSelect = (
     subscriptionId
@@ -984,7 +1049,8 @@ const PaymentAddPage = () => {
     const subscription =
       filteredSubscriptions.find(
         (s) =>
-          s.id === subscriptionId
+          Number(s.id) ===
+          Number(subscriptionId)
       );
 
     if (subscription) {
@@ -1007,22 +1073,7 @@ const PaymentAddPage = () => {
 
   /* =========================================================
      SUBSCRIPTION AMOUNT
-
-     IMPORTANT:
-
-     The subscription amount is already calculated
-     by Django.
-
-     We DO NOT calculate:
-
-         rate × capacity
-
-     here.
-
-     We DO NOT add tax here.
-
-     The value is PRE-TAX.
-  ========================================================= */
+========================================================= */
 
   const updateFormFromSubscription = (
     subscription
@@ -1042,7 +1093,7 @@ const PaymentAddPage = () => {
 
   /* =========================================================
      TAX TYPE
-  ========================================================= */
+========================================================= */
 
   const handleTaxTypeSelect = (
     taxTypeId
@@ -1062,22 +1113,20 @@ const PaymentAddPage = () => {
     const parsedTaxTypeId =
       parseInt(taxTypeId, 10);
 
-    const taxType =
-      taxTypes.find(
-        (t) =>
-          Number(t.id) ===
-          parsedTaxTypeId
-      );
+    const taxType = taxTypes.find(
+      (t) =>
+        Number(t.id) ===
+        parsedTaxTypeId
+    );
 
     setSelectedTaxType(taxType);
 
-    const rates =
-      taxRates.filter(
-        (r) =>
-          Number(r.tax_type_id) ===
-            parsedTaxTypeId &&
-          r.is_active
-      );
+    const rates = taxRates.filter(
+      (r) =>
+        Number(r.tax_type_id) ===
+          parsedTaxTypeId &&
+        r.is_active
+    );
 
     if (rates.length > 0) {
       setSelectedTaxRate(
@@ -1100,7 +1149,7 @@ const PaymentAddPage = () => {
 
   /* =========================================================
      FORM CHANGE
-  ========================================================= */
+========================================================= */
 
   const handleChange = (e) => {
     const {
@@ -1122,8 +1171,111 @@ const PaymentAddPage = () => {
   };
 
   /* =========================================================
+     PAYMENT RECEIPT IMAGE
+
+     Uses existing Bill.payment_receipt
+========================================================= */
+
+  const handlePaymentReceiptChange = (
+    e
+  ) => {
+    const file =
+      e.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    const allowedTypes = [
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/webp",
+    ];
+
+    if (
+      !allowedTypes.includes(
+        file.type
+      )
+    ) {
+      setErrors((prev) => ({
+        ...prev,
+        payment_receipt:
+          "Please upload a JPG, JPEG, PNG or WebP image.",
+      }));
+
+      e.target.value = "";
+      return;
+    }
+
+    const maxSize =
+      5 * 1024 * 1024;
+
+    if (file.size > maxSize) {
+      setErrors((prev) => ({
+        ...prev,
+        payment_receipt:
+          "Image size must be less than 5 MB.",
+      }));
+
+      e.target.value = "";
+      return;
+    }
+
+    setPaymentReceipt(file);
+
+    setErrors((prev) => ({
+      ...prev,
+      payment_receipt: "",
+    }));
+  };
+
+  const removePaymentReceipt = () => {
+    setPaymentReceipt(null);
+    setPaymentReceiptPreview("");
+
+    if (
+      paymentReceiptInputRef.current
+    ) {
+      paymentReceiptInputRef.current.value =
+        "";
+    }
+
+    setErrors((prev) => ({
+      ...prev,
+      payment_receipt: "",
+    }));
+  };
+
+  /* =========================================================
+     CREATE / UPDATE PREVIEW URL
+========================================================= */
+
+  useEffect(() => {
+    if (!paymentReceipt) {
+      setPaymentReceiptPreview("");
+      return;
+    }
+
+    const previewUrl =
+      URL.createObjectURL(
+        paymentReceipt
+      );
+
+    setPaymentReceiptPreview(
+      previewUrl
+    );
+
+    return () => {
+      URL.revokeObjectURL(
+        previewUrl
+      );
+    };
+  }, [paymentReceipt]);
+
+  /* =========================================================
      VALIDATION
-  ========================================================= */
+========================================================= */
 
   const validate = () => {
     const newErrors = {};
@@ -1140,7 +1292,8 @@ const PaymentAddPage = () => {
 
     const subscriptionAmount =
       Number(
-        selectedSubscription?.amount || 0
+        selectedSubscription?.amount ||
+          0
       );
 
     if (subscriptionAmount <= 0) {
@@ -1171,9 +1324,7 @@ const PaymentAddPage = () => {
 
   /* =========================================================
      SUBSCRIPTION AMOUNT
-
-     AUTHORITATIVE PRE-TAX AMOUNT
-  ========================================================= */
+========================================================= */
 
   const getSubscriptionAmount = () => {
     if (!selectedSubscription) {
@@ -1187,11 +1338,7 @@ const PaymentAddPage = () => {
 
   /* =========================================================
      TAX PERCENTAGE
-
-     NEVER HARDCODE TAX.
-
-     The percentage comes from TaxRate.
-  ========================================================= */
+========================================================= */
 
   const getTaxPercentage = () => {
     if (!selectedTaxRate) {
@@ -1199,18 +1346,14 @@ const PaymentAddPage = () => {
     }
 
     return Number(
-      selectedTaxRate.rate_percentage || 0
+      selectedTaxRate.rate_percentage ||
+        0
     );
   };
 
   /* =========================================================
      TAX CALCULATION
-
-     This is ONLY a UI PREVIEW.
-
-     Django Bill.save() performs the
-     authoritative calculation.
-  ========================================================= */
+========================================================= */
 
   const calculateTax = () => {
     const subtotal =
@@ -1246,9 +1389,11 @@ const PaymentAddPage = () => {
 
   /* =========================================================
      CURRENCY
-  ========================================================= */
+========================================================= */
 
-  const formatCurrency = (amount) => {
+  const formatCurrency = (
+    amount
+  ) => {
     return new Intl.NumberFormat(
       "en-IN",
       {
@@ -1257,12 +1402,14 @@ const PaymentAddPage = () => {
         minimumFractionDigits: 0,
         maximumFractionDigits: 2,
       }
-    ).format(Number(amount) || 0);
+    ).format(
+      Number(amount) || 0
+    );
   };
 
   /* =========================================================
      DATE
-  ========================================================= */
+========================================================= */
 
   const formatDate = (
     dateString
@@ -1286,7 +1433,7 @@ const PaymentAddPage = () => {
 
   /* =========================================================
      BILLING PERIOD
-  ========================================================= */
+========================================================= */
 
   const getBillingPeriodDisplay =
     () => {
@@ -1324,18 +1471,7 @@ const PaymentAddPage = () => {
 
   /* =========================================================
      CALCULATION BREAKDOWN
-
-     IMPORTANT:
-
-     subtotal = subscription.amount
-
-     NOT:
-
-     rate × capacity
-
-     The rate and capacity below are displayed
-     only as subscription information.
-  ========================================================= */
+========================================================= */
 
   const getCalculationBreakdown =
     () => {
@@ -1399,15 +1535,12 @@ const PaymentAddPage = () => {
         taxPercentage,
         taxAmount,
         total,
-
         billingCycle:
           selectedSubscription.billing_cycle,
-
         cycleDisplay:
           isYearly
             ? "Yearly"
             : "Monthly",
-
         rateDisplay:
           isYearly
             ? "Yearly Rate"
@@ -1418,20 +1551,13 @@ const PaymentAddPage = () => {
   /* =========================================================
      SUBMIT
 
-     SEND:
+     IMPORTANT:
+     Uses FormData because payment_receipt
+     is an ImageField.
 
-       amount          = PRE-TAX subscription amount
-       tax_type_id     = selected tax type
-       tax_rate_id     = selected tax rate
-
-     DO NOT SEND:
-
-       tax_percentage
-       tax_amount
-       total_amount
-
-     Django Bill.save() calculates those values.
-  ========================================================= */
+     Existing backend field:
+         payment_receipt
+========================================================= */
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1446,49 +1572,97 @@ const PaymentAddPage = () => {
       const subscriptionAmount =
         getSubscriptionAmount();
 
-      const data = {
-        church_id:
-          selectedChurch.id,
+      const data = new FormData();
 
-        subscription_id:
-          selectedSubscription.id,
+      data.append(
+        "church_id",
+        String(selectedChurch.id)
+      );
 
-        // PRE-TAX AMOUNT
-        amount:
-          subscriptionAmount,
+      data.append(
+        "subscription_id",
+        String(selectedSubscription.id)
+      );
 
-        payment_method:
-          formData.payment_method,
+      data.append(
+        "amount",
+        String(subscriptionAmount)
+      );
 
-        // Bill model uses "status"
-        status:
-          formData.status,
+      data.append(
+        "payment_method",
+        formData.payment_method
+      );
 
-        transaction_id:
-          formData.transaction_id,
+      data.append(
+        "status",
+        formData.status
+      );
 
-        note:
-          formData.notes,
+      data.append(
+        "transaction_id",
+        formData.transaction_id
+      );
 
-        tax_type_id:
-          selectedTaxType?.id || null,
+      data.append(
+        "note",
+        formData.notes || ""
+      );
 
-        tax_rate_id:
-          selectedTaxRate?.id || null,
+      if (selectedTaxType?.id) {
+        data.append(
+          "tax_type_id",
+          String(selectedTaxType.id)
+        );
+      }
 
-        bill_type: "NEW",
+      if (selectedTaxRate?.id) {
+        data.append(
+          "tax_rate_id",
+          String(selectedTaxRate.id)
+        );
+      }
 
-        billing_cycle:
-          selectedSubscription.billing_cycle,
+      data.append(
+        "bill_type",
+        "NEW"
+      );
 
-        duration_months:
-          selectedSubscription.duration_months ||
-          null,
-      };
+      data.append(
+        "billing_cycle",
+        selectedSubscription.billing_cycle ||
+          ""
+      );
+
+      if (
+        selectedSubscription.duration_months !=
+        null
+      ) {
+        data.append(
+          "duration_months",
+          String(
+            selectedSubscription.duration_months
+          )
+        );
+      }
+
+      /* ================================================
+         EXISTING IMAGE FIELD
+         
+         Bill.payment_receipt
+      ================================================= */
+
+      if (paymentReceipt) {
+        data.append(
+          "payment_receipt",
+          paymentReceipt,
+          paymentReceipt.name
+        );
+      }
 
       console.log(
-        "Creating bill with PRE-TAX amount:",
-        data
+        "Creating payment with receipt:",
+        paymentReceipt
       );
 
       await adminApi.createBill(data);
@@ -1535,7 +1709,7 @@ const PaymentAddPage = () => {
 
   /* =========================================================
      CALCULATION VALUES
-  ========================================================= */
+========================================================= */
 
   const {
     taxAmount,
@@ -1551,7 +1725,7 @@ const PaymentAddPage = () => {
 
   /* =========================================================
      LOADING
-  ========================================================= */
+========================================================= */
 
   if (isLoading) {
     return (
@@ -1565,18 +1739,16 @@ const PaymentAddPage = () => {
             align="center"
             minH="400px"
           >
-            <div
-              style={{
-                border:
-                  "4px solid #e2e8f0",
-                borderTop:
-                  "4px solid #ae2050",
-                borderRadius: "50%",
-                width: "40px",
-                height: "40px",
-                animation:
-                  "spin 1s linear infinite",
-              }}
+            <Box
+              width="40px"
+              height="40px"
+              border="4px solid"
+              borderColor="gray.200"
+              borderTopColor={
+                primaryMaroon
+              }
+              borderRadius="50%"
+              animation="spin 1s linear infinite"
             />
           </Flex>
 
@@ -1585,7 +1757,6 @@ const PaymentAddPage = () => {
               0% {
                 transform: rotate(0deg);
               }
-
               100% {
                 transform: rotate(360deg);
               }
@@ -1598,7 +1769,7 @@ const PaymentAddPage = () => {
 
   /* =========================================================
      UI
-  ========================================================= */
+========================================================= */
 
   return (
     <AdminLayout>
@@ -1687,7 +1858,7 @@ const PaymentAddPage = () => {
               align="stretch"
             >
               {/* =================================================
-                  ROW 1
+                  CHURCH + SUBSCRIPTION
               ================================================= */}
 
               <Grid
@@ -1765,7 +1936,7 @@ const PaymentAddPage = () => {
               </Grid>
 
               {/* =================================================
-                  ROW 2
+                  BILLING + PAYMENT METHOD
               ================================================= */}
 
               <Grid
@@ -1811,15 +1982,6 @@ const PaymentAddPage = () => {
                       {getBillingPeriodDisplay()}
                     </Text>
                   </Box>
-
-                  <Text
-                    fontSize="xs"
-                    color="gray.500"
-                    mt={1}
-                  >
-                    Subscription billing
-                    period
-                  </Text>
                 </GridItem>
 
                 <GridItem>
@@ -1853,14 +2015,6 @@ const PaymentAddPage = () => {
                         "white",
                       outline: "none",
                     }}
-                    onFocus={(e) =>
-                      (e.target.style.borderColor =
-                        primaryMaroon)
-                    }
-                    onBlur={(e) =>
-                      (e.target.style.borderColor =
-                        "#e2e8f0")
-                    }
                   >
                     {paymentMethods.map(
                       (method) => (
@@ -1881,7 +2035,7 @@ const PaymentAddPage = () => {
               </Grid>
 
               {/* =================================================
-                  ROW 3
+                  TAX + STATUS
               ================================================= */}
 
               <Grid
@@ -1924,14 +2078,6 @@ const PaymentAddPage = () => {
                         "white",
                       outline: "none",
                     }}
-                    onFocus={(e) =>
-                      (e.target.style.borderColor =
-                        primaryMaroon)
-                    }
-                    onBlur={(e) =>
-                      (e.target.style.borderColor =
-                        "#e2e8f0")
-                    }
                   >
                     <option value="">
                       No Tax
@@ -1956,62 +2102,34 @@ const PaymentAddPage = () => {
 
                   {selectedTaxType &&
                     selectedTaxRate && (
-                      <Flex
-                        align="center"
-                        gap={2}
-                        mt={1}
+                    <Flex
+                      align="center"
+                      gap={2}
+                      mt={1}
+                    >
+                      <Icon
+                        as={LuTag}
+                        color={
+                          primaryMaroon
+                        }
+                        boxSize={3}
+                      />
+
+                      <Text
+                        fontSize="xs"
+                        color="gray.600"
                       >
-                        <Icon
-                          as={LuTag}
-                          color={
-                            primaryMaroon
-                          }
-                          boxSize={3}
-                        />
-
-                        <Text
-                          fontSize="xs"
-                          color="gray.600"
-                        >
-                          {
-                            selectedTaxType.tax_type_code
-                          }{" "}
-                          •{" "}
-                          {
-                            selectedTaxRate.rate_percentage
-                          }
-                          % (
-                          {
-                            selectedTaxRate.tax_rate_code
-                          }
-                          )
-                        </Text>
-                      </Flex>
-                    )}
-
-                  {selectedTaxType &&
-                    !selectedTaxRate && (
-                      <Flex
-                        align="center"
-                        gap={2}
-                        mt={1}
-                      >
-                        <Icon
-                          as={LuInfo}
-                          color="orange.500"
-                          boxSize={3}
-                        />
-
-                        <Text
-                          fontSize="xs"
-                          color="orange.500"
-                        >
-                          No active tax
-                          rate found for
-                          this type
-                        </Text>
-                      </Flex>
-                    )}
+                        {
+                          selectedTaxType.tax_type_code
+                        }{" "}
+                        •{" "}
+                        {
+                          selectedTaxRate.rate_percentage
+                        }
+                        %
+                      </Text>
+                    </Flex>
+                  )}
 
                   {errors.tax && (
                     <Text
@@ -2055,14 +2173,6 @@ const PaymentAddPage = () => {
                         "white",
                       outline: "none",
                     }}
-                    onFocus={(e) =>
-                      (e.target.style.borderColor =
-                        primaryMaroon)
-                    }
-                    onBlur={(e) =>
-                      (e.target.style.borderColor =
-                        "#e2e8f0")
-                    }
                   >
                     {paymentStatuses.map(
                       (status) => (
@@ -2083,7 +2193,7 @@ const PaymentAddPage = () => {
               </Grid>
 
               {/* =================================================
-                  ROW 4
+                  TRANSACTION + AMOUNT
               ================================================= */}
 
               <Grid
@@ -2175,11 +2285,6 @@ const PaymentAddPage = () => {
                         ? "red.500"
                         : "gray.200"
                     }
-                    _focus={{
-                      borderColor:
-                        primaryMaroon,
-                      boxShadow: `0 0 0 1px ${primaryMaroon}`,
-                    }}
                   />
 
                   {errors.amount && (
@@ -2191,20 +2296,6 @@ const PaymentAddPage = () => {
                       {errors.amount}
                     </Text>
                   )}
-
-                  {breakdown && (
-                    <Text
-                      fontSize="xs"
-                      color="gray.500"
-                      mt={1}
-                    >
-                      Subscription amount
-                      before tax:{" "}
-                      {formatCurrency(
-                        breakdown.subtotal
-                      )}
-                    </Text>
-                  )}
                 </GridItem>
               </Grid>
 
@@ -2212,10 +2303,7 @@ const PaymentAddPage = () => {
                   NOTES
               ================================================= */}
 
-              <Grid
-                templateColumns="1fr"
-                gap={4}
-              >
+              <Grid>
                 <GridItem>
                   <Text
                     fontSize="xs"
@@ -2243,10 +2331,269 @@ const PaymentAddPage = () => {
                         primaryMaroon,
                       boxShadow: `0 0 0 1px ${primaryMaroon}`,
                     }}
-                    resize="vertical"
                   />
                 </GridItem>
               </Grid>
+
+              {/* =================================================
+                  PAYMENT RECEIPT / SCREENSHOT
+
+                  EXISTING FIELD:
+                  Bill.payment_receipt
+              ================================================= */}
+
+              <Box
+                border="1px solid"
+                borderColor={
+                  errors.payment_receipt
+                    ? "red.300"
+                    : "gray.200"
+                }
+                borderRadius="lg"
+                p={4}
+                bg="white"
+              >
+                <Flex
+                  align="center"
+                  justify="space-between"
+                  mb={3}
+                >
+                  <HStack spacing={3}>
+                    <Circle
+                      size="36px"
+                      bg="rgba(174,32,80,0.08)"
+                      color={
+                        primaryMaroon
+                      }
+                    >
+                      <Icon
+                        as={LuImage}
+                        boxSize={4}
+                      />
+                    </Circle>
+
+                    <Box>
+                      <Text
+                        fontSize="sm"
+                        fontWeight="700"
+                        color="#1a1a2e"
+                      >
+                        Payment Receipt /
+                        Screenshot
+                      </Text>
+
+                      <Text
+                        fontSize="xs"
+                        color="gray.500"
+                      >
+                        Upload the payment
+                        proof image
+                      </Text>
+                    </Box>
+                  </HStack>
+
+                  <Badge
+                    bg="gray.100"
+                    color="gray.600"
+                    fontSize="10px"
+                    px={2}
+                    py={1}
+                    borderRadius="full"
+                  >
+                    Optional
+                  </Badge>
+                </Flex>
+
+                {!paymentReceiptPreview ? (
+                  <Box
+                    as="label"
+                    display="block"
+                    cursor="pointer"
+                  >
+                    <Box
+                      border="1.5px dashed"
+                      borderColor="gray.300"
+                      borderRadius="md"
+                      minH="120px"
+                      display="flex"
+                      alignItems="center"
+                      justifyContent="center"
+                      textAlign="center"
+                      px={4}
+                      py={5}
+                      transition="all 0.2s"
+                      _hover={{
+                        borderColor:
+                          primaryMaroon,
+                        bg: "rgba(174,32,80,0.02)",
+                      }}
+                    >
+                      <VStack
+                        spacing={2}
+                      >
+                        <Circle
+                          size="40px"
+                          bg="rgba(174,32,80,0.08)"
+                          color={
+                            primaryMaroon
+                          }
+                        >
+                          <Icon
+                            as={LuUpload}
+                            boxSize={5}
+                          />
+                        </Circle>
+
+                        <Text
+                          fontSize="sm"
+                          fontWeight="600"
+                          color={
+                            primaryMaroon
+                          }
+                        >
+                          Click to upload
+                        </Text>
+
+                        <Text
+                          fontSize="xs"
+                          color="gray.500"
+                        >
+                          JPG, JPEG, PNG or
+                          WebP • Maximum
+                          5 MB
+                        </Text>
+                      </VStack>
+
+                      <Input
+                        ref={
+                          paymentReceiptInputRef
+                        }
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/webp"
+                        onChange={
+                          handlePaymentReceiptChange
+                        }
+                        display="none"
+                      />
+                    </Box>
+                  </Box>
+                ) : (
+                  <Box
+                    border="1px solid"
+                    borderColor="gray.200"
+                    borderRadius="md"
+                    overflow="hidden"
+                    bg="gray.50"
+                  >
+                    <Box
+                      position="relative"
+                      width="100%"
+                      maxH="320px"
+                      overflow="hidden"
+                      bg="gray.100"
+                      display="flex"
+                      justifyContent="center"
+                      alignItems="center"
+                    >
+                      <Image
+                        src={
+                          paymentReceiptPreview
+                        }
+                        alt="Payment receipt preview"
+                        maxH="320px"
+                        maxW="100%"
+                        objectFit="contain"
+                      />
+
+                      <Button
+                        type="button"
+                        position="absolute"
+                        top={2}
+                        right={2}
+                        size="sm"
+                        minW="34px"
+                        h="34px"
+                        p={0}
+                        borderRadius="full"
+                        bg="white"
+                        color="red.500"
+                        boxShadow="md"
+                        _hover={{
+                          bg: "red.50",
+                        }}
+                        onClick={
+                          removePaymentReceipt
+                        }
+                      >
+                        <Icon
+                          as={LuTrash2}
+                          boxSize={4}
+                        />
+                      </Button>
+                    </Box>
+
+                    <Flex
+                      align="center"
+                      justify="space-between"
+                      px={3}
+                      py={2}
+                      bg="white"
+                      borderTop="1px solid"
+                      borderColor="gray.200"
+                    >
+                      <Flex
+                        align="center"
+                        gap={2}
+                        minW={0}
+                      >
+                        <Icon
+                          as={LuImage}
+                          color={
+                            primaryMaroon
+                          }
+                          boxSize={4}
+                        />
+
+                        <Text
+                          fontSize="xs"
+                          color="gray.600"
+                          noOfLines={1}
+                        >
+                          {
+                            paymentReceipt?.name
+                          }
+                        </Text>
+                      </Flex>
+
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        color={
+                          primaryMaroon
+                        }
+                        onClick={() =>
+                          paymentReceiptInputRef.current?.click()
+                        }
+                      >
+                        Change
+                      </Button>
+                    </Flex>
+                  </Box>
+                )}
+
+                {errors.payment_receipt && (
+                  <Text
+                    fontSize="xs"
+                    color="red.500"
+                    mt={2}
+                  >
+                    {
+                      errors.payment_receipt
+                    }
+                  </Text>
+                )}
+              </Box>
 
               {/* =================================================
                   PACKAGE SUMMARY
@@ -2403,11 +2750,7 @@ const PaymentAddPage = () => {
                           fontSize="xs"
                           color="gray.400"
                         >
-                          {
-                            selectedSubscription.custom_capacity
-                              ? "Custom capacity"
-                              : "Package limit"
-                          }
+                          Package limit
                         </Text>
                       </GridItem>
 
@@ -2506,7 +2849,7 @@ const PaymentAddPage = () => {
                 )}
 
               {/* =================================================
-                  TAX & PAYMENT SUMMARY
+                  TAX SUMMARY
               ================================================= */}
 
               {selectedSubscription &&
@@ -2576,8 +2919,6 @@ const PaymentAddPage = () => {
                       }}
                       gap={4}
                     >
-                      {/* SUBTOTAL */}
-
                       <GridItem>
                         <Text
                           fontSize="xs"
@@ -2605,8 +2946,6 @@ const PaymentAddPage = () => {
                         </Text>
                       </GridItem>
 
-                      {/* TAX TYPE */}
-
                       <GridItem>
                         <Text
                           fontSize="xs"
@@ -2626,20 +2965,7 @@ const PaymentAddPage = () => {
                             "No Tax"
                           }
                         </Text>
-
-                        {selectedTaxType && (
-                          <Text
-                            fontSize="xs"
-                            color="gray.400"
-                          >
-                            {
-                              selectedTaxType.tax_type_code
-                            }
-                          </Text>
-                        )}
                       </GridItem>
-
-                      {/* TAX RATE */}
 
                       <GridItem>
                         <Text
@@ -2660,20 +2986,7 @@ const PaymentAddPage = () => {
                           }
                           %
                         </Text>
-
-                        {selectedTaxRate && (
-                          <Text
-                            fontSize="xs"
-                            color="gray.400"
-                          >
-                            {
-                              selectedTaxRate.tax_rate_code
-                            }
-                          </Text>
-                        )}
                       </GridItem>
-
-                      {/* TAX AMOUNT */}
 
                       <GridItem>
                         <Text
@@ -2693,19 +3006,6 @@ const PaymentAddPage = () => {
                             breakdown.taxAmount
                           )}
                         </Text>
-
-                        <Text
-                          fontSize="xs"
-                          color="gray.400"
-                        >
-                          {
-                            breakdown.taxPercentage
-                          }
-                          % of{" "}
-                          {formatCurrency(
-                            breakdown.subtotal
-                          )}
-                        </Text>
                       </GridItem>
                     </Grid>
 
@@ -2715,18 +3015,19 @@ const PaymentAddPage = () => {
                       my={4}
                     />
 
-                    <Grid
-                      templateColumns={{
-                        base:
-                          "1fr 1fr",
-                        md:
-                          "1fr 1fr 1fr 1fr 1fr",
+                    <Flex
+                      justify="space-between"
+                      align={{
+                        base: "flex-start",
+                        md: "center",
                       }}
-                      gap={4}
+                      direction={{
+                        base: "column",
+                        md: "row",
+                      }}
+                      gap={3}
                     >
-                      {/* TOTAL */}
-
-                      <GridItem colSpan={2}>
+                      <Box>
                         <Text
                           fontSize="xs"
                           color="gray.500"
@@ -2746,25 +3047,9 @@ const PaymentAddPage = () => {
                             breakdown.total
                           )}
                         </Text>
+                      </Box>
 
-                        <Text
-                          fontSize="xs"
-                          color="gray.400"
-                        >
-                          {formatCurrency(
-                            breakdown.subtotal
-                          )}{" "}
-                          +{" "}
-                          {formatCurrency(
-                            breakdown.taxAmount
-                          )}{" "}
-                          tax
-                        </Text>
-                      </GridItem>
-
-                      {/* STATUS */}
-
-                      <GridItem>
+                      <Box>
                         <Text
                           fontSize="xs"
                           color="gray.500"
@@ -2801,73 +3086,27 @@ const PaymentAddPage = () => {
                             formData.status
                           }
                         </Badge>
-                      </GridItem>
+                      </Box>
 
-                      {/* TRANSACTION */}
-
-                      <GridItem>
+                      <Box>
                         <Text
                           fontSize="xs"
                           color="gray.500"
                           mb={1}
                         >
-                          Transaction ID
+                          Payment Method
                         </Text>
 
                         <Text
                           fontSize="sm"
                           fontWeight="600"
-                          color="#333"
-                          noOfLines={1}
                         >
                           {
-                            formData.transaction_id
+                            formData.payment_method
                           }
                         </Text>
-                      </GridItem>
-
-                      {/* CURRENCY */}
-
-                      <GridItem>
-                        <Text
-                          fontSize="xs"
-                          color="gray.500"
-                          mb={1}
-                        >
-                          Currency
-                        </Text>
-
-                        <Text
-                          fontSize="sm"
-                          fontWeight="600"
-                          color="#333"
-                        >
-                          INR (₹)
-                        </Text>
-                      </GridItem>
-                    </Grid>
-
-                    <Text
-                      fontSize="xs"
-                      color="gray.400"
-                      mt={3}
-                    >
-                      {
-                        breakdown.cycleDisplay
-                      }{" "}
-                      billing:{" "}
-                      {formatCurrency(
-                        breakdown.subtotal
-                      )}{" "}
-                      +{" "}
-                      {
-                        breakdown.taxPercentage
-                      }
-                      % tax ={" "}
-                      {formatCurrency(
-                        breakdown.total
-                      )}
-                    </Text>
+                      </Box>
+                    </Flex>
                   </Box>
                 )}
 
@@ -3010,7 +3249,7 @@ const PaymentAddPage = () => {
               </Box>
 
               {/* =================================================
-                  SUBMIT
+                  ACTIONS
               ================================================= */}
 
               <Flex

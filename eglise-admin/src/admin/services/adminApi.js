@@ -444,6 +444,21 @@ const adminApi = {
       throw error;
     }
   },
+  deleteSubscription: async (id) => {
+  try {
+    const token = getAdminToken();
+    const response = await apiClient.post(
+      `/api/admin/subscriptions/${id}/cancel/`,
+      {},
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    return response.data;
+  } catch (error) {
+    console.error("API Error - Cancel Subscription:", error.response?.data || error.message);
+    throw error;
+  }
+},
+
 
   // ============ TAX TYPES ============
   getTaxTypes: async (params = {}) => {
@@ -687,9 +702,6 @@ const adminApi = {
   // src/admin/services/adminApi.js - Add these methods
 
 // ============ PAYMENTS (BILLS) ============
-// src/admin/services/adminApi.js
-
-// ============ PAYMENTS (BILLS) ============
 getBills: async (params = {}) => {
   try {
     const token = getAdminToken();
@@ -749,29 +761,64 @@ getBillDetail: async (id) => {
 createBill: async (data) => {
   try {
     const token = getAdminToken();
+
+    // PaymentAddPage sends FormData because payment_receipt
+    // is an existing Django ImageField.
+    if (data instanceof FormData) {
+      const response = await apiClient.post(
+        "/api/admin/bills/create/",
+        data,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            // Do NOT manually set Content-Type here.
+            // Axios/browser will add:
+            // multipart/form-data; boundary=...
+          },
+        }
+      );
+
+      return response.data;
+    }
+
+    // Keep JSON support for any other existing callers.
     const payload = {
       church_id: data.church_id,
       subscription_id: data.subscription_id,
-      bill_type: data.bill_type || 'NEW',
+      bill_type: data.bill_type || "NEW",
       billing_cycle: data.billing_cycle,
       duration_months: data.duration_months,
       amount: data.amount,
-      payment_method: data.payment_method || 'CASH',
-      transaction_id: data.transaction_id || '',
-      note: data.note || '',
-      tax_type_id: data.tax_type_id || null,
-      tax_rate_id: data.tax_rate_id || null,
+      payment_method:
+        data.payment_method || "CASH",
+      transaction_id:
+        data.transaction_id || "",
+      note: data.note || "",
+      tax_type_id:
+        data.tax_type_id || null,
+      tax_rate_id:
+        data.tax_rate_id || null,
     };
-    
-    const response = await apiClient.post("/api/admin/bills/create/", payload, {
-      headers: { 
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
+
+    const response = await apiClient.post(
+      "/api/admin/bills/create/",
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
       }
-    });
+    );
+
     return response.data;
   } catch (error) {
-    console.error("API Error - Create Bill:", error.response?.data || error.message);
+    console.error(
+      "API Error - Create Bill:",
+      error.response?.data ||
+        error.message
+    );
+
     throw error;
   }
 },

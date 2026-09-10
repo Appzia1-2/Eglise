@@ -317,6 +317,7 @@ class DioceseSerializer(serializers.ModelSerializer):
         if value and not value.startswith(('http://', 'https://')):
             value = 'https://' + value
         return value
+    
 class PackageSerializer(serializers.ModelSerializer):
     """Admin Package Serializer"""
     is_in_use = serializers.BooleanField(read_only=True)

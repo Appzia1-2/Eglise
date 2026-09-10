@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from accounts.permissions import IsAdminUser
 from registry.models import Diocese, Church, Package, ChurchSubscription, Bill, UpgradeRequest, TaxType, TaxRate
 from registry.utils import send_church_credentials, generate_random_password
-from accounts.models import User
+
 from django.db import transaction  # 🔥 FIX 1: was missing — transaction.atomic() raised NameError
 from django.db.models import Count, Sum, Q
 from django.utils import timezone
@@ -1102,7 +1102,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
-from django.contrib.auth.models import User
+
 
 
 
@@ -1264,7 +1264,6 @@ class PackageCreateAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-
 class PackageDetailAPIView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
 
@@ -1272,36 +1271,200 @@ class PackageDetailAPIView(APIView):
         try:
             package = Package.objects.get(pk=pk)
 
-            is_in_use = package.subscriptions.filter(is_active=True).exists()
+            # Active subscriptions
+            subscriptions = (
+                package.subscriptions
+                .select_related('church')
+                .filter(is_active=True)
+                .order_by('-created_at')
+            )
+
+            is_in_use = subscriptions.exists()
+
+            # ALL subscriptions, including cancelled/expired
             church_count = package.subscriptions.count()
 
             churches = []
-            for sub in package.subscriptions.select_related('church').filter(is_active=True):
+
+            for sub in subscriptions:
+                church = sub.church
+
+                # Try to get current member count safely
+                member_count = 0
+
+                try:
+                    # Most common related_name
+                    if hasattr(church, "members"):
+                        member_count = church.members.filter(
+                            is_deleted=False
+                        ).count()
+                except Exception:
+                    try:
+                        member_count = church.members.count()
+                    except Exception:
+                        member_count = 0
+
                 churches.append({
-                    'id': sub.church.id,
-                    'name': sub.church.name,
-                    'email': sub.church.email,
-                    'billing_cycle': sub.billing_cycle,
-                    'payment_status': sub.payment_status,
-                    'start_date': sub.start_date,
-                    'end_date': sub.end_date,
+                    "id": church.id,
+                    "name": church.name,
+                    "code": getattr(church, "code", None),
+                    "church_code": getattr(church, "code", None),
+
+                    "email": church.email,
+
+                    "members": member_count,
+                    "member_count": member_count,
+
+                    "member_limit": package.member_limit,
+
+                    "billing": (
+                        "Yearly"
+                        if sub.billing_cycle == "YEARLY"
+                        else "Monthly"
+                    ),
+                    "billing_cycle": sub.billing_cycle,
+
+                    "payment_status": sub.payment_status,
+
+                    "status": (
+                        "Active"
+                        if sub.is_active
+                        else "Inactive"
+                    ),
+
+                    "is_active": sub.is_active,
+
+                    "start_date": sub.start_date,
+                    "end_date": sub.end_date,
+
+                    "created_at": sub.created_at,
                 })
 
+            # ---------------------------------------------------------
+            # RECENT ACTIVITY
+            # ---------------------------------------------------------
+            #
+            # There is currently no Activity model in the code you
+            # provided, so we derive useful activity from package and
+            # subscription timestamps.
+            #
+            # This gives the Package View page data immediately.
+            # ---------------------------------------------------------
+
+            activities = []
+
+            # Package updated
+            if package.updated_at:
+                activities.append({
+                    "type": "PACKAGE_UPDATED",
+                    "title": "Package updated",
+                    "description": "Package details were updated",
+                    "actor": "Super Admin",
+                    "date": package.updated_at,
+                    "timestamp": package.updated_at,
+                })
+
+            # Package created
+            if package.created_at:
+                activities.append({
+                    "type": "PACKAGE_CREATED",
+                    "title": "Package created",
+                    "description": f"{package.name} package was created",
+                    "actor": "Super Admin",
+                    "date": package.created_at,
+                    "timestamp": package.created_at,
+                })
+
+            # Subscription activities
+            for sub in package.subscriptions.select_related("church").order_by(
+                "-created_at"
+            )[:20]:
+
+                church_name = (
+                    sub.church.name
+                    if sub.church
+                    else "Unknown Church"
+                )
+
+                # Church subscribed
+                if sub.created_at:
+                    activities.append({
+                        "type": "CHURCH_SUBSCRIBED",
+                        "title": "Church subscribed",
+                        "description": church_name,
+                        "actor": church_name,
+                        "date": sub.created_at,
+                        "timestamp": sub.created_at,
+                    })
+
+                # Payment / activation
+                if sub.payment_status == "PAID" and sub.updated_at:
+                    activities.append({
+                        "type": "SUBSCRIPTION_ACTIVATED",
+                        "title": "Subscription activated",
+                        "description": church_name,
+                        "actor": "Super Admin",
+                        "date": sub.updated_at,
+                        "timestamp": sub.updated_at,
+                    })
+
+            # Sort newest first
+            activities.sort(
+                key=lambda item: item.get("timestamp") or "",
+                reverse=True
+            )
+
+            # Only show latest 5
+            activities = activities[:5]
+
             data = {
-                'id': package.id,
-                'code': package.code,
-                'name': package.name,
-                'member_limit': package.member_limit,
-                'rate_per_member_monthly': float(package.rate_per_member_monthly) if package.rate_per_member_monthly else None,
-                'rate_per_member_yearly': float(package.rate_per_member_yearly) if package.rate_per_member_yearly else None,
-                'is_active': package.is_active,
-                'is_in_use': is_in_use,
-                'church_count': church_count,
-                'can_edit': True,
-                'can_delete': not is_in_use,
-                'churches': churches,
-                'created_at': package.created_at,
-                'updated_at': package.updated_at,
+                "id": package.id,
+                "code": package.code,
+                "name": package.name,
+
+                "member_limit": package.member_limit,
+
+                "rate_per_member_monthly": (
+                    float(package.rate_per_member_monthly)
+                    if package.rate_per_member_monthly
+                    else None
+                ),
+
+                "rate_per_member_yearly": (
+                    float(package.rate_per_member_yearly)
+                    if package.rate_per_member_yearly
+                    else None
+                ),
+
+                "upgrade_rate_monthly": (
+                    float(package.upgrade_rate_monthly)
+                    if getattr(package, "upgrade_rate_monthly", None)
+                    else None
+                ),
+
+                "upgrade_rate_yearly": (
+                    float(package.upgrade_rate_yearly)
+                    if getattr(package, "upgrade_rate_yearly", None)
+                    else None
+                ),
+
+                "is_active": package.is_active,
+
+                "is_in_use": is_in_use,
+                "church_count": church_count,
+
+                "can_edit": True,
+                "can_delete": not is_in_use,
+
+                "churches": churches,
+
+                # Both names are supplied so the frontend can use
+                # either one.
+                "activity": activities,
+                "recent_activity": activities,
+
+                "created_at": package.created_at,
+                "updated_at": package.updated_at,
             }
 
             return Response({
@@ -1314,10 +1477,17 @@ class PackageDetailAPIView(APIView):
                 {"error": "Package not found"},
                 status=status.HTTP_404_NOT_FOUND
             )
+
         except Exception as e:
-            logger.error(f"Error fetching package {pk}: {str(e)}", exc_info=True)
+            logger.error(
+                f"Error fetching package {pk}: {str(e)}",
+                exc_info=True
+            )
+
             return Response(
-                {"error": "Failed to fetch package"},
+                {
+                    "error": f"Failed to fetch package: {str(e)}"
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -1338,14 +1508,14 @@ class PackageDetailAPIView(APIView):
 
             if 'member_limit' in request.data:
                 member_limit = request.data['member_limit']
-                
+
                 # Validate member_limit
                 if member_limit is None or member_limit == '':
                     return Response(
                         {"error": "Member limit cannot be empty"},
                         status=status.HTTP_400_BAD_REQUEST
                     )
-                
+
                 try:
                     member_limit = int(member_limit)
                     if member_limit < 0:
@@ -1353,20 +1523,20 @@ class PackageDetailAPIView(APIView):
                             {"error": "Member limit cannot be negative"},
                             status=status.HTTP_400_BAD_REQUEST
                         )
-                    
+
                     # Check for duplicate (excluding current package)
                     if Package.objects.exclude(pk=pk).filter(member_limit=member_limit).exists():
                         return Response(
                             {"error": f"Member limit {member_limit} is already in use by another package. Please use a different limit."},
                             status=status.HTTP_400_BAD_REQUEST
                         )
-                        
+
                 except (ValueError, TypeError):
                     return Response(
                         {"error": "Member limit must be a valid number"},
                         status=status.HTTP_400_BAD_REQUEST
                     )
-                
+
                 package.member_limit = member_limit
 
             if 'rate_per_member_monthly' in request.data:
@@ -1411,14 +1581,14 @@ class PackageDetailAPIView(APIView):
                 )
 
             member_limit = request.data.get('member_limit')
-            
+
             # Validate member_limit
             if member_limit is None or member_limit == '':
                 return Response(
                     {"error": "Member limit is required"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
+
             try:
                 member_limit = int(member_limit)
                 if member_limit < 0:
@@ -1426,14 +1596,14 @@ class PackageDetailAPIView(APIView):
                         {"error": "Member limit cannot be negative"},
                         status=status.HTTP_400_BAD_REQUEST
                     )
-                
+
                 # Check for duplicate (excluding current package)
                 if Package.objects.exclude(pk=pk).filter(member_limit=member_limit).exists():
                     return Response(
                         {"error": f"Member limit {member_limit} is already in use by another package. Please use a different limit."},
                         status=status.HTTP_400_BAD_REQUEST
                     )
-                    
+
             except (ValueError, TypeError):
                 return Response(
                     {"error": "Member limit must be a valid number"},
@@ -1517,7 +1687,6 @@ class PackageDetailAPIView(APIView):
             'can_delete': not has_active_subs,
             'warning': "Existing subscriptions preserve their original rates" if has_active_subs else None
         }
-
 
 class PackageChurchesAPIView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
@@ -1900,7 +2069,7 @@ class SubscriptionActivateAPIView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-
+from accounts.models import User
 class SubscriptionCancelAPIView(APIView):
     """Cancel a subscription"""
     permission_classes = [IsAuthenticated, IsAdminUser]
@@ -2560,6 +2729,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 # Keep your existing imports for:
 # Church
@@ -2575,6 +2745,11 @@ class BillCreateAPIView(APIView):
     """
     Create a new bill.
 
+    Supports:
+    - JSON requests
+    - multipart/form-data requests
+    - payment_receipt image upload
+
     IMPORTANT:
     - ChurchSubscription calculates the PRE-TAX subscription amount.
     - Bill selects the tax.
@@ -2583,6 +2758,12 @@ class BillCreateAPIView(APIView):
 
     permission_classes = [IsAuthenticated, IsAdminUser]
 
+    parser_classes = [
+        MultiPartParser,
+        FormParser,
+        JSONParser,
+    ]
+
     def post(self, request):
 
         try:
@@ -2590,8 +2771,13 @@ class BillCreateAPIView(APIView):
             # REQUEST DATA
             # ============================================================
 
-            church_id = request.data.get('church_id')
-            subscription_id = request.data.get('subscription_id')
+            church_id = request.data.get(
+                'church_id'
+            )
+
+            subscription_id = request.data.get(
+                'subscription_id'
+            )
 
             bill_type = request.data.get(
                 'bill_type',
@@ -2606,8 +2792,8 @@ class BillCreateAPIView(APIView):
                 'duration_months'
             )
 
-            # Amount can be supplied by frontend for display,
-            # but we should NOT blindly trust it.
+            # Amount can be supplied by frontend for verification,
+            # but the backend calculates the real amount.
             requested_amount = request.data.get(
                 'amount'
             )
@@ -2623,6 +2809,18 @@ class BillCreateAPIView(APIView):
 
             note = request.data.get(
                 'note'
+            )
+
+            # ============================================================
+            # PAYMENT RECEIPT
+            # ============================================================
+
+            # Existing Bill.payment_receipt ImageField.
+            #
+            # For multipart/form-data this comes from request.FILES.
+            # For normal JSON requests this will simply be None.
+            payment_receipt = request.FILES.get(
+                'payment_receipt'
             )
 
             tax_type_id = request.data.get(
@@ -2722,8 +2920,8 @@ class BillCreateAPIView(APIView):
             # BILLING DETAILS
             # ============================================================
 
-            # If billing_cycle was not supplied, use the subscription's
-            # billing cycle.
+            # If billing_cycle was not supplied,
+            # use subscription billing cycle.
             if not billing_cycle:
                 billing_cycle = subscription.billing_cycle
 
@@ -2738,7 +2936,8 @@ class BillCreateAPIView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # If duration was not supplied, use subscription duration.
+            # If duration was not supplied,
+            # use subscription duration.
             if duration_months is None:
                 duration_months = subscription.duration_months
 
@@ -2754,11 +2953,6 @@ class BillCreateAPIView(APIView):
 
             if bill_type == 'NEW':
 
-                # Subscription calculates price.
-                #
-                # IMPORTANT:
-                # ChurchSubscription.get_total_price()
-                # does NOT include tax.
                 amount = Decimal(
                     subscription.get_total_price()
                 )
@@ -2769,7 +2963,6 @@ class BillCreateAPIView(APIView):
 
             elif bill_type == 'RENEW':
 
-                # Renewal uses the subscription's current price.
                 amount = Decimal(
                     subscription.get_total_price()
                 )
@@ -2780,10 +2973,7 @@ class BillCreateAPIView(APIView):
 
             elif bill_type == 'EXTENSION':
 
-                # For now use subscription price.
-                #
-                # If your extension has a different pricing rule,
-                # replace this calculation with the extension logic.
+                # Currently uses subscription price.
                 amount = Decimal(
                     subscription.get_total_price()
                 )
@@ -2794,8 +2984,8 @@ class BillCreateAPIView(APIView):
 
             elif bill_type == 'UPGRADE':
 
-                # For an upgrade, the frontend should send the new
-                # package ID.
+                # For an upgrade, frontend must send
+                # the new package ID.
                 new_package_id = request.data.get(
                     'new_package_id'
                 )
@@ -2824,12 +3014,7 @@ class BillCreateAPIView(APIView):
                         status=status.HTTP_404_NOT_FOUND
                     )
 
-                # Calculate upgrade price using subscription logic.
-                #
-                # This gives:
-                # new_price
-                # - pro-rata credit
-                # = amount before tax
+                # Calculate upgrade price.
                 upgrade_data = (
                     subscription.calculate_upgrade_cost(
                         new_package=new_package,
@@ -2850,10 +3035,8 @@ class BillCreateAPIView(APIView):
             if amount < 0:
                 amount = Decimal('0')
 
-            # Optional frontend amount verification.
-            #
-            # We calculate the real amount on the backend, so the
-            # frontend cannot change the bill amount.
+            # Frontend amount is only verified.
+            # Backend calculated amount remains authoritative.
             if requested_amount is not None:
 
                 try:
@@ -2861,7 +3044,6 @@ class BillCreateAPIView(APIView):
                         str(requested_amount)
                     )
 
-                    # Only compare if frontend supplied a valid value.
                     if requested_amount_decimal != amount:
 
                         return Response(
@@ -2871,12 +3053,17 @@ class BillCreateAPIView(APIView):
                                     "The submitted amount does not "
                                     "match the calculated subscription amount."
                                 ),
-                                "calculated_amount": float(amount)
+                                "calculated_amount": float(
+                                    amount
+                                )
                             },
                             status=status.HTTP_400_BAD_REQUEST
                         )
 
-                except (InvalidOperation, ValueError):
+                except (
+                    InvalidOperation,
+                    ValueError
+                ):
                     return Response(
                         {
                             "error": "Invalid amount"
@@ -2892,7 +3079,7 @@ class BillCreateAPIView(APIView):
             tax_rate = None
 
             # ------------------------------------------------------------
-            # Tax type
+            # TAX TYPE
             # ------------------------------------------------------------
 
             if tax_type_id:
@@ -2911,7 +3098,7 @@ class BillCreateAPIView(APIView):
                     )
 
             # ------------------------------------------------------------
-            # Tax rate
+            # TAX RATE
             # ------------------------------------------------------------
 
             if tax_rate_id:
@@ -2930,7 +3117,7 @@ class BillCreateAPIView(APIView):
                     )
 
             # ------------------------------------------------------------
-            # Require tax type and rate together
+            # REQUIRE TAX TYPE AND RATE TOGETHER
             # ------------------------------------------------------------
 
             if tax_type and not tax_rate:
@@ -2956,7 +3143,7 @@ class BillCreateAPIView(APIView):
                 )
 
             # ------------------------------------------------------------
-            # Verify tax rate belongs to tax type
+            # VERIFY TAX RATE BELONGS TO TAX TYPE
             # ------------------------------------------------------------
 
             if tax_rate and tax_type:
@@ -2974,7 +3161,53 @@ class BillCreateAPIView(APIView):
                     )
 
             # ============================================================
-            # CREATE BILL
+            # PAYMENT RECEIPT VALIDATION
+            # ============================================================
+
+            if payment_receipt:
+
+                # Allow only image files.
+                content_type = getattr(
+                    payment_receipt,
+                    'content_type',
+                    ''
+                )
+
+                allowed_types = [
+                    'image/jpeg',
+                    'image/jpg',
+                    'image/png',
+                    'image/webp',
+                ]
+
+                if content_type not in allowed_types:
+                    return Response(
+                        {
+                            "error": (
+                                "Invalid payment receipt. "
+                                "Only JPG, JPEG, PNG and WEBP "
+                                "images are allowed."
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Maximum 5 MB.
+                max_size = 5 * 1024 * 1024
+
+                if payment_receipt.size > max_size:
+                    return Response(
+                        {
+                            "error": (
+                                "Payment receipt image must "
+                                "be 5 MB or smaller."
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # ============================================================
+            # BREAKDOWN
             # ============================================================
 
             breakdown = {
@@ -3019,14 +3252,21 @@ class BillCreateAPIView(APIView):
                 ),
 
                 'tax_percentage': (
-                    float(tax_rate.rate_percentage)
+                    float(
+                        tax_rate.rate_percentage
+                    )
                     if tax_rate
                     else 0
                 ),
             }
 
+            # ============================================================
+            # CREATE BILL
+            # ============================================================
+
             bill = Bill.objects.create(
                 church=church,
+
                 subscription=subscription,
 
                 bill_type=bill_type,
@@ -3045,6 +3285,9 @@ class BillCreateAPIView(APIView):
 
                 note=note,
 
+                # EXISTING IMAGE FIELD
+                payment_receipt=payment_receipt,
+
                 tax_type=tax_type,
 
                 tax_rate=tax_rate,
@@ -3055,6 +3298,24 @@ class BillCreateAPIView(APIView):
             )
 
             # ============================================================
+            # PAYMENT RECEIPT URL
+            # ============================================================
+
+            payment_receipt_url = None
+
+            if bill.payment_receipt:
+
+                try:
+                    payment_receipt_url = (
+                        request.build_absolute_uri(
+                            bill.payment_receipt.url
+                        )
+                    )
+
+                except Exception:
+                    payment_receipt_url = None
+
+            # ============================================================
             # RESPONSE
             # ============================================================
 
@@ -3062,7 +3323,9 @@ class BillCreateAPIView(APIView):
                 {
                     "status": "success",
 
-                    "message": "Bill created successfully",
+                    "message": (
+                        "Bill created successfully"
+                    ),
 
                     "data": {
                         'id': bill.id,
@@ -3071,7 +3334,17 @@ class BillCreateAPIView(APIView):
 
                         'invoice_number': bill.invoice_number,
 
-                        'church_name': church.name,
+                        'church_id': (
+                            church.id
+                        ),
+
+                        'church_name': (
+                            church.name
+                        ),
+
+                        'subscription_id': (
+                            subscription.id
+                        ),
 
                         'package_name': (
                             subscription.package.name
@@ -3079,9 +3352,13 @@ class BillCreateAPIView(APIView):
                             else None
                         ),
 
-                        'bill_type': bill.bill_type,
+                        'bill_type': (
+                            bill.bill_type
+                        ),
 
-                        'billing_cycle': bill.billing_cycle,
+                        'billing_cycle': (
+                            bill.billing_cycle
+                        ),
 
                         'duration_months': (
                             bill.duration_months
@@ -3118,7 +3395,9 @@ class BillCreateAPIView(APIView):
                             bill.total_amount
                         ),
 
-                        'status': bill.status,
+                        'status': (
+                            bill.status
+                        ),
 
                         'payment_method': (
                             bill.payment_method
@@ -3126,6 +3405,11 @@ class BillCreateAPIView(APIView):
 
                         'transaction_id': (
                             bill.transaction_id
+                        ),
+
+                        # PAYMENT RECEIPT
+                        'payment_receipt': (
+                            payment_receipt_url
                         ),
 
                         'created_at': (

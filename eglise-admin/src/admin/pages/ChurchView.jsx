@@ -1,656 +1,967 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate, useLocation, useParams } from "react-router-dom";
+// src/admin/pages/ChurchViewPage.jsx
+
+import React, { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+
 import {
   Box,
   Container,
   Heading,
+  Text,
   VStack,
   HStack,
   Button,
-  Text,
-  Flex,
   Badge,
-  Spinner,
-  SimpleGrid,
-  Icon,
+  Flex,
   Circle,
-  Image,
+  Spinner,
+  Grid,
+  GridItem,
+  Tabs,
+  Menu,
+  ProgressRoot,
+  ProgressTrack,
+  ProgressRange,
 } from "@chakra-ui/react";
+
 import {
+  LuChevronRight,
+  LuChevronDown,
   LuChurch,
-  LuMapPin,
-  LuMail,
-  LuPhone,
-  LuGlobe,
+  LuBadgeCheck,
   LuUsers,
   LuUserCog,
   LuFileText,
   LuIndianRupee,
-  LuChevronDown,
-  LuBadgeCheck,
+  LuInfo,
+  LuMail,
+  LuPhone,
+  LuGlobe,
+  LuMapPin,
+  LuChartColumn,
+  LuClock,
+  LuCircleUserRound,
+  LuPencil,
   LuCreditCard,
   LuRefreshCw,
-  LuPencil,
   LuUserPlus,
-  LuTrendingUp,
-  LuCalendar,
-  LuHash,
-  LuInfo,
 } from "react-icons/lu";
-import { Country, State } from "country-state-city";
+
 import AdminLayout from "../components/AdminLayout";
-import { toaster } from "../../components/ui/toaster";
 import adminApi from "../services/adminApi";
 
-const TABS = ["Overview", "Subscription", "Payments", "Administrators", "Documents", "Activity"];
+/* --------------------------------------------------
+   Design Tokens
+-------------------------------------------------- */
 
-const CURRENCY_LABELS = {
-  USD: "USD ($) — US Dollar",
-  EUR: "EUR (€) — Euro",
-  GBP: "GBP (£) — British Pound",
-  INR: "INR (₹) — Indian Rupee",
-  AED: "AED (د.إ) — UAE Dirham",
-  SAR: "SAR (﷼) — Saudi Riyal",
-  SGD: "SGD (S$) — Singapore Dollar",
-  MYR: "MYR (RM) — Malaysian Ringgit",
-  AUD: "AUD (A$) — Australian Dollar",
-  CAD: "CAD (C$) — Canadian Dollar",
+const COLORS = {
+  primaryMaroon: "#ae2050",
+  darkNavy: "#182338",
+  mutedText: "#60708C",
+  border: "#DCE2EA",
+  white: "#FFFFFF",
+  lightBg: "#F7F8FA",
+  softPink: "#FCE9EF",
+  green: "#16805C",
+  greenBg: "#E8F7F0",
+  red: "#C62828",
+  gold: "#B7791F",
 };
 
-const primaryMaroon = "var(--primary-maroon)";
+/* --------------------------------------------------
+   Formatting Helpers
+-------------------------------------------------- */
 
-const ChurchView = () => {
+const money = (value, { withCents = false } = {}) => {
+  if (value === null || value === undefined || value === "") {
+    return "₹0";
+  }
+
+  const number = Number(value);
+
+  if (Number.isNaN(number)) {
+    return `₹${value}`;
+  }
+
+  return `₹${number.toLocaleString("en-IN", {
+    minimumFractionDigits: withCents ? 2 : 0,
+    maximumFractionDigits: withCents ? 2 : 0,
+  })}`;
+};
+
+const compactMoney = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return "₹0";
+  }
+
+  const number = Number(value);
+
+  if (Number.isNaN(number)) {
+    return `₹${value}`;
+  }
+
+  if (number >= 100000) {
+    return `₹${(number / 100000).toFixed(1)}L`;
+  }
+
+  if (number >= 1000) {
+    return `₹${(number / 1000).toFixed(0)}K`;
+  }
+
+  return `₹${number}`;
+};
+
+const formatDate = (value) => {
+  if (!value) return "-";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const formatDateTime = (value) => {
+  if (!value) return "-";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return date.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const daysRemaining = (renewDate) => {
+  if (!renewDate) return null;
+
+  const end = new Date(renewDate);
+
+  if (Number.isNaN(end.getTime())) return null;
+
+  const diff = Math.ceil(
+    (end.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+  );
+
+  return diff;
+};
+
+/* --------------------------------------------------
+   Response Helpers
+-------------------------------------------------- */
+
+const unwrapObject = (response) => {
+  if (!response) return null;
+
+  let data = response;
+
+  if (data?.data && typeof data.data === "object" && !Array.isArray(data.data)) {
+    data = data.data;
+  }
+
+  if (data?.church && typeof data.church === "object") {
+    data = data.church;
+  }
+
+  if (data?.church_detail && typeof data.church_detail === "object") {
+    data = data.church_detail;
+  }
+
+  return data;
+};
+
+/* --------------------------------------------------
+   Small Building Blocks
+-------------------------------------------------- */
+
+const StatCard = ({ icon, value, label }) => (
+  <HStack spacing={3} minW="0">
+    <Circle size="46px" bg={COLORS.softPink} color={COLORS.primaryMaroon} flexShrink={0}>
+      {icon}
+    </Circle>
+    <Box>
+      <Text fontSize="20px" fontWeight="700" color={COLORS.darkNavy} lineHeight="1.1">
+        {value}
+      </Text>
+      <Text fontSize="12px" color={COLORS.mutedText} mt="2px">
+        {label}
+      </Text>
+    </Box>
+  </HStack>
+);
+
+const StatusPill = ({ tone = "green", children, icon }) => {
+  const tones = {
+    green: { bg: COLORS.greenBg, color: COLORS.green },
+    maroon: { bg: COLORS.softPink, color: COLORS.primaryMaroon },
+    gray: { bg: "#EEF1F5", color: COLORS.mutedText },
+  };
+
+  const s = tones[tone] || tones.green;
+
+  return (
+    <Badge
+      display="inline-flex"
+      alignItems="center"
+      gap={1}
+      px={2.5}
+      py={1}
+      borderRadius="full"
+      fontSize="11px"
+      fontWeight="700"
+      bg={s.bg}
+      color={s.color}
+      textTransform="none"
+    >
+      {icon}
+      {children}
+    </Badge>
+  );
+};
+
+const InfoCard = ({ icon, title, children, action }) => (
+  <Box
+    bg="white"
+    border="1px solid"
+    borderColor={COLORS.border}
+    borderRadius="12px"
+    p={4}
+    h="100%"
+  >
+    <Flex align="center" justify="space-between" mb={3.5}>
+      <HStack spacing={2.5}>
+        <Circle size="28px" bg={COLORS.softPink} color={COLORS.primaryMaroon}>
+          {icon}
+        </Circle>
+        <Heading fontSize="14px" color={COLORS.darkNavy} fontWeight="700">
+          {title}
+        </Heading>
+      </HStack>
+      {action}
+    </Flex>
+    {children}
+  </Box>
+);
+
+const InfoRow = ({ label, value }) => (
+  <Flex justify="space-between" gap={4} py={1.5}>
+    <Text fontSize="13px" color={COLORS.mutedText}>
+      {label}
+    </Text>
+    <Text fontSize="13px" color={COLORS.darkNavy} fontWeight="600" textAlign="right">
+      {value ?? "-"}
+    </Text>
+  </Flex>
+);
+
+const ContactRow = ({ icon, value, isLink }) => (
+  <HStack spacing={2.5} py={1.5}>
+    <Box color={COLORS.mutedText} flexShrink={0}>
+      {icon}
+    </Box>
+    <Text
+      fontSize="13px"
+      color={isLink ? COLORS.primaryMaroon : COLORS.darkNavy}
+      fontWeight={isLink ? "600" : "500"}
+    >
+      {value}
+    </Text>
+  </HStack>
+);
+
+/* --------------------------------------------------
+   Main Component
+-------------------------------------------------- */
+
+const ChurchViewPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams();
-  const [church, setChurch] = useState(null);
-  const [bills, setBills] = useState([]);
+
+  const [churchData, setChurchData] = useState(location.state?.church || null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("Overview");
-  const [showActions, setShowActions] = useState(false);
+  const [activeTab, setActiveTab] = useState("overview");
 
   useEffect(() => {
-    if (location.state?.church) {
-      setChurch(location.state.church);
-      setIsLoading(false);
-      fetchBills(location.state.church.id);
-    } else if (id) {
-      fetchChurch(id);
-    } else {
-      navigate("/admin/churches");
-    }
-  }, [location, id, navigate]);
+    let mounted = true;
 
-  const fetchChurch = async (churchId) => {
-    try {
-      const response = await adminApi.getChurchDetail(churchId);
-      const churchData = response?.data || response;
-      setChurch(churchData);
-      fetchBills(churchId);
-    } catch (error) {
-      console.error("Error fetching church:", error);
-      toaster.create({
-        title: "Error",
-        description: "Failed to load church details.",
-        type: "error",
-        duration: 5000,
-      });
-      navigate("/admin/churches");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    const loadChurch = async () => {
+      if (!id) {
+        if (mounted) setIsLoading(false);
+        return;
+      }
 
-  const fetchBills = async (churchId) => {
-    try {
-      const response = await adminApi.getBills({ church: churchId });
-      let list = [];
-      if (response) {
-        if (Array.isArray(response)) {
-          list = response;
-        } else if (response.results && Array.isArray(response.results)) {
-          list = response.results;
-        } else if (response.data && Array.isArray(response.data)) {
-          list = response.data;
-        } else if (response.data && response.data.results && Array.isArray(response.data.results)) {
-          list = response.data.results;
+      if (mounted) setIsLoading(true);
+
+      try {
+        const response = await adminApi.getChurchDetail(id);
+        const data = unwrapObject(response);
+
+        if (mounted) {
+          if (data && typeof data === "object") {
+            setChurchData(data);
+          } else if (location.state?.church) {
+            setChurchData(location.state.church);
+          }
+        }
+      } catch (error) {
+        console.error(
+          "Error loading church detail:",
+          error?.response?.data || error?.message || error
+        );
+
+        if (mounted && location.state?.church) {
+          setChurchData(location.state.church);
         }
       }
-      setBills(list);
-    } catch (error) {
-      console.error("Error fetching bills for church:", error);
-      setBills([]);
-    }
+
+      if (mounted) setIsLoading(false);
+    };
+
+    loadChurch();
+
+    return () => {
+      mounted = false;
+    };
+  }, [id]);
+
+  const church = useMemo(() => churchData || {}, [churchData]);
+
+  const churchName = church?.name || church?.church_name || "Church";
+  const churchCode = church?.code || church?.church_code || `CH-${id}`;
+  const city = church?.city || church?.address?.city || "";
+  const stateName = church?.state || church?.address?.state || "";
+  const isActive = church?.is_active ?? church?.active ?? true;
+  const isVerified = church?.is_verified ?? church?.verified ?? false;
+
+  const currentPackage =
+    church?.current_package?.name || church?.package_name || church?.package || "-";
+
+  const subscriptionRenewsOn =
+    church?.subscription?.renews_on ||
+    church?.subscription_renews_on ||
+    church?.renews_on;
+
+  const memberCount = church?.member_count ?? church?.members_count ?? 0;
+  const adminCount = church?.administrator_count ?? church?.admins_count ?? 0;
+  const documentCount = church?.document_count ?? church?.documents_count ?? 0;
+  const annualValue = church?.annual_value ?? church?.subscription?.annual_value ?? 0;
+
+  const diocese = church?.diocese || "-";
+  const established = church?.established_year || church?.established || "-";
+  const registrationNo = church?.registration_no || church?.registration_number || "-";
+  const currency = church?.currency || "Indian Rupee (INR)";
+  const primaryLanguage = church?.primary_language || "English";
+  const timeZone = church?.time_zone || "Asia/Kolkata";
+
+  const email = church?.email || "-";
+  const phone = church?.phone || church?.phone_primary || "-";
+  const phoneSecondary = church?.phone_secondary || "";
+  const website = church?.website || "";
+
+  const addressLine1 = church?.address_line1 || church?.address?.line1 || "";
+  const addressLine2 = church?.address_line2 || church?.address?.line2 || "";
+  const postalCode = church?.postal_code || church?.address?.postal_code || "";
+  const country = church?.country || church?.address?.country || "India";
+
+  const subscriptionPackageName =
+    church?.subscription?.package_name || currentPackage;
+  const subscriptionStatus = church?.subscription?.is_active ?? isActive;
+  const subscriptionAmount =
+    church?.subscription?.amount ?? annualValue;
+  const subscriptionStartedOn =
+    church?.subscription?.started_on || church?.subscription_started_on;
+  const remainingDays = daysRemaining(subscriptionRenewsOn);
+
+  const administrators = Array.isArray(church?.administrators)
+    ? church.administrators
+    : [];
+
+  const recentActivities = Array.isArray(church?.recent_activity)
+    ? church.recent_activity
+    : Array.isArray(church?.activities)
+    ? church.activities
+    : [];
+
+  const activityIcon = (type) => {
+    const t = String(type || "").toUpperCase();
+
+    if (t.includes("PAYMENT")) return <LuIndianRupee size={14} strokeWidth={2} />;
+    if (t.includes("PACKAGE") || t.includes("RENEW"))
+      return <LuRefreshCw size={14} strokeWidth={2} />;
+    if (t.includes("ADMIN") || t.includes("INVITE"))
+      return <LuUserPlus size={14} strokeWidth={2} />;
+    if (t.includes("UPDATE")) return <LuPencil size={14} strokeWidth={2} />;
+
+    return <LuClock size={14} strokeWidth={2} />;
   };
+
+  const tabItems = [
+    { value: "overview", label: "Overview" },
+    { value: "subscription", label: "Subscription" },
+    { value: "payments", label: "Payments" },
+    { value: "administrators", label: "Administrators" },
+    { value: "documents", label: "Documents" },
+    { value: "activity", label: "Activity" },
+  ];
 
   if (isLoading) {
     return (
       <AdminLayout>
-        <Container maxW="container.xl" py={6}>
-          <Flex justify="center" align="center" minH="300px">
-            <Spinner size="xl" style={{ color: primaryMaroon }} />
+        <Container maxW="1400px" px={{ base: 4, md: 6 }} py={6}>
+          <Flex minH="55vh" align="center" justify="center">
+            <VStack spacing={3}>
+              <Spinner size="lg" thickness="3px" color={COLORS.primaryMaroon} />
+              <Text fontSize="13px" color={COLORS.mutedText}>
+                Loading church details...
+              </Text>
+            </VStack>
           </Flex>
         </Container>
       </AdminLayout>
     );
   }
 
-  if (!church) {
-    return (
-      <AdminLayout>
-        <Container maxW="container.xl" py={6}>
-          <Text>Church not found</Text>
-        </Container>
-      </AdminLayout>
-    );
-  }
-
-  const countryLabel = church.country
-    ? Country.getCountryByCode(church.country)?.name || church.country
-    : null;
-  const stateLabel = church.state
-    ? State.getStateByCodeAndCountry(church.state, church.country)?.name || church.state
-    : null;
-  const currencyLabel = church.currency ? CURRENCY_LABELS[church.currency] || church.currency : null;
-
-  const addressLine1 = church.address;
-  const addressLine2 = church.address_line1;
-
-  const churchCode = church.code || `CH-${String(church.id).padStart(3, "0")}`;
-  const locationLabel = [church.city, stateLabel].filter(Boolean).join(", ") || church.city || "—";
-  const isVerified = church.is_verified ?? church.is_active ?? true;
-
-  const subscription = church.subscription || {};
-  const packageName = subscription.locked_package_name || subscription.package_name || church.current_package || church.package_name || "—";
-  const renewsOn = subscription.renews_on || subscription.next_billing_date || subscription.end_date
-    ? new Date(subscription.renews_on || subscription.next_billing_date || subscription.end_date).toLocaleDateString("en-US", {
-        day: "2-digit", month: "short", year: "numeric",
-      })
-    : null;
-  const startedOn = subscription.started_on || subscription.start_date || subscription.created_at
-    ? new Date(subscription.started_on || subscription.start_date || subscription.created_at).toLocaleDateString("en-US", {
-        day: "2-digit", month: "short", year: "numeric",
-      })
-    : null;
-  const daysRemaining = subscription.days_remaining;
-  const subscriptionProgressPct = subscription.progress_pct ?? 0;
-
-  const paidBills = bills.filter((b) => b.status === "PAID" || b.paid_at);
-  const annualValue =
-    subscription.annual_value ??
-    subscription.total_price ??
-    (paidBills.length ? paidBills.reduce((sum, b) => sum + Number(b.amount || 0), 0) : null);
-
-  const stats = [
-    { label: "Members", value: church.member_count ?? church.stats?.members_count ?? "—", icon: LuUsers, tinted: true },
-    { label: "Administrators", value: church.administrators?.length ?? church.admin_count ?? "—", icon: LuUserCog, tinted: false },
-    { label: "Documents", value: church.document_count ?? "—", icon: LuFileText, tinted: false },
-    {
-      label: "Annual Value",
-      value: annualValue != null ? `₹${Number(annualValue).toLocaleString("en-IN")}` : "—",
-      icon: LuIndianRupee,
-      tinted: true,
-    },
-  ];
-
-  const administrators = church.administrators || [];
-
-  const recentActivity = [...bills]
-    .sort((a, b) => new Date(b.paid_at || b.created_at) - new Date(a.paid_at || a.created_at))
-    .slice(0, 4)
-    .map((b) => ({
-      icon: LuIndianRupee,
-      title: b.status === "PAID" ? "Payment received" : "Bill created",
-      description: `₹${Number(b.amount || 0).toLocaleString("en-IN")} via ${b.payment_method || "—"}`,
-      date: b.paid_at || b.created_at
-        ? new Date(b.paid_at || b.created_at).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" })
-        : "—",
-    }));
-
-  // Sample activity data for display when no bills exist
-  const sampleActivities = [
-    {
-      icon: LuTrendingUp,
-      title: "Package renewed",
-      description: `${packageName} package renewed for 1 year`,
-      date: new Date().toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" }),
-    },
-    {
-      icon: LuInfo,
-      title: "Church details updated",
-      description: "Address and contact information updated",
-      date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" }),
-    },
-    {
-      icon: LuUserPlus,
-      title: "Administrator invited",
-      description: "New administrator invited to join",
-      date: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" }),
-    },
-  ];
-
-  const displayActivities = recentActivity.length > 0 ? recentActivity : sampleActivities;
-
   return (
     <AdminLayout>
-      <Container maxW="container.xl" py={6}>
+      <Container maxW="1400px" px={{ base: 4, md: 6 }} py={5}>
         {/* Breadcrumb */}
-        <Text fontSize="xs" fontWeight="600" letterSpacing="0.5px" mb={4} style={{ color: "#9CA3AF" }}>
-          <Text as="span" style={{ color: primaryMaroon, cursor: "pointer" }} onClick={() => navigate("/admin/churches")}>
+
+        <HStack spacing={1.5} mb={4} fontSize="12px" color={COLORS.mutedText}>
+          <Text
+            cursor="pointer"
+            _hover={{ color: COLORS.primaryMaroon }}
+            onClick={() => navigate("/churches")}
+          >
             Churches
-          </Text>{" "}
-          / {church.name}
-        </Text>
+          </Text>
+          <LuChevronRight size={13} color="#AAB3BF" />
+          <Text color={COLORS.darkNavy} fontWeight="600">
+            {churchName}
+          </Text>
+        </HStack>
 
         {/* Header */}
-        <Flex justify="space-between" align="flex-start" mb={6} wrap="wrap" gap={4}>
-          <VStack align="start" gap={1}>
-            <Text fontSize="xs" fontWeight="700" letterSpacing="1px" textTransform="uppercase" style={{ color: primaryMaroon }}>
-              Church Profile
+
+        <Flex
+          align={{ base: "flex-start", md: "center" }}
+          justify="space-between"
+          gap={4}
+          mb={5}
+          direction={{ base: "column", md: "row" }}
+        >
+          <Box>
+            <Text
+              fontSize="11px"
+              fontWeight="700"
+              color={COLORS.primaryMaroon}
+              letterSpacing="0.03em"
+              mb={1}
+            >
+              CHURCH PROFILE
             </Text>
-            <Heading fontSize="3xl" fontWeight="800" style={{ color: "#1a1a1a" }}>Church Details</Heading>
-            <Text fontSize="sm" style={{ color: "#6B7280" }}>
+            <Heading fontSize={{ base: "24px", md: "28px" }} color={COLORS.darkNavy} fontWeight="800">
+              Church Details
+            </Heading>
+            <Text fontSize="13px" color={COLORS.mutedText} mt={1}>
               View church information, subscription and account activity.
             </Text>
-          </VStack>
+          </Box>
 
-          <HStack gap={3} position="relative">
-            <Box position="relative">
-              <Button variant="outline" onClick={() => setShowActions((prev) => !prev)}>
-                <HStack gap={2}>
-                  <Text>More Actions</Text>
-                  <Icon as={LuChevronDown} boxSize={4} />
-                </HStack>
-              </Button>
-              {showActions && (
-                <Box
-                  position="absolute" top="110%" right={0} bg="white" borderRadius="lg"
-                  border="1px solid" borderColor="gray.200" boxShadow="md" minW="180px" zIndex={10} overflow="hidden"
+          <HStack spacing={2.5}>
+            <Menu.Root>
+              <Menu.Trigger asChild>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  borderColor={COLORS.border}
+                  color={COLORS.darkNavy}
+                  _hover={{ borderColor: COLORS.primaryMaroon, color: COLORS.primaryMaroon }}
                 >
-                  {[
-                    { label: "Suspend Church", action: () => adminApi.suspendChurch(church.id) },
-                    { label: "Activate Church", action: () => adminApi.activateChurch(church.id) },
-                    { label: "Delete Church", action: () => adminApi.deleteChurch(church.id) },
-                  ].map((item) => (
-                    <Box
-                      key={item.label} px={4} py={2} fontSize="sm" cursor="pointer" _hover={{ bg: "gray.50" }}
-                      onClick={async () => {
-                        setShowActions(false);
-                        try {
-                          await item.action();
-                          toaster.create({ title: "Success", description: `${item.label} completed.`, type: "success", duration: 4000 });
-                          fetchChurch(church.id);
-                        } catch (err) {
-                          toaster.create({ title: "Error", description: `Failed: ${item.label}`, type: "error", duration: 4000 });
-                        }
-                      }}
-                    >
-                      {item.label}
-                    </Box>
-                  ))}
-                </Box>
-              )}
-            </Box>
+                  More Actions
+                  <LuChevronDown size={14} strokeWidth={2} />
+                </Button>
+              </Menu.Trigger>
+              <Menu.Positioner>
+                <Menu.Content>
+                  <Menu.Item value="deactivate">Deactivate Church</Menu.Item>
+                  <Menu.Item value="export">Export Details</Menu.Item>
+                  <Menu.Item value="delete" color={COLORS.red}>
+                    Delete Church
+                  </Menu.Item>
+                </Menu.Content>
+              </Menu.Positioner>
+            </Menu.Root>
+
             <Button
-              style={{ background: primaryMaroon, color: "white" }}
-              _hover={{ opacity: 0.9 }}
-              onClick={() => navigate(`/admin/churches/edit/${church.id}`, { state: { church } })}
+              size="sm"
+              bg={COLORS.primaryMaroon}
+              color="white"
+              _hover={{ bg: "#951B45" }}
+              onClick={() =>
+                navigate(`/churches/${id}/edit`, { state: { church } })
+              }
             >
-              <HStack gap={2}>
-                <Icon as={LuPencil} boxSize={4} />
-                <Text>Edit Church</Text>
-              </HStack>
+              <LuPencil size={14} strokeWidth={2} />
+              Edit Church
             </Button>
           </HStack>
         </Flex>
 
-        {/* Profile Header Card */}
-        <Box bg="white" borderRadius="xl" border="1px solid" borderColor="gray.200" p={6} mb={6} boxShadow="sm">
-          <Flex direction={{ base: "column", lg: "row" }} justify="space-between" align={{ base: "flex-start", lg: "center" }} gap={4}>
-            <HStack gap={4} align="center">
-              {church.logo || church.logo_url ? (
-                <Circle size="72px" overflow="hidden" border="1px solid" borderColor="gray.200">
-                  <Image src={church.logo || church.logo_url} alt={church.name} w="100%" h="100%" objectFit="cover" />
-                </Circle>
-              ) : (
-                <Circle size="72px" style={{ background: "rgba(174, 32, 80, 0.08)" }}>
-                  <Icon as={LuChurch} boxSize={8} style={{ color: primaryMaroon }} />
-                </Circle>
-              )}
-              <VStack align="start" gap={1}>
-                <Heading fontSize="2xl" fontWeight="800" style={{ color: "#1a1a1a" }}>{church.name}</Heading>
-                <HStack gap={4} fontSize="sm" style={{ color: "#6B7280" }}>
-                  <Text fontWeight="500" color={primaryMaroon}>{churchCode}</Text>
-                  <HStack gap={1}>
-                    <Icon as={LuMapPin} boxSize={3.5} />
-                    <Text>{locationLabel}</Text>
+        {/* Profile Summary Card */}
+
+        <Box
+          bg="white"
+          border="1px solid"
+          borderColor={COLORS.border}
+          borderRadius="14px"
+          p={5}
+          mb={5}
+        >
+          <Flex
+            align={{ base: "flex-start", lg: "center" }}
+            justify="space-between"
+            gap={6}
+            direction={{ base: "column", lg: "row" }}
+          >
+            {/* Identity block */}
+
+            <HStack spacing={4} align="center">
+              <Circle size="72px" bg={COLORS.softPink} color={COLORS.primaryMaroon} flexShrink={0}>
+                <LuChurch size={28} strokeWidth={1.8} />
+              </Circle>
+
+              <Box>
+                <Heading fontSize={{ base: "20px", md: "24px" }} color={COLORS.darkNavy} fontWeight="800">
+                  {churchName}
+                </Heading>
+
+                <HStack spacing={3} mt={2} flexWrap="wrap">
+                  <HStack spacing={1.5}>
+                    <LuFileText size={13} color={COLORS.mutedText} />
+                    <Text fontSize="12px" color={COLORS.mutedText} fontWeight="500">
+                      {churchCode}
+                    </Text>
                   </HStack>
-                </HStack>
-                <HStack gap={2} pt={1}>
-                  <Badge colorPalette={church.is_active ? "green" : "red"} borderRadius="full" px={3} py={0.5} fontSize="xs">
-                    {church.is_active ? "Active" : "Inactive"}
-                  </Badge>
-                  {isVerified && (
-                    <Badge colorPalette="blue" borderRadius="full" px={3} py={0.5} fontSize="xs">
-                      <HStack gap={1}>
-                        <Icon as={LuBadgeCheck} boxSize={3} />
-                        <Text>Verified</Text>
-                      </HStack>
-                    </Badge>
+
+                  {(city || stateName) && (
+                    <HStack spacing={1.5}>
+                      <LuMapPin size={13} color={COLORS.mutedText} />
+                      <Text fontSize="12px" color={COLORS.mutedText} fontWeight="500">
+                        {[city, stateName].filter(Boolean).join(", ")}
+                      </Text>
+                    </HStack>
                   )}
                 </HStack>
-              </VStack>
+
+                <HStack spacing={2} mt={2.5}>
+                  <StatusPill tone={isActive ? "green" : "gray"}>
+                    {isActive ? "Active" : "Inactive"}
+                  </StatusPill>
+
+                  {isVerified && (
+                    <StatusPill tone="green" icon={<LuBadgeCheck size={12} strokeWidth={2.5} />}>
+                      Verified
+                    </StatusPill>
+                  )}
+                </HStack>
+              </Box>
             </HStack>
 
-            <HStack gap={8} flexWrap="wrap">
-              {stats.map((stat) => (
-                <VStack key={stat.label} gap={0} align="center">
-                  <Text fontSize="xl" fontWeight="800" style={{ color: "#1a1a1a" }}>{stat.value}</Text>
-                  <Text fontSize="xs" style={{ color: "#9CA3AF" }}>{stat.label}</Text>
-                </VStack>
-              ))}
-            </HStack>
+            {/* Package + stats block */}
+
+            <Flex
+              align="center"
+              gap={{ base: 5, xl: 8 }}
+              flexWrap="wrap"
+              justify={{ base: "flex-start", lg: "flex-end" }}
+              w={{ base: "100%", lg: "auto" }}
+            >
+              <Box>
+                <Text fontSize="11px" color={COLORS.mutedText} mb={1.5}>
+                  Current Package
+                </Text>
+                <StatusPill tone="maroon" icon={<LuChartColumn size={12} strokeWidth={2.5} />}>
+                  {subscriptionPackageName}
+                </StatusPill>
+                {subscriptionRenewsOn && (
+                  <Text fontSize="11px" color={COLORS.mutedText} mt={1.5}>
+                    Renews {formatDate(subscriptionRenewsOn)}
+                  </Text>
+                )}
+              </Box>
+
+              <StatCard
+                icon={<LuUsers size={18} strokeWidth={2} />}
+                value={Number(memberCount).toLocaleString("en-IN")}
+                label="Members"
+              />
+
+              <StatCard
+                icon={<LuUserCog size={18} strokeWidth={2} />}
+                value={adminCount}
+                label="Administrators"
+              />
+
+              <StatCard
+                icon={<LuFileText size={18} strokeWidth={2} />}
+                value={documentCount}
+                label="Documents"
+              />
+
+              <StatCard
+                icon={<LuIndianRupee size={18} strokeWidth={2} />}
+                value={compactMoney(annualValue)}
+                label="Annual Value"
+              />
+            </Flex>
           </Flex>
         </Box>
 
         {/* Tabs */}
-        <HStack gap={6} borderBottom="1px solid" borderColor="gray.200" mb={6}>
-          {TABS.map((tab) => (
-            <Box
-              key={tab} pb={3} cursor="pointer" onClick={() => setActiveTab(tab)}
-              borderBottom="2px solid" borderColor={activeTab === tab ? primaryMaroon : "transparent"}
-              transition="border-color 0.2s"
-            >
-              <Text 
-                fontSize="sm" 
-                fontWeight={activeTab === tab ? "700" : "500"} 
-                style={{ color: activeTab === tab ? primaryMaroon : "#6B7280" }}
-                transition="color 0.2s"
-              >
-                {tab}
-              </Text>
-            </Box>
-          ))}
-        </HStack>
 
-        {/* Overview Tab */}
-        {activeTab === "Overview" && (
-          <VStack align="stretch" gap={6}>
-            {/* Three column grid - Church Info, Contact, Address */}
-            <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} gap={6}>
+        <Tabs.Root
+          value={activeTab}
+          onValueChange={(details) => setActiveTab(details.value)}
+          mb={5}
+        >
+          <Tabs.List borderBottom="1px solid" borderColor={COLORS.border}>
+            {tabItems.map((tab) => (
+              <Tabs.Trigger
+                key={tab.value}
+                value={tab.value}
+                fontSize="13px"
+                fontWeight="600"
+                color={activeTab === tab.value ? COLORS.primaryMaroon : COLORS.mutedText}
+                _selected={{
+                  color: COLORS.primaryMaroon,
+                  borderColor: COLORS.primaryMaroon,
+                }}
+                px={4}
+                py={2.5}
+              >
+                {tab.label}
+              </Tabs.Trigger>
+            ))}
+          </Tabs.List>
+
+          {/* Overview Content */}
+
+          <Tabs.Content value="overview" px={0} pt={5}>
+            <Grid
+              templateColumns={{ base: "1fr", lg: "repeat(3, 1fr)" }}
+              gap={5}
+              mb={5}
+            >
               {/* Church Information */}
-              <Box bg="white" borderRadius="xl" border="1px solid" borderColor="gray.200" p={5} boxShadow="sm">
-                <HStack gap={2} mb={4}>
-                  <Icon as={LuChurch} boxSize={4} style={{ color: primaryMaroon }} />
-                  <Heading size="sm" fontWeight="700" style={{ color: "#1a1a1a" }}>Church Information</Heading>
-                </HStack>
-                <VStack align="stretch" gap={2}>
-                  <Flex justify="space-between" align="center" py={1}>
-                    <Text fontSize="sm" style={{ color: "#9CA3AF" }}>Diocese</Text>
-                    <Text fontSize="sm" fontWeight="500" style={{ color: "#1a1a1a" }}>
-                      {church.diocese_name || church.diocese?.name || "—"}
-                    </Text>
-                  </Flex>
-                  <Box borderBottom="1px solid" borderColor="gray.100" />
-                  <Flex justify="space-between" align="center" py={1}>
-                    <Text fontSize="sm" style={{ color: "#9CA3AF" }}>Established</Text>
-                    <Text fontSize="sm" fontWeight="500" style={{ color: "#1a1a1a" }}>
-                      {church.established_year || "—"}
-                    </Text>
-                  </Flex>
-                  <Box borderBottom="1px solid" borderColor="gray.100" />
-                  <Flex justify="space-between" align="center" py={1}>
-                    <Text fontSize="sm" style={{ color: "#9CA3AF" }}>Registration No</Text>
-                    <Text fontSize="sm" fontWeight="500" style={{ color: "#1a1a1a" }}>
-                      {church.registration_number || "—"}
-                    </Text>
-                  </Flex>
-                  <Box borderBottom="1px solid" borderColor="gray.100" />
-                  <Flex justify="space-between" align="center" py={1}>
-                    <Text fontSize="sm" style={{ color: "#9CA3AF" }}>Currency</Text>
-                    <Text fontSize="sm" fontWeight="500" style={{ color: "#1a1a1a" }}>
-                      {currencyLabel || "—"}
-                    </Text>
-                  </Flex>
-                  <Box borderBottom="1px solid" borderColor="gray.100" />
-                  <Flex justify="space-between" align="center" py={1}>
-                    <Text fontSize="sm" style={{ color: "#9CA3AF" }}>Primary Language</Text>
-                    <Text fontSize="sm" fontWeight="500" style={{ color: "#1a1a1a" }}>
-                      {church.primary_language || "English"}
-                    </Text>
-                  </Flex>
-                  <Box borderBottom="1px solid" borderColor="gray.100" />
-                  <Flex justify="space-between" align="center" py={1}>
-                    <Text fontSize="sm" style={{ color: "#9CA3AF" }}>Time Zone</Text>
-                    <Text fontSize="sm" fontWeight="500" style={{ color: "#1a1a1a" }}>
-                      {church.timezone || "Asia/Kolkata"}
-                    </Text>
-                  </Flex>
-                </VStack>
-              </Box>
+
+              <GridItem>
+                <InfoCard icon={<LuInfo size={15} strokeWidth={2} />} title="Church Information">
+                  <VStack spacing={0} align="stretch" divideY="1px" divideColor="#EEF1F5">
+                    <InfoRow label="Diocese" value={diocese} />
+                    <InfoRow label="Established" value={established} />
+                    <InfoRow label="Registration No" value={registrationNo} />
+                    <InfoRow label="Currency" value={currency} />
+                    <InfoRow label="Primary Language" value={primaryLanguage} />
+                    <InfoRow label="Time Zone" value={timeZone} />
+                  </VStack>
+                </InfoCard>
+              </GridItem>
 
               {/* Contact Information */}
-              <Box bg="white" borderRadius="xl" border="1px solid" borderColor="gray.200" p={5} boxShadow="sm">
-                <HStack gap={2} mb={4}>
-                  <Icon as={LuMail} boxSize={4} style={{ color: primaryMaroon }} />
-                  <Heading size="sm" fontWeight="700" style={{ color: "#1a1a1a" }}>Contact Information</Heading>
-                </HStack>
-                <VStack align="stretch" gap={2}>
-                  <Flex align="center" gap={3} py={1}>
-                    <Circle size="28px" style={{ background: "rgba(174, 32, 80, 0.08)" }}>
-                      <Icon as={LuMail} boxSize={3.5} style={{ color: primaryMaroon }} />
-                    </Circle>
-                    <Text fontSize="sm" style={{ color: "#1a1a1a" }}>{church.email || "—"}</Text>
-                  </Flex>
-                  <Box borderBottom="1px solid" borderColor="gray.100" />
-                  <Flex align="center" gap={3} py={1}>
-                    <Circle size="28px" style={{ background: "rgba(174, 32, 80, 0.08)" }}>
-                      <Icon as={LuPhone} boxSize={3.5} style={{ color: primaryMaroon }} />
-                    </Circle>
-                    <Text fontSize="sm" style={{ color: "#1a1a1a" }}>{church.phone_number || "—"}</Text>
-                  </Flex>
-                  <Box borderBottom="1px solid" borderColor="gray.100" />
-                  <Flex align="center" gap={3} py={1}>
-                    <Circle size="28px" style={{ background: "rgba(174, 32, 80, 0.08)" }}>
-                      <Icon as={LuPhone} boxSize={3.5} style={{ color: primaryMaroon }} />
-                    </Circle>
-                    <Text fontSize="sm" style={{ color: "#1a1a1a" }}>{church.alternate_phone || "—"}</Text>
-                  </Flex>
-                  {church.website && (
-                    <>
-                      <Box borderBottom="1px solid" borderColor="gray.100" />
-                      <Flex align="center" gap={3} py={1}>
-                        <Circle size="28px" style={{ background: "rgba(174, 32, 80, 0.08)" }}>
-                          <Icon as={LuGlobe} boxSize={3.5} style={{ color: primaryMaroon }} />
-                        </Circle>
-                        <Text fontSize="sm" style={{ color: primaryMaroon, cursor: "pointer" }} onClick={() => window.open(church.website, "_blank")}>
-                          {church.website}
-                        </Text>
-                      </Flex>
-                    </>
-                  )}
-                </VStack>
-              </Box>
+
+              <GridItem>
+                <InfoCard icon={<LuPhone size={15} strokeWidth={2} />} title="Contact Information">
+                  <VStack spacing={0} align="stretch">
+                    <ContactRow icon={<LuMail size={15} />} value={email} isLink />
+                    <ContactRow icon={<LuPhone size={15} />} value={phone} />
+                    {phoneSecondary && (
+                      <ContactRow icon={<LuPhone size={15} />} value={phoneSecondary} />
+                    )}
+                    {website && (
+                      <ContactRow icon={<LuGlobe size={15} />} value={website} isLink />
+                    )}
+                  </VStack>
+                </InfoCard>
+              </GridItem>
 
               {/* Address */}
-              <Box bg="white" borderRadius="xl" border="1px solid" borderColor="gray.200" p={5} boxShadow="sm">
-                <HStack gap={2} mb={4}>
-                  <Icon as={LuMapPin} boxSize={4} style={{ color: primaryMaroon }} />
-                  <Heading size="sm" fontWeight="700" style={{ color: "#1a1a1a" }}>Address</Heading>
-                </HStack>
-                <VStack align="stretch" gap={2}>
-                  <VStack align="start" spacing={1}>
-                    <Text fontSize="sm" style={{ color: "#1a1a1a" }}>{addressLine1 || "Not provided"}</Text>
-                    {addressLine2 && <Text fontSize="sm" style={{ color: "#1a1a1a" }}>{addressLine2}</Text>}
-                    <Text fontSize="sm" style={{ color: "#1a1a1a" }}>{[church.city, stateLabel].filter(Boolean).join(", ") || "—"}</Text>
-                    <Text fontSize="sm" style={{ color: "#1a1a1a" }}>{countryLabel || "—"}</Text>
-                    <Text fontSize="sm" style={{ color: "#1a1a1a" }}>{church.postal_code || "—"}</Text>
-                  </VStack>
-                  <Flex h="80px" borderRadius="lg" align="center" justify="center" style={{ background: "rgba(174, 32, 80, 0.06)", mt: 2 }}>
-                    <Icon as={LuMapPin} boxSize={6} style={{ color: primaryMaroon }} />
-                  </Flex>
-                </VStack>
-              </Box>
-            </SimpleGrid>
 
-            {/* Bottom row - Subscription Summary, Administrators, Recent Activity */}
-            <SimpleGrid columns={{ base: 1, lg: 3 }} gap={6}>
-              {/* Subscription Summary */}
-              <Box bg="white" borderRadius="xl" border="1px solid" borderColor="gray.200" p={5} boxShadow="sm">
-                <HStack gap={2} mb={4}>
-                  <Icon as={LuCreditCard} boxSize={4} style={{ color: primaryMaroon }} />
-                  <Heading size="sm" fontWeight="700" style={{ color: "#1a1a1a" }}>Subscription Summary</Heading>
-                </HStack>
-                <VStack align="stretch" gap={4}>
-                  <HStack justify="space-between">
-                    <HStack gap={2}>
-                      <Circle size="36px" style={{ background: "rgba(174, 32, 80, 0.08)" }}>
-                        <Icon as={LuTrendingUp} boxSize={4} style={{ color: primaryMaroon }} />
-                      </Circle>
-                      <VStack align="start" gap={0}>
-                        <Text fontWeight="700" fontSize="sm">{packageName}</Text>
-                        <Badge colorPalette={church.is_active ? "green" : "gray"} size="sm" borderRadius="full" fontSize="xs">
-                          {church.is_active ? "Active" : "Inactive"}
-                        </Badge>
-                      </VStack>
-                    </HStack>
-                    <VStack align="end" gap={0}>
-                      <Text fontWeight="800" fontSize="lg">
-                        {annualValue != null ? `₹${Number(annualValue).toLocaleString("en-IN")}` : "—"}
+              <GridItem>
+                <InfoCard icon={<LuMapPin size={15} strokeWidth={2} />} title="Address">
+                  <VStack spacing={0.5} align="stretch" mb={3}>
+                    {addressLine1 && (
+                      <Text fontSize="13px" color={COLORS.darkNavy} fontWeight="500">
+                        {addressLine1}
                       </Text>
-                      <Text fontSize="xs" style={{ color: "#9CA3AF" }}>/ year</Text>
-                    </VStack>
+                    )}
+                    {addressLine2 && (
+                      <Text fontSize="13px" color={COLORS.darkNavy} fontWeight="500">
+                        {addressLine2}
+                      </Text>
+                    )}
+                    <Text fontSize="13px" color={COLORS.darkNavy} fontWeight="500">
+                      {[city, stateName, postalCode].filter(Boolean).join(", ")}
+                    </Text>
+                    <Text fontSize="13px" color={COLORS.darkNavy} fontWeight="500">
+                      {country}
+                    </Text>
+                  </VStack>
+
+                  <Flex
+                    align="center"
+                    justify="center"
+                    h="90px"
+                    borderRadius="10px"
+                    bg={COLORS.softPink}
+                    color={COLORS.primaryMaroon}
+                  >
+                    <LuMapPin size={26} strokeWidth={1.6} />
+                  </Flex>
+                </InfoCard>
+              </GridItem>
+            </Grid>
+
+            <Grid
+              templateColumns={{ base: "1fr", lg: "repeat(3, 1fr)" }}
+              gap={5}
+            >
+              {/* Subscription Summary */}
+
+              <GridItem>
+                <InfoCard
+                  icon={<LuChartColumn size={15} strokeWidth={2} />}
+                  title="Subscription Summary"
+                >
+                  <HStack spacing={3} mb={4}>
+                    <Circle size="42px" bg={COLORS.softPink} color={COLORS.primaryMaroon}>
+                      <LuChartColumn size={18} strokeWidth={2} />
+                    </Circle>
+
+                    <Box flex="1">
+                      <HStack spacing={2}>
+                        <Text fontSize="15px" fontWeight="700" color={COLORS.darkNavy}>
+                          {subscriptionPackageName}
+                        </Text>
+                        <StatusPill tone={subscriptionStatus ? "green" : "gray"}>
+                          {subscriptionStatus ? "Active" : "Inactive"}
+                        </StatusPill>
+                      </HStack>
+                    </Box>
+
+                    <Text fontSize="17px" fontWeight="700" color={COLORS.darkNavy}>
+                      {money(subscriptionAmount)}
+                      <Text as="span" fontSize="12px" color={COLORS.mutedText} fontWeight="500">
+                        /year
+                      </Text>
+                    </Text>
                   </HStack>
 
-                  <Flex justify="space-between" fontSize="xs" style={{ color: "#9CA3AF" }}>
-                    <VStack align="start" gap={0}>
+                  <Flex justify="space-between" fontSize="11px" color={COLORS.mutedText} mb={1.5}>
+                    <Box>
                       <Text>Started</Text>
-                      <Text fontWeight="600" style={{ color: "#374151" }}>{startedOn || "—"}</Text>
-                    </VStack>
-                    <VStack align="start" gap={0}>
+                      <Text color={COLORS.darkNavy} fontWeight="600" fontSize="12px" mt={0.5}>
+                        {formatDate(subscriptionStartedOn)}
+                      </Text>
+                    </Box>
+                    <Box textAlign="right">
                       <Text>Renews</Text>
-                      <Text fontWeight="600" style={{ color: "#374151" }}>{renewsOn || "—"}</Text>
-                    </VStack>
-                    {daysRemaining != null && (
-                      <VStack align="end" gap={0}>
-                        <Text>Days remaining</Text>
-                        <Text fontWeight="600" style={{ color: "#374151" }}>{daysRemaining}</Text>
-                      </VStack>
-                    )}
+                      <Text color={COLORS.darkNavy} fontWeight="600" fontSize="12px" mt={0.5}>
+                        {formatDate(subscriptionRenewsOn)}
+                      </Text>
+                    </Box>
                   </Flex>
 
-                  <Box h="6px" borderRadius="full" bg="gray.100" overflow="hidden">
-                    <Box h="100%" borderRadius="full" style={{ width: `${subscriptionProgressPct}%`, background: primaryMaroon }} />
-                  </Box>
+                  {remainingDays !== null && (
+                    <>
+                      <Text fontSize="11px" color={COLORS.mutedText} mb={1.5}>
+                        {remainingDays} days remaining
+                      </Text>
+                      <ProgressRoot
+                        value={Math.max(
+                          0,
+                          Math.min(100, (remainingDays / 365) * 100)
+                        )}
+                        size="sm"
+                        borderRadius="full"
+                        mb={4}
+                      >
+                        <ProgressTrack bg="#EEF1F5" borderRadius="full">
+                          <ProgressRange bg={COLORS.primaryMaroon} />
+                        </ProgressTrack>
+                      </ProgressRoot>
+                    </>
+                  )}
 
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    w="100%"
                     size="sm"
-                    borderColor={primaryMaroon}
-                    color={primaryMaroon}
-                    _hover={{ bg: "rgba(174, 32, 80, 0.05)" }}
-                    onClick={() => setActiveTab("Subscription")}
+                    variant="outline"
+                    borderColor={COLORS.primaryMaroon}
+                    color={COLORS.primaryMaroon}
+                    _hover={{ bg: COLORS.softPink }}
+                    onClick={() => setActiveTab("subscription")}
                   >
                     View Subscription
                   </Button>
-                </VStack>
-              </Box>
+                </InfoCard>
+              </GridItem>
 
               {/* Church Administrators */}
-              <Box bg="white" borderRadius="xl" border="1px solid" borderColor="gray.200" p={5} boxShadow="sm">
-                <HStack gap={2} mb={4}>
-                  <Icon as={LuUserCog} boxSize={4} style={{ color: primaryMaroon }} />
-                  <Heading size="sm" fontWeight="700" style={{ color: "#1a1a1a" }}>Church Administrators</Heading>
-                </HStack>
-                <VStack align="stretch" gap={3}>
-                  {administrators.length === 0 ? (
-                    <Text fontSize="sm" style={{ color: "#9CA3AF" }}>No administrators found.</Text>
+
+              <GridItem>
+                <InfoCard
+                  icon={<LuUserCog size={15} strokeWidth={2} />}
+                  title="Church Administrators"
+                >
+                  {administrators.length > 0 ? (
+                    <VStack spacing={0} align="stretch" divideY="1px" divideColor="#EEF1F5">
+                      {administrators.slice(0, 4).map((admin, index) => (
+                        <Flex
+                          key={admin?.id || index}
+                          align="center"
+                          justify="space-between"
+                          py={2.5}
+                          gap={3}
+                        >
+                          <HStack spacing={2.5} minW={0}>
+                            <Circle size="34px" bg={COLORS.softPink} color={COLORS.primaryMaroon} flexShrink={0}>
+                              <LuCircleUserRound size={17} strokeWidth={1.8} />
+                            </Circle>
+                            <Box minW={0}>
+                              <Text fontSize="13px" color={COLORS.darkNavy} fontWeight="600" noOfLines={1}>
+                                {admin?.name || admin?.full_name}
+                              </Text>
+                              <Text fontSize="11px" color={COLORS.mutedText} noOfLines={1}>
+                                {admin?.role || admin?.designation}
+                              </Text>
+                            </Box>
+                          </HStack>
+                          <StatusPill tone={(admin?.is_active ?? true) ? "green" : "gray"}>
+                            {(admin?.is_active ?? true) ? "Active" : "Inactive"}
+                          </StatusPill>
+                        </Flex>
+                      ))}
+                    </VStack>
                   ) : (
-                    administrators.map((admin, idx) => (
-                      <HStack key={idx} justify="space-between">
-                        <HStack gap={3}>
-                          <Circle size="32px" style={{ background: "rgba(174, 32, 80, 0.08)" }}>
-                            <Icon as={LuUserPlus} boxSize={4} style={{ color: primaryMaroon }} />
-                          </Circle>
-                          <VStack align="start" gap={0}>
-                            <Text fontSize="sm" fontWeight="600">{admin.name || admin.email}</Text>
-                            <Text fontSize="xs" style={{ color: "#9CA3AF" }}>{admin.role || "Administrator"}</Text>
-                          </VStack>
-                        </HStack>
-                        <Badge colorPalette={admin.status === "Active" ? "green" : "gray"} size="sm" borderRadius="full" fontSize="xs">
-                          {admin.status || "Active"}
-                        </Badge>
-                      </HStack>
-                    ))
+                    <Flex
+                      minH="150px"
+                      align="center"
+                      justify="center"
+                      border="1px dashed"
+                      borderColor={COLORS.border}
+                      borderRadius="8px"
+                    >
+                      <Text fontSize="12px" color={COLORS.mutedText}>
+                        No administrators yet.
+                      </Text>
+                    </Flex>
                   )}
-                </VStack>
-              </Box>
+                </InfoCard>
+              </GridItem>
 
               {/* Recent Activity */}
-              <Box bg="white" borderRadius="xl" border="1px solid" borderColor="gray.200" p={5} boxShadow="sm">
-                <HStack gap={2} mb={4}>
-                  <Icon as={LuRefreshCw} boxSize={4} style={{ color: primaryMaroon }} />
-                  <Heading size="sm" fontWeight="700" style={{ color: "#1a1a1a" }}>Recent Activity</Heading>
-                </HStack>
-                <VStack align="stretch" gap={4}>
-                  {displayActivities.map((item, idx) => (
-                    <HStack key={idx} align="start" gap={3}>
-                      <Circle size="28px" style={{ background: "rgba(174, 32, 80, 0.08)", flexShrink: 0 }}>
-                        <Icon as={item.icon} boxSize={3.5} style={{ color: primaryMaroon }} />
-                      </Circle>
-                      <VStack align="start" gap={0} flex="1">
-                        <Text fontSize="sm" fontWeight="600">{item.title}</Text>
-                        <Text fontSize="xs" style={{ color: "#9CA3AF" }}>{item.description}</Text>
-                      </VStack>
-                      <Text fontSize="xs" style={{ color: "#9CA3AF" }} whiteSpace="nowrap">{item.date}</Text>
-                    </HStack>
-                  ))}
-                </VStack>
-              </Box>
-            </SimpleGrid>
-          </VStack>
-        )}
 
-        {/* Payments Tab */}
-        {activeTab === "Payments" && (
-          <Box bg="white" borderRadius="xl" border="1px solid" borderColor="gray.200" p={5} boxShadow="sm">
-            {bills.length === 0 ? (
-              <Text style={{ color: "#9CA3AF" }} textAlign="center" py={6}>
-                No payment records found for this church.
-              </Text>
-            ) : (
-              <VStack align="stretch" gap={0}>
-                {bills.map((b, idx) => (
-                  <Flex key={idx} justify="space-between" py={3} borderBottom={idx < bills.length - 1 ? "1px solid" : "none"} borderColor="gray.100">
-                    <VStack align="start" gap={0}>
-                      <Text fontSize="sm" fontWeight="600">₹{Number(b.amount || 0).toLocaleString("en-IN")}</Text>
-                      <Text fontSize="xs" style={{ color: "#9CA3AF" }}>{b.payment_method || b.bill_type || "—"}</Text>
+              <GridItem>
+                <InfoCard icon={<LuClock size={15} strokeWidth={2} />} title="Recent Activity">
+                  {recentActivities.length > 0 ? (
+                    <VStack spacing={0} align="stretch">
+                      {recentActivities.slice(0, 4).map((activity, index) => (
+                        <HStack
+                          key={activity?.id || index}
+                          align="flex-start"
+                          spacing={3}
+                          py={2.5}
+                          borderBottom="1px solid"
+                          borderColor="#EEF1F5"
+                          _last={{ borderBottom: "none" }}
+                        >
+                          <Circle size="28px" bg={COLORS.softPink} color={COLORS.primaryMaroon} flexShrink={0}>
+                            {activityIcon(activity?.type)}
+                          </Circle>
+
+                          <Box flex="1" minW={0}>
+                            <Text fontSize="12px" fontWeight="600" color={COLORS.darkNavy}>
+                              {activity?.title || activity?.action_display}
+                            </Text>
+                            <Text fontSize="11px" color={COLORS.mutedText} mt={0.5} noOfLines={1}>
+                              {activity?.description || activity?.message}
+                            </Text>
+                          </Box>
+
+                          <Text fontSize="10px" color={COLORS.mutedText} whiteSpace="nowrap" flexShrink={0}>
+                            {formatDateTime(activity?.created_at || activity?.date)}
+                          </Text>
+                        </HStack>
+                      ))}
                     </VStack>
-                    <Badge colorPalette={b.status === "PAID" ? "green" : "yellow"} borderRadius="full" fontSize="xs">
-                      {b.status || "PENDING"}
-                    </Badge>
-                  </Flex>
-                ))}
-              </VStack>
-            )}
-          </Box>
-        )}
+                  ) : (
+                    <Flex
+                      minH="150px"
+                      align="center"
+                      justify="center"
+                      border="1px dashed"
+                      borderColor={COLORS.border}
+                      borderRadius="8px"
+                    >
+                      <Text fontSize="12px" color={COLORS.mutedText}>
+                        No recent activity.
+                      </Text>
+                    </Flex>
+                  )}
+                </InfoCard>
+              </GridItem>
+            </Grid>
+          </Tabs.Content>
 
-        {/* Placeholder tabs */}
-        {["Subscription", "Administrators", "Documents", "Activity"].includes(activeTab) && (
-          <Box bg="white" borderRadius="xl" border="1px solid" borderColor="gray.200" p={10} textAlign="center">
-            <Text style={{ color: "#9CA3AF" }}>{activeTab} content goes here.</Text>
-          </Box>
-        )}
+          {/* Placeholder content for the other tabs */}
 
-        {/* Footer */}
-        <Flex justify="space-between" mt={10} fontSize="xs" style={{ color: "#9CA3AF" }}>
-          <Text>Version 1.0.0</Text>
-          <Text>© 2026 Appzia Tec Solutions. All rights reserved</Text>
-        </Flex>
+          <Tabs.Content value="subscription" pt={5}>
+            <Text fontSize="13px" color={COLORS.mutedText}>
+              Full subscription history and billing details go here.
+            </Text>
+          </Tabs.Content>
+
+          <Tabs.Content value="payments" pt={5}>
+            <Text fontSize="13px" color={COLORS.mutedText}>
+              Payment records for this church go here.
+            </Text>
+          </Tabs.Content>
+
+          <Tabs.Content value="administrators" pt={5}>
+            <Text fontSize="13px" color={COLORS.mutedText}>
+              Full administrator list and role management goes here.
+            </Text>
+          </Tabs.Content>
+
+          <Tabs.Content value="documents" pt={5}>
+            <Text fontSize="13px" color={COLORS.mutedText}>
+              Uploaded documents for this church go here.
+            </Text>
+          </Tabs.Content>
+
+          <Tabs.Content value="activity" pt={5}>
+            <Text fontSize="13px" color={COLORS.mutedText}>
+              Full activity log for this church goes here.
+            </Text>
+          </Tabs.Content>
+        </Tabs.Root>
       </Container>
     </AdminLayout>
   );
 };
 
-export default ChurchView;
+export default ChurchViewPage;
