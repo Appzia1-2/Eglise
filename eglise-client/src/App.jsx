@@ -131,13 +131,17 @@ import MemberDirectoryPage from "./pages/MemberDirectoryPage";
 import MemberAgeWisePage from "./pages/MemberAgeWisePage";
 import MemberPhoneDirectoryPage from "./pages/MemberPhoneDirectoryPage";
 
+
+import ForcePasswordChange from "./components/ForcePasswordChange";
+
 import { Toaster } from "./components/ui/toaster";
 
 const ProtectedRoute = ({ children }) => {
   if (!authService.isAuthenticated()) {
     return <Navigate to="/login" replace />;
   }
-  return children;
+
+  return <ForcePasswordChange>{children}</ForcePasswordChange>;
 };
 
 function App() {

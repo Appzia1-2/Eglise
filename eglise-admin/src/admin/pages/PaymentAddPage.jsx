@@ -2,13 +2,13 @@
 
 import React, {
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
 
 import {
   useNavigate,
-  useLocation,
 } from "react-router-dom";
 
 import {
@@ -41,12 +41,8 @@ import {
   LuCalculator,
   LuReceipt,
   LuTag,
-  LuClock,
-  LuUser,
-  LuPackage,
-  LuDollarSign,
-  LuWallet,
-  LuCreditCard,
+  LuLock,
+  LuUsers,
   LuImage,
   LuUpload,
   LuTrash2,
@@ -57,6 +53,56 @@ import { toaster } from "../../components/ui/toaster";
 import adminApi from "../services/adminApi";
 
 const primaryMaroon = "#ae2050";
+const deepMaroon = "#7d1538";
+
+/* =========================================================
+   SHARED FIELD LABEL
+========================================================= */
+
+const FieldLabel = ({ children, required }) => (
+  <Text fontSize="xs" fontWeight="600" color="gray.700" mb={1}>
+    {children} {required && <Text as="span" color="red.500">*</Text>}
+  </Text>
+);
+
+/* =========================================================
+   NATIVE SELECT (styled to match design)
+========================================================= */
+
+const NativeSelect = ({ children, leftDot, ...props }) => (
+  <Box position="relative">
+    {leftDot && (
+      <Box
+        position="absolute"
+        left="12px"
+        top="50%"
+        transform="translateY(-50%)"
+        width="8px"
+        height="8px"
+        borderRadius="full"
+        bg={leftDot}
+        zIndex={1}
+        pointerEvents="none"
+      />
+    )}
+    <Box
+      as="select"
+      style={{
+        width: "100%",
+        padding: leftDot ? "12px 12px 12px 28px" : "12px",
+        borderRadius: "6px",
+        border: "1.5px solid #e2e8f0",
+        fontSize: "13px",
+        height: "48px",
+        background: "white",
+        outline: "none",
+      }}
+      {...props}
+    >
+      {children}
+    </Box>
+  </Box>
+);
 
 /* =========================================================
    CHURCH DROPDOWN
@@ -83,44 +129,25 @@ const ChurchDropdown = ({
   const filteredOptions = searchTerm
     ? options.filter(
         (opt) =>
-          opt.name
-            ?.toLowerCase()
-            .includes(searchTerm.toLowerCase()) ||
-          opt.code
-            ?.toLowerCase()
-            .includes(searchTerm.toLowerCase())
+          opt.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          opt.code?.toLowerCase().includes(searchTerm.toLowerCase())
       )
     : options;
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target)
-      ) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
         setIsOpen(false);
         setSearchTerm("");
       }
     };
-
-    document.addEventListener(
-      "mousedown",
-      handleClickOutside
-    );
-
-    return () => {
-      document.removeEventListener(
-        "mousedown",
-        handleClickOutside
-      );
-    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   useEffect(() => {
     if (isOpen && searchRef.current) {
-      setTimeout(() => {
-        searchRef.current?.focus();
-      }, 100);
+      setTimeout(() => searchRef.current?.focus(), 100);
     }
   }, [isOpen]);
 
@@ -133,69 +160,38 @@ const ChurchDropdown = ({
   const getDisplayValue = () => {
     if (selectedOption) {
       return (
-        <Flex
-          align="center"
-          gap={2}
-          flex="1"
-          overflow="hidden"
-        >
+        <Flex align="center" gap={2} flex="1" overflow="hidden">
+          <Icon as={LuSearch} color="gray.400" boxSize={4} flexShrink={0} />
           <Box flex="1">
-            <Text
-              fontSize="sm"
-              fontWeight="600"
-              color="#333"
-              noOfLines={1}
-            >
+            <Text fontSize="sm" fontWeight="600" color="#333" noOfLines={1}>
               {selectedOption.name}
             </Text>
-
-            <Text
-              fontSize="xs"
-              color="gray.500"
-            >
-              {selectedOption.code}
-            </Text>
           </Box>
+          <Text fontSize="xs" color="gray.500" flexShrink={0}>
+            {selectedOption.code}
+          </Text>
         </Flex>
       );
     }
-
     return (
-      <Text
-        color="gray.400"
-        fontSize="sm"
-      >
-        {placeholder}
-      </Text>
+      <Flex align="center" gap={2}>
+        <Icon as={LuSearch} color="gray.400" boxSize={4} />
+        <Text color="gray.400" fontSize="sm">
+          {placeholder}
+        </Text>
+      </Flex>
     );
   };
 
   return (
-    <Box
-      ref={containerRef}
-      position="relative"
-      width="100%"
-    >
-      <Text
-        fontSize="xs"
-        fontWeight="600"
-        color="gray.700"
-        mb={1}
-      >
-        Church *
-      </Text>
+    <Box ref={containerRef} position="relative" width="100%">
+      <FieldLabel required>Church</FieldLabel>
 
       <Box
         onClick={() => setIsOpen(!isOpen)}
         cursor="pointer"
         border="1.5px solid"
-        borderColor={
-          isInvalid
-            ? "#e53e3e"
-            : isOpen
-            ? primaryMaroon
-            : "#e2e8f0"
-        }
+        borderColor={isInvalid ? "#e53e3e" : isOpen ? primaryMaroon : "#e2e8f0"}
         borderRadius="md"
         height="48px"
         px={3}
@@ -203,11 +199,7 @@ const ChurchDropdown = ({
         alignItems="center"
         justifyContent="space-between"
         bg="white"
-        _hover={{
-          borderColor: isInvalid
-            ? "#e53e3e"
-            : "#cbd5e0",
-        }}
+        _hover={{ borderColor: isInvalid ? "#e53e3e" : "#cbd5e0" }}
         transition="all 0.2s"
         role="button"
         aria-expanded={isOpen}
@@ -218,14 +210,9 @@ const ChurchDropdown = ({
         <LuChevronDown
           size={16}
           style={{
-            transform: isOpen
-              ? "rotate(180deg)"
-              : "rotate(0deg)",
-            transition:
-              "transform 0.25s ease",
-            color: isOpen
-              ? primaryMaroon
-              : "#718096",
+            transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform 0.25s ease",
+            color: isOpen ? primaryMaroon : "#718096",
             flexShrink: 0,
             marginLeft: "6px",
           }}
@@ -247,12 +234,7 @@ const ChurchDropdown = ({
           maxHeight="360px"
           overflow="hidden"
         >
-          <Box
-            p={2}
-            borderBottom="1px solid"
-            borderColor="gray.100"
-            bg="gray.50"
-          >
+          <Box p={2} borderBottom="1px solid" borderColor="gray.100" bg="gray.50">
             <Flex
               align="center"
               gap={2}
@@ -263,34 +245,21 @@ const ChurchDropdown = ({
               border="1px solid"
               borderColor="gray.200"
             >
-              <LuSearch
-                size={14}
-                color="#718096"
-              />
-
+              <LuSearch size={14} color="#718096" />
               <Input
                 ref={searchRef}
                 placeholder="Search church by name or code..."
                 value={searchTerm}
-                onChange={(e) =>
-                  setSearchTerm(e.target.value)
-                }
-                onClick={(e) =>
-                  e.stopPropagation()
-                }
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
                 border="none"
-                _focus={{
-                  boxShadow: "none",
-                }}
+                _focus={{ boxShadow: "none" }}
                 bg="transparent"
                 px={0}
                 height="28px"
                 fontSize="13px"
-                _placeholder={{
-                  color: "gray.400",
-                }}
+                _placeholder={{ color: "gray.400" }}
               />
-
               {searchTerm && (
                 <Box
                   as="button"
@@ -300,9 +269,7 @@ const ChurchDropdown = ({
                     setSearchTerm("");
                   }}
                   color="gray.400"
-                  _hover={{
-                    color: "gray.600",
-                  }}
+                  _hover={{ color: "gray.600" }}
                 >
                   <LuX size={12} />
                 </Box>
@@ -314,28 +281,14 @@ const ChurchDropdown = ({
             maxHeight="260px"
             overflowY="auto"
             css={{
-              "&::-webkit-scrollbar": {
-                width: "4px",
-              },
-              "&::-webkit-scrollbar-track": {
-                background: "#f7fafc",
-              },
-              "&::-webkit-scrollbar-thumb": {
-                background: "#cbd5e0",
-                borderRadius: "24px",
-              },
+              "&::-webkit-scrollbar": { width: "4px" },
+              "&::-webkit-scrollbar-track": { background: "#f7fafc" },
+              "&::-webkit-scrollbar-thumb": { background: "#cbd5e0", borderRadius: "24px" },
             }}
           >
             {filteredOptions.length === 0 ? (
-              <Box
-                px={4}
-                py={6}
-                textAlign="center"
-              >
-                <Text
-                  fontSize="sm"
-                  color="gray.400"
-                >
+              <Box px={4} py={6} textAlign="center">
+                <Text fontSize="sm" color="gray.400">
                   No churches found
                 </Text>
               </Box>
@@ -346,18 +299,9 @@ const ChurchDropdown = ({
                   px={3}
                   py={2.5}
                   cursor="pointer"
-                  _hover={{
-                    bg: "gray.50",
-                  }}
-                  onClick={() =>
-                    handleSelect(option)
-                  }
-                  bg={
-                    Number(option.id) ===
-                    Number(value)
-                      ? "purple.50"
-                      : "transparent"
-                  }
+                  _hover={{ bg: "gray.50" }}
+                  onClick={() => handleSelect(option)}
+                  bg={Number(option.id) === Number(value) ? "purple.50" : "transparent"}
                   transition="all 0.15s"
                   display="flex"
                   alignItems="center"
@@ -365,44 +309,20 @@ const ChurchDropdown = ({
                   borderBottom="1px solid"
                   borderColor="gray.50"
                 >
-                  <Flex
-                    direction="column"
-                    flex="1"
-                  >
+                  <Flex direction="column" flex="1">
                     <Text
                       fontSize="sm"
-                      color={
-                        Number(option.id) ===
-                        Number(value)
-                          ? primaryMaroon
-                          : "gray.700"
-                      }
-                      fontWeight={
-                        Number(option.id) ===
-                        Number(value)
-                          ? "600"
-                          : "500"
-                      }
+                      color={Number(option.id) === Number(value) ? primaryMaroon : "gray.700"}
+                      fontWeight={Number(option.id) === Number(value) ? "600" : "500"}
                     >
                       {option.name}
                     </Text>
-
-                    <Text
-                      fontSize="xs"
-                      color="gray.500"
-                    >
-                      {option.code} •{" "}
-                      {option.city ||
-                        "No city"}
+                    <Text fontSize="xs" color="gray.500">
+                      {option.code} • {option.city || "No city"}
                     </Text>
                   </Flex>
-
-                  {Number(option.id) ===
-                    Number(value) && (
-                    <LuCheck
-                      size={16}
-                      color={primaryMaroon}
-                    />
+                  {Number(option.id) === Number(value) && (
+                    <LuCheck size={16} color={primaryMaroon} />
                   )}
                 </Box>
               ))
@@ -412,11 +332,7 @@ const ChurchDropdown = ({
       )}
 
       {error && (
-        <Text
-          fontSize="xs"
-          color="red.500"
-          mt={1}
-        >
+        <Text fontSize="xs" color="red.500" mt={1}>
           {error}
         </Text>
       )}
@@ -437,34 +353,18 @@ const SubscriptionDropdown = ({
   error,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-
   const containerRef = useRef(null);
 
-  const selectedOption = options.find(
-    (opt) => Number(opt.id) === Number(value)
-  );
+  const selectedOption = options.find((opt) => Number(opt.id) === Number(value));
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target)
-      ) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
         setIsOpen(false);
       }
     };
-
-    document.addEventListener(
-      "mousedown",
-      handleClickOutside
-    );
-
-    return () => {
-      document.removeEventListener(
-        "mousedown",
-        handleClickOutside
-      );
-    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const handleSelect = (option) => {
@@ -474,130 +374,46 @@ const SubscriptionDropdown = ({
 
   const getDisplayValue = () => {
     if (selectedOption) {
-      const isYearly =
-        selectedOption.billing_cycle ===
-        "YEARLY";
-
-      const cycleLabel = isYearly
-        ? "Yearly"
-        : "Monthly";
+      const isYearly = selectedOption.billing_cycle === "YEARLY";
+      const cycleLabel = isYearly ? "Yearly" : "Monthly";
 
       return (
-        <Flex
-          align="center"
-          gap={2}
-          flex="1"
-          overflow="hidden"
-        >
-          <Box flex="1">
-            <Text
-              fontSize="sm"
-              fontWeight="600"
-              color="#333"
-              noOfLines={1}
-            >
-              {selectedOption.package_name}
-            </Text>
-
-            <Text
-              fontSize="xs"
-              color="gray.500"
-            >
-              {cycleLabel} •{" "}
-              {selectedOption.capacity ||
-                selectedOption.member_limit ||
-                0}{" "}
-              members •{" "}
-              {formatCurrencyStatic(
-                selectedOption.amount
-              )}
-            </Text>
-          </Box>
-
-          <Badge
-            bg={
-              isYearly
-                ? "purple.50"
-                : "blue.50"
-            }
-            color={
-              isYearly
-                ? "purple.600"
-                : "blue.600"
-            }
-            fontSize="10px"
-            px={2}
-            py={0.5}
-            borderRadius="full"
-            flexShrink={0}
-          >
-            {cycleLabel}
-          </Badge>
+        <Flex align="center" gap={2} flex="1" overflow="hidden">
+          <Icon as={LuSearch} color="gray.400" boxSize={4} flexShrink={0} />
+          <Text fontSize="sm" fontWeight="600" color="#333" noOfLines={1}>
+            {selectedOption.subscription_code || `SUB-${selectedOption.id}`} ·{" "}
+            {selectedOption.package_name} · {cycleLabel}
+          </Text>
         </Flex>
       );
     }
-
     return (
-      <Text
-        color="gray.400"
-        fontSize="sm"
-      >
-        {placeholder}
-      </Text>
+      <Flex align="center" gap={2}>
+        <Icon as={LuSearch} color="gray.400" boxSize={4} />
+        <Text color="gray.400" fontSize="sm">
+          {placeholder}
+        </Text>
+      </Flex>
     );
   };
 
   return (
-    <Box
-      ref={containerRef}
-      position="relative"
-      width="100%"
-    >
-      <Text
-        fontSize="xs"
-        fontWeight="600"
-        color="gray.700"
-        mb={1}
-      >
-        Subscription *
-      </Text>
+    <Box ref={containerRef} position="relative" width="100%">
+      <FieldLabel required>Subscription</FieldLabel>
 
       <Box
-        onClick={() =>
-          options.length > 0 &&
-          setIsOpen(!isOpen)
-        }
-        cursor={
-          options.length > 0
-            ? "pointer"
-            : "default"
-        }
+        onClick={() => options.length > 0 && setIsOpen(!isOpen)}
+        cursor={options.length > 0 ? "pointer" : "default"}
         border="1.5px solid"
-        borderColor={
-          isInvalid
-            ? "#e53e3e"
-            : isOpen
-            ? primaryMaroon
-            : "#e2e8f0"
-        }
+        borderColor={isInvalid ? "#e53e3e" : isOpen ? primaryMaroon : "#e2e8f0"}
         borderRadius="md"
         height="48px"
         px={3}
         display="flex"
         alignItems="center"
         justifyContent="space-between"
-        bg={
-          options.length === 0
-            ? "gray.50"
-            : "white"
-        }
-        _hover={{
-          borderColor: isInvalid
-            ? "#e53e3e"
-            : options.length > 0
-            ? "#cbd5e0"
-            : "#e2e8f0",
-        }}
+        bg={options.length === 0 ? "gray.50" : "white"}
+        _hover={{ borderColor: isInvalid ? "#e53e3e" : options.length > 0 ? "#cbd5e0" : "#e2e8f0" }}
         transition="all 0.2s"
         role="button"
         aria-expanded={isOpen}
@@ -609,14 +425,9 @@ const SubscriptionDropdown = ({
           <LuChevronDown
             size={16}
             style={{
-              transform: isOpen
-                ? "rotate(180deg)"
-                : "rotate(0deg)",
-              transition:
-                "transform 0.25s ease",
-              color: isOpen
-                ? primaryMaroon
-                : "#718096",
+              transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform 0.25s ease",
+              color: isOpen ? primaryMaroon : "#718096",
               flexShrink: 0,
               marginLeft: "6px",
             }}
@@ -640,13 +451,8 @@ const SubscriptionDropdown = ({
           overflowY="auto"
         >
           {options.map((option) => {
-            const isYearly =
-              option.billing_cycle ===
-              "YEARLY";
-
-            const cycleLabel = isYearly
-              ? "Yearly"
-              : "Monthly";
+            const isYearly = option.billing_cycle === "YEARLY";
+            const cycleLabel = isYearly ? "Yearly" : "Monthly";
 
             return (
               <Box
@@ -654,18 +460,9 @@ const SubscriptionDropdown = ({
                 px={3}
                 py={2.5}
                 cursor="pointer"
-                _hover={{
-                  bg: "gray.50",
-                }}
-                onClick={() =>
-                  handleSelect(option)
-                }
-                bg={
-                  Number(option.id) ===
-                  Number(value)
-                    ? "purple.50"
-                    : "transparent"
-                }
+                _hover={{ bg: "gray.50" }}
+                onClick={() => handleSelect(option)}
+                bg={Number(option.id) === Number(value) ? "purple.50" : "transparent"}
                 transition="all 0.15s"
                 display="flex"
                 alignItems="center"
@@ -673,55 +470,23 @@ const SubscriptionDropdown = ({
                 borderBottom="1px solid"
                 borderColor="gray.50"
               >
-                <Flex
-                  direction="column"
-                  flex="1"
-                >
+                <Flex direction="column" flex="1">
                   <Text
                     fontSize="sm"
-                    color={
-                      Number(option.id) ===
-                      Number(value)
-                        ? primaryMaroon
-                        : "gray.700"
-                    }
-                    fontWeight={
-                      Number(option.id) ===
-                      Number(value)
-                        ? "600"
-                        : "500"
-                    }
+                    color={Number(option.id) === Number(value) ? primaryMaroon : "gray.700"}
+                    fontWeight={Number(option.id) === Number(value) ? "600" : "500"}
                   >
-                    {option.package_name}
+                    {option.subscription_code || `SUB-${option.id}`} · {option.package_name}
                   </Text>
-
-                  <Text
-                    fontSize="xs"
-                    color="gray.500"
-                  >
-                    {cycleLabel} •{" "}
-                    {option.capacity ||
-                      option.member_limit ||
-                      0}{" "}
-                    members •{" "}
-                    {formatCurrencyStatic(
-                      option.amount
-                    )}
+                  <Text fontSize="xs" color="gray.500">
+                    {cycleLabel} • {option.capacity || option.member_limit || 0} members
                   </Text>
                 </Flex>
 
                 <HStack spacing={2}>
                   <Badge
-                    bg={
-                      isYearly
-                        ? "purple.50"
-                        : "blue.50"
-                    }
-                    color={
-                      isYearly
-                        ? "purple.600"
-                        : "blue.600"
-                    }
+                    bg={isYearly ? "purple.50" : "blue.50"}
+                    color={isYearly ? "purple.600" : "blue.600"}
                     fontSize="10px"
                     px={2}
                     py={0.5}
@@ -729,13 +494,8 @@ const SubscriptionDropdown = ({
                   >
                     {cycleLabel}
                   </Badge>
-
-                  {Number(option.id) ===
-                    Number(value) && (
-                    <LuCheck
-                      size={16}
-                      color={primaryMaroon}
-                    />
+                  {Number(option.id) === Number(value) && (
+                    <LuCheck size={16} color={primaryMaroon} />
                   )}
                 </HStack>
               </Box>
@@ -745,11 +505,7 @@ const SubscriptionDropdown = ({
       )}
 
       {error && (
-        <Text
-          fontSize="xs"
-          color="red.500"
-          mt={1}
-        >
+        <Text fontSize="xs" color="red.500" mt={1}>
           {error}
         </Text>
       )}
@@ -761,14 +517,28 @@ const SubscriptionDropdown = ({
    CURRENCY
 ========================================================= */
 
-const formatCurrencyStatic = (amount) => {
-  return new Intl.NumberFormat("en-IN", {
+const formatCurrencyStatic = (amount) =>
+  new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(Number(amount) || 0);
-};
+
+/* =========================================================
+   SUMMARY ROW (used in the sidebar cards)
+========================================================= */
+
+const SummaryRow = ({ label, value, valueColor = "#1a1a2e", bold }) => (
+  <Flex justify="space-between" align="center" py={1.5}>
+    <Text fontSize="sm" color="gray.500">
+      {label}
+    </Text>
+    <Text fontSize="sm" fontWeight={bold ? "700" : "600"} color={valueColor}>
+      {value}
+    </Text>
+  </Flex>
+);
 
 /* =========================================================
    MAIN PAGE
@@ -776,109 +546,56 @@ const formatCurrencyStatic = (amount) => {
 
 const PaymentAddPage = () => {
   const navigate = useNavigate();
-  const location = useLocation();
 
-  const [isLoading, setIsLoading] =
-    useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [isSubmitting, setIsSubmitting] =
-    useState(false);
+  const [churches, setChurches] = useState([]);
+  const [allSubscriptions, setAllSubscriptions] = useState([]);
+  const [filteredSubscriptions, setFilteredSubscriptions] = useState([]);
+  const [taxTypes, setTaxTypes] = useState([]);
+  const [taxRates, setTaxRates] = useState([]);
 
-  const [churches, setChurches] =
-    useState([]);
+  const [selectedChurch, setSelectedChurch] = useState(null);
+  const [selectedSubscription, setSelectedSubscription] = useState(null);
+  const [selectedTaxType, setSelectedTaxType] = useState(null);
+  const [selectedTaxRate, setSelectedTaxRate] = useState(null);
 
-  const [allSubscriptions, setAllSubscriptions] =
-    useState([]);
+  const [paymentReceipt, setPaymentReceipt] = useState(null);
+  const [paymentReceiptPreview, setPaymentReceiptPreview] = useState("");
+  const paymentReceiptInputRef = useRef(null);
 
-  const [filteredSubscriptions, setFilteredSubscriptions] =
-    useState([]);
+  const todayISO = () => new Date().toISOString().split("T")[0];
 
-  const [taxTypes, setTaxTypes] =
-    useState([]);
+  const [formData, setFormData] = useState({
+    amount: "",
+    previously_paid: "0",
+    payment_method: "BANK_TRANSFER",
+    payment_date: todayISO(),
+    status: "PAID",
+    transaction_id: "",
+    notes: "",
+  });
 
-  const [taxRates, setTaxRates] =
-    useState([]);
-
-  const [selectedChurch, setSelectedChurch] =
-    useState(null);
-
-  const [selectedSubscription, setSelectedSubscription] =
-    useState(null);
-
-  const [selectedTaxType, setSelectedTaxType] =
-    useState(null);
-
-  const [selectedTaxRate, setSelectedTaxRate] =
-    useState(null);
-
-  /* =========================================================
-     EXISTING BILL.payment_receipt FIELD
-
-     NO NEW DATABASE FIELD
-========================================================= */
-
-  const [paymentReceipt, setPaymentReceipt] =
-    useState(null);
-
-  const [paymentReceiptPreview, setPaymentReceiptPreview] =
-    useState("");
-
-  const paymentReceiptInputRef =
-    useRef(null);
-
-  const [formData, setFormData] =
-    useState({
-      amount: "",
-      payment_method: "CASH",
-      status: "PAID",
-      transaction_id: "",
-      notes: "",
-    });
-
-  const [errors, setErrors] =
-    useState({});
-
-  /* =========================================================
-     PAYMENT OPTIONS
-========================================================= */
+  const [errors, setErrors] = useState({});
 
   const paymentMethods = [
-    {
-      value: "CASH",
-      label: "Cash",
-    },
-    {
-      value: "UPI",
-      label: "UPI",
-    },
-    {
-      value: "CARD",
-      label: "Card",
-    },
-    {
-      value: "CHEQUE",
-      label: "Cheque",
-    },
+    { value: "CASH", label: "Cash" },
+    { value: "UPI", label: "UPI" },
+    { value: "CARD", label: "Card" },
+    { value: "CHEQUE", label: "Cheque" },
+    { value: "BANK_TRANSFER", label: "Bank Transfer" },
   ];
 
   const paymentStatuses = [
-    {
-      value: "PAID",
-      label: "Paid",
-    },
-    {
-      value: "UNPAID",
-      label: "Unpaid",
-    },
-    {
-      value: "CANCELLED",
-      label: "Cancelled",
-    },
+    { value: "PAID", label: "Paid", color: "#38a169" },
+    { value: "UNPAID", label: "Unpaid", color: "#e53e3e" },
+    { value: "CANCELLED", label: "Cancelled", color: "#a0aec0" },
   ];
 
   /* =========================================================
      INITIAL DATA
-========================================================= */
+  ========================================================= */
 
   useEffect(() => {
     fetchData();
@@ -886,96 +603,52 @@ const PaymentAddPage = () => {
 
   const generateTransactionId = () => {
     const date = new Date();
-
     const year = date.getFullYear();
-
-    const month = String(
-      date.getMonth() + 1
-    ).padStart(2, "0");
-
-    const day = String(
-      date.getDate()
-    ).padStart(2, "0");
-
-    const random = Math.floor(
-      Math.random() * 10000
-    )
-      .toString()
-      .padStart(4, "0");
-
-    return `TXN-${year}${month}${day}-${random}`;
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const random = Math.floor(Math.random() * 10000).toString().padStart(4, "0");
+    return `TXN-${year}-${month}${random}`;
   };
 
   const fetchData = async () => {
     setIsLoading(true);
-
     try {
-      const [
-        churchesRes,
-        subscriptionsRes,
-        taxTypesRes,
-        taxRatesRes,
-      ] = await Promise.all([
-        adminApi.getChurches(),
-        adminApi.getSubscriptions(),
-        adminApi.getTaxTypes(),
-        adminApi.getTaxRates(),
-      ]);
+      const [churchesRes, subscriptionsRes, taxTypesRes, taxRatesRes] =
+        await Promise.all([
+          adminApi.getChurches(),
+          adminApi.getSubscriptions(),
+          adminApi.getTaxTypes(),
+          adminApi.getTaxRates(),
+        ]);
 
-      const allChurchesData =
-        churchesRes.data || [];
+      const allChurchesData = churchesRes.data || [];
+      const subscriptionsData = subscriptionsRes.data || [];
+      const taxTypesData = taxTypesRes.data || [];
+      const taxRatesData = taxRatesRes.data || [];
 
-      const subscriptionsData =
-        subscriptionsRes.data || [];
+      const churchIdsWithUnpaidSubs = new Set(
+        subscriptionsData
+          .filter((s) => s.payment_status === "UNPAID")
+          .map((s) => Number(s.church_id))
+      );
 
-      const taxTypesData =
-        taxTypesRes.data || [];
-
-      const taxRatesData =
-        taxRatesRes.data || [];
-
-      const churchIdsWithUnpaidSubs =
-        new Set(
-          subscriptionsData
-            .filter(
-              (s) =>
-                s.payment_status ===
-                "UNPAID"
-            )
-            .map((s) =>
-              Number(s.church_id)
-            )
-        );
-
-      const churchesData =
-        allChurchesData.filter((c) =>
-          churchIdsWithUnpaidSubs.has(
-            Number(c.id)
-          )
-        );
+      const churchesData = allChurchesData.filter((c) =>
+        churchIdsWithUnpaidSubs.has(Number(c.id))
+      );
 
       setChurches(churchesData);
-      setAllSubscriptions(
-        subscriptionsData
-      );
+      setAllSubscriptions(subscriptionsData);
       setTaxTypes(taxTypesData);
       setTaxRates(taxRatesData);
 
       setFormData((prev) => ({
         ...prev,
-        transaction_id:
-          generateTransactionId(),
+        transaction_id: generateTransactionId(),
       }));
     } catch (error) {
-      console.error(
-        "Error fetching data:",
-        error
-      );
-
+      console.error("Error fetching data:", error);
       toaster.create({
         title: "Error",
-        description:
-          "Failed to load data.",
+        description: "Failed to load data.",
         type: "error",
         duration: 4000,
       });
@@ -986,160 +659,91 @@ const PaymentAddPage = () => {
 
   /* =========================================================
      CHURCH SELECT
-========================================================= */
+  ========================================================= */
 
-  const handleChurchSelect = (
-    churchId
-  ) => {
-    const church = churches.find(
-      (c) =>
-        Number(c.id) ===
-        Number(churchId)
-    );
-
+  const handleChurchSelect = (churchId) => {
+    const church = churches.find((c) => Number(c.id) === Number(churchId));
     setSelectedChurch(church);
-
     setSelectedSubscription(null);
 
-    const churchSubs =
-      allSubscriptions.filter(
-        (s) =>
-          Number(s.church_id) ===
-            Number(churchId) &&
-          s.payment_status ===
-            "UNPAID"
-      );
-
-    setFilteredSubscriptions(
-      churchSubs
+    const churchSubs = allSubscriptions.filter(
+      (s) => Number(s.church_id) === Number(churchId) && s.payment_status === "UNPAID"
     );
 
-    if (churchSubs.length > 0) {
-      setSelectedSubscription(
-        churchSubs[0]
-      );
+    setFilteredSubscriptions(churchSubs);
 
-      updateFormFromSubscription(
-        churchSubs[0]
-      );
+    if (churchSubs.length > 0) {
+      setSelectedSubscription(churchSubs[0]);
+      updateFormFromSubscription(churchSubs[0]);
     } else {
       setSelectedSubscription(null);
-
-      setFormData((prev) => ({
-        ...prev,
-        amount: "",
-      }));
+      setFormData((prev) => ({ ...prev, amount: "" }));
     }
 
     if (errors.church) {
-      setErrors((prev) => ({
-        ...prev,
-        church: "",
-      }));
+      setErrors((prev) => ({ ...prev, church: "" }));
     }
   };
 
   /* =========================================================
      SUBSCRIPTION SELECT
-========================================================= */
+  ========================================================= */
 
-  const handleSubscriptionSelect = (
-    subscriptionId
-  ) => {
-    const subscription =
-      filteredSubscriptions.find(
-        (s) =>
-          Number(s.id) ===
-          Number(subscriptionId)
-      );
+  const handleSubscriptionSelect = (subscriptionId) => {
+    const subscription = filteredSubscriptions.find(
+      (s) => Number(s.id) === Number(subscriptionId)
+    );
 
     if (subscription) {
-      setSelectedSubscription(
-        subscription
-      );
-
-      updateFormFromSubscription(
-        subscription
-      );
+      setSelectedSubscription(subscription);
+      updateFormFromSubscription(subscription);
 
       if (errors.subscription) {
-        setErrors((prev) => ({
-          ...prev,
-          subscription: "",
-        }));
+        setErrors((prev) => ({ ...prev, subscription: "" }));
       }
     }
   };
 
-  /* =========================================================
-     SUBSCRIPTION AMOUNT
-========================================================= */
-
-  const updateFormFromSubscription = (
-    subscription
-  ) => {
-    const amount = Number(
-      subscription?.amount || 0
-    );
-
+  const updateFormFromSubscription = (subscription) => {
+    const amount = Number(subscription?.amount || 0);
     setFormData((prev) => ({
       ...prev,
-      amount:
-        amount > 0
-          ? amount.toString()
-          : "",
+      amount: amount > 0 ? amount.toString() : "",
     }));
   };
 
   /* =========================================================
-     TAX TYPE
-========================================================= */
+     TAX TYPE / TAX RATE
+  ========================================================= */
 
-  const handleTaxTypeSelect = (
-    taxTypeId
-  ) => {
+  const availableTaxRates = useMemo(() => {
+    if (!selectedTaxType) return [];
+    return taxRates.filter(
+      (r) => Number(r.tax_type_id) === Number(selectedTaxType.id) && r.is_active
+    );
+  }, [selectedTaxType, taxRates]);
+
+  const handleTaxTypeSelect = (taxTypeId) => {
     if (!taxTypeId) {
       setSelectedTaxType(null);
       setSelectedTaxRate(null);
-
-      setErrors((prev) => ({
-        ...prev,
-        tax: "",
-      }));
-
+      setErrors((prev) => ({ ...prev, tax: "" }));
       return;
     }
 
-    const parsedTaxTypeId =
-      parseInt(taxTypeId, 10);
-
-    const taxType = taxTypes.find(
-      (t) =>
-        Number(t.id) ===
-        parsedTaxTypeId
-    );
-
+    const parsedTaxTypeId = parseInt(taxTypeId, 10);
+    const taxType = taxTypes.find((t) => Number(t.id) === parsedTaxTypeId);
     setSelectedTaxType(taxType);
 
     const rates = taxRates.filter(
-      (r) =>
-        Number(r.tax_type_id) ===
-          parsedTaxTypeId &&
-        r.is_active
+      (r) => Number(r.tax_type_id) === parsedTaxTypeId && r.is_active
     );
 
     if (rates.length > 0) {
-      setSelectedTaxRate(
-        rates[0]
-      );
-
-      setErrors((prev) => ({
-        ...prev,
-        tax: "",
-      }));
+      setSelectedTaxRate(rates[0]);
+      setErrors((prev) => ({ ...prev, tax: "" }));
     } else {
       setSelectedTaxRate(null);
-
       setErrors((prev) => ({
         ...prev,
         tax: "No active tax rate found for this tax type",
@@ -1147,557 +751,254 @@ const PaymentAddPage = () => {
     }
   };
 
+  const handleTaxRateSelect = (taxRateId) => {
+    const rate = availableTaxRates.find((r) => Number(r.id) === Number(taxRateId));
+    setSelectedTaxRate(rate || null);
+    if (errors.tax) {
+      setErrors((prev) => ({ ...prev, tax: "" }));
+    }
+  };
+
   /* =========================================================
      FORM CHANGE
-========================================================= */
+  ========================================================= */
 
   const handleChange = (e) => {
-    const {
-      name,
-      value,
-    } = e.target;
-
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) {
-      setErrors((prev) => ({
-        ...prev,
-        [name]: "",
-      }));
+      setErrors((prev) => ({ ...prev, [name]: "" }));
     }
   };
 
   /* =========================================================
      PAYMENT RECEIPT IMAGE
+  ========================================================= */
 
-     Uses existing Bill.payment_receipt
-========================================================= */
+  const handlePaymentReceiptChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  const handlePaymentReceiptChange = (
-    e
-  ) => {
-    const file =
-      e.target.files?.[0];
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
-    if (!file) {
-      return;
-    }
-
-    const allowedTypes = [
-      "image/jpeg",
-      "image/jpg",
-      "image/png",
-      "image/webp",
-    ];
-
-    if (
-      !allowedTypes.includes(
-        file.type
-      )
-    ) {
+    if (!allowedTypes.includes(file.type)) {
       setErrors((prev) => ({
         ...prev,
-        payment_receipt:
-          "Please upload a JPG, JPEG, PNG or WebP image.",
+        payment_receipt: "Please upload a JPG, JPEG, PNG or WebP image.",
       }));
-
       e.target.value = "";
       return;
     }
 
-    const maxSize =
-      5 * 1024 * 1024;
-
+    const maxSize = 5 * 1024 * 1024;
     if (file.size > maxSize) {
       setErrors((prev) => ({
         ...prev,
-        payment_receipt:
-          "Image size must be less than 5 MB.",
+        payment_receipt: "Image size must be less than 5 MB.",
       }));
-
       e.target.value = "";
       return;
     }
 
     setPaymentReceipt(file);
+    setErrors((prev) => ({ ...prev, payment_receipt: "" }));
+  };
 
-    setErrors((prev) => ({
-      ...prev,
-      payment_receipt: "",
-    }));
+  const handleReceiptDrop = (e) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    handlePaymentReceiptChange({ target: { files: [file], value: "" } });
   };
 
   const removePaymentReceipt = () => {
     setPaymentReceipt(null);
     setPaymentReceiptPreview("");
-
-    if (
-      paymentReceiptInputRef.current
-    ) {
-      paymentReceiptInputRef.current.value =
-        "";
+    if (paymentReceiptInputRef.current) {
+      paymentReceiptInputRef.current.value = "";
     }
-
-    setErrors((prev) => ({
-      ...prev,
-      payment_receipt: "",
-    }));
+    setErrors((prev) => ({ ...prev, payment_receipt: "" }));
   };
-
-  /* =========================================================
-     CREATE / UPDATE PREVIEW URL
-========================================================= */
 
   useEffect(() => {
     if (!paymentReceipt) {
       setPaymentReceiptPreview("");
       return;
     }
-
-    const previewUrl =
-      URL.createObjectURL(
-        paymentReceipt
-      );
-
-    setPaymentReceiptPreview(
-      previewUrl
-    );
-
-    return () => {
-      URL.revokeObjectURL(
-        previewUrl
-      );
-    };
+    const previewUrl = URL.createObjectURL(paymentReceipt);
+    setPaymentReceiptPreview(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
   }, [paymentReceipt]);
 
   /* =========================================================
      VALIDATION
-========================================================= */
+  ========================================================= */
 
   const validate = () => {
     const newErrors = {};
 
-    if (!selectedChurch) {
-      newErrors.church =
-        "Please select a church";
-    }
+    if (!selectedChurch) newErrors.church = "Please select a church";
+    if (!selectedSubscription) newErrors.subscription = "Please select a subscription";
 
-    if (!selectedSubscription) {
-      newErrors.subscription =
-        "Please select a subscription";
-    }
-
-    const subscriptionAmount =
-      Number(
-        selectedSubscription?.amount ||
-          0
-      );
-
-    if (subscriptionAmount <= 0) {
-      newErrors.amount =
-        "Subscription amount is invalid";
-    }
+    const amountValue = Number(formData.amount || 0);
+    if (amountValue <= 0) newErrors.amount = "Amount paid is invalid";
 
     if (!formData.transaction_id) {
-      newErrors.transaction_id =
-        "Transaction ID is required";
+      newErrors.transaction_id = "Transaction ID is required";
     }
 
-    if (
-      selectedTaxType &&
-      !selectedTaxRate
-    ) {
-      newErrors.tax =
-        "No active tax rate found for this tax type";
+    if (!formData.payment_date) {
+      newErrors.payment_date = "Payment date is required";
+    }
+
+    if (selectedTaxType && !selectedTaxRate) {
+      newErrors.tax = "No active tax rate found for this tax type";
+    }
+
+    if (!paymentReceipt) {
+      newErrors.payment_receipt = "Payment screenshot is required for manual payment verification";
     }
 
     setErrors(newErrors);
-
-    return (
-      Object.keys(newErrors).length ===
-      0
-    );
+    return Object.keys(newErrors).length === 0;
   };
 
   /* =========================================================
-     SUBSCRIPTION AMOUNT
-========================================================= */
+     CALCULATIONS
+  ========================================================= */
 
-  const getSubscriptionAmount = () => {
-    if (!selectedSubscription) {
-      return 0;
-    }
+  const getSubscriptionAmount = () => Number(selectedSubscription?.amount || 0);
 
-    return Number(
-      selectedSubscription.amount || 0
-    );
-  };
-
-  /* =========================================================
-     TAX PERCENTAGE
-========================================================= */
-
-  const getTaxPercentage = () => {
-    if (!selectedTaxRate) {
-      return 0;
-    }
-
-    return Number(
-      selectedTaxRate.rate_percentage ||
-        0
-    );
-  };
-
-  /* =========================================================
-     TAX CALCULATION
-========================================================= */
+  const getTaxPercentage = () => Number(selectedTaxRate?.rate_percentage || 0);
 
   const calculateTax = () => {
-    const subtotal =
-      getSubscriptionAmount();
+    const subtotal = getSubscriptionAmount();
+    const taxPercentage = getTaxPercentage();
+    const taxAmount = Math.round(((subtotal * taxPercentage) / 100 + Number.EPSILON) * 100) / 100;
+    const totalPayable = Math.round((subtotal + taxAmount + Number.EPSILON) * 100) / 100;
+    return { subtotal, taxPercentage, taxAmount, totalPayable };
+  };
 
-    const taxPercentage =
-      getTaxPercentage();
+  const formatCurrency = (amount) =>
+    new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(Number(amount) || 0);
 
-    const taxAmount =
-      Math.round(
-        ((subtotal *
-          taxPercentage) /
-          100 +
-          Number.EPSILON) *
-          100
-      ) / 100;
+  const formatDate = (dateString) => {
+    if (!dateString) return "—";
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" });
+  };
 
-    const totalPayable =
-      Math.round(
-        (subtotal +
-          taxAmount +
-          Number.EPSILON) *
-          100
-      ) / 100;
+  const getBillingPeriodDisplay = () => {
+    if (!selectedSubscription) return "Select a subscription to view billing period";
+
+    const startDate = selectedSubscription.start_date
+      ? new Date(selectedSubscription.start_date)
+      : new Date();
+
+    const endDate = selectedSubscription.end_date
+      ? new Date(selectedSubscription.end_date)
+      : null;
+
+    if (endDate) return `${formatDate(startDate)} – ${formatDate(endDate)}`;
+
+    return `${formatDate(startDate)} – ${selectedSubscription.duration_months || 12} months`;
+  };
+
+  const getCalculationBreakdown = () => {
+    if (!selectedSubscription) return null;
+
+    const isYearly = selectedSubscription.billing_cycle === "YEARLY";
+
+    const rate = isYearly
+      ? Number(selectedSubscription.rate_per_member_yearly || 0)
+      : Number(selectedSubscription.rate_per_member_monthly || 0);
+
+    const capacity = Number(
+      selectedSubscription.capacity || selectedSubscription.member_limit || 0
+    );
+
+    const durationMonths = Number(
+      selectedSubscription.duration_months || (isYearly ? 12 : 1)
+    );
+
+    const subtotal = getSubscriptionAmount();
+    const taxPercentage = getTaxPercentage();
+    const taxAmount = Math.round(((subtotal * taxPercentage) / 100 + Number.EPSILON) * 100) / 100;
+    const total = Math.round((subtotal + taxAmount + Number.EPSILON) * 100) / 100;
 
     return {
+      rate,
+      capacity,
+      durationMonths,
       subtotal,
       taxPercentage,
       taxAmount,
-      totalPayable,
+      total,
+      billingCycle: selectedSubscription.billing_cycle,
+      cycleDisplay: isYearly ? "Yearly" : "Monthly",
+      rateDisplay: isYearly ? "Rate per Member (Yearly)" : "Rate per Member (Monthly)",
     };
   };
-
-  /* =========================================================
-     CURRENCY
-========================================================= */
-
-  const formatCurrency = (
-    amount
-  ) => {
-    return new Intl.NumberFormat(
-      "en-IN",
-      {
-        style: "currency",
-        currency: "INR",
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2,
-      }
-    ).format(
-      Number(amount) || 0
-    );
-  };
-
-  /* =========================================================
-     DATE
-========================================================= */
-
-  const formatDate = (
-    dateString
-  ) => {
-    if (!dateString) {
-      return "—";
-    }
-
-    const date =
-      new Date(dateString);
-
-    return date.toLocaleDateString(
-      "en-US",
-      {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }
-    );
-  };
-
-  /* =========================================================
-     BILLING PERIOD
-========================================================= */
-
-  const getBillingPeriodDisplay =
-    () => {
-      if (!selectedSubscription) {
-        return "Select a subscription to view billing period";
-      }
-
-      const startDate =
-        selectedSubscription.start_date
-          ? new Date(
-              selectedSubscription.start_date
-            )
-          : new Date();
-
-      const endDate =
-        selectedSubscription.end_date
-          ? new Date(
-              selectedSubscription.end_date
-            )
-          : null;
-
-      if (endDate) {
-        return `${formatDate(
-          startDate
-        )} – ${formatDate(endDate)}`;
-      }
-
-      return `${formatDate(
-        startDate
-      )} – ${
-        selectedSubscription.duration_months ||
-        12
-      } months`;
-    };
-
-  /* =========================================================
-     CALCULATION BREAKDOWN
-========================================================= */
-
-  const getCalculationBreakdown =
-    () => {
-      if (!selectedSubscription) {
-        return null;
-      }
-
-      const isYearly =
-        selectedSubscription.billing_cycle ===
-        "YEARLY";
-
-      const rate = isYearly
-        ? Number(
-            selectedSubscription.rate_per_member_yearly ||
-              0
-          )
-        : Number(
-            selectedSubscription.rate_per_member_monthly ||
-              0
-          );
-
-      const capacity = Number(
-        selectedSubscription.capacity ||
-          selectedSubscription.member_limit ||
-          0
-      );
-
-      const durationMonths = Number(
-        selectedSubscription.duration_months ||
-          (isYearly ? 12 : 1)
-      );
-
-      const subtotal =
-        getSubscriptionAmount();
-
-      const taxPercentage =
-        getTaxPercentage();
-
-      const taxAmount =
-        Math.round(
-          ((subtotal *
-            taxPercentage) /
-            100 +
-            Number.EPSILON) *
-            100
-        ) / 100;
-
-      const total =
-        Math.round(
-          (subtotal +
-            taxAmount +
-            Number.EPSILON) *
-            100
-        ) / 100;
-
-      return {
-        rate,
-        capacity,
-        durationMonths,
-        subtotal,
-        taxPercentage,
-        taxAmount,
-        total,
-        billingCycle:
-          selectedSubscription.billing_cycle,
-        cycleDisplay:
-          isYearly
-            ? "Yearly"
-            : "Monthly",
-        rateDisplay:
-          isYearly
-            ? "Yearly Rate"
-            : "Monthly Rate",
-      };
-    };
 
   /* =========================================================
      SUBMIT
-
-     IMPORTANT:
-     Uses FormData because payment_receipt
-     is an ImageField.
-
-     Existing backend field:
-         payment_receipt
-========================================================= */
+  ========================================================= */
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!validate()) {
-      return;
-    }
+    if (!validate()) return;
 
     setIsSubmitting(true);
 
     try {
-      const subscriptionAmount =
-        getSubscriptionAmount();
-
       const data = new FormData();
 
-      data.append(
-        "church_id",
-        String(selectedChurch.id)
-      );
+      data.append("church_id", String(selectedChurch.id));
+      data.append("subscription_id", String(selectedSubscription.id));
+      data.append("amount", String(formData.amount));
+      data.append("payment_method", formData.payment_method);
+      data.append("payment_date", formData.payment_date);
+      data.append("status", formData.status);
+      data.append("transaction_id", formData.transaction_id);
+      data.append("note", formData.notes || "");
 
-      data.append(
-        "subscription_id",
-        String(selectedSubscription.id)
-      );
+      if (selectedTaxType?.id) data.append("tax_type_id", String(selectedTaxType.id));
+      if (selectedTaxRate?.id) data.append("tax_rate_id", String(selectedTaxRate.id));
 
-      data.append(
-        "amount",
-        String(subscriptionAmount)
-      );
+      data.append("bill_type", "NEW");
+      data.append("billing_cycle", selectedSubscription.billing_cycle || "");
 
-      data.append(
-        "payment_method",
-        formData.payment_method
-      );
-
-      data.append(
-        "status",
-        formData.status
-      );
-
-      data.append(
-        "transaction_id",
-        formData.transaction_id
-      );
-
-      data.append(
-        "note",
-        formData.notes || ""
-      );
-
-      if (selectedTaxType?.id) {
-        data.append(
-          "tax_type_id",
-          String(selectedTaxType.id)
-        );
+      if (selectedSubscription.duration_months != null) {
+        data.append("duration_months", String(selectedSubscription.duration_months));
       }
-
-      if (selectedTaxRate?.id) {
-        data.append(
-          "tax_rate_id",
-          String(selectedTaxRate.id)
-        );
-      }
-
-      data.append(
-        "bill_type",
-        "NEW"
-      );
-
-      data.append(
-        "billing_cycle",
-        selectedSubscription.billing_cycle ||
-          ""
-      );
-
-      if (
-        selectedSubscription.duration_months !=
-        null
-      ) {
-        data.append(
-          "duration_months",
-          String(
-            selectedSubscription.duration_months
-          )
-        );
-      }
-
-      /* ================================================
-         EXISTING IMAGE FIELD
-         
-         Bill.payment_receipt
-      ================================================= */
 
       if (paymentReceipt) {
-        data.append(
-          "payment_receipt",
-          paymentReceipt,
-          paymentReceipt.name
-        );
+        data.append("payment_receipt", paymentReceipt, paymentReceipt.name);
       }
-
-      console.log(
-        "Creating payment with receipt:",
-        paymentReceipt
-      );
 
       await adminApi.createBill(data);
 
       toaster.create({
         title: "Success",
-        description:
-          "Payment recorded successfully.",
+        description: "Payment recorded successfully.",
         type: "success",
         duration: 3000,
       });
 
-      navigate(
-        "/admin/payments"
-      );
+      navigate("/admin/payments");
     } catch (error) {
-      console.error(
-        "Error creating payment:",
-        error
-      );
-
-      console.error(
-        "Backend response:",
-        error.response?.data
-      );
-
+      console.error("Error creating payment:", error);
       toaster.create({
         title: "Error",
         description:
-          error.response?.data
-            ?.error ||
-          error.response?.data
-            ?.detail ||
-          error.response?.data
-            ?.message ||
+          error.response?.data?.error ||
+          error.response?.data?.detail ||
+          error.response?.data?.message ||
           "Failed to record payment.",
         type: "error",
         duration: 5000,
@@ -1708,58 +1009,41 @@ const PaymentAddPage = () => {
   };
 
   /* =========================================================
-     CALCULATION VALUES
-========================================================= */
+     DERIVED VALUES
+  ========================================================= */
 
-  const {
-    taxAmount,
-    totalPayable,
-    taxPercentage,
-  } = calculateTax();
-
-  const subscriptionAmount =
-    getSubscriptionAmount();
-
-  const breakdown =
-    getCalculationBreakdown();
+  const { taxAmount, totalPayable, taxPercentage } = calculateTax();
+  const breakdown = getCalculationBreakdown();
+  const previouslyPaid = Number(formData.previously_paid || 0);
+  const amountDue = Math.max(
+    Math.round((totalPayable - previouslyPaid + Number.EPSILON) * 100) / 100,
+    0
+  );
+  const currentStatus = paymentStatuses.find((s) => s.value === formData.status);
 
   /* =========================================================
      LOADING
-========================================================= */
+  ========================================================= */
 
   if (isLoading) {
     return (
       <AdminLayout>
-        <Container
-          maxW="container.xl"
-          py={6}
-        >
-          <Flex
-            justify="center"
-            align="center"
-            minH="400px"
-          >
+        <Container maxW="container.xl" py={6}>
+          <Flex justify="center" align="center" minH="400px">
             <Box
               width="40px"
               height="40px"
               border="4px solid"
               borderColor="gray.200"
-              borderTopColor={
-                primaryMaroon
-              }
+              borderTopColor={primaryMaroon}
               borderRadius="50%"
               animation="spin 1s linear infinite"
             />
           </Flex>
-
           <style>{`
             @keyframes spin {
-              0% {
-                transform: rotate(0deg);
-              }
-              100% {
-                transform: rotate(360deg);
-              }
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
             }
           `}</style>
         </Container>
@@ -1769,28 +1053,16 @@ const PaymentAddPage = () => {
 
   /* =========================================================
      UI
-========================================================= */
+  ========================================================= */
 
   return (
     <AdminLayout>
-      <Container
-        maxW="container.xl"
-        py={4}
-      >
-        <Text
-          fontSize="xs"
-          color="gray.400"
-          fontWeight="600"
-          mb={2}
-        >
+      <Container maxW="container.xl" py={4}>
+        <Text fontSize="xs" color="gray.400" fontWeight="600" mb={2}>
           Payments / Add Payment
         </Text>
 
-        <VStack
-          align="start"
-          spacing={1}
-          mb={4}
-        >
+        <VStack align="start" spacing={1} mb={4}>
           <Text
             fontSize="xs"
             fontWeight="700"
@@ -1800,1488 +1072,527 @@ const PaymentAddPage = () => {
           >
             Payment Management
           </Text>
-
-          <Heading
-            fontSize="2xl"
-            fontWeight="800"
-            color="#1a1a2e"
-          >
+          <Heading fontSize="2xl" fontWeight="800" color="#1a1a2e">
             Record Payment
           </Heading>
-
-          <Text
-            color="gray.500"
-            fontSize="sm"
-          >
-            Record a manual payment against
-            an existing church subscription.
+          <Text color="gray.500" fontSize="sm">
+            Record a manual payment against an existing church subscription.
           </Text>
         </VStack>
 
-        <Box
-          bg="white"
-          borderRadius="xl"
-          border="1px solid"
-          borderColor="gray.200"
-          p={5}
-          boxShadow="sm"
-        >
-          <HStack
-            spacing={3}
-            mb={5}
-          >
-            <Circle
-              size="40px"
-              bg="rgba(174,32,80,0.08)"
-              color={primaryMaroon}
-            >
-              <Icon
-                as={LuBox}
-                boxSize={5}
-              />
-            </Circle>
-
-            <Heading
-              fontSize="lg"
-              fontWeight="700"
-              color="#1a1a2e"
-            >
-              Payment Information
-            </Heading>
-          </HStack>
-
-          <form
-            onSubmit={handleSubmit}
-          >
-            <VStack
-              spacing={4}
-              align="stretch"
-            >
-              {/* =================================================
-                  CHURCH + SUBSCRIPTION
-              ================================================= */}
-
-              <Grid
-                templateColumns={{
-                  base: "1fr",
-                  md: "1fr 1fr",
-                }}
-                gap={4}
-              >
-                <GridItem>
-                  <ChurchDropdown
-                    options={churches}
-                    value={
-                      selectedChurch?.id ||
-                      null
-                    }
-                    onChange={
-                      handleChurchSelect
-                    }
-                    placeholder="Select a church..."
-                    isInvalid={
-                      !!errors.church
-                    }
-                    error={
-                      errors.church
-                    }
-                  />
-
-                  <Text
-                    fontSize="xs"
-                    color="gray.500"
-                    mt={1}
-                  >
-                    Select the church
-                    making the payment
-                  </Text>
-                </GridItem>
-
-                <GridItem>
-                  <SubscriptionDropdown
-                    options={
-                      filteredSubscriptions
-                    }
-                    value={
-                      selectedSubscription?.id ||
-                      null
-                    }
-                    onChange={
-                      handleSubscriptionSelect
-                    }
-                    placeholder={
-                      filteredSubscriptions.length ===
-                      0
-                        ? "No active subscriptions"
-                        : "Select subscription..."
-                    }
-                    isInvalid={
-                      !!errors.subscription
-                    }
-                    error={
-                      errors.subscription
-                    }
-                  />
-
-                  <Text
-                    fontSize="xs"
-                    color="gray.500"
-                    mt={1}
-                  >
-                    Subscription will
-                    auto-select if only
-                    one exists
-                  </Text>
-                </GridItem>
-              </Grid>
-
-              {/* =================================================
-                  BILLING + PAYMENT METHOD
-              ================================================= */}
-
-              <Grid
-                templateColumns={{
-                  base: "1fr",
-                  md: "1fr 1fr",
-                }}
-                gap={4}
-              >
-                <GridItem>
-                  <Text
-                    fontSize="xs"
-                    fontWeight="600"
-                    color="gray.700"
-                    mb={1}
-                  >
-                    Billing Period
-                  </Text>
-
-                  <Box
-                    bg="gray.50"
-                    px={3}
-                    py={2.5}
-                    borderRadius="md"
-                    border="1.5px solid"
-                    borderColor="gray.200"
-                    display="flex"
-                    alignItems="center"
-                    gap={2}
-                    height="48px"
-                  >
-                    <Icon
-                      as={LuCalendar}
-                      color="gray.400"
-                      boxSize={4}
-                    />
-
-                    <Text
-                      fontSize="sm"
-                      fontWeight="500"
-                      color="#333"
-                    >
-                      {getBillingPeriodDisplay()}
-                    </Text>
-                  </Box>
-                </GridItem>
-
-                <GridItem>
-                  <Text
-                    fontSize="xs"
-                    fontWeight="600"
-                    color="gray.700"
-                    mb={1}
-                  >
-                    Payment Method *
-                  </Text>
-
-                  <Box
-                    as="select"
-                    name="payment_method"
-                    value={
-                      formData.payment_method
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    style={{
-                      width: "100%",
-                      padding: "12px",
-                      borderRadius: "6px",
-                      border:
-                        "1.5px solid #e2e8f0",
-                      fontSize: "13px",
-                      height: "48px",
-                      background:
-                        "white",
-                      outline: "none",
-                    }}
-                  >
-                    {paymentMethods.map(
-                      (method) => (
-                        <option
-                          key={
-                            method.value
-                          }
-                          value={
-                            method.value
-                          }
-                        >
-                          {method.label}
-                        </option>
-                      )
-                    )}
-                  </Box>
-                </GridItem>
-              </Grid>
-
-              {/* =================================================
-                  TAX + STATUS
-              ================================================= */}
-
-              <Grid
-                templateColumns={{
-                  base: "1fr",
-                  md: "1fr 1fr",
-                }}
-                gap={4}
-              >
-                <GridItem>
-                  <Text
-                    fontSize="xs"
-                    fontWeight="600"
-                    color="gray.700"
-                    mb={1}
-                  >
-                    Tax Type
-                  </Text>
-
-                  <Box
-                    as="select"
-                    value={
-                      selectedTaxType?.id ||
-                      ""
-                    }
-                    onChange={(e) =>
-                      handleTaxTypeSelect(
-                        e.target.value
-                      )
-                    }
-                    style={{
-                      width: "100%",
-                      padding: "12px",
-                      borderRadius: "6px",
-                      border:
-                        "1.5px solid #e2e8f0",
-                      fontSize: "13px",
-                      height: "48px",
-                      background:
-                        "white",
-                      outline: "none",
-                    }}
-                  >
-                    <option value="">
-                      No Tax
-                    </option>
-
-                    {taxTypes.map(
-                      (tax) => (
-                        <option
-                          key={tax.id}
-                          value={tax.id}
-                        >
-                          {
-                            tax.tax_type_name
-                          }{" "}
-                          {tax.country_name
-                            ? `(${tax.country_name})`
-                            : ""}
-                        </option>
-                      )
-                    )}
-                  </Box>
-
-                  {selectedTaxType &&
-                    selectedTaxRate && (
-                    <Flex
-                      align="center"
-                      gap={2}
-                      mt={1}
-                    >
-                      <Icon
-                        as={LuTag}
-                        color={
-                          primaryMaroon
-                        }
-                        boxSize={3}
-                      />
-
-                      <Text
-                        fontSize="xs"
-                        color="gray.600"
-                      >
-                        {
-                          selectedTaxType.tax_type_code
-                        }{" "}
-                        •{" "}
-                        {
-                          selectedTaxRate.rate_percentage
-                        }
-                        %
-                      </Text>
-                    </Flex>
-                  )}
-
-                  {errors.tax && (
-                    <Text
-                      fontSize="xs"
-                      color="red.500"
-                      mt={1}
-                    >
-                      {errors.tax}
-                    </Text>
-                  )}
-                </GridItem>
-
-                <GridItem>
-                  <Text
-                    fontSize="xs"
-                    fontWeight="600"
-                    color="gray.700"
-                    mb={1}
-                  >
-                    Payment Status
-                  </Text>
-
-                  <Box
-                    as="select"
-                    name="status"
-                    value={
-                      formData.status
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    style={{
-                      width: "100%",
-                      padding: "12px",
-                      borderRadius: "6px",
-                      border:
-                        "1.5px solid #e2e8f0",
-                      fontSize: "13px",
-                      height: "48px",
-                      background:
-                        "white",
-                      outline: "none",
-                    }}
-                  >
-                    {paymentStatuses.map(
-                      (status) => (
-                        <option
-                          key={
-                            status.value
-                          }
-                          value={
-                            status.value
-                          }
-                        >
-                          {status.label}
-                        </option>
-                      )
-                    )}
-                  </Box>
-                </GridItem>
-              </Grid>
-
-              {/* =================================================
-                  TRANSACTION + AMOUNT
-              ================================================= */}
-
-              <Grid
-                templateColumns={{
-                  base: "1fr",
-                  md: "1fr 1fr",
-                }}
-                gap={4}
-              >
-                <GridItem>
-                  <Text
-                    fontSize="xs"
-                    fontWeight="600"
-                    color="gray.700"
-                    mb={1}
-                  >
-                    Transaction /
-                    Reference Number *
-                  </Text>
-
-                  <Input
-                    name="transaction_id"
-                    value={
-                      formData.transaction_id
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    placeholder="TXN-YYYYMMDD-XXXX"
-                    height="48px"
-                    fontSize="13px"
-                    borderColor={
-                      errors.transaction_id
-                        ? "red.500"
-                        : "gray.200"
-                    }
-                    _focus={{
-                      borderColor:
-                        primaryMaroon,
-                      boxShadow: `0 0 0 1px ${primaryMaroon}`,
-                    }}
-                  />
-
-                  {errors.transaction_id && (
-                    <Text
-                      fontSize="xs"
-                      color="red.500"
-                      mt={1}
-                    >
-                      {
-                        errors.transaction_id
-                      }
-                    </Text>
-                  )}
-
-                  <Text
-                    fontSize="xs"
-                    color="gray.500"
-                    mt={1}
-                  >
-                    Auto-generated. You
-                    can edit it if needed.
-                  </Text>
-                </GridItem>
-
-                <GridItem>
-                  <Text
-                    fontSize="xs"
-                    fontWeight="600"
-                    color="gray.700"
-                    mb={1}
-                  >
-                    Amount *
-                  </Text>
-
-                  <Input
-                    type="number"
-                    name="amount"
-                    value={
-                      formData.amount
-                    }
-                    readOnly
-                    bg="gray.50"
-                    cursor="not-allowed"
-                    height="48px"
-                    fontSize="13px"
-                    borderColor={
-                      errors.amount
-                        ? "red.500"
-                        : "gray.200"
-                    }
-                  />
-
-                  {errors.amount && (
-                    <Text
-                      fontSize="xs"
-                      color="red.500"
-                      mt={1}
-                    >
-                      {errors.amount}
-                    </Text>
-                  )}
-                </GridItem>
-              </Grid>
-
-              {/* =================================================
-                  NOTES
-              ================================================= */}
-
-              <Grid>
-                <GridItem>
-                  <Text
-                    fontSize="xs"
-                    fontWeight="600"
-                    color="gray.700"
-                    mb={1}
-                  >
-                    Notes
-                  </Text>
-
-                  <Textarea
-                    name="notes"
-                    value={
-                      formData.notes
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    placeholder="Add any additional notes about this payment..."
-                    rows={2}
-                    fontSize="13px"
-                    borderColor="gray.200"
-                    _focus={{
-                      borderColor:
-                        primaryMaroon,
-                      boxShadow: `0 0 0 1px ${primaryMaroon}`,
-                    }}
-                  />
-                </GridItem>
-              </Grid>
-
-              {/* =================================================
-                  PAYMENT RECEIPT / SCREENSHOT
-
-                  EXISTING FIELD:
-                  Bill.payment_receipt
-              ================================================= */}
-
+        <form onSubmit={handleSubmit}>
+          <Grid templateColumns={{ base: "1fr", lg: "2fr 1fr" }} gap={6} alignItems="start">
+            {/* =====================================================
+                LEFT: PAYMENT INFORMATION FORM
+            ===================================================== */}
+            <GridItem>
               <Box
-                border="1px solid"
-                borderColor={
-                  errors.payment_receipt
-                    ? "red.300"
-                    : "gray.200"
-                }
-                borderRadius="lg"
-                p={4}
                 bg="white"
+                borderRadius="xl"
+                border="1px solid"
+                borderColor="gray.200"
+                p={5}
+                boxShadow="sm"
               >
-                <Flex
-                  align="center"
-                  justify="space-between"
-                  mb={3}
-                >
-                  <HStack spacing={3}>
-                    <Circle
-                      size="36px"
-                      bg="rgba(174,32,80,0.08)"
-                      color={
-                        primaryMaroon
-                      }
-                    >
-                      <Icon
-                        as={LuImage}
-                        boxSize={4}
+                <HStack spacing={3} mb={5}>
+                  <Circle size="40px" bg="rgba(174,32,80,0.08)" color={primaryMaroon}>
+                    <Icon as={LuBox} boxSize={5} />
+                  </Circle>
+                  <Heading fontSize="lg" fontWeight="700" color="#1a1a2e">
+                    Payment Information
+                  </Heading>
+                </HStack>
+
+                <VStack spacing={4} align="stretch">
+                  {/* CHURCH + SUBSCRIPTION */}
+                  <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={4}>
+                    <GridItem>
+                      <ChurchDropdown
+                        options={churches}
+                        value={selectedChurch?.id || null}
+                        onChange={handleChurchSelect}
+                        placeholder="Select a church..."
+                        isInvalid={!!errors.church}
+                        error={errors.church}
                       />
-                    </Circle>
+                    </GridItem>
 
-                    <Box>
-                      <Text
-                        fontSize="sm"
-                        fontWeight="700"
-                        color="#1a1a2e"
+                    <GridItem>
+                      <SubscriptionDropdown
+                        options={filteredSubscriptions}
+                        value={selectedSubscription?.id || null}
+                        onChange={handleSubscriptionSelect}
+                        placeholder={
+                          filteredSubscriptions.length === 0
+                            ? "No active subscriptions"
+                            : "Select subscription..."
+                        }
+                        isInvalid={!!errors.subscription}
+                        error={errors.subscription}
+                      />
+                    </GridItem>
+                  </Grid>
+
+                  {/* BILLING PERIOD + PAYMENT DATE */}
+                  <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={4}>
+                    <GridItem>
+                      <FieldLabel required>Billing Period</FieldLabel>
+                      <Box
+                        bg="gray.50"
+                        px={3}
+                        py={2.5}
+                        borderRadius="md"
+                        border="1.5px solid"
+                        borderColor="gray.200"
+                        display="flex"
+                        alignItems="center"
+                        gap={2}
+                        height="48px"
                       >
-                        Payment Receipt /
-                        Screenshot
+                        <Icon as={LuLock} color="gray.400" boxSize={4} />
+                        <Text fontSize="sm" fontWeight="500" color="#333">
+                          {getBillingPeriodDisplay()}
+                        </Text>
+                      </Box>
+                    </GridItem>
+
+                    <GridItem>
+                      <FieldLabel required>Payment Date</FieldLabel>
+                      <Box position="relative">
+                        <Icon
+                          as={LuCalendar}
+                          color="gray.400"
+                          boxSize={4}
+                          position="absolute"
+                          left="12px"
+                          top="50%"
+                          transform="translateY(-50%)"
+                          zIndex={1}
+                          pointerEvents="none"
+                        />
+                        <Input
+                          type="date"
+                          name="payment_date"
+                          value={formData.payment_date}
+                          onChange={handleChange}
+                          pl="34px"
+                          height="48px"
+                          fontSize="13px"
+                          borderColor={errors.payment_date ? "red.500" : "gray.200"}
+                          _focus={{
+                            borderColor: primaryMaroon,
+                            boxShadow: `0 0 0 1px ${primaryMaroon}`,
+                          }}
+                        />
+                      </Box>
+                      {errors.payment_date && (
+                        <Text fontSize="xs" color="red.500" mt={1}>
+                          {errors.payment_date}
+                        </Text>
+                      )}
+                    </GridItem>
+                  </Grid>
+
+                  {/* PAYMENT METHOD + TRANSACTION */}
+                  <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={4}>
+                    <GridItem>
+                      <FieldLabel required>Payment Method</FieldLabel>
+                      <NativeSelect
+                        name="payment_method"
+                        value={formData.payment_method}
+                        onChange={handleChange}
+                      >
+                        {paymentMethods.map((method) => (
+                          <option key={method.value} value={method.value}>
+                            {method.label}
+                          </option>
+                        ))}
+                      </NativeSelect>
+                    </GridItem>
+
+                    <GridItem>
+                      <FieldLabel required>Transaction / Reference Number</FieldLabel>
+                      <Input
+                        name="transaction_id"
+                        value={formData.transaction_id}
+                        onChange={handleChange}
+                        placeholder="TXN-YYYY-XXXX"
+                        height="48px"
+                        fontSize="13px"
+                        borderColor={errors.transaction_id ? "red.500" : "gray.200"}
+                        _focus={{
+                          borderColor: primaryMaroon,
+                          boxShadow: `0 0 0 1px ${primaryMaroon}`,
+                        }}
+                      />
+                      {errors.transaction_id && (
+                        <Text fontSize="xs" color="red.500" mt={1}>
+                          {errors.transaction_id}
+                        </Text>
+                      )}
+                    </GridItem>
+                  </Grid>
+
+                  {/* TAX TYPE + TAX RATE */}
+                  <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={4}>
+                    <GridItem>
+                      <FieldLabel required>Tax Type</FieldLabel>
+                      <NativeSelect
+                        value={selectedTaxType?.id || ""}
+                        onChange={(e) => handleTaxTypeSelect(e.target.value)}
+                      >
+                        <option value="">No Tax</option>
+                        {taxTypes.map((tax) => (
+                          <option key={tax.id} value={tax.id}>
+                            {tax.tax_type_name} {tax.country_name ? `(${tax.country_name})` : ""}
+                          </option>
+                        ))}
+                      </NativeSelect>
+                    </GridItem>
+
+                    <GridItem>
+                      <FieldLabel required>Tax Rate</FieldLabel>
+                      <NativeSelect
+                        value={selectedTaxRate?.id || ""}
+                        onChange={(e) => handleTaxRateSelect(e.target.value)}
+                        disabled={!selectedTaxType || availableTaxRates.length === 0}
+                      >
+                        {availableTaxRates.length === 0 ? (
+                          <option value="">—</option>
+                        ) : (
+                          availableTaxRates.map((rate) => (
+                            <option key={rate.id} value={rate.id}>
+                              {rate.rate_percentage}%
+                            </option>
+                          ))
+                        )}
+                      </NativeSelect>
+                      {errors.tax && (
+                        <Text fontSize="xs" color="red.500" mt={1}>
+                          {errors.tax}
+                        </Text>
+                      )}
+                    </GridItem>
+                  </Grid>
+
+                  {/* AMOUNT PAID + PAYMENT STATUS */}
+                  <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={4}>
+                    <GridItem>
+                      <FieldLabel required>Amount Paid</FieldLabel>
+                      <Box position="relative">
+                        <Text
+                          position="absolute"
+                          left="12px"
+                          top="50%"
+                          transform="translateY(-50%)"
+                          fontSize="sm"
+                          color="gray.500"
+                          zIndex={1}
+                        >
+                          ₹
+                        </Text>
+                        <Input
+                          type="number"
+                          name="amount"
+                          value={formData.amount}
+                          onChange={handleChange}
+                          pl="26px"
+                          height="48px"
+                          fontSize="13px"
+                          borderColor={errors.amount ? "red.500" : "gray.200"}
+                          _focus={{
+                            borderColor: primaryMaroon,
+                            boxShadow: `0 0 0 1px ${primaryMaroon}`,
+                          }}
+                        />
+                      </Box>
+                      {errors.amount && (
+                        <Text fontSize="xs" color="red.500" mt={1}>
+                          {errors.amount}
+                        </Text>
+                      )}
+                    </GridItem>
+
+                    <GridItem>
+                      <FieldLabel required>Payment Status</FieldLabel>
+                      <NativeSelect
+                        name="status"
+                        value={formData.status}
+                        onChange={handleChange}
+                        leftDot={currentStatus?.color}
+                      >
+                        {paymentStatuses.map((status) => (
+                          <option key={status.value} value={status.value}>
+                            {status.label}
+                          </option>
+                        ))}
+                      </NativeSelect>
+                    </GridItem>
+                  </Grid>
+
+                  {/* NOTES */}
+                  <Box>
+                    <FieldLabel>Notes</FieldLabel>
+                    <Textarea
+                      name="notes"
+                      value={formData.notes}
+                      onChange={handleChange}
+                      placeholder="Add any additional notes about this payment..."
+                      rows={2}
+                      fontSize="13px"
+                      borderColor="gray.200"
+                      _focus={{
+                        borderColor: primaryMaroon,
+                        boxShadow: `0 0 0 1px ${primaryMaroon}`,
+                      }}
+                    />
+                  </Box>
+
+                  {/* PAYMENT SCREENSHOT */}
+                  <Box>
+                    <FieldLabel required>Payment Screenshot</FieldLabel>
+
+                    {!paymentReceiptPreview ? (
+                      <Box
+                        as="label"
+                        display="block"
+                        cursor="pointer"
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={handleReceiptDrop}
+                      >
+                        <Box
+                          border="1.5px dashed"
+                          borderColor={errors.payment_receipt ? "red.400" : "red.300"}
+                          bg={errors.payment_receipt ? "red.50" : "rgba(229,62,62,0.02)"}
+                          borderRadius="md"
+                          minH="100px"
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="center"
+                          textAlign="center"
+                          px={4}
+                          py={5}
+                          transition="all 0.2s"
+                          _hover={{ borderColor: "red.400", bg: "red.50" }}
+                        >
+                          <VStack spacing={1}>
+                            <Icon as={LuImage} boxSize={6} color="red.400" />
+                            <Text fontSize="sm" color="gray.600">
+                              Drag and drop, payment screenshot
+                            </Text>
+                            <Text fontSize="sm" fontWeight="600" color={primaryMaroon} textDecoration="underline">
+                              Browse file
+                            </Text>
+                            <Text fontSize="xs" color="gray.500">
+                              JPG or PNG, maximum 5 MB
+                            </Text>
+                          </VStack>
+
+                          <Input
+                            ref={paymentReceiptInputRef}
+                            type="file"
+                            accept="image/jpeg,image/jpg,image/png,image/webp"
+                            onChange={handlePaymentReceiptChange}
+                            display="none"
+                          />
+                        </Box>
+                      </Box>
+                    ) : (
+                      <Box border="1px solid" borderColor="gray.200" borderRadius="md" overflow="hidden" bg="gray.50">
+                        <Box
+                          position="relative"
+                          width="100%"
+                          maxH="260px"
+                          overflow="hidden"
+                          bg="gray.100"
+                          display="flex"
+                          justifyContent="center"
+                          alignItems="center"
+                        >
+                          <Image
+                            src={paymentReceiptPreview}
+                            alt="Payment receipt preview"
+                            maxH="260px"
+                            maxW="100%"
+                            objectFit="contain"
+                          />
+                          <Button
+                            type="button"
+                            position="absolute"
+                            top={2}
+                            right={2}
+                            size="sm"
+                            minW="34px"
+                            h="34px"
+                            p={0}
+                            borderRadius="full"
+                            bg="white"
+                            color="red.500"
+                            boxShadow="md"
+                            _hover={{ bg: "red.50" }}
+                            onClick={removePaymentReceipt}
+                          >
+                            <Icon as={LuTrash2} boxSize={4} />
+                          </Button>
+                        </Box>
+
+                        <Flex align="center" justify="space-between" px={3} py={2} bg="white" borderTop="1px solid" borderColor="gray.200">
+                          <Flex align="center" gap={2} minW={0}>
+                            <Icon as={LuImage} color={primaryMaroon} boxSize={4} />
+                            <Text fontSize="xs" color="gray.600" noOfLines={1}>
+                              {paymentReceipt?.name}
+                            </Text>
+                          </Flex>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            color={primaryMaroon}
+                            onClick={() => paymentReceiptInputRef.current?.click()}
+                          >
+                            Change
+                          </Button>
+                        </Flex>
+                      </Box>
+                    )}
+
+                    <Text fontSize="xs" color="gray.500" mt={1}>
+                      Required for manual payment verification.
+                    </Text>
+
+                    {errors.payment_receipt && (
+                      <Text fontSize="xs" color="red.500" mt={1}>
+                        {errors.payment_receipt}
                       </Text>
+                    )}
+                  </Box>
 
-                      <Text
-                        fontSize="xs"
-                        color="gray.500"
-                      >
-                        Upload the payment
-                        proof image
+                  {/* ACTIONS */}
+                  <Flex justify="flex-end" pt={2}>
+                    <Button
+                      bg={primaryMaroon}
+                      color="white"
+                      _hover={{ bg: "#8a1a3e" }}
+                      type="submit"
+                      loading={isSubmitting}
+                      loadingText="Recording..."
+                      size="lg"
+                      px={8}
+                    >
+                      <Icon as={LuSave} boxSize={4} mr={2} />
+                      Record Payment
+                    </Button>
+                  </Flex>
+                </VStack>
+              </Box>
+            </GridItem>
+
+            {/* =====================================================
+                RIGHT: SUMMARY SIDEBAR
+            ===================================================== */}
+            <GridItem>
+              <VStack spacing={5} align="stretch">
+                {/* SUBSCRIPTION SUMMARY */}
+                <Box bg="white" borderRadius="xl" border="1px solid" borderColor="gray.200" p={5} boxShadow="sm">
+                  <HStack spacing={3} mb={3}>
+                    <Circle size="36px" bg="rgba(174,32,80,0.08)" color={primaryMaroon}>
+                      <Icon as={LuUsers} boxSize={4} />
+                    </Circle>
+                    <Heading fontSize="md" fontWeight="700" color="#1a1a2e">
+                      Subscription Summary
+                    </Heading>
+                  </HStack>
+
+                  <VStack spacing={0} align="stretch" divider={<Box borderBottom="1px solid" borderColor="gray.100" />}>
+                    <SummaryRow label="Church" value={selectedChurch?.name || "—"} />
+                    <SummaryRow
+                      label="Subscription ID"
+                      value={
+                        selectedSubscription
+                          ? selectedSubscription.subscription_code || `SUB-${selectedSubscription.id}`
+                          : "—"
+                      }
+                    />
+                    <SummaryRow label="Package" value={selectedSubscription?.package_name || "—"} />
+                    <SummaryRow label="Billing Cycle" value={breakdown?.cycleDisplay || "—"} />
+                    <SummaryRow
+                      label="Member Limit"
+                      value={breakdown ? breakdown.capacity.toLocaleString("en-IN") : "—"}
+                    />
+                    <SummaryRow
+                      label={breakdown?.rateDisplay || "Rate per Member"}
+                      value={breakdown ? formatCurrencyStatic(breakdown.rate) : "—"}
+                    />
+                  </VStack>
+                </Box>
+
+                {/* TAX & PAYMENT SUMMARY */}
+                <Box
+                  bg="white"
+                  borderRadius="xl"
+                  border="1px solid"
+                  borderColor="gray.200"
+                  p={5}
+                  boxShadow="sm"
+                >
+                  <HStack spacing={3} mb={3}>
+                    <Circle size="36px" bg="rgba(174,32,80,0.08)" color={primaryMaroon}>
+                      <Icon as={LuCalculator} boxSize={4} />
+                    </Circle>
+                    <Heading fontSize="md" fontWeight="700" color="#1a1a2e">
+                      Tax &amp; Payment Summary
+                    </Heading>
+                  </HStack>
+
+                  <VStack spacing={0} align="stretch" divider={<Box borderBottom="1px solid" borderColor="gray.100" />}>
+                    <SummaryRow label="Subscription Amount" value={formatCurrencyStatic(getSubscriptionAmount())} />
+                    <SummaryRow label="Tax Type" value={selectedTaxType?.tax_type_name || "No Tax"} />
+                    <SummaryRow label="Tax Rate" value={`${taxPercentage}%`} />
+                    <SummaryRow label="Tax Amount" value={formatCurrencyStatic(taxAmount)} />
+                  </VStack>
+
+                  <Box borderTop="1px solid" borderColor="gray.200" my={3} />
+
+                  <Flex justify="space-between" align="center" mb={2}>
+                    <Text fontSize="sm" color="gray.500">
+                      Total Payable
+                    </Text>
+                    <Text fontSize="2xl" fontWeight="800" color={primaryMaroon}>
+                      {formatCurrencyStatic(totalPayable)}
+                    </Text>
+                  </Flex>
+
+                  <VStack spacing={0} align="stretch">
+                    <SummaryRow label="Previously Paid" value={formatCurrencyStatic(previouslyPaid)} />
+                    <SummaryRow label="Amount Due" value={formatCurrencyStatic(amountDue)} valueColor={deepMaroon} />
+                    <SummaryRow label="Currency" value="INR (₹)" />
+                  </VStack>
+
+                  <Text fontSize="xs" color="gray.400" mt={2}>
+                    Tax calculated on the subscription amount.
+                  </Text>
+                </Box>
+
+                {/* RECEIPT INFORMATION */}
+                <Box bg="white" borderRadius="xl" border="1px solid" borderColor="gray.200" p={5} boxShadow="sm">
+                  <HStack spacing={3} align="start">
+                    <Circle size="36px" bg="rgba(174,32,80,0.08)" color={primaryMaroon} flexShrink={0}>
+                      <Icon as={LuReceipt} boxSize={4} />
+                    </Circle>
+                    <Box>
+                      <Text fontWeight="700" color="#1a1a2e" mb={1}>
+                        Receipt Information
+                      </Text>
+                      <Text fontSize="sm" color="gray.500">
+                        Receipt number and tax details will be generated after the payment is recorded.
                       </Text>
                     </Box>
                   </HStack>
-
-                  <Badge
-                    bg="gray.100"
-                    color="gray.600"
-                    fontSize="10px"
-                    px={2}
-                    py={1}
-                    borderRadius="full"
-                  >
-                    Optional
-                  </Badge>
-                </Flex>
-
-                {!paymentReceiptPreview ? (
-                  <Box
-                    as="label"
-                    display="block"
-                    cursor="pointer"
-                  >
-                    <Box
-                      border="1.5px dashed"
-                      borderColor="gray.300"
-                      borderRadius="md"
-                      minH="120px"
-                      display="flex"
-                      alignItems="center"
-                      justifyContent="center"
-                      textAlign="center"
-                      px={4}
-                      py={5}
-                      transition="all 0.2s"
-                      _hover={{
-                        borderColor:
-                          primaryMaroon,
-                        bg: "rgba(174,32,80,0.02)",
-                      }}
-                    >
-                      <VStack
-                        spacing={2}
-                      >
-                        <Circle
-                          size="40px"
-                          bg="rgba(174,32,80,0.08)"
-                          color={
-                            primaryMaroon
-                          }
-                        >
-                          <Icon
-                            as={LuUpload}
-                            boxSize={5}
-                          />
-                        </Circle>
-
-                        <Text
-                          fontSize="sm"
-                          fontWeight="600"
-                          color={
-                            primaryMaroon
-                          }
-                        >
-                          Click to upload
-                        </Text>
-
-                        <Text
-                          fontSize="xs"
-                          color="gray.500"
-                        >
-                          JPG, JPEG, PNG or
-                          WebP • Maximum
-                          5 MB
-                        </Text>
-                      </VStack>
-
-                      <Input
-                        ref={
-                          paymentReceiptInputRef
-                        }
-                        type="file"
-                        accept="image/jpeg,image/jpg,image/png,image/webp"
-                        onChange={
-                          handlePaymentReceiptChange
-                        }
-                        display="none"
-                      />
-                    </Box>
-                  </Box>
-                ) : (
-                  <Box
-                    border="1px solid"
-                    borderColor="gray.200"
-                    borderRadius="md"
-                    overflow="hidden"
-                    bg="gray.50"
-                  >
-                    <Box
-                      position="relative"
-                      width="100%"
-                      maxH="320px"
-                      overflow="hidden"
-                      bg="gray.100"
-                      display="flex"
-                      justifyContent="center"
-                      alignItems="center"
-                    >
-                      <Image
-                        src={
-                          paymentReceiptPreview
-                        }
-                        alt="Payment receipt preview"
-                        maxH="320px"
-                        maxW="100%"
-                        objectFit="contain"
-                      />
-
-                      <Button
-                        type="button"
-                        position="absolute"
-                        top={2}
-                        right={2}
-                        size="sm"
-                        minW="34px"
-                        h="34px"
-                        p={0}
-                        borderRadius="full"
-                        bg="white"
-                        color="red.500"
-                        boxShadow="md"
-                        _hover={{
-                          bg: "red.50",
-                        }}
-                        onClick={
-                          removePaymentReceipt
-                        }
-                      >
-                        <Icon
-                          as={LuTrash2}
-                          boxSize={4}
-                        />
-                      </Button>
-                    </Box>
-
-                    <Flex
-                      align="center"
-                      justify="space-between"
-                      px={3}
-                      py={2}
-                      bg="white"
-                      borderTop="1px solid"
-                      borderColor="gray.200"
-                    >
-                      <Flex
-                        align="center"
-                        gap={2}
-                        minW={0}
-                      >
-                        <Icon
-                          as={LuImage}
-                          color={
-                            primaryMaroon
-                          }
-                          boxSize={4}
-                        />
-
-                        <Text
-                          fontSize="xs"
-                          color="gray.600"
-                          noOfLines={1}
-                        >
-                          {
-                            paymentReceipt?.name
-                          }
-                        </Text>
-                      </Flex>
-
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        color={
-                          primaryMaroon
-                        }
-                        onClick={() =>
-                          paymentReceiptInputRef.current?.click()
-                        }
-                      >
-                        Change
-                      </Button>
-                    </Flex>
-                  </Box>
-                )}
-
-                {errors.payment_receipt && (
-                  <Text
-                    fontSize="xs"
-                    color="red.500"
-                    mt={2}
-                  >
-                    {
-                      errors.payment_receipt
-                    }
-                  </Text>
-                )}
-              </Box>
-
-              {/* =================================================
-                  PACKAGE SUMMARY
-              ================================================= */}
-
-              {selectedSubscription &&
-                breakdown && (
-                  <Box
-                    bg="white"
-                    border="1px solid"
-                    borderColor="gray.200"
-                    borderRadius="lg"
-                    p={4}
-                  >
-                    <HStack
-                      spacing={3}
-                      mb={4}
-                    >
-                      <Circle
-                        size="36px"
-                        bg="rgba(174,32,80,0.08)"
-                        color={
-                          primaryMaroon
-                        }
-                      >
-                        <Icon
-                          as={LuPackage}
-                          boxSize={4}
-                        />
-                      </Circle>
-
-                      <Text
-                        fontWeight="700"
-                        color="#1a1a2e"
-                      >
-                        Package &
-                        Subscription Details
-                      </Text>
-
-                      <Badge
-                        bg={
-                          breakdown.billingCycle ===
-                          "YEARLY"
-                            ? "purple.50"
-                            : "blue.50"
-                        }
-                        color={
-                          breakdown.billingCycle ===
-                          "YEARLY"
-                            ? "purple.600"
-                            : "blue.600"
-                        }
-                        fontSize="11px"
-                        px={3}
-                        py={1}
-                        borderRadius="full"
-                      >
-                        {
-                          breakdown.cycleDisplay
-                        }
-                      </Badge>
-                    </HStack>
-
-                    <Grid
-                      templateColumns={{
-                        base:
-                          "1fr 1fr",
-                        md:
-                          "1fr 1fr 1fr 1fr 1fr 1fr",
-                      }}
-                      gap={3}
-                    >
-                      <GridItem>
-                        <Text
-                          fontSize="xs"
-                          color="gray.500"
-                          mb={1}
-                        >
-                          Package
-                        </Text>
-
-                        <Text
-                          fontSize="sm"
-                          fontWeight="600"
-                          color="#1a1a2e"
-                        >
-                          {
-                            selectedSubscription.package_name
-                          }
-                        </Text>
-
-                        <Text
-                          fontSize="xs"
-                          color="gray.400"
-                        >
-                          {
-                            selectedSubscription.package_code
-                          }
-                        </Text>
-                      </GridItem>
-
-                      <GridItem>
-                        <Text
-                          fontSize="xs"
-                          color="gray.500"
-                          mb={1}
-                        >
-                          Billing Cycle
-                        </Text>
-
-                        <Text
-                          fontSize="sm"
-                          fontWeight="600"
-                          color="#1a1a2e"
-                        >
-                          {
-                            breakdown.cycleDisplay
-                          }
-                        </Text>
-
-                        <Text
-                          fontSize="xs"
-                          color="gray.400"
-                        >
-                          {
-                            breakdown.durationMonths
-                          }{" "}
-                          months
-                        </Text>
-                      </GridItem>
-
-                      <GridItem>
-                        <Text
-                          fontSize="xs"
-                          color="gray.500"
-                          mb={1}
-                        >
-                          Member Capacity
-                        </Text>
-
-                        <Text
-                          fontSize="sm"
-                          fontWeight="700"
-                          color={
-                            primaryMaroon
-                          }
-                        >
-                          {breakdown.capacity.toLocaleString(
-                            "en-IN"
-                          )}
-                        </Text>
-
-                        <Text
-                          fontSize="xs"
-                          color="gray.400"
-                        >
-                          Package limit
-                        </Text>
-                      </GridItem>
-
-                      <GridItem>
-                        <Text
-                          fontSize="xs"
-                          color="gray.500"
-                          mb={1}
-                        >
-                          {
-                            breakdown.rateDisplay
-                          }
-                        </Text>
-
-                        <Text
-                          fontSize="sm"
-                          fontWeight="600"
-                          color="#1a1a2e"
-                        >
-                          {formatCurrency(
-                            breakdown.rate
-                          )}
-                        </Text>
-
-                        <Text
-                          fontSize="xs"
-                          color="gray.400"
-                        >
-                          Per{" "}
-                          {breakdown.billingCycle ===
-                          "YEARLY"
-                            ? "year"
-                            : "month"}
-                        </Text>
-                      </GridItem>
-
-                      <GridItem>
-                        <Text
-                          fontSize="xs"
-                          color="gray.500"
-                          mb={1}
-                        >
-                          Subscription Amount
-                        </Text>
-
-                        <Text
-                          fontSize="sm"
-                          fontWeight="600"
-                          color="#1a1a2e"
-                        >
-                          {formatCurrency(
-                            breakdown.subtotal
-                          )}
-                        </Text>
-
-                        <Text
-                          fontSize="xs"
-                          color="gray.400"
-                        >
-                          Before tax
-                        </Text>
-                      </GridItem>
-
-                      <GridItem>
-                        <Text
-                          fontSize="xs"
-                          color="gray.500"
-                          mb={1}
-                        >
-                          Tax Rate
-                        </Text>
-
-                        <Text
-                          fontSize="sm"
-                          fontWeight="600"
-                          color="#1a1a2e"
-                        >
-                          {
-                            breakdown.taxPercentage
-                          }
-                          %
-                        </Text>
-
-                        <Text
-                          fontSize="xs"
-                          color="gray.400"
-                        >
-                          {
-                            selectedTaxType?.tax_type_name ||
-                            "No Tax"
-                          }
-                        </Text>
-                      </GridItem>
-                    </Grid>
-                  </Box>
-                )}
-
-              {/* =================================================
-                  TAX SUMMARY
-              ================================================= */}
-
-              {selectedSubscription &&
-                breakdown && (
-                  <Box
-                    bg="rgba(174,32,80,0.06)"
-                    border="1px solid"
-                    borderColor="rgba(174,32,80,0.15)"
-                    borderRadius="lg"
-                    p={4}
-                  >
-                    <HStack
-                      spacing={3}
-                      mb={4}
-                    >
-                      <Circle
-                        size="36px"
-                        bg="rgba(174,32,80,0.1)"
-                        color={
-                          primaryMaroon
-                        }
-                      >
-                        <Icon
-                          as={LuCalculator}
-                          boxSize={4}
-                        />
-                      </Circle>
-
-                      <Text
-                        fontWeight="700"
-                        color="#1a1a2e"
-                      >
-                        Tax & Payment Summary
-                      </Text>
-
-                      <Badge
-                        bg={
-                          breakdown.billingCycle ===
-                          "YEARLY"
-                            ? "purple.50"
-                            : "blue.50"
-                        }
-                        color={
-                          breakdown.billingCycle ===
-                          "YEARLY"
-                            ? "purple.600"
-                            : "blue.600"
-                        }
-                        fontSize="11px"
-                        px={3}
-                        py={1}
-                        borderRadius="full"
-                      >
-                        {
-                          breakdown.cycleDisplay
-                        }{" "}
-                        Billing
-                      </Badge>
-                    </HStack>
-
-                    <Grid
-                      templateColumns={{
-                        base:
-                          "1fr 1fr",
-                        md:
-                          "1fr 1fr 1fr 1fr",
-                      }}
-                      gap={4}
-                    >
-                      <GridItem>
-                        <Text
-                          fontSize="xs"
-                          color="gray.500"
-                          mb={1}
-                        >
-                          Subtotal
-                        </Text>
-
-                        <Text
-                          fontSize="lg"
-                          fontWeight="700"
-                          color="#333"
-                        >
-                          {formatCurrency(
-                            breakdown.subtotal
-                          )}
-                        </Text>
-
-                        <Text
-                          fontSize="xs"
-                          color="gray.400"
-                        >
-                          Before tax
-                        </Text>
-                      </GridItem>
-
-                      <GridItem>
-                        <Text
-                          fontSize="xs"
-                          color="gray.500"
-                          mb={1}
-                        >
-                          Tax Type
-                        </Text>
-
-                        <Text
-                          fontSize="sm"
-                          fontWeight="600"
-                          color="#333"
-                        >
-                          {
-                            selectedTaxType?.tax_type_name ||
-                            "No Tax"
-                          }
-                        </Text>
-                      </GridItem>
-
-                      <GridItem>
-                        <Text
-                          fontSize="xs"
-                          color="gray.500"
-                          mb={1}
-                        >
-                          Tax Rate
-                        </Text>
-
-                        <Text
-                          fontSize="sm"
-                          fontWeight="600"
-                          color="#333"
-                        >
-                          {
-                            breakdown.taxPercentage
-                          }
-                          %
-                        </Text>
-                      </GridItem>
-
-                      <GridItem>
-                        <Text
-                          fontSize="xs"
-                          color="gray.500"
-                          mb={1}
-                        >
-                          Tax Amount
-                        </Text>
-
-                        <Text
-                          fontSize="sm"
-                          fontWeight="600"
-                          color="#333"
-                        >
-                          {formatCurrency(
-                            breakdown.taxAmount
-                          )}
-                        </Text>
-                      </GridItem>
-                    </Grid>
-
-                    <Box
-                      borderTop="1px solid"
-                      borderColor="rgba(174,32,80,0.15)"
-                      my={4}
-                    />
-
-                    <Flex
-                      justify="space-between"
-                      align={{
-                        base: "flex-start",
-                        md: "center",
-                      }}
-                      direction={{
-                        base: "column",
-                        md: "row",
-                      }}
-                      gap={3}
-                    >
-                      <Box>
-                        <Text
-                          fontSize="xs"
-                          color="gray.500"
-                          mb={1}
-                        >
-                          Total Payable
-                        </Text>
-
-                        <Text
-                          fontSize="2xl"
-                          fontWeight="800"
-                          color={
-                            primaryMaroon
-                          }
-                        >
-                          {formatCurrency(
-                            breakdown.total
-                          )}
-                        </Text>
-                      </Box>
-
-                      <Box>
-                        <Text
-                          fontSize="xs"
-                          color="gray.500"
-                          mb={1}
-                        >
-                          Payment Status
-                        </Text>
-
-                        <Badge
-                          bg={
-                            formData.status ===
-                            "PAID"
-                              ? "green.50"
-                              : formData.status ===
-                                "UNPAID"
-                              ? "red.50"
-                              : "gray.50"
-                          }
-                          color={
-                            formData.status ===
-                            "PAID"
-                              ? "green.600"
-                              : formData.status ===
-                                "UNPAID"
-                              ? "red.600"
-                              : "gray.600"
-                          }
-                          fontSize="12px"
-                          px={3}
-                          py={1}
-                          borderRadius="full"
-                        >
-                          {
-                            formData.status
-                          }
-                        </Badge>
-                      </Box>
-
-                      <Box>
-                        <Text
-                          fontSize="xs"
-                          color="gray.500"
-                          mb={1}
-                        >
-                          Payment Method
-                        </Text>
-
-                        <Text
-                          fontSize="sm"
-                          fontWeight="600"
-                        >
-                          {
-                            formData.payment_method
-                          }
-                        </Text>
-                      </Box>
-                    </Flex>
-                  </Box>
-                )}
-
-              {/* =================================================
-                  RECEIPT INFORMATION
-              ================================================= */}
-
-              <Box
-                bg="gray.50"
-                border="1px solid"
-                borderColor="gray.200"
-                borderRadius="md"
-                p={3}
-              >
-                <Flex
-                  align="center"
-                  gap={2}
-                >
-                  <Icon
-                    as={LuReceipt}
-                    boxSize={4}
-                    color={
-                      primaryMaroon
-                    }
-                  />
-
-                  <Text
-                    fontSize="sm"
-                    fontWeight="600"
-                    color="gray.700"
-                  >
-                    Receipt Information
-                  </Text>
-                </Flex>
-
-                <Text
-                  fontSize="xs"
-                  color="gray.500"
-                  mt={1}
-                >
-                  Receipt number and tax
-                  details will be generated
-                  after the payment is
-                  recorded.
-                </Text>
-
-                {selectedSubscription &&
-                  breakdown && (
-                    <Flex
-                      gap={4}
-                      mt={2}
-                      fontSize="xs"
-                      color="gray.500"
-                      flexWrap="wrap"
-                    >
-                      <Flex
-                        align="center"
-                        gap={1}
-                      >
-                        <Icon
-                          as={LuClock}
-                          boxSize={3}
-                        />
-
-                        <Text>
-                          Payment Date:{" "}
-                          {new Date().toLocaleDateString()}
-                        </Text>
-                      </Flex>
-
-                      <Flex
-                        align="center"
-                        gap={1}
-                      >
-                        <Icon
-                          as={LuUser}
-                          boxSize={3}
-                        />
-
-                        <Text>
-                          Receipt will be
-                          sent to:{" "}
-                          {selectedChurch?.email ||
-                            "N/A"}
-                        </Text>
-                      </Flex>
-
-                      <Flex
-                        align="center"
-                        gap={1}
-                      >
-                        <Icon
-                          as={LuDollarSign}
-                          boxSize={3}
-                        />
-
-                        <Text>
-                          Total:{" "}
-                          {formatCurrency(
-                            breakdown.total
-                          )}
-                        </Text>
-                      </Flex>
-
-                      <Flex
-                        align="center"
-                        gap={1}
-                      >
-                        <Icon
-                          as={LuWallet}
-                          boxSize={3}
-                        />
-
-                        <Text>
-                          Tax:{" "}
-                          {
-                            breakdown.taxPercentage
-                          }
-                          %
-                        </Text>
-                      </Flex>
-
-                      <Flex
-                        align="center"
-                        gap={1}
-                      >
-                        <Icon
-                          as={LuCreditCard}
-                          boxSize={3}
-                        />
-
-                        <Text>
-                          {
-                            formData.payment_method
-                          }
-                        </Text>
-                      </Flex>
-                    </Flex>
-                  )}
-              </Box>
-
-              {/* =================================================
-                  ACTIONS
-              ================================================= */}
-
-              <Flex
-                justify="flex-end"
-                pt={2}
-              >
-                <Button
-                  bg={primaryMaroon}
-                  color="white"
-                  _hover={{
-                    bg: "#8a1a3e",
-                  }}
-                  type="submit"
-                  isLoading={
-                    isSubmitting
-                  }
-                  loadingText="Recording..."
-                  size="lg"
-                  px={8}
-                >
-                  <Icon
-                    as={LuSave}
-                    boxSize={4}
-                    mr={2}
-                  />
-
-                  Record Payment
-                </Button>
-              </Flex>
-            </VStack>
-          </form>
-        </Box>
+                </Box>
+              </VStack>
+            </GridItem>
+          </Grid>
+        </form>
       </Container>
     </AdminLayout>
   );

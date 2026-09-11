@@ -42,9 +42,10 @@ import TaxRateEditPage from "./admin/pages/TaxRateEditPage";
 
 // Payment Imports
 import PaymentsPage from "./admin/pages/PaymentsPage";
-// import PaymentDetailPage from "./admin/pages/PaymentDetailPage";
+import PaymentDetailPage from "./admin/pages/PaymentDetailPage";
 import PaymentAddPage from "./admin/pages/PaymentAddPage";
 // import PaymentEditPage from "./admin/pages/PaymentEditPage";
+import InvoicePreviewPage from "./admin/pages/InvoicePreviewPage";
 
 import UpgradeRequestsPage from "./admin/pages/UpgradeRequestsPage";
 import AdminProtectedRoute from "./admin/routes/ProtectedRoute";
@@ -284,14 +285,22 @@ function App() {
             </AdminProtectedRoute>
           }
         />
-        {/* <Route
+        <Route
           path="/admin/payments/:id"
           element={
             <AdminProtectedRoute>
               <PaymentDetailPage />
             </AdminProtectedRoute>
           }
-        /> */}
+        />
+        <Route
+  path="/admin/payments/:id/invoice"
+  element={
+    <AdminProtectedRoute>
+      <InvoicePreviewPage />
+    </AdminProtectedRoute>
+  }
+/>
         {/* <Route
           path="/admin/payments/edit/:id"
           element={

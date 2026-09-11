@@ -30,7 +30,7 @@ from .views_api import (
     BillListAPIView,
     BillCreateAPIView,
     BillDetailAPIView,
-    BillMarkPaidAPIView,
+    BillMarkPaidAPIView, BillReceiptPDFAPIView,
 )
 
 urlpatterns = [
@@ -81,6 +81,11 @@ urlpatterns = [
     path('bills/create/', BillCreateAPIView.as_view(), name='bill-create'),
     path('bills/<int:pk>/', BillDetailAPIView.as_view(), name='bill-detail'),
     path('bills/<int:pk>/mark-paid/', BillMarkPaidAPIView.as_view(), name='bill-mark-paid'),
+    path(
+        'bills/<int:pk>/receipt/',
+        BillReceiptPDFAPIView.as_view(),
+        name='bill-receipt-pdf',
+    ),
     
     # Upgrade Requests
     path('upgrade-requests/', UpgradeRequestListAPIView.as_view(), name='upgrade-request-list'),

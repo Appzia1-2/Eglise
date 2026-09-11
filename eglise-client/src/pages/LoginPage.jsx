@@ -260,6 +260,23 @@ const Login = () => {
         type: "success", 
         duration: 2500 
       });
+
+      // 🔒 Force password change if the account still uses a temporary password
+      if (d.force_password_change === true) {
+        localStorage.setItem("force_password_change", "1");
+        toaster.create({
+          title: "Password change required",
+          description:
+            "You're using a temporary password. Please set a new one to continue.",
+          type: "info",
+          duration: 5000,
+        });
+        navigate("/change-password", { replace: true });
+        return;
+      }
+
+      // Clear any stale flag from a previous session
+      localStorage.removeItem("force_password_change");
       
       // ✅ Redirect based on role
       if (d.role === "CHURCH") {

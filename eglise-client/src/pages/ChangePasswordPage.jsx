@@ -28,6 +28,10 @@ const ChangePasswordPage = () => {
   const primaryMaroon = "var(--primary-maroon)";
   const white = "var(--white)";
 
+  // 🔒 Detect if the user was forced here by the guard
+  const isForced =
+    localStorage.getItem("force_password_change") === "1";
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -45,13 +49,26 @@ const ChangePasswordPage = () => {
         new_password: newPassword,
         confirm_password: confirmPassword,
       });
+
+      // 🔓 Clear the forced-password flag now that it's been changed
+      localStorage.removeItem("force_password_change");
+
       setMessage("Password changed successfully!");
       setOldPassword("");
       setNewPassword("");
       setConfirmPassword("");
 
-      // Optional: redirect after some delay
-      setTimeout(() => navigate("/"), 2000);
+      // ✅ Redirect by role after a short delay
+      setTimeout(() => {
+        const role = localStorage.getItem("user_role");
+        if (role === "CHURCH") {
+          navigate("/church/dashboard", { replace: true });
+        } else if (role === "USER") {
+          navigate("/user/dashboard", { replace: true });
+        } else {
+          navigate("/", { replace: true });
+        }
+      }, 1500);
     } catch (err) {
       console.error("Change password failed:", err);
       const backendError = err.response?.data;
@@ -71,7 +88,9 @@ const ChangePasswordPage = () => {
         } else if (typeof backendError === "object") {
           const firstField = Object.keys(backendError)[0];
           const errorValue = backendError[firstField];
-          errorMessage = `${firstField}: ${Array.isArray(errorValue) ? errorValue[0] : errorValue}`;
+          errorMessage = `${firstField}: ${
+            Array.isArray(errorValue) ? errorValue[0] : errorValue
+          }`;
         }
       } else if (err.message) {
         errorMessage = err.message;
@@ -97,27 +116,53 @@ const ChangePasswordPage = () => {
           borderColor="gray.100"
           position="relative"
         >
-          <Icon
-            as={LuX}
-            position="absolute"
-            top={4}
-            right={4}
-            cursor="pointer"
-            color="gray.400"
-            _hover={{ color: primaryMaroon }}
-            onClick={() => navigate("/")}
-            boxSize={5}
-          />
+          {/* Hide the X button when the change is forced */}
+          {!isForced && (
+            <Icon
+              as={LuX}
+              position="absolute"
+              top={4}
+              right={4}
+              cursor="pointer"
+              color="gray.400"
+              _hover={{ color: primaryMaroon }}
+              onClick={() => navigate("/")}
+              boxSize={5}
+            />
+          )}
+
           <VStack gap={6} align="start" w="full">
             <VStack align="start" gap={1}>
               <Heading as="h2" size="lg" fontWeight="semibold">
-                Change Password
+                {isForced ? "Set Your New Password" : "Change Password"}
               </Heading>
               <Text fontSize="sm" color="gray.500">
-                Ensure your account is using a long, random password to stay
-                secure.
+                {isForced
+                  ? "Your account was created with a temporary password. Please choose a new password to continue."
+                  : "Ensure your account is using a long, random password to stay secure."}
               </Text>
             </VStack>
+
+            {/* Show a hint when forced */}
+            {isForced && (
+              <Box
+                p={3}
+                bg="rgba(174,32,80,0.05)"
+                color={primaryMaroon}
+                borderRadius="md"
+                w="full"
+                border="1px solid"
+                borderColor="rgba(174,32,80,0.18)"
+              >
+                <Flex align="center" gap={2}>
+                  <Icon as={LuShieldCheck} />
+                  <Text fontSize="sm" fontWeight="600">
+                    Action required — you must change your password before
+                    you can use the app.
+                  </Text>
+                </Flex>
+              </Box>
+            )}
 
             {error && (
               <Box

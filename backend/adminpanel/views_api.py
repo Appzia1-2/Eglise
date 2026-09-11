@@ -411,6 +411,11 @@ class ChurchListAPIView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+from registry.utils import (
+    send_church_credentials,
+    generate_random_password,
+    seed_default_relationships,
+)
 class ChurchCreateAPIView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
 
@@ -517,6 +522,10 @@ class ChurchCreateAPIView(APIView):
                     is_active=False,
                 )
 
+                # 🌱 Seed default relationships for this church
+                #    (idempotent — uses get_or_create, safe to call multiple times)
+                seed_default_relationships(church)
+
                 # Create user for the church (inactive until activated)
                 user = User.objects.create(
                     username=email,
@@ -573,7 +582,6 @@ class ChurchCreateAPIView(APIView):
             return Response({
                 "error": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
-
 
 # adminpanel/views_api.py - Update ChurchDetailAPIView
 
@@ -1030,6 +1038,11 @@ class ChurchActivateAPIView(APIView):
                     user.save()
                     user_created = True
 
+                # 🌱 Ensure the church has the default relationship set.
+                #    Uses get_or_create under the hood, so it's safe to
+                #    call repeatedly without creating duplicates.
+                seed_default_relationships(church)
+
                 church.is_active = True
                 church.save()
 
@@ -1059,7 +1072,6 @@ class ChurchActivateAPIView(APIView):
                 {"error": f"Failed to activate church: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
 
 class ChurchSuspendAPIView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
@@ -3440,33 +3452,171 @@ class BillDetailAPIView(APIView):
 
     def get(self, request, pk):
         try:
-            bill = Bill.objects.select_related('church', 'subscription__package').get(pk=pk)
+            bill = (
+                Bill.objects
+                .select_related(
+                    'church',
+                    'subscription',
+                    'subscription__package',
+                    'tax_type',
+                    'tax_rate',
+                )
+                .get(pk=pk)
+            )
 
-            package_name = None
-            if bill.subscription and bill.subscription.package:
-                package_name = bill.subscription.package.name
+            church = bill.church
+            sub = bill.subscription
+            package = sub.package if sub else None
 
+            # ---------------------------------------------------------
+            # PAYMENT RECEIPT (screenshot) — may or may not exist
+            # ---------------------------------------------------------
+            receipt_url = None
+            if bill.payment_receipt:
+                try:
+                    receipt_url = request.build_absolute_uri(
+                        bill.payment_receipt.url
+                    )
+                except Exception:
+                    receipt_url = None
+
+            receipt_name = None
+            receipt_size = None
+            if bill.payment_receipt:
+                try:
+                    receipt_name = bill.payment_receipt.name.split('/')[-1]
+                except Exception:
+                    receipt_name = None
+                try:
+                    receipt_size = f"{bill.payment_receipt.size / 1024:.1f} KB"
+                except Exception:
+                    receipt_size = None
+
+            # ---------------------------------------------------------
+            # BILLING PERIOD (from subscription)
+            # ---------------------------------------------------------
+            billing_start = sub.start_date if sub else None
+            billing_end = sub.end_date if sub else None
+
+            # ---------------------------------------------------------
+            # BILLING CYCLE DISPLAY
+            # ---------------------------------------------------------
+            if bill.billing_cycle == 'YEARLY':
+                cycle_display = 'Yearly'
+            elif bill.billing_cycle == 'MONTHLY':
+                cycle_display = 'Monthly'
+            else:
+                cycle_display = bill.billing_cycle
+
+            # ---------------------------------------------------------
+            # CAPACITY & RATE
+            # get_capacity() prefers custom_capacity → locked_capacity
+            # → live package.member_limit
+            # get_rate()    prefers locked_rate → live package rate
+            # ---------------------------------------------------------
+            capacity = None
+            rate_used = 0
+            rate_monthly = 0
+            rate_yearly = 0
+
+            if sub:
+                try:
+                    capacity = sub.get_capacity()
+                except Exception:
+                    capacity = None
+
+                try:
+                    rate_used = float(sub.get_rate()) if sub.get_rate() else 0
+                except Exception:
+                    rate_used = 0
+
+            if package:
+                rate_monthly = (
+                    float(package.rate_per_member_monthly)
+                    if package.rate_per_member_monthly else 0
+                )
+                rate_yearly = (
+                    float(package.rate_per_member_yearly)
+                    if package.rate_per_member_yearly else 0
+                )
+
+            # ---------------------------------------------------------
+            # PAYLOAD
+            # ---------------------------------------------------------
             data = {
                 'id': bill.id,
                 'bill_number': bill.bill_number,
                 'invoice_number': bill.invoice_number,
-                'church_id': bill.church.id if bill.church else None,
-                'church_name': bill.church.name if bill.church else None,
-                'subscription_id': bill.subscription.id if bill.subscription else None,
-                'package_name': package_name,
+
+                # ---------- Church ----------
+                'church_id': church.id if church else None,
+                'church_name': church.name if church else None,
+                'church_code': church.code if church else None,
+                'church_email': church.email if church else None,
+
+                # ---------- Subscription / Package ----------
+                'subscription_id': sub.id if sub else None,
+                'subscription_code': (
+                    f"SUB-{str(sub.id).zfill(4)}" if sub else None
+                ),
+                'package_id': package.id if package else None,
+                'package_name': package.name if package else None,
+                'package_code': package.code if package else None,
+
+                # ---------- Billing ----------
                 'bill_type': bill.bill_type,
-                'amount': float(bill.amount),
                 'billing_cycle': bill.billing_cycle,
+                'billing_cycle_display': cycle_display,
                 'duration_months': bill.duration_months,
-                'payment_method': bill.payment_method,
-                'transaction_id': bill.transaction_id,
-                'note': bill.note,
+                'billing_start': billing_start,
+                'billing_end': billing_end,
+
+                # ---------- Capacity & Rate ----------
+                'member_limit': capacity,
+                'capacity': capacity,
+                'rate_used': rate_used,
+                'rate_per_member_monthly': rate_monthly,
+                'rate_per_member_yearly': rate_yearly,
+
+                # ---------- Amounts ----------
+                'amount': float(bill.amount),
+                'taxable_amount': float(bill.amount),   # alias (pre-tax)
                 'tax_percentage': float(bill.tax_percentage),
                 'tax_amount': float(bill.tax_amount),
                 'total_amount': float(bill.total_amount),
+
+                # ---------- Tax objects ----------
+                'tax_type': {
+                    'id': bill.tax_type.id,
+                    'tax_type_code': bill.tax_type.tax_type_code,
+                    'tax_type_name': bill.tax_type.tax_type_name,
+                } if bill.tax_type else None,
+
+                'tax_rate': {
+                    'id': bill.tax_rate.id,
+                    'tax_rate_code': bill.tax_rate.tax_rate_code,
+                    'tax_rate_name': bill.tax_rate.tax_rate_name,
+                    'rate_percentage': float(bill.tax_rate.rate_percentage),
+                } if bill.tax_rate else None,
+
+                # ---------- Payment ----------
+                'payment_method': bill.payment_method,
+                'transaction_id': bill.transaction_id,
+                'note': bill.note,
                 'status': bill.status,
+
+                # ---------- Payment Receipt (screenshot) ----------
+                'payment_receipt': receipt_url,
+                'payment_receipt_url': receipt_url,
+                'payment_receipt_name': receipt_name,
+                'payment_receipt_size': receipt_size,
+                'has_payment_receipt': bool(receipt_url),
+
+                # ---------- Timestamps ----------
                 'created_at': bill.created_at,
                 'paid_at': bill.paid_at,
+
+                # ---------- Breakdown ----------
                 'breakdown': bill.breakdown,
             }
 
@@ -3484,76 +3634,6 @@ class BillDetailAPIView(APIView):
             logger.error(f"Error fetching bill {pk}: {str(e)}", exc_info=True)
             return Response(
                 {"error": f"Failed to fetch bill: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    def patch(self, request, pk):
-        """Partial update bill"""
-        try:
-            bill = Bill.objects.get(pk=pk)
-
-            if 'status' in request.data:
-                bill.status = request.data['status']
-                if bill.status == 'PAID' and not bill.paid_at:
-                    bill.paid_at = timezone.now()
-
-            if 'payment_method' in request.data:
-                bill.payment_method = request.data['payment_method']
-
-            if 'transaction_id' in request.data:
-                bill.transaction_id = request.data['transaction_id']
-
-            if 'note' in request.data:
-                bill.note = request.data['note']
-
-            bill.save()
-
-            return Response({
-                "status": "success",
-                "message": "Bill updated successfully",
-                "data": {
-                    'id': bill.id,
-                    'bill_number': bill.bill_number,
-                    'status': bill.status,
-                    'payment_method': bill.payment_method,
-                    'transaction_id': bill.transaction_id,
-                    'paid_at': bill.paid_at,
-                }
-            }, status=status.HTTP_200_OK)
-
-        except Bill.DoesNotExist:
-            return Response(
-                {"error": "Bill not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        except Exception as e:
-            logger.error(f"Error updating bill {pk}: {str(e)}", exc_info=True)
-            return Response(
-                {"error": f"Failed to update bill: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    def delete(self, request, pk):
-        """Delete bill"""
-        try:
-            bill = Bill.objects.get(pk=pk)
-            bill_number = bill.bill_number
-            bill.delete()
-
-            return Response({
-                "status": "success",
-                "message": f"Bill #{bill_number} deleted successfully"
-            }, status=status.HTTP_200_OK)
-
-        except Bill.DoesNotExist:
-            return Response(
-                {"error": "Bill not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        except Exception as e:
-            logger.error(f"Error deleting bill {pk}: {str(e)}", exc_info=True)
-            return Response(
-                {"error": f"Failed to delete bill: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -3602,6 +3682,11 @@ class BillMarkPaidAPIView(APIView):
                 subscription.payment_status = 'PAID'
                 subscription.is_active = True
                 subscription.save()
+
+                # 🌱 Ensure the church has the default relationship set.
+                #    Uses get_or_create under the hood, so it's safe to
+                #    call repeatedly without creating duplicates.
+                seed_default_relationships(church)
 
                 church.is_active = True
                 church.save()
@@ -3658,6 +3743,238 @@ class BillMarkPaidAPIView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+from django.http import HttpResponse
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import mm
+
+
+class BillReceiptPDFAPIView(APIView):
+    """
+    Generate a PDF receipt / tax invoice for a Bill.
+    Streams as attachment.
+    """
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request, pk):
+        try:
+            bill = Bill.objects.select_related(
+                'church',
+                'subscription',
+                'subscription__package',
+                'tax_type',
+                'tax_rate',
+            ).get(pk=pk)
+        except Bill.DoesNotExist:
+            return Response(
+                {"error": "Bill not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        church = bill.church
+        sub = bill.subscription
+        package = sub.package if sub else None
+
+        # -------------------------------------------------------
+        # RESPONSE
+        # -------------------------------------------------------
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = (
+            f'attachment; filename="receipt-{bill.bill_number or bill.id}.pdf"'
+        )
+
+        p = canvas.Canvas(response, pagesize=A4)
+        width, height = A4
+
+        maroon = colors.HexColor("#ae2050")
+        dark = colors.HexColor("#1a1a2e")
+        grey = colors.HexColor("#666666")
+        border = colors.HexColor("#1a1a2e")
+
+        left = 20 * mm
+        right = width - 20 * mm
+        y = height - 20 * mm
+
+        # -------------------------------------------------------
+        # TITLE
+        # -------------------------------------------------------
+        p.setFillColor(maroon)
+        p.setFont("Helvetica-Bold", 18)
+        p.drawString(left, y, "Eglise")
+        p.setFillColor(dark)
+        p.setFont("Helvetica-Bold", 12)
+        p.drawRightString(right, y, "TAX INVOICE")
+
+        y -= 6 * mm
+
+        p.setFont("Helvetica", 9)
+        p.setFillColor(grey)
+        p.drawString(left, y, "Eglise Church Management — Appzia Tec Solutions")
+        p.drawRightString(right, y, "Original for Recipient")
+
+        y -= 10 * mm
+
+        # -------------------------------------------------------
+        # META GRID (Invoice / Bill no / Dates)
+        # -------------------------------------------------------
+        p.setFillColor(dark)
+        p.setFont("Helvetica", 9)
+        p.drawString(left, y, f"Invoice No: {bill.invoice_number or '—'}")
+        p.drawString(left + 80 * mm, y, f"Bill No: {bill.bill_number or '—'}")
+
+        y -= 5 * mm
+        p.drawString(
+            left, y,
+            f"Date: {bill.created_at.strftime('%d %b %Y') if bill.created_at else '—'}"
+        )
+        p.drawString(
+            left + 80 * mm, y,
+            f"Status: {bill.status}"
+        )
+
+        y -= 5 * mm
+        p.drawString(
+            left, y,
+            f"Mode of Payment: {bill.payment_method or '—'}"
+        )
+        p.drawString(
+            left + 80 * mm, y,
+            f"Reference: {bill.transaction_id or '—'}"
+        )
+
+        y -= 5 * mm
+        p.drawString(
+            left, y,
+            f"Billing Cycle: {bill.billing_cycle or '—'}"
+        )
+        if sub:
+            p.drawString(
+                left + 80 * mm, y,
+                f"Period: {sub.start_date or '—'} to {sub.end_date or '—'}"
+            )
+
+        y -= 10 * mm
+
+        # -------------------------------------------------------
+        # BUYER BLOCK
+        # -------------------------------------------------------
+        p.setFont("Helvetica-Bold", 10)
+        p.setFillColor(dark)
+        p.drawString(left, y, "Bill To")
+        y -= 5 * mm
+
+        p.setFont("Helvetica-Bold", 11)
+        p.drawString(left, y, church.name if church else "—")
+        y -= 5 * mm
+
+        p.setFont("Helvetica", 9)
+        p.setFillColor(grey)
+        if church:
+            p.drawString(left, y, f"Church Code: {church.code or '—'}")
+            y -= 4 * mm
+            if church.email:
+                p.drawString(left, y, f"Email: {church.email}")
+                y -= 4 * mm
+            if church.city or church.state:
+                addr = ", ".join(
+                    filter(None, [church.city, church.state])
+                )
+                p.drawString(left, y, addr)
+                y -= 4 * mm
+
+        y -= 6 * mm
+
+        # -------------------------------------------------------
+        # LINE ITEMS TABLE
+        # -------------------------------------------------------
+        p.setFillColor(dark)
+        p.setFont("Helvetica-Bold", 9)
+
+        col_x = [left, left + 90 * mm, left + 130 * mm, right]
+        p.line(col_x[0], y + 3 * mm, col_x[-1], y + 3 * mm)
+        p.line(col_x[0], y - 4 * mm, col_x[-1], y - 4 * mm)
+
+        p.drawString(col_x[0] + 1 * mm, y, "Particulars")
+        p.drawRightString(col_x[1], y, "Rate")
+        p.drawRightString(col_x[2], y, "Qty")
+        p.drawRightString(col_x[3], y, "Amount")
+
+        y -= 9 * mm
+        p.setFont("Helvetica", 9)
+
+        package_name = (
+            package.name if package else "Subscription"
+        )
+        capacity = sub.get_capacity() if sub else 0
+        rate = float(sub.get_rate()) if sub and sub.get_rate() else 0
+
+        p.drawString(
+            col_x[0] + 1 * mm, y,
+            f"{package_name} — {bill.billing_cycle or ''} Subscription"
+        )
+        p.drawRightString(col_x[1], y, f"Rs. {rate:,.2f}")
+        p.drawRightString(col_x[2], y, str(capacity))
+        p.drawRightString(col_x[3], y, f"Rs. {float(bill.amount):,.2f}")
+
+        y -= 5 * mm
+        p.drawString(
+            col_x[0] + 1 * mm, y,
+            f"Tax — {bill.tax_type.tax_type_name if bill.tax_type else 'No Tax'} "
+            f"@ {bill.tax_percentage}%"
+        )
+        p.drawRightString(col_x[3], y, f"Rs. {float(bill.tax_amount):,.2f}")
+
+        y -= 8 * mm
+        p.line(col_x[0], y + 3 * mm, col_x[-1], y + 3 * mm)
+
+        p.setFont("Helvetica-Bold", 11)
+        p.drawString(col_x[0] + 1 * mm, y - 2 * mm, "TOTAL")
+        p.drawRightString(
+            col_x[3], y - 2 * mm,
+            f"Rs. {float(bill.total_amount):,.2f}"
+        )
+
+        y -= 15 * mm
+
+        # -------------------------------------------------------
+        # NOTES
+        # -------------------------------------------------------
+        if bill.note:
+            p.setFont("Helvetica-Bold", 9)
+            p.setFillColor(dark)
+            p.drawString(left, y, "Notes")
+            y -= 4 * mm
+            p.setFont("Helvetica", 9)
+            p.setFillColor(grey)
+            # crude wrap
+            words = bill.note.split()
+            line = ""
+            for w in words:
+                if len(line + " " + w) > 90:
+                    p.drawString(left, y, line)
+                    y -= 4 * mm
+                    line = w
+                else:
+                    line = (line + " " + w).strip()
+            if line:
+                p.drawString(left, y, line)
+                y -= 4 * mm
+
+        # -------------------------------------------------------
+        # FOOTER
+        # -------------------------------------------------------
+        p.setFillColor(grey)
+        p.setFont("Helvetica-Oblique", 8)
+        p.drawString(
+            left, 15 * mm,
+            "This is a computer-generated invoice. E. & O.E."
+        )
+        p.drawRightString(right, 15 * mm, "Page 1 of 1")
+
+        p.showPage()
+        p.save()
+        return response
 
 # ============ UPGRADE REQUEST VIEWS ============
 

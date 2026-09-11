@@ -873,6 +873,45 @@ markBillPaid: async (id) => {
   }
 },
 
+  // ============ INVOICE ============
+  getInvoiceDetail: async (id) => {
+    try {
+      const token = getAdminToken();
+      // Reuses the bill detail endpoint.
+      // Swap URL later if you add a dedicated /invoice/ endpoint.
+      const response = await apiClient.get(`/api/admin/bills/${id}/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return response.data;
+    } catch (error) {
+      console.error(
+        "API Error - Get Invoice Detail:",
+        error.response?.data || error.message
+      );
+      throw error;
+    }
+  },
+
+  downloadInvoicePdf: async (id) => {
+    try {
+      const token = getAdminToken();
+      const response = await apiClient.get(
+        `/api/admin/bills/${id}/receipt/`,
+        {
+          responseType: "blob",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      return response;
+    } catch (error) {
+      console.error(
+        "API Error - Download Invoice PDF:",
+        error.response?.data || error.message
+      );
+      throw error;
+    }
+  },
+
   // ============ EXPIRING CHURCHES ============
   getExpiringChurches: async () => {
     try {
@@ -888,4 +927,8 @@ markBillPaid: async (id) => {
   },
 };
 
+
+
+
 export default adminApi;
+
