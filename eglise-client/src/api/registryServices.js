@@ -754,6 +754,7 @@ export const deleteAccountGroup = (id) =>
   );
 
 
+
 // ============================================================
 // ACCOUNT LEDGERS
 // ============================================================
@@ -783,10 +784,42 @@ export const updateAccountLedger = (
     data
   );
 
+// ============================================================
+// ARCHIVE ACCOUNT LEDGER
+// ============================================================
+
+export const archiveAccountLedger = (id) =>
+  apiClient.patch(
+    `/api/registry/account-ledgers/${id}/`,
+    {
+      is_active: false,
+    }
+  );
+
+// ============================================================
+// LEDGER TRANSACTIONS
+// ============================================================
+
+export const listLedgerTransactions = (
+  ledgerId,
+  params = {}
+) =>
+  apiClient.get(
+    `/api/registry/account-ledgers/${ledgerId}/transactions/`,
+    {
+      params,
+    }
+  );
+
+// ============================================================
+// DELETE ACCOUNT LEDGER
+// ============================================================
+
 export const deleteAccountLedger = (id) =>
   apiClient.delete(
     `/api/registry/account-ledgers/${id}/`
   );
+
 
 
 // ============================================================

@@ -7,7 +7,10 @@ import {
   Navigate,
 } from "react-router-dom";
 import LoginPage from "./pages/LoginPage";
+
 import HomePage from "./pages/HomePage";
+
+
 import FamilyPage from "./pages/FamilyPage";
 import FamilyAddPage from "./pages/FamilyAddPage";
 import FamilyViewPage from "./pages/FamilyViewPage";
@@ -24,6 +27,7 @@ import GradePage from "./pages/GradePage";
 import GradeAdd from "./pages/GradeAdd";
 import GradeEdit from "./pages/GradeEdit";
 import GradeView from "./pages/GradeView";
+
 
 import RelationshipPage from "./pages/RelationshipPage";
 import RelationshipAddPage from "./pages/RelationshipAddPage";
@@ -121,7 +125,18 @@ import SubscriptionCreatePage from "./pages/SubscriptionAddPage";
 import SubscriptionEditPage from "./pages/SubscriptionEditPage";
 
 import AccountGroupPage from "./pages/AccountGroupPage";
+import AccountGroupAddPage from "./pages/AccountGroupAddPage";
+import AccountGroupViewPage from "./pages/AccountGroupViewPage";
+import Accountledgereditpage from "./pages/Accountledgereditpage";
+
+
 import AccountLedgerPage from "./pages/AccountLedgerPage";
+import AccountLedgerAddPage from "./pages/Accountledgeraddpage";
+import AccountLedgerEditPage from "./pages/Accountledgereditpage";
+import AccountLedgerViewPage from "./pages/Accountledgerviewpage";
+// import AccountLedgerTransactionsPage from "./pages/AccountLedgerTransactionsPage";
+
+
 import PaymentPage from "./pages/PaymentPage";
 import QurbanaReceiptsPage from "./pages/QurbanaReceiptsPage";
 import CommitteePage from "./pages/CommitteePage";
@@ -771,13 +786,72 @@ function App() {
           }
         />
         <Route
-          path="/account-ledgers"
+          path="/account-groups/add"
           element={
             <ProtectedRoute>
-              <AccountLedgerPage />
+              <AccountGroupAddPage  />
             </ProtectedRoute>
           }
         />
+       
+         <Route
+          path="/account-groups/:id/edit"
+          element={
+            <ProtectedRoute>
+              <Accountledgereditpage   />
+            </ProtectedRoute>
+          }
+        />
+         <Route
+          path="/account-groups/:id"
+          element={
+            <ProtectedRoute>
+              <AccountGroupViewPage    />
+            </ProtectedRoute>
+          }
+        />
+
+
+       <Route
+  path="/account-ledgers"
+  element={
+    <ProtectedRoute>
+      <AccountLedgerPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/account-ledgers/add"
+  element={
+    <ProtectedRoute>
+      <AccountLedgerAddPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/account-ledgers/:id/edit"
+  element={
+    <ProtectedRoute>
+      <AccountLedgerEditPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/account-ledgers/:id"
+  element={
+    <ProtectedRoute>
+      <AccountLedgerViewPage />
+    </ProtectedRoute>
+  }
+/>
+{/* <Route
+  path="/account-ledgers/:id/transactions"
+  element={
+    <ProtectedRoute>
+      <AccountLedgerTransactionsPage />
+    </ProtectedRoute>
+  }
+/> */}
         <Route
           path="/payments"
           element={

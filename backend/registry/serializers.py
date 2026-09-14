@@ -4959,26 +4959,52 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     
 class AccountGroupMasterSerializer(serializers.ModelSerializer):
     under_group_name = serializers.CharField(
-        source="under_group.group_name", read_only=True
+        source="under_group.group_name",
+        read_only=True
+    )
+
+    ledgers_count = serializers.IntegerField(
+        source="ledgers.count",
+        read_only=True
+    )
+
+    sub_groups_count = serializers.IntegerField(
+        source="sub_groups.count",
+        read_only=True
     )
 
     class Meta:
         model = AccountGroupMaster
         fields = "__all__"
-        read_only_fields = ("church",)
+        read_only_fields = (
+            "church",
+            "ledgers_count",
+            "sub_groups_count",
+        )
 
     def validate_group_name(self, value):
         if not value.strip():
-            raise serializers.ValidationError("Group name cannot be empty")
+            raise serializers.ValidationError(
+                "Group name cannot be empty"
+            )
         return value
 
     def validate(self, data):
         # Prevent a group from being set as its own parent
         under_group = data.get("under_group")
-        if under_group and self.instance and under_group.id == self.instance.id:
+
+        if (
+            under_group
+            and self.instance
+            and under_group.id == self.instance.id
+        ):
             raise serializers.ValidationError(
-                {"under_group": "A group cannot be its own parent."}
+                {
+                    "under_group":
+                    "A group cannot be its own parent."
+                }
             )
+
         return data
     
 class AccountLedgerMasterSerializer(serializers.ModelSerializer):
