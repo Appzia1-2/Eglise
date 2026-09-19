@@ -886,15 +886,12 @@ export const deleteQurbanaReceipt = (id) =>
     `/api/registry/qurbana-receipts/${id}/`
   );
 
-
 // ============================================================
 // COMMITTEES
 // ============================================================
 
 export const listCommittees = () =>
-  apiClient.get(
-    "/api/registry/committees/"
-  );
+  apiClient.get("/api/registry/committees/");
 
 export const createCommittee = (data) =>
   apiClient.post(
@@ -902,10 +899,7 @@ export const createCommittee = (data) =>
     data
   );
 
-export const updateCommittee = (
-  id,
-  data
-) =>
+export const updateCommittee = (id, data) =>
   apiClient.patch(
     `/api/registry/committees/${id}/`,
     data
@@ -915,42 +909,8 @@ export const deleteCommittee = (id) =>
   apiClient.delete(
     `/api/registry/committees/${id}/`
   );
-
-
-// ============================================================
-// COMMITTEE MEMBERS
-// ============================================================
-
-export const listCommitteeMembers = () =>
-  apiClient.get(
-    "/api/registry/committee-members/"
-  );
-
-export const createCommitteeMember = (
-  data
-) =>
-  apiClient.post(
-    "/api/registry/committee-members/",
-    data
-  );
-
-export const updateCommitteeMember = (
-  id,
-  data
-) =>
-  apiClient.patch(
-    `/api/registry/committee-members/${id}/`,
-    data
-  );
-
-export const deleteCommitteeMember = (
-  id
-) =>
-  apiClient.delete(
-    `/api/registry/committee-members/${id}/`
-  );
-
-
+export const getCommittee = (id) =>
+  apiClient.get(`/api/registry/committees/${id}/`);
 // ============================================================
 // MEMBER DIRECTORY
 // ============================================================

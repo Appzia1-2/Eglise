@@ -119,6 +119,9 @@ import OfferingEditPage from "./pages/OfferingEditPage";
 
 
 import VisitorPage from "./pages/VisitorPage";
+import VisitorAddPage from "./pages/VisitorAddPage";
+import VisitorViewPage from "./pages/VisitorViewPage";
+import VisitorEditPage from "./pages/VisitorEditPage";
 
 import SubscriptionPage from "./pages/SubscriptionPage";
 import SubscriptionCreatePage from "./pages/SubscriptionAddPage";
@@ -140,11 +143,17 @@ import AccountLedgerViewPage from "./pages/Accountledgerviewpage";
 import PaymentPage from "./pages/PaymentPage";
 import QurbanaReceiptsPage from "./pages/QurbanaReceiptsPage";
 import CommitteePage from "./pages/CommitteePage";
-import CommitteeMemberPage from "./pages/CommitteeMemberPage";
+import CommitteeAddPage from "./pages/CommitteeAddPage";
+import CommitteeEditPage from "./pages/CommitteeEditPage";
+import CommitteeViewPage from "./pages/CommitteeViewPage";
+import CommitteePrintPage from "./pages/CommitteePrintPage";
+
+// import CommitteeMemberPage from "./pages/CommitteeMemberPage";
 import CommitteeListReportPage from "./pages/CommitteeListReportPage";
 import MemberDirectoryPage from "./pages/MemberDirectoryPage";
 import MemberAgeWisePage from "./pages/MemberAgeWisePage";
 import MemberPhoneDirectoryPage from "./pages/MemberPhoneDirectoryPage";
+
 
 
 import ForcePasswordChange from "./components/ForcePasswordChange";
@@ -745,14 +754,47 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/visitors"
-          element={
-            <ProtectedRoute>
-              <VisitorPage />
-            </ProtectedRoute>
-          }
-        />
+        {/* =========================================================
+    VISITOR MASTER ROUTES
+========================================================= */}
+<Route
+  path="/visitors"
+  element={
+    <ProtectedRoute>
+      <VisitorPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/visitors/add"
+  element={
+    <ProtectedRoute>
+      <VisitorAddPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/visitors/:id"
+  element={
+    <ProtectedRoute>
+      <VisitorViewPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/visitors/:id/edit"
+  element={
+    <ProtectedRoute>
+      <VisitorEditPage />
+    </ProtectedRoute>
+  }
+/>
+
+{/* Keep old singular path working (redirect) */}
+<Route
+  path="/visitor"
+  element={<Navigate to="/visitors" replace />}
+/>
         <Route
           path="/subscriptions"
           element={
@@ -877,13 +919,45 @@ function App() {
           }
         />
         <Route
+  path="/committees/add"
+  element={
+    <ProtectedRoute>
+      <CommitteeAddPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/committees/:id/edit"
+  element={
+    <ProtectedRoute>
+      <CommitteeEditPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/committees/:id"
+  element={
+    <ProtectedRoute>
+      <CommitteeViewPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/committees/:id/print"
+  element={
+    <ProtectedRoute>
+      <CommitteePrintPage  />
+    </ProtectedRoute>
+  }
+/>
+        {/* <Route
           path="/committee-members"
           element={
             <ProtectedRoute>
               <CommitteeMemberPage />
             </ProtectedRoute>
           }
-        />
+        /> */}
         <Route
           path="/member-directory"
           element={

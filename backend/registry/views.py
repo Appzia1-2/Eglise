@@ -10,8 +10,8 @@ from rest_framework.permissions import IsAuthenticated
 from accounts.permissions import IsChurchAuthenticated,IsChurchUser, IsMemberUser
 from accounts.utils import create_family_head_user
 from registry.services import calculate_new_bill_amount, calculate_prorated_upgrade_amount, generate_folio_number, get_next_subscription_action, handle_member_death
-from .models import Baptism, Bill, Church, DeathRegister, Designation, DheshaKuri, Diocese, Events, Grade, Marriage, Priest,  RegisterSetting, Relationship, TombFee, TombType, UpgradeRequest,  Ward, Family, Member, Package, Offering, VisitorMaster, Subscription, AccountGroupMaster, AccountLedgerMaster, PaymentMaster, QurbanaReceipts, CommitteeMaster, CommitteeMember
-from .serializers import BaptismSerializer, BillDetailSerializer, BillListSerializer, ChurchDetailSerializer,MemberDetailSerializer, ChurchListSerializer, DeathRegisterSerializer, DesignationSerializer, DheshaKuriSerializer, DioceseSerializer, EventSerializer, FamilyHeadCreateSerializer, FamilyHeadUpdateSerializer, FamilyMemberSerializer, GradeSerializer, InactiveMemberSerializer, MarriageCertificateSerializer, MarriageSerializer, MemberProfileSerializer, MobileFamilyBaptismSerializer, MobileFamilyDetailSerializer, MobileFamilyListSerializer, MobileFamilyMemberSerializer,  PriestNameSerializer,PriestSerializer, RegisterSettingSerializer, RelationshipSerializer, SubscriptionExpirySerializer, TombFeeSerializer, TombTypeSerializer, UpgradeSerializer,  WardSerializer, FamilySerializer, MemberSerializer,PackageSerializer, WardWithFamilyCountSerializer, OfferingSerializer, VisitorMasterSerializer, SubscriptionSerializer, AccountGroupMasterSerializer, AccountLedgerMasterSerializer, PaymentMasterSerializer, QurbanaReceiptsSerializer, CommitteeMasterSerializer, CommitteeMemberSerializer, MemberDirectorySerializer
+from .models import Baptism, Bill, Church, DeathRegister, Designation, DheshaKuri, Diocese, Events, Grade, Marriage, Priest,  RegisterSetting, Relationship, TombFee, TombType, UpgradeRequest,  Ward, Family, Member, Package, Offering, VisitorMaster, Subscription, AccountGroupMaster, AccountLedgerMaster, PaymentMaster, QurbanaReceipts, CommitteeMaster
+from .serializers import BaptismSerializer, BillDetailSerializer, BillListSerializer, ChurchDetailSerializer,MemberDetailSerializer, ChurchListSerializer, DeathRegisterSerializer, DesignationSerializer, DheshaKuriSerializer, DioceseSerializer, EventSerializer, FamilyHeadCreateSerializer, FamilyHeadUpdateSerializer, FamilyMemberSerializer, GradeSerializer, InactiveMemberSerializer, MarriageCertificateSerializer, MarriageSerializer, MemberProfileSerializer, MobileFamilyBaptismSerializer, MobileFamilyDetailSerializer, MobileFamilyListSerializer, MobileFamilyMemberSerializer,  PriestNameSerializer,PriestSerializer, RegisterSettingSerializer, RelationshipSerializer, SubscriptionExpirySerializer, TombFeeSerializer, TombTypeSerializer, UpgradeSerializer,  WardSerializer, FamilySerializer, MemberSerializer,PackageSerializer, WardWithFamilyCountSerializer, OfferingSerializer, VisitorMasterSerializer, SubscriptionSerializer, AccountGroupMasterSerializer, AccountLedgerMasterSerializer, PaymentMasterSerializer, QurbanaReceiptsSerializer, CommitteeMasterSerializer, MemberDirectorySerializer
 from rest_framework.generics import ListAPIView
 from .models import ChurchSubscription
 from .serializers import SubscribeSerializer,UpgradeRequestSerializer
@@ -3476,26 +3476,6 @@ class CommitteeMasterDetailView(generics.RetrieveUpdateDestroyAPIView):
         return CommitteeMaster.objects.filter(church=self.request.user.church)
 
 
-class CommitteeMemberListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated, IsChurchUser]
-    serializer_class = CommitteeMemberSerializer
-
-    def get_queryset(self):
-        return CommitteeMember.objects.filter(
-            church=self.request.user.church
-        ).order_by("-id")
-
-    def perform_create(self, serializer):
-        serializer.save(church=self.request.user.church)
-
-
-class CommitteeMemberDetailView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticated, IsChurchUser]
-    serializer_class = CommitteeMemberSerializer
-
-    def get_queryset(self):
-        return CommitteeMember.objects.filter(church=self.request.user.church)
-
 
 class QurbanaReceiptsDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated, IsChurchUser]
@@ -3506,7 +3486,11 @@ class QurbanaReceiptsDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class CommitteeMasterListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated, IsChurchUser]
+    permission_classes = [
+        IsAuthenticated,
+        IsChurchUser
+    ]
+
     serializer_class = CommitteeMasterSerializer
 
     def get_queryset(self):
@@ -3515,36 +3499,25 @@ class CommitteeMasterListCreateView(generics.ListCreateAPIView):
         ).order_by("-committee_from_date")
 
     def perform_create(self, serializer):
-        serializer.save(church=self.request.user.church)
+        serializer.save(
+            church=self.request.user.church
+        )
 
+class CommitteeMasterDetailView(
+    generics.RetrieveUpdateDestroyAPIView
+):
+    permission_classes = [
+        IsAuthenticated,
+        IsChurchUser
+    ]
 
-class CommitteeMasterDetailView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticated, IsChurchUser]
     serializer_class = CommitteeMasterSerializer
 
     def get_queryset(self):
-        return CommitteeMaster.objects.filter(church=self.request.user.church)
-
-
-class CommitteeMemberListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated, IsChurchUser]
-    serializer_class = CommitteeMemberSerializer
-
-    def get_queryset(self):
-        return CommitteeMember.objects.filter(
+        return CommitteeMaster.objects.filter(
             church=self.request.user.church
-        ).order_by("-id")
+        )
 
-    def perform_create(self, serializer):
-        serializer.save(church=self.request.user.church)
-
-
-class CommitteeMemberDetailView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticated, IsChurchUser]
-    serializer_class = CommitteeMemberSerializer
-
-    def get_queryset(self):
-        return CommitteeMember.objects.filter(church=self.request.user.church)
     
 class MemberDirectoryAPIView(APIView):
     permission_classes = [IsAuthenticated, IsChurchUser]

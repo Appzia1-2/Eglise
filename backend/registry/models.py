@@ -2465,8 +2465,24 @@ class VisitorMaster(models.Model):
 
     visitor_name = models.CharField(max_length=100)
     visitor_date = models.DateField()
-    visitor_address = models.CharField(max_length=300, blank=True, null=True)
-    remarks = models.CharField(max_length=300, blank=True, null=True)
+    reason_to_visit = models.CharField(
+        max_length=300,
+        blank=True,
+        null=True
+    )
+    visitor_address = models.CharField(
+        max_length=300,
+        blank=True,
+        null=True
+    )
+    remarks = models.CharField(
+        max_length=300,
+        blank=True,
+        null=True
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.visitor_name} ({self.visitor_date})"
@@ -2620,6 +2636,8 @@ class QurbanaReceipts(models.Model):
         return f"{self.name} ({self.qurbana_date})"
 
 
+
+
 class CommitteeMaster(models.Model):
     church = models.ForeignKey(
         Church,
@@ -2627,42 +2645,70 @@ class CommitteeMaster(models.Model):
         related_name="committees"
     )
 
-    committee_code = models.IntegerField()
-    committee_name = models.CharField(max_length=50)
+    committee_code = models.CharField(
+        max_length=20,
+        editable=False
+    )
+
+    committee_name = models.CharField(
+        max_length=50
+    )
+
     committee_from_date = models.DateField()
+
     committee_to_date = models.DateField()
 
-    created_at = models.DateTimeField(null=True, blank=True, auto_now_add=True)
-    updated_at = models.DateTimeField(null=True, blank=True, auto_now=True)
+    # Multiple committee members
+    # Example:
+    # [
+    #     {
+    #         "member": 1,
+    #         "designation": 2
+    #     },
+    #     {
+    #         "member": 5,
+    #         "designation": 3
+    #     }
+    # ]
+    members = models.JSONField(
+        default=list,
+        blank=True
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        null=True,
+        blank=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        null=True,
+        blank=True
+    )
+
+    def save(self, *args, **kwargs):
+        if not self.committee_code:
+            last_committee = (
+                CommitteeMaster.objects
+                .filter(church=self.church)
+                .order_by("-id")
+                .first()
+            )
+
+            if last_committee and last_committee.committee_code:
+                try:
+                    last_number = int(
+                        last_committee.committee_code.replace("COM-", "")
+                    )
+                except (ValueError, AttributeError):
+                    last_number = 0
+            else:
+                last_number = 0
+
+            self.committee_code = f"COM-{last_number + 1:03d}"
+
+        super().save(*args, **kwargs)
 
     def __str__(self):
-        return self.committee_name
-
-
-class CommitteeMember(models.Model):
-    member = models.ForeignKey(
-        Member,
-        on_delete=models.CASCADE,
-        related_name="committee_memberships"
-    )
-    designation = models.ForeignKey(
-        Designation,
-        on_delete=models.PROTECT,
-        related_name="committee_members"
-    )
-    committee = models.ForeignKey(
-        CommitteeMaster,
-        on_delete=models.CASCADE,
-        related_name="members"
-    )
-    church = models.ForeignKey(
-        Church,
-        on_delete=models.CASCADE,
-        related_name="committee_members"
-    )
-    
-    created_at = models.DateTimeField(null=True, blank=True, auto_now_add=True)
-    updated_at = models.DateTimeField(null=True, blank=True, auto_now=True)
-
-    def __str__(self):
-        return f"{self.member.name} - {self.designation.designation_name} ({self.committee.committee_name})"
+        return f"{self.committee_code} - {self.committee_name}"

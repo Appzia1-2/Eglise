@@ -9,6 +9,6 @@ urlpatterns = [
     # path('adminpanel/',include('adminpanel.urls')),
     path('api/accounts/',include('accounts.urls')),
     path('api/registry/',include('registry.urls')),
-     path('api/admin/', include('adminpanel.urls_api')),  # Your admin API endpoints
+    path('api/admin/', include('adminpanel.urls_api')),  # Your admin API endpoints
 ]
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

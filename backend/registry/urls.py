@@ -68,8 +68,8 @@ from .views import (
     RelationshipDetailView,GradeListCreateview,GradeDetailview,WardListWithFamilyCountAPIView,WardFamiliesMobileAPIView, VisitorMasterListCreateView,
     VisitorMasterDetailView,SubscriptionListCreateView,AccountGroupMasterListCreateView, AccountGroupMasterDetailView,TransferAndPromoteHeadAPIView,
     SubscriptionDetailView,AccountLedgerMasterListCreateView,PaymentMasterListCreateView,QurbanaReceiptsListCreateView,
-    QurbanaReceiptsDetailView, CommitteeMasterListCreateView, CommitteeMasterDetailView, CommitteeMemberListCreateView,HeadlessHouseMembersAPIView,
-    CommitteeMemberDetailView, PaymentMasterDetailView, AccountLedgerMasterDetailView, MemberDirectoryAPIView,
+    QurbanaReceiptsDetailView, CommitteeMasterListCreateView, CommitteeMasterDetailView, HeadlessHouseMembersAPIView,
+     PaymentMasterDetailView, AccountLedgerMasterDetailView, MemberDirectoryAPIView,
     MemberAgeWiseListAPIView, MemberPhoneDirectoryAPIView,DioceseListCreateAPIView, DioceseDetailAPIView, MemberDetailView
 )
 
@@ -215,8 +215,7 @@ path("death-registers/<int:pk>/", DeathRegisterUpdateAPIView.as_view(), name="de
     path("committees/", CommitteeMasterListCreateView.as_view(), name="committee-list-create"),
     path("committees/<int:pk>/", CommitteeMasterDetailView.as_view(), name="committee-detail"),
 
-    path("committee-members/", CommitteeMemberListCreateView.as_view(), name="committee-member-list-create"),
-    path("committee-members/<int:pk>/", CommitteeMemberDetailView.as_view(), name="committee-member-detail"),
+  
 
     path("members/directory/", MemberDirectoryAPIView.as_view(), name="member-directory"),
     path("members/age-wise/", MemberAgeWiseListAPIView.as_view(), name="member-age-wise"),

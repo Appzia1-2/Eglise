@@ -1,7 +1,7 @@
 from datetime import date
 
 from rest_framework import serializers
-from .models import Baptism, Bill, Church, DeathRegister, Designation, DheshaKuri, Diocese, Events, Grade, Priest,  RegisterSetting, Relationship, TombFee, TombType, UpgradeRequest,  Ward, Family, Member, Offering, VisitorMaster, Subscription, AccountGroupMaster, AccountLedgerMaster, PaymentMaster,  QurbanaReceipts, CommitteeMaster, CommitteeMember
+from .models import Baptism, Bill, Church, DeathRegister, Designation, DheshaKuri, Diocese, Events, Grade, Priest,  RegisterSetting, Relationship, TombFee, TombType, UpgradeRequest,  Ward, Family, Member, Offering, VisitorMaster, Subscription, AccountGroupMaster, AccountLedgerMaster, PaymentMaster,  QurbanaReceipts, CommitteeMaster
 from .services import can_add_member, generate_folio_number, generate_register_number
 from rest_framework import serializers
 from .models import Package
@@ -5054,37 +5054,78 @@ class QurbanaReceiptsSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Name cannot be empty")
         return value
 
+from rest_framework import serializers
 
+from .models import CommitteeMaster
 class CommitteeMasterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CommitteeMaster
         fields = "__all__"
-        read_only_fields = ("church",)
+        read_only_fields = (
+            "church",
+            "committee_code",
+        )
 
     def validate(self, data):
-        from_date = data.get("committee_from_date", getattr(self.instance, "committee_from_date", None))
-        to_date = data.get("committee_to_date", getattr(self.instance, "committee_to_date", None))
+        from_date = data.get(
+            "committee_from_date",
+            getattr(self.instance, "committee_from_date", None)
+        )
+
+        to_date = data.get(
+            "committee_to_date",
+            getattr(self.instance, "committee_to_date", None)
+        )
+
         if from_date and to_date and to_date < from_date:
-            raise serializers.ValidationError(
-                {"committee_to_date": "To date cannot be before from date."}
-            )
+            raise serializers.ValidationError({
+                "committee_to_date":
+                    "To date cannot be before from date."
+            })
+
+        members = data.get("members", [])
+
+        if not isinstance(members, list):
+            raise serializers.ValidationError({
+                "members": "Members must be a list."
+            })
+
+        for index, item in enumerate(members):
+            if not isinstance(item, dict):
+                raise serializers.ValidationError({
+                    "members": f"Member {index + 1} must be an object."
+                })
+
+            if not item.get("member"):
+                raise serializers.ValidationError({
+                    "members":
+                        f"Member {index + 1}: member is required."
+                })
+
+            if not item.get("designation"):
+                raise serializers.ValidationError({
+                    "members":
+                        f"Member {index + 1}: designation is required."
+                })
+
+            # ✅ NEW: phone is required
+            if not item.get("phone"):
+                raise serializers.ValidationError({
+                    "members":
+                        f"Member {index + 1}: phone is required."
+                })
+
+            # ✅ OPTIONAL: basic format check (digits, +, -, spaces)
+            phone = str(item.get("phone", "")).strip()
+
+            if len(phone) < 7 or len(phone) > 20:
+                raise serializers.ValidationError({
+                    "members":
+                        f"Member {index + 1}: phone must be between 7 and 20 characters."
+                })
+
         return data
-
-
-class CommitteeMemberSerializer(serializers.ModelSerializer):
-    member_name = serializers.CharField(source="member.name", read_only=True)
-    designation_name = serializers.CharField(
-        source="designation.designation_name", read_only=True
-    )
-    committee_name = serializers.CharField(
-        source="committee.committee_name", read_only=True
-    )
-
-    class Meta:
-        model = CommitteeMember
-        fields = "__all__"
-        read_only_fields = ("church",)
 
 class MemberDirectorySerializer(serializers.ModelSerializer):
     relationship = serializers.CharField(source="relationship.name", read_only=True)
