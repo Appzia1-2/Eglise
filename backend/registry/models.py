@@ -2712,3 +2712,227 @@ class CommitteeMaster(models.Model):
 
     def __str__(self):
         return f"{self.committee_code} - {self.committee_name}"
+
+
+
+# -----------------------------------------OLD DATA-----------------------------------------------------------------
+
+class LegacyBaptism(models.Model):
+    """
+    Historical / back-filled baptism records.
+    Does NOT create or link a Member.
+    Used only for typing in old register data.
+    """
+
+    BAPTISM_CATEGORY_CHOICES = (
+        ("PARISH", "Parish (Church Member)"),
+        ("OTHER", "Other (Outsider)"),
+    )
+
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="legacy_baptisms"
+    )
+
+    baptism_category = models.CharField(
+        max_length=10,
+        choices=BAPTISM_CATEGORY_CHOICES,
+        default="PARISH"
+    )
+
+    # ---- REGISTER ----
+    date_of_baptism = models.DateField()
+    register_number = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Old register number as written in the book"
+    )
+
+    # ---- PERSON ----
+    name = models.CharField(max_length=150)
+    baptismal_name = models.CharField(max_length=150, blank=True, null=True)
+    gender = models.CharField(
+        max_length=10,
+        choices=(("MALE", "Male"), ("FEMALE", "Female"))
+    )
+    dob = models.DateField(null=True, blank=True)
+    place_of_birth = models.CharField(max_length=150, blank=True, null=True)
+
+    # ---- FAMILY (typed, not linked) ----
+    family_name = models.CharField(max_length=150, blank=True, null=True)
+    house_name = models.CharField(max_length=150, blank=True, null=True)
+    father_name = models.CharField(max_length=150, blank=True, null=True)
+    mother_name = models.CharField(max_length=150, blank=True, null=True)
+
+    # ---- GODPARENTS ----
+    god_father = models.CharField(max_length=150, blank=True, null=True)
+    god_mother = models.CharField(max_length=150, blank=True, null=True)
+
+    # ---- CHURCH / PRIEST ----
+    parish_of_baptism = models.CharField(max_length=150, blank=True, null=True)
+    panchayath = models.CharField(max_length=150, blank=True, null=True)
+    priest_name = models.CharField(max_length=150, blank=True, null=True)
+
+    address = models.TextField(blank=True, null=True)
+    remarks = models.TextField(blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Legacy Baptism"
+        verbose_name_plural = "Legacy Baptisms"
+        ordering = ["-date_of_baptism"]
+        unique_together = ("church", "register_number")
+
+    def __str__(self):
+        return f"{self.name} ({self.register_number or 'no-reg'})"
+
+
+class LegacyMarriage(models.Model):
+    """
+    Historical / back-filled marriage records.
+    Does NOT create DheshaKuri, does NOT modify Member.marital_status.
+    Used only for typing in old register data.
+    """
+
+    MARRIAGE_TYPE_CHOICES = (
+        ("ADD_BRIDE", "Add Bride to Parish"),
+        ("TRANSFER_BRIDE", "Transfer Bride from Parish"),
+    )
+
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="legacy_marriages"
+    )
+
+    marriage_type = models.CharField(
+        max_length=20,
+        choices=MARRIAGE_TYPE_CHOICES,
+        default="ADD_BRIDE"
+    )
+
+    date = models.DateField()
+    register_number = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Old register number as written in the book"
+    )
+
+    # ---- GROOM (typed) ----
+    groom_name = models.CharField(max_length=150)
+    groom_dob = models.DateField(null=True, blank=True)
+    groom_house_name = models.CharField(max_length=150, blank=True, null=True)
+    groom_family_name = models.CharField(max_length=150, blank=True, null=True)
+    groom_address = models.TextField(blank=True, null=True)
+    groom_father = models.CharField(max_length=150, blank=True, null=True)
+    groom_mother = models.CharField(max_length=150, blank=True, null=True)
+    nationality_of_groom = models.CharField(max_length=100, blank=True, null=True)
+
+    # ---- BRIDE (typed) ----
+    bride_name = models.CharField(max_length=150)
+    bride_dob = models.DateField(null=True, blank=True)
+    bride_house_name = models.CharField(max_length=150, blank=True, null=True)
+    bride_family_name = models.CharField(max_length=150, blank=True, null=True)
+    bride_address = models.TextField(blank=True, null=True)
+    bride_father = models.CharField(max_length=150, blank=True, null=True)
+    bride_mother = models.CharField(max_length=150, blank=True, null=True)
+    nationality_of_bride = models.CharField(max_length=100, blank=True, null=True)
+
+    # ---- WITNESSES / MINISTERS ----
+    witness_bride_side = models.CharField(max_length=150, blank=True, null=True)
+    witness_groom_side = models.CharField(max_length=150, blank=True, null=True)
+    minister_of_marriage = models.CharField(max_length=150, blank=True, null=True)
+    other_priests = models.TextField(blank=True, null=True)
+
+    # ---- TRANSFER ----
+    transfer_to = models.CharField(max_length=150, blank=True, null=True)
+    remarks = models.TextField(blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Legacy Marriage"
+        verbose_name_plural = "Legacy Marriages"
+        ordering = ["-date"]
+        unique_together = ("church", "register_number")
+
+    def __str__(self):
+        return f"{self.groom_name} & {self.bride_name} ({self.register_number or 'no-reg'})"
+
+
+
+class LegacyDeath(models.Model):
+    """
+    Historical / back-filled death records.
+    Does NOT mark a Member as expired.
+    Used only for typing in old register data.
+    """
+
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="legacy_deaths"
+    )
+
+    reg_no = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Old register number as written in the book"
+    )
+
+    # ---- PERSON (typed, not linked to Member) ----
+    name = models.CharField(max_length=150)
+    gender = models.CharField(
+        max_length=10,
+        choices=(("MALE", "Male"), ("FEMALE", "Female")),
+        blank=True,
+        null=True
+    )
+    dob = models.DateField(null=True, blank=True)
+    age_at_death = models.PositiveIntegerField(null=True, blank=True)
+
+    family_name = models.CharField(max_length=150, blank=True, null=True)
+    house_name = models.CharField(max_length=150, blank=True, null=True)
+    father_name = models.CharField(max_length=150, blank=True, null=True)
+    mother_name = models.CharField(max_length=150, blank=True, null=True)
+    marital_status = models.CharField(max_length=20, blank=True, null=True)
+
+    # ---- DEATH / FUNERAL ----
+    died_on = models.DateField()
+    funeral_on = models.DateField(null=True, blank=True)
+    reason_of_death = models.TextField(blank=True, null=True)
+    place_of_death = models.CharField(max_length=200, blank=True, null=True)
+
+    # ---- TOMB (typed text, no FK to TombFee) ----
+    tomb_type_name = models.CharField(max_length=150, blank=True, null=True)
+    tomb_idn = models.CharField(max_length=100, blank=True, null=True)
+    tomb_charge = models.DecimalField(
+        max_digits=15,
+        decimal_places=3,
+        null=True,
+        blank=True
+    )
+
+    # ---- PRIEST / CHURCH ----
+    priest_name = models.CharField(max_length=150, blank=True, null=True)
+
+    remarks = models.TextField(blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Legacy Death"
+        verbose_name_plural = "Legacy Deaths"
+        ordering = ["-died_on"]
+        unique_together = ("church", "reg_no")
+
+    def __str__(self):
+        return f"{self.name} ({self.reg_no or 'no-reg'})"

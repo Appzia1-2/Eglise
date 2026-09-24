@@ -1,7 +1,7 @@
 from datetime import date
 
 from rest_framework import serializers
-from .models import Baptism, Bill, Church, DeathRegister, Designation, DheshaKuri, Diocese, Events, Grade, Priest,  RegisterSetting, Relationship, TombFee, TombType, UpgradeRequest,  Ward, Family, Member, Offering, VisitorMaster, Subscription, AccountGroupMaster, AccountLedgerMaster, PaymentMaster,  QurbanaReceipts, CommitteeMaster
+from .models import Baptism, Bill, Church, DeathRegister, Designation, DheshaKuri, Diocese, Events, Grade, Priest,  RegisterSetting, Relationship, TombFee, TombType, UpgradeRequest,  Ward, Family, Member, Offering, VisitorMaster, Subscription, AccountGroupMaster, AccountLedgerMaster, PaymentMaster,  QurbanaReceipts, CommitteeMaster, LegacyBaptism, LegacyMarriage, LegacyDeath
 from .services import can_add_member, generate_folio_number, generate_register_number
 from rest_framework import serializers
 from .models import Package
@@ -5333,3 +5333,209 @@ class MemberDetailSerializer(serializers.ModelSerializer):
                 return None
         
         return None
+
+
+# -------------------------------------------------OLD DTATA---------------------------------------------------------------
+
+
+# ============================================================
+# LEGACY BAPTISM SERIALIZER
+# ============================================================
+
+class LegacyBaptismSerializer(serializers.ModelSerializer):
+    church_name = serializers.CharField(source="church.name", read_only=True)
+
+    class Meta:
+        model = LegacyBaptism
+        fields = "__all__"
+        read_only_fields = ("church", "created_at", "updated_at")
+
+    def validate_date_of_baptism(self, value):
+        if value and value > date.today():
+            raise serializers.ValidationError(
+                "Date of baptism cannot be in the future."
+            )
+        return value
+
+    def validate_dob(self, value):
+        if value and value > date.today():
+            raise serializers.ValidationError(
+                "Date of birth cannot be in the future."
+            )
+        return value
+
+    def validate(self, data):
+        church = self.context.get("church")
+        register_number = data.get("register_number")
+
+        if church and register_number:
+            qs = LegacyBaptism.objects.filter(
+                church=church,
+                register_number=register_number
+            )
+            if self.instance:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError({
+                    "register_number":
+                        "A legacy baptism with this register number "
+                        "already exists in this church."
+                })
+        return data
+
+    def create(self, validated_data):
+        validated_data["church"] = self.context["church"]
+        return super().create(validated_data)
+
+
+class LegacyBaptismListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LegacyBaptism
+        fields = [
+            "id",
+            "register_number",
+            "date_of_baptism",
+            "name",
+            "baptismal_name",
+            "gender",
+            "family_name",
+            "house_name",
+            "parish_of_baptism",
+            "created_at",
+        ]
+
+
+# ============================================================
+# LEGACY MARRIAGE SERIALIZER
+# ============================================================
+
+class LegacyMarriageSerializer(serializers.ModelSerializer):
+    church_name = serializers.CharField(source="church.name", read_only=True)
+
+    class Meta:
+        model = LegacyMarriage
+        fields = "__all__"
+        read_only_fields = ("church", "created_at", "updated_at")
+
+    def validate_date(self, value):
+        if value and value > date.today():
+            raise serializers.ValidationError(
+                "Marriage date cannot be in the future."
+            )
+        return value
+
+    def validate(self, data):
+        church = self.context.get("church")
+        register_number = data.get("register_number")
+
+        if church and register_number:
+            qs = LegacyMarriage.objects.filter(
+                church=church,
+                register_number=register_number
+            )
+            if self.instance:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError({
+                    "register_number":
+                        "A legacy marriage with this register number "
+                        "already exists in this church."
+                })
+        return data
+
+    def create(self, validated_data):
+        validated_data["church"] = self.context["church"]
+        return super().create(validated_data)
+
+
+class LegacyMarriageListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LegacyMarriage
+        fields = [
+            "id",
+            "register_number",
+            "date",
+            "marriage_type",
+            "groom_name",
+            "bride_name",
+            "minister_of_marriage",
+            "created_at",
+        ]
+
+
+# ============================================================
+# LEGACY DEATH SERIALIZER
+# ============================================================
+
+class LegacyDeathSerializer(serializers.ModelSerializer):
+    church_name = serializers.CharField(source="church.name", read_only=True)
+
+    class Meta:
+        model = LegacyDeath
+        fields = "__all__"
+        read_only_fields = ("church", "created_at", "updated_at")
+
+    def validate_died_on(self, value):
+        if value and value > date.today():
+            raise serializers.ValidationError(
+                "Date of death cannot be in the future."
+            )
+        return value
+
+    def validate(self, data):
+        church = self.context.get("church")
+        reg_no = data.get("reg_no")
+
+        # Duplicate register number within church
+        if church and reg_no:
+            qs = LegacyDeath.objects.filter(
+                church=church,
+                reg_no=reg_no
+            )
+            if self.instance:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError({
+                    "reg_no":
+                        "A legacy death record with this register "
+                        "number already exists in this church."
+                })
+
+        # Funeral cannot be before death
+        died_on = data.get(
+            "died_on",
+            getattr(self.instance, "died_on", None)
+        )
+        funeral_on = data.get(
+            "funeral_on",
+            getattr(self.instance, "funeral_on", None)
+        )
+
+        if died_on and funeral_on and funeral_on < died_on:
+            raise serializers.ValidationError({
+                "funeral_on":
+                    "Funeral date cannot be before the date of death."
+            })
+
+        return data
+
+    def create(self, validated_data):
+        validated_data["church"] = self.context["church"]
+        return super().create(validated_data)
+
+
+class LegacyDeathListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LegacyDeath
+        fields = [
+            "id",
+            "reg_no",
+            "name",
+            "gender",
+            "age_at_death",
+            "family_name",
+            "house_name",
+            "died_on",
+            "funeral_on",
+            "created_at",
+        ]

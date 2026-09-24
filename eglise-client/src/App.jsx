@@ -155,6 +155,25 @@ import MemberAgeWisePage from "./pages/MemberAgeWisePage";
 import MemberPhoneDirectoryPage from "./pages/MemberPhoneDirectoryPage";
 
 
+// Legacy Baptism
+import LegacyBaptismListPage   from "./pages/LegacyBaptismListPage";
+import LegacyBaptismViewPage   from "./pages/LegacyBaptismViewPage";
+import LegacyBaptismAddPage    from "./pages/LegacyBaptismAddPage";
+import LegacyBaptismEditPage   from "./pages/LegacyBaptismEditPage";
+
+// Legacy Marriage
+import LegacyMarriageListPage  from "./pages/LegacyMarriageListPage";
+import LegacyMarriageViewPage  from "./pages/LegacyMarriageViewPage";
+import LegacyMarriageAddPage   from "./pages/LegacyMarriageAddPage";
+import LegacyMarriageEditPage  from "./pages/LegacyMarriageEditPage";
+
+// Legacy Death
+import LegacyDeathListPage     from "./pages/LegacyDeathListPage";
+import LegacyDeathViewPage     from "./pages/LegacyDeathViewPage";
+import LegacyDeathAddPage      from "./pages/LegacyDeathAddPage";
+import LegacyDeathEditPage     from "./pages/LegacyDeathEditPage";
+
+
 
 import ForcePasswordChange from "./components/ForcePasswordChange";
 
@@ -990,6 +1009,115 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+
+        {/* =========================================================
+    LEGACY BAPTISM ROUTES
+========================================================= */}
+<Route
+  path="/legacy/baptism"
+  element={
+    <ProtectedRoute>
+      <LegacyBaptismListPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/legacy/baptism/add"
+  element={
+    <ProtectedRoute>
+      <LegacyBaptismAddPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/legacy/baptism/:id"
+  element={
+    <ProtectedRoute>
+      <LegacyBaptismViewPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/legacy/baptism/:id/edit"
+  element={
+    <ProtectedRoute>
+      <LegacyBaptismEditPage />
+    </ProtectedRoute>
+  }
+/>
+
+{/* =========================================================
+    LEGACY MARRIAGE ROUTES
+========================================================= */}
+<Route
+  path="/legacy/marriage"
+  element={
+    <ProtectedRoute>
+      <LegacyMarriageListPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/legacy/marriage/add"
+  element={
+    <ProtectedRoute>
+      <LegacyMarriageAddPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/legacy/marriage/:id"
+  element={
+    <ProtectedRoute>
+      <LegacyMarriageViewPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/legacy/marriage/:id/edit"
+  element={
+    <ProtectedRoute>
+      <LegacyMarriageEditPage />
+    </ProtectedRoute>
+  }
+/>
+
+{/* =========================================================
+    LEGACY DEATH ROUTES
+========================================================= */}
+<Route
+  path="/legacy/death"
+  element={
+    <ProtectedRoute>
+      <LegacyDeathListPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/legacy/death/add"
+  element={
+    <ProtectedRoute>
+      <LegacyDeathAddPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/legacy/death/:id"
+  element={
+    <ProtectedRoute>
+      <LegacyDeathViewPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/legacy/death/:id/edit"
+  element={
+    <ProtectedRoute>
+      <LegacyDeathEditPage />
+    </ProtectedRoute>
+  }
+/>
 
 
         

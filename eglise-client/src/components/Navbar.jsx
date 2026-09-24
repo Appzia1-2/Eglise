@@ -24,15 +24,22 @@ const ROUTE_MAP = {
   Grade: "/grade",
   Relationship: "/relationship",
   "Member Info": "/family-heads",
+
+  // Live registers
   "Baptism Register": "/baptism",
   "Marriage Register": "/marriage",
+  "Death Register": "/death-register",
+
+  // Legacy registers
+  "Legacy Baptism Register": "/legacy/baptism",
+  "Legacy Marriage Register": "/legacy/marriage",
+  "Legacy Death Register": "/legacy/death",
 
   "Tomb Type": "/tomb-type",
   "Tomb Fees": "/tomb-fees",
   Designation: "/designation",
   "Priest Master": "/priest-master",
-  
-  "Death Register": "/death-register",
+
   Events: "/events",
   // Diocese: "/dioceses",
   "Member Offers": "/offerings",
@@ -55,7 +62,7 @@ const MENU_DATA = {
   Masters: [
     {
       title: "Church Configuration",
-      items: ["Church Info", "Priest Master",],
+      items: ["Church Info", "Priest Master"],
     },
     {
       title: "Members",
@@ -94,8 +101,17 @@ const MENU_DATA = {
         "Member Info",
         "Baptism Register",
         "Marriage Register",
-       
         "Death Register",
+      ],
+      subSections: [
+        {
+          title: "Legacy",
+          items: [
+            "Legacy Baptism Register",
+            "Legacy Marriage Register",
+            "Legacy Death Register",
+          ],
+        },
       ],
     },
     {
@@ -108,7 +124,11 @@ const MENU_DATA = {
     },
     {
       title: "Sunday School",
-      items: ["Student Activity", "Student Attendance", "Student Registration"],
+      items: [
+        "Student Activity",
+        "Student Attendance",
+        "Student Registration",
+      ],
     },
   ],
   Reports: [
@@ -121,8 +141,15 @@ const MENU_DATA = {
           items: [
             "Baptism Register",
             "Marriage Register",
-            
             "Death Register",
+          ],
+        },
+        {
+          title: "Legacy Registers",
+          items: [
+            "Legacy Baptism Register",
+            "Legacy Marriage Register",
+            "Legacy Death Register",
           ],
         },
       ],

@@ -10,8 +10,8 @@ from rest_framework.permissions import IsAuthenticated
 from accounts.permissions import IsChurchAuthenticated,IsChurchUser, IsMemberUser
 from accounts.utils import create_family_head_user
 from registry.services import calculate_new_bill_amount, calculate_prorated_upgrade_amount, generate_folio_number, get_next_subscription_action, handle_member_death
-from .models import Baptism, Bill, Church, DeathRegister, Designation, DheshaKuri, Diocese, Events, Grade, Marriage, Priest,  RegisterSetting, Relationship, TombFee, TombType, UpgradeRequest,  Ward, Family, Member, Package, Offering, VisitorMaster, Subscription, AccountGroupMaster, AccountLedgerMaster, PaymentMaster, QurbanaReceipts, CommitteeMaster
-from .serializers import BaptismSerializer, BillDetailSerializer, BillListSerializer, ChurchDetailSerializer,MemberDetailSerializer, ChurchListSerializer, DeathRegisterSerializer, DesignationSerializer, DheshaKuriSerializer, DioceseSerializer, EventSerializer, FamilyHeadCreateSerializer, FamilyHeadUpdateSerializer, FamilyMemberSerializer, GradeSerializer, InactiveMemberSerializer, MarriageCertificateSerializer, MarriageSerializer, MemberProfileSerializer, MobileFamilyBaptismSerializer, MobileFamilyDetailSerializer, MobileFamilyListSerializer, MobileFamilyMemberSerializer,  PriestNameSerializer,PriestSerializer, RegisterSettingSerializer, RelationshipSerializer, SubscriptionExpirySerializer, TombFeeSerializer, TombTypeSerializer, UpgradeSerializer,  WardSerializer, FamilySerializer, MemberSerializer,PackageSerializer, WardWithFamilyCountSerializer, OfferingSerializer, VisitorMasterSerializer, SubscriptionSerializer, AccountGroupMasterSerializer, AccountLedgerMasterSerializer, PaymentMasterSerializer, QurbanaReceiptsSerializer, CommitteeMasterSerializer, MemberDirectorySerializer
+from .models import Baptism, Bill, Church, DeathRegister, Designation, DheshaKuri, Diocese, Events, Grade, Marriage, Priest,  RegisterSetting, Relationship, TombFee, TombType, UpgradeRequest,  Ward, Family, Member, Package, Offering, VisitorMaster, Subscription, AccountGroupMaster, AccountLedgerMaster, PaymentMaster, QurbanaReceipts, CommitteeMaster,  LegacyBaptism, LegacyMarriage, LegacyDeath
+from .serializers import BaptismSerializer, BillDetailSerializer, BillListSerializer, ChurchDetailSerializer,MemberDetailSerializer, ChurchListSerializer, DeathRegisterSerializer, DesignationSerializer, DheshaKuriSerializer, DioceseSerializer, EventSerializer, FamilyHeadCreateSerializer, FamilyHeadUpdateSerializer, FamilyMemberSerializer, GradeSerializer, InactiveMemberSerializer, MarriageCertificateSerializer, MarriageSerializer, MemberProfileSerializer, MobileFamilyBaptismSerializer, MobileFamilyDetailSerializer, MobileFamilyListSerializer, MobileFamilyMemberSerializer,  PriestNameSerializer,PriestSerializer, RegisterSettingSerializer, RelationshipSerializer, SubscriptionExpirySerializer, TombFeeSerializer, TombTypeSerializer, UpgradeSerializer,  WardSerializer, FamilySerializer, MemberSerializer,PackageSerializer, WardWithFamilyCountSerializer, OfferingSerializer, VisitorMasterSerializer, SubscriptionSerializer, AccountGroupMasterSerializer, AccountLedgerMasterSerializer, PaymentMasterSerializer, QurbanaReceiptsSerializer, CommitteeMasterSerializer, MemberDirectorySerializer, LegacyBaptismSerializer, LegacyMarriageSerializer, LegacyDeathSerializer, LegacyBaptismListSerializer, LegacyMarriageListSerializer, LegacyDeathListSerializer
 from rest_framework.generics import ListAPIView
 from .models import ChurchSubscription
 from .serializers import SubscribeSerializer,UpgradeRequestSerializer
@@ -3749,3 +3749,172 @@ class MemberDetailView(APIView):
                 {"detail": f"Error serializing member: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+# ============================================================
+# LEGACY BAPTISM VIEWS
+# ============================================================
+
+class LegacyBaptismListCreateAPIView(ListCreateAPIView):
+    permission_classes = [IsAuthenticated, IsChurchUser]
+    serializer_class = LegacyBaptismSerializer
+
+    def get_queryset(self):
+        return (
+            LegacyBaptism.objects
+            .filter(church=self.request.user.church)
+            .order_by("-date_of_baptism")
+        )
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["church"] = self.request.user.church
+        return context
+
+    def list(self, request, *args, **kwargs):
+        """Use lightweight serializer for list view."""
+        queryset = self.get_queryset()
+
+        # Optional filters
+        name = request.query_params.get("name")
+        if name:
+            queryset = queryset.filter(name__icontains=name)
+
+        year = request.query_params.get("year")
+        if year:
+            queryset = queryset.filter(date_of_baptism__year=year)
+
+        serializer = LegacyBaptismListSerializer(
+            queryset, many=True
+        )
+        return Response({
+            "count": queryset.count(),
+            "results": serializer.data
+        })
+
+
+class LegacyBaptismDetailAPIView(RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated, IsChurchUser]
+    serializer_class = LegacyBaptismSerializer
+
+    def get_queryset(self):
+        return LegacyBaptism.objects.filter(
+            church=self.request.user.church
+        )
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["church"] = self.request.user.church
+        return context
+
+
+# ============================================================
+# LEGACY MARRIAGE VIEWS
+# ============================================================
+
+class LegacyMarriageListCreateAPIView(ListCreateAPIView):
+    permission_classes = [IsAuthenticated, IsChurchUser]
+    serializer_class = LegacyMarriageSerializer
+
+    def get_queryset(self):
+        return (
+            LegacyMarriage.objects
+            .filter(church=self.request.user.church)
+            .order_by("-date")
+        )
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["church"] = self.request.user.church
+        return context
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+
+        name = request.query_params.get("name")
+        if name:
+            queryset = queryset.filter(
+                Q(groom_name__icontains=name) |
+                Q(bride_name__icontains=name)
+            )
+
+        year = request.query_params.get("year")
+        if year:
+            queryset = queryset.filter(date__year=year)
+
+        serializer = LegacyMarriageListSerializer(
+            queryset, many=True
+        )
+        return Response({
+            "count": queryset.count(),
+            "results": serializer.data
+        })
+
+
+class LegacyMarriageDetailAPIView(RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated, IsChurchUser]
+    serializer_class = LegacyMarriageSerializer
+
+    def get_queryset(self):
+        return LegacyMarriage.objects.filter(
+            church=self.request.user.church
+        )
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["church"] = self.request.user.church
+        return context
+
+
+# ============================================================
+# LEGACY DEATH VIEWS
+# ============================================================
+
+class LegacyDeathListCreateAPIView(ListCreateAPIView):
+    permission_classes = [IsAuthenticated, IsChurchUser]
+    serializer_class = LegacyDeathSerializer
+
+    def get_queryset(self):
+        return (
+            LegacyDeath.objects
+            .filter(church=self.request.user.church)
+            .order_by("-died_on")
+        )
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["church"] = self.request.user.church
+        return context
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+
+        name = request.query_params.get("name")
+        if name:
+            queryset = queryset.filter(name__icontains=name)
+
+        year = request.query_params.get("year")
+        if year:
+            queryset = queryset.filter(died_on__year=year)
+
+        serializer = LegacyDeathListSerializer(
+            queryset, many=True
+        )
+        return Response({
+            "count": queryset.count(),
+            "results": serializer.data
+        })
+
+
+class LegacyDeathDetailAPIView(RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated, IsChurchUser]
+    serializer_class = LegacyDeathSerializer
+
+    def get_queryset(self):
+        return LegacyDeath.objects.filter(
+            church=self.request.user.church
+        )
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["church"] = self.request.user.church
+        return context

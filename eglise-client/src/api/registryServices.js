@@ -1003,3 +1003,61 @@ export const deleteTombType = (id) =>
   apiClient.delete(
     `/api/registry/tomb-types/${id}/`
   );
+
+
+// ============================================================
+// LEGACY BAPTISM REGISTER
+// ============================================================
+
+export const listLegacyBaptisms = () =>
+  apiClient.get("/api/registry/legacy/baptisms/");
+
+export const createLegacyBaptism = (data) =>
+  apiClient.post("/api/registry/legacy/baptisms/", data);
+
+export const getLegacyBaptism = (id) =>
+  apiClient.get(`/api/registry/legacy/baptisms/${id}/`);
+
+export const updateLegacyBaptism = (id, data) =>
+  apiClient.patch(`/api/registry/legacy/baptisms/${id}/`, data);
+
+export const deleteLegacyBaptism = (id) =>
+  apiClient.delete(`/api/registry/legacy/baptisms/${id}/`);
+
+// ============================================================
+// LEGACY MARRIAGE REGISTER
+// ============================================================
+
+export const listLegacyMarriages = () =>
+  apiClient.get("/api/registry/legacy/marriages/");
+
+export const createLegacyMarriage = (data) =>
+  apiClient.post("/api/registry/legacy/marriages/", data);
+
+export const getLegacyMarriage = (id) =>
+  apiClient.get(`/api/registry/legacy/marriages/${id}/`);
+
+export const updateLegacyMarriage = (id, data) =>
+  apiClient.patch(`/api/registry/legacy/marriages/${id}/`, data);
+
+export const deleteLegacyMarriage = (id) =>
+  apiClient.delete(`/api/registry/legacy/marriages/${id}/`);
+
+// ============================================================
+// LEGACY DEATH REGISTER
+// ============================================================
+
+export const listLegacyDeaths = () =>
+  apiClient.get("/api/registry/legacy/deaths/");
+
+export const createLegacyDeath = (data) =>
+  apiClient.post("/api/registry/legacy/deaths/", data);
+
+export const getLegacyDeath = (id) =>
+  apiClient.get(`/api/registry/legacy/deaths/${id}/`);
+
+export const updateLegacyDeath = (id, data) =>
+  apiClient.patch(`/api/registry/legacy/deaths/${id}/`, data);
+
+export const deleteLegacyDeath = (id) =>
+  apiClient.delete(`/api/registry/legacy/deaths/${id}/`);

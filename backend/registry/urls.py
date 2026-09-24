@@ -70,7 +70,12 @@ from .views import (
     SubscriptionDetailView,AccountLedgerMasterListCreateView,PaymentMasterListCreateView,QurbanaReceiptsListCreateView,
     QurbanaReceiptsDetailView, CommitteeMasterListCreateView, CommitteeMasterDetailView, HeadlessHouseMembersAPIView,
      PaymentMasterDetailView, AccountLedgerMasterDetailView, MemberDirectoryAPIView,
-    MemberAgeWiseListAPIView, MemberPhoneDirectoryAPIView,DioceseListCreateAPIView, DioceseDetailAPIView, MemberDetailView
+    MemberAgeWiseListAPIView, MemberPhoneDirectoryAPIView,DioceseListCreateAPIView, DioceseDetailAPIView, MemberDetailView, LegacyBaptismListCreateAPIView,
+    LegacyBaptismDetailAPIView,
+    LegacyMarriageListCreateAPIView,
+    LegacyMarriageDetailAPIView,
+    LegacyDeathListCreateAPIView,
+    LegacyDeathDetailAPIView,
 )
 
 urlpatterns = [
@@ -220,4 +225,40 @@ path("death-registers/<int:pk>/", DeathRegisterUpdateAPIView.as_view(), name="de
     path("members/directory/", MemberDirectoryAPIView.as_view(), name="member-directory"),
     path("members/age-wise/", MemberAgeWiseListAPIView.as_view(), name="member-age-wise"),
     path("members/phone-directory/", MemberPhoneDirectoryAPIView.as_view(), name="member-phone-directory"),
+
+
+    path(
+        "legacy/baptisms/",
+        LegacyBaptismListCreateAPIView.as_view(),
+        name="legacy-baptism-list-create"
+    ),
+    path(
+        "legacy/baptisms/<int:pk>/",
+        LegacyBaptismDetailAPIView.as_view(),
+        name="legacy-baptism-detail"
+    ),
+
+    # Legacy Marriage
+    path(
+        "legacy/marriages/",
+        LegacyMarriageListCreateAPIView.as_view(),
+        name="legacy-marriage-list-create"
+    ),
+    path(
+        "legacy/marriages/<int:pk>/",
+        LegacyMarriageDetailAPIView.as_view(),
+        name="legacy-marriage-detail"
+    ),
+
+    # Legacy Death
+    path(
+        "legacy/deaths/",
+        LegacyDeathListCreateAPIView.as_view(),
+        name="legacy-death-list-create"
+    ),
+    path(
+        "legacy/deaths/<int:pk>/",
+        LegacyDeathDetailAPIView.as_view(),
+        name="legacy-death-detail"
+    ),
 ]
