@@ -1114,7 +1114,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
-
+from django.db import IntegrityError
 
 
 
@@ -1246,14 +1246,20 @@ class PackageCreateAPIView(APIView):
 
             code = self._generate_package_code()
 
-            package = Package.objects.create(
-                code=code,
-                name=name,
-                member_limit=member_limit,
-                rate_per_member_monthly=rate_monthly,
-                rate_per_member_yearly=rate_yearly,
-                is_active=request.data.get('is_active', True),
-            )
+            try:
+                package = Package.objects.create(
+                    code=code,
+                    name=name,
+                    member_limit=member_limit,
+                    rate_per_member_monthly=rate_monthly,
+                    rate_per_member_yearly=rate_yearly,
+                    is_active=request.data.get('is_active', True),
+                )
+            except IntegrityError:
+                return Response(
+                    {"error": f"Member limit {member_limit} is already in use. Please use a different limit."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
             return Response({
                 "status": "success",
@@ -1275,6 +1281,9 @@ class PackageCreateAPIView(APIView):
                 {"error": str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+from django.db import IntegrityError  # add this import at the top of the file
+
 
 class PackageDetailAPIView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
@@ -1355,14 +1364,6 @@ class PackageDetailAPIView(APIView):
             # ---------------------------------------------------------
             # RECENT ACTIVITY
             # ---------------------------------------------------------
-            #
-            # There is currently no Activity model in the code you
-            # provided, so we derive useful activity from package and
-            # subscription timestamps.
-            #
-            # This gives the Package View page data immediately.
-            # ---------------------------------------------------------
-
             activities = []
 
             # Package updated
@@ -1470,8 +1471,6 @@ class PackageDetailAPIView(APIView):
 
                 "churches": churches,
 
-                # Both names are supplied so the frontend can use
-                # either one.
                 "activity": activities,
                 "recent_activity": activities,
 
@@ -1560,7 +1559,15 @@ class PackageDetailAPIView(APIView):
             if 'is_active' in request.data:
                 package.is_active = request.data['is_active']
 
-            package.save()
+            # --- CHANGE: wrap save() to catch a race-condition duplicate ---
+            try:
+                package.save()
+            except IntegrityError:
+                return Response(
+                    {"error": f"Member limit {package.member_limit} is already in use by another package."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            # -----------------------------------------------------------------
 
             return Response({
                 "status": "success",
@@ -1627,7 +1634,16 @@ class PackageDetailAPIView(APIView):
             package.rate_per_member_monthly = request.data.get('rate_per_member_monthly', 0)
             package.rate_per_member_yearly = request.data.get('rate_per_member_yearly', 0)
             package.is_active = request.data.get('is_active', True)
-            package.save()
+
+            # --- CHANGE: wrap save() to catch a race-condition duplicate ---
+            try:
+                package.save()
+            except IntegrityError:
+                return Response(
+                    {"error": f"Member limit {member_limit} is already in use by another package."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            # -----------------------------------------------------------------
 
             return Response({
                 "status": "success",
