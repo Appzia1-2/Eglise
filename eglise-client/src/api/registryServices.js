@@ -1061,3 +1061,4 @@ export const updateLegacyDeath = (id, data) =>
 
 export const deleteLegacyDeath = (id) =>
   apiClient.delete(`/api/registry/legacy/deaths/${id}/`);
+

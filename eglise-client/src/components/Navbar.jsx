@@ -16,7 +16,7 @@ import EgliseLogo from "../assets/logo.png";
 import authService from "../auth/authService";
 import UserDropdown from "./UserDropdown";
 
-// ─── Route map: item label → path (only items with a real page) ───────────────
+// ─── Route map: label → path (ENTRY pages only) ───────────────────────────
 const ROUTE_MAP = {
   "Church Info": "/church-info",
   Family: "/family",
@@ -25,12 +25,12 @@ const ROUTE_MAP = {
   Relationship: "/relationship",
   "Member Info": "/family-heads",
 
-  // Live registers
+  // Live registers (ENTRY)
   "Baptism Register": "/baptism",
   "Marriage Register": "/marriage",
   "Death Register": "/death-register",
 
-  // Legacy registers
+  // Legacy registers (ENTRY)
   "Legacy Baptism Register": "/legacy/baptism",
   "Legacy Marriage Register": "/legacy/marriage",
   "Legacy Death Register": "/legacy/death",
@@ -41,7 +41,6 @@ const ROUTE_MAP = {
   "Priest Master": "/priest-master",
 
   Events: "/events",
-  // Diocese: "/dioceses",
   "Member Offers": "/offerings",
   "Visitor Management": "/visitors",
   Subscriptions: "/subscriptions",
@@ -57,7 +56,21 @@ const ROUTE_MAP = {
   "Phone Directory": "/phone-directory",
 };
 
-// ─── Menu data ────────────────────────────────────────────────────────────────
+// ─── Report-only routes (separate from ENTRY routes above) ────────────────
+const REPORT_ROUTES = {
+  "Baptism Register Report": "/reports/baptism",
+  "Marriage Register Report": "/reports/marriage",
+  "Death Register Report": "/reports/death",
+
+  "Legacy Baptism Register Report": "/reports/legacy/baptism",
+  "Legacy Marriage Register Report": "/reports/legacy/marriage",
+  "Legacy Death Register Report": "/reports/legacy/death",
+};
+
+// ─── Menu data ────────────────────────────────────────────────────────────
+// Items can be either:
+//   - a string  → looked up in ROUTE_MAP
+//   - an object → { label, route } (used for report-specific routes)
 const MENU_DATA = {
   Masters: [
     {
@@ -139,19 +152,37 @@ const MENU_DATA = {
         {
           title: "Registers",
           items: [
-            "Baptism Register",
-            "Marriage Register",
-            "Death Register",
+            {
+              label: "Baptism Register",
+              route: REPORT_ROUTES["Baptism Register Report"],
+            },
+            {
+              label: "Marriage Register",
+              route: REPORT_ROUTES["Marriage Register Report"],
+            },
+            {
+              label: "Death Register",
+              route: REPORT_ROUTES["Death Register Report"],
+            },
           ],
         },
-        {
-          title: "Legacy Registers",
-          items: [
-            "Legacy Baptism Register",
-            "Legacy Marriage Register",
-            "Legacy Death Register",
-          ],
-        },
+        // {
+        //   title: "Legacy Registers",
+        //   items: [
+        //     {
+        //       label: "Legacy Baptism Register",
+        //       route: REPORT_ROUTES["Legacy Baptism Register Report"],
+        //     },
+        //     {
+        //       label: "Legacy Marriage Register",
+        //       route: REPORT_ROUTES["Legacy Marriage Register Report"],
+        //     },
+        //     {
+        //       label: "Legacy Death Register",
+        //       route: REPORT_ROUTES["Legacy Death Register Report"],
+        //     },
+        //   ],
+        // },
       ],
     },
     {
@@ -179,9 +210,13 @@ const MENU_DATA = {
   ],
 };
 
-// ─── A single menu link ────────────────────────────────────────────────────────
-const MenuLink = ({ label, onClose, primaryMaroon }) => {
-  const route = ROUTE_MAP[label];
+// ─── A single menu link ────────────────────────────────────────────────────
+// `item` is either a string (looked up via ROUTE_MAP) or { label, route }
+const MenuLink = ({ item, onClose, primaryMaroon }) => {
+  const isObject = typeof item === "object" && item !== null;
+  const label = isObject ? item.label : item;
+  const route = isObject ? item.route : ROUTE_MAP[item];
+
   const sharedStyle = {
     fontSize: "sm",
     color: "gray.700",
@@ -198,14 +233,20 @@ const MenuLink = ({ label, onClose, primaryMaroon }) => {
       </Box>
     );
   }
+
   return (
-    <Box as="a" href="#" onClick={(e) => e.preventDefault()} {...sharedStyle}>
+    <Box
+      as="a"
+      href="#"
+      onClick={(e) => e.preventDefault()}
+      {...sharedStyle}
+    >
       {label}
     </Box>
   );
 };
 
-// ─── A category column ────────────────────────────────────────────────────────
+// ─── A category column ────────────────────────────────────────────────────
 const CategoryColumn = ({ section, onClose, primaryMaroon }) => (
   <VStack align="start" spacing={1.5}>
     <Heading
@@ -219,14 +260,19 @@ const CategoryColumn = ({ section, onClose, primaryMaroon }) => (
     >
       {section.title}
     </Heading>
-    {section.items.map((item) => (
-      <MenuLink
-        key={item}
-        label={item}
-        onClose={onClose}
-        primaryMaroon={primaryMaroon}
-      />
-    ))}
+
+    {section.items.map((item) => {
+      const key = typeof item === "string" ? item : item.label;
+      return (
+        <MenuLink
+          key={key}
+          item={item}
+          onClose={onClose}
+          primaryMaroon={primaryMaroon}
+        />
+      );
+    })}
+
     {section.subSections?.map((sub) => (
       <VStack key={sub.title} align="start" spacing={1} pt={2} w="full">
         <Heading
@@ -240,20 +286,24 @@ const CategoryColumn = ({ section, onClose, primaryMaroon }) => (
         >
           {sub.title}
         </Heading>
-        {sub.items.map((item) => (
-          <MenuLink
-            key={item}
-            label={item}
-            onClose={onClose}
-            primaryMaroon={primaryMaroon}
-          />
-        ))}
+
+        {sub.items.map((item) => {
+          const key = typeof item === "string" ? item : item.label;
+          return (
+            <MenuLink
+              key={key}
+              item={item}
+              onClose={onClose}
+              primaryMaroon={primaryMaroon}
+            />
+          );
+        })}
       </VStack>
     ))}
   </VStack>
 );
 
-// ─── Navbar ───────────────────────────────────────────────────────────────────
+// ─── Navbar ───────────────────────────────────────────────────────────────
 const Navbar = () => {
   const primaryMaroon = "var(--primary-maroon)";
   const navigate = useNavigate();

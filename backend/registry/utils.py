@@ -253,3 +253,46 @@ def seed_default_relationships(church):
     from .models import Relationship
     for name in DEFAULT_RELATIONSHIPS:
         Relationship.objects.get_or_create(church=church, name=name)
+
+DEFAULT_ACCOUNTS = [
+    ("ASSETS", None),
+    ("CURRENT ASSETS", "ASSETS"),
+    ("BANK ACCOUNTS", "CURRENT ASSETS"),
+    ("CASH IN HAND", "CURRENT ASSETS"),
+    ("DEPOSITS(ASSET)", "CURRENT ASSETS"),
+    ("LOANS & ADVANCES(ASSET)", "CURRENT ASSETS"),
+    ("STOCK-IN-HAND", "CURRENT ASSETS"),
+    ("SUNDRY DEBTORS", "CURRENT ASSETS"),
+    ("FIXED ASSETS", "ASSETS"),
+    ("INVESTMENTS", "ASSETS"),
+    ("MISC.EXPENSES(ASSET)", "ASSETS"),
+    ("LIABILITIES", None),
+    ("CAPITAL ACCOUNTS", "LIABILITIES"),
+    ("RESERVES & SURPLUS", "CAPITAL ACCOUNTS"),
+    ("CURRENT LIABILITIES", "LIABILITIES"),
+    ("DUTIES & TAXES", "CURRENT LIABILITIES"),
+    ("PROVISIONS", "CURRENT LIABILITIES"),
+    ("SUNDRY CREDITORS", "CURRENT LIABILITIES"),
+    ("LOANS(LIABILITY)", "LIABILITIES"),
+    ("BANK OD A/C", "LOANS(LIABILITY)"),
+    ("SECURED LOANS", "LOANS(LIABILITY)"),
+    ("UNSECURED LOANS", "LOANS(LIABILITY)"),
+    ("SUSPENSE ACCOUNTS", "LIABILITIES"),
+    ("P&L A/C", "LIABILITIES"),
+]
+
+def seed_default_accounts(church):
+    from .models import AccountGroupMaster, AccountLedgerMaster
+    groups = {}
+    for name, parent_name in DEFAULT_ACCOUNTS:
+        group, _ = AccountGroupMaster.objects.get_or_create(
+            church=church,
+            group_name=name,
+            defaults={"under_group": groups.get(parent_name), "reserved": True},
+        )
+        groups[name] = group
+        AccountLedgerMaster.objects.get_or_create(
+            church=church,
+            ledger_name=name,
+            defaults={"account_group": group, "reserved": True},
+        )

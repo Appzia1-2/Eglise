@@ -173,7 +173,11 @@ import LegacyDeathViewPage     from "./pages/LegacyDeathViewPage";
 import LegacyDeathAddPage      from "./pages/LegacyDeathAddPage";
 import LegacyDeathEditPage     from "./pages/LegacyDeathEditPage";
 
-
+// Reports (list + print certificate)
+import ReportListPage from "./pages/reports/ReportListPage";
+import BaptismCertificatePage from "./pages/reports/BaptismCertificatePage";
+import MarriageCertificatePage from "./pages/reports/MarriageCertificatePage";
+import DeathCertificatePage from "./pages/reports/DeathCertificatePage";
 
 import ForcePasswordChange from "./components/ForcePasswordChange";
 
@@ -1119,7 +1123,109 @@ function App() {
   }
 />
 
+{/* =========================================================
+    REPORTS: LIVE REGISTERS
+========================================================= */}
+<Route
+  path="/reports/baptism"
+  element={
+    <ProtectedRoute>
+      <ReportListPage type="baptism" />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/reports/baptism/:id/certificate"
+  element={
+    <ProtectedRoute>
+      <BaptismCertificatePage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/reports/marriage"
+  element={
+    <ProtectedRoute>
+      <ReportListPage type="marriage" />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/reports/marriage/:id/certificate"
+  element={
+    <ProtectedRoute>
+      <MarriageCertificatePage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/reports/death"
+  element={
+    <ProtectedRoute>
+      <ReportListPage type="death" />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/reports/death/:id/certificate"
+  element={
+    <ProtectedRoute>
+      <DeathCertificatePage />
+    </ProtectedRoute>
+  }
+/>
 
+{/* =========================================================
+    REPORTS: LEGACY REGISTERS
+========================================================= */}
+<Route
+  path="/reports/legacy/baptism"
+  element={
+    <ProtectedRoute>
+      <ReportListPage type="baptism" />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/reports/legacy/baptism/:id/certificate"
+  element={
+    <ProtectedRoute>
+      <BaptismCertificatePage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/reports/legacy/marriage"
+  element={
+    <ProtectedRoute>
+      <ReportListPage type="marriage" />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/reports/legacy/marriage/:id/certificate"
+  element={
+    <ProtectedRoute>
+      <MarriageCertificatePage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/reports/legacy/death"
+  element={
+    <ProtectedRoute>
+      <ReportListPage type="death" />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/reports/legacy/death/:id/certificate"
+  element={
+    <ProtectedRoute>
+      <DeathCertificatePage />
+    </ProtectedRoute>
+  }
+/>
         
         
         

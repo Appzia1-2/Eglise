@@ -414,7 +414,8 @@ class ChurchListAPIView(APIView):
 from registry.utils import (
     send_church_credentials,
     generate_random_password,
-    seed_default_relationships,
+    seed_default_relationships,seed_default_accounts,
+
 )
 class ChurchCreateAPIView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
@@ -525,6 +526,7 @@ class ChurchCreateAPIView(APIView):
                 # 🌱 Seed default relationships for this church
                 #    (idempotent — uses get_or_create, safe to call multiple times)
                 seed_default_relationships(church)
+                seed_default_accounts(church)
 
                 # Create user for the church (inactive until activated)
                 user = User.objects.create(
@@ -1042,6 +1044,7 @@ class ChurchActivateAPIView(APIView):
                 #    Uses get_or_create under the hood, so it's safe to
                 #    call repeatedly without creating duplicates.
                 seed_default_relationships(church)
+                seed_default_accounts(church)
 
                 church.is_active = True
                 church.save()
@@ -3703,6 +3706,7 @@ class BillMarkPaidAPIView(APIView):
                 #    Uses get_or_create under the hood, so it's safe to
                 #    call repeatedly without creating duplicates.
                 seed_default_relationships(church)
+                seed_default_accounts(church)
 
                 church.is_active = True
                 church.save()

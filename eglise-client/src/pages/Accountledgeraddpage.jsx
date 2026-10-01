@@ -1,10 +1,6 @@
-
 // src/admin/pages/AccountLedgerAddPage.jsx
 
-import React, {
-  useEffect,
-  useState,
-} from "react";
+import React, { useEffect, useState } from "react";
 
 import { useNavigate } from "react-router-dom";
 
@@ -22,11 +18,7 @@ import {
   Icon,
 } from "@chakra-ui/react";
 
-import {
-  LuNetwork,
-  LuCalendar,
-  LuIndianRupee,
-} from "react-icons/lu";
+import { LuNetwork, LuCalendar, LuIndianRupee } from "react-icons/lu";
 
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -53,42 +45,25 @@ const red = "#D7193F";
 ========================================================= */
 
 const todayDisplay = () =>
-  new Date().toLocaleDateString(
-    "en-GB",
-    {
-      day: "2-digit",
-      month: "long",
-      year: "numeric",
-    }
-  );
+  new Date().toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
 
-const todayISO = () =>
-  new Date()
-    .toISOString()
-    .split("T")[0];
+// Local date (not UTC) so it is correct in IST early mornings
+const todayISO = () => new Date().toLocaleDateString("en-CA");
 
 /* =========================================================
    FIELD LABEL
 ========================================================= */
 
-const FieldLabel = ({
-  children,
-  required,
-}) => (
-  <Text
-    fontSize="12px"
-    fontWeight="700"
-    color={dark}
-    mb={1.5}
-  >
+const FieldLabel = ({ children, required }) => (
+  <Text fontSize="12px" fontWeight="700" color={dark} mb={1.5}>
     {children}
 
     {required && (
-      <Text
-        as="span"
-        color="red.500"
-        ml={1}
-      >
+      <Text as="span" color="red.500" ml={1}>
         *
       </Text>
     )}
@@ -99,35 +74,22 @@ const FieldLabel = ({
    TEXT FIELD
 ========================================================= */
 
-const TextField = ({
-  error,
-  ...props
-}) => (
+const TextField = ({ error, ...props }) => (
   <>
     <Input
       height="40px"
       fontSize="12px"
-      borderColor={
-        error
-          ? "red.500"
-          : border
-      }
+      borderColor={error ? "red.500" : border}
       borderRadius="6px"
       _focus={{
-        borderColor:
-          primaryMaroon,
-        boxShadow:
-          `0 0 0 1px ${primaryMaroon}`,
+        borderColor: primaryMaroon,
+        boxShadow: `0 0 0 1px ${primaryMaroon}`,
       }}
       {...props}
     />
 
     {error && (
-      <Text
-        fontSize="10px"
-        color="red.500"
-        mt={1}
-      >
+      <Text fontSize="10px" color="red.500" mt={1}>
         {error}
       </Text>
     )}
@@ -138,16 +100,9 @@ const TextField = ({
    ACCOUNT GROUP SELECT
 ========================================================= */
 
-const AccountGroupSelect = ({
-  value,
-  onChange,
-  groups,
-  error,
-}) => (
+const AccountGroupSelect = ({ value, onChange, groups, error }) => (
   <>
-    <Box
-      position="relative"
-    >
+    <Box position="relative">
       <Icon
         as={LuNetwork}
         boxSize={4}
@@ -166,34 +121,21 @@ const AccountGroupSelect = ({
         onChange={onChange}
         style={{
           width: "100%",
-          padding:
-            "0 12px 0 36px",
+          padding: "0 12px 0 36px",
           borderRadius: "6px",
-          border:
-            `1px solid ${
-              error
-                ? "#e53e3e"
-                : border
-            }`,
+          border: `1px solid ${error ? "#e53e3e" : border}`,
           fontSize: "12px",
           height: "40px",
           background: "white",
           outline: "none",
-          color: value
-            ? dark
-            : "#a0aec0",
+          color: value ? dark : "#a0aec0",
           cursor: "pointer",
         }}
       >
-        <option value="">
-          Select account group
-        </option>
+        <option value="">Select account group</option>
 
         {groups.map((group) => (
-          <option
-            key={group.id}
-            value={group.id}
-          >
+          <option key={group.id} value={group.id}>
             {group.group_name}
           </option>
         ))}
@@ -201,11 +143,7 @@ const AccountGroupSelect = ({
     </Box>
 
     {error && (
-      <Text
-        fontSize="10px"
-        color="red.500"
-        mt={1}
-      >
+      <Text fontSize="10px" color="red.500" mt={1}>
         {error}
       </Text>
     )}
@@ -213,988 +151,533 @@ const AccountGroupSelect = ({
 );
 
 /* =========================================================
-   DR / CR TOGGLE
-========================================================= */
-
-const DrCrToggle = ({
-  value,
-  onChange,
-}) => (
-  <HStack
-    spacing={0}
-    border="1px solid"
-    borderColor={border}
-    borderRadius="6px"
-    overflow="hidden"
-    flexShrink={0}
-    height="40px"
-  >
-    {["DR", "CR"].map(
-      (side) => (
-        <Box
-          key={side}
-          as="button"
-          type="button"
-          onClick={() =>
-            onChange(side)
-          }
-          px={5}
-          height="40px"
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          fontSize="12px"
-          fontWeight="700"
-          color={
-            value === side
-              ? primaryMaroon
-              : "gray.500"
-          }
-          bg={
-            value === side
-              ? "rgba(174,32,80,0.08)"
-              : "white"
-          }
-          borderLeft={
-            side === "CR"
-              ? "1px solid"
-              : "none"
-          }
-          borderColor={
-            border
-          }
-          cursor="pointer"
-          _hover={{
-            bg:
-              value === side
-                ? "rgba(174,32,80,0.08)"
-                : "gray.50",
-          }}
-        >
-          {side === "DR"
-            ? "Dr"
-            : "Cr"}
-        </Box>
-      )
-    )}
-  </HStack>
-);
-
-/* =========================================================
    MAIN PAGE
 ========================================================= */
 
-const AccountLedgerAddPage =
-  () => {
-    const navigate =
-      useNavigate();
+const AccountLedgerAddPage = () => {
+  const navigate = useNavigate();
 
-    const [groups, setGroups] =
-      useState([]);
+  const [groups, setGroups] = useState([]);
 
-    const [
-      isLoadingGroups,
-      setIsLoadingGroups,
-    ] = useState(true);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(true);
 
-    const [
-      isSubmitting,
-      setIsSubmitting,
-    ] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const [
-      formData,
-      setFormData,
-    ] = useState({
-      ledger_name: "",
-      ledger_code: "",
-      alias: "",
-      account_group: "",
-      opening_balance_date:
-        todayISO(),
-      op_balance: "",
-      op_balance_type: "DR",
-    });
+  const [formData, setFormData] = useState({
+    ledger_name: "",
+    ledger_code: "",
+    alias: "",
+    account_group: "",
+    opening_balance_date: todayISO(),
+    op_balance: "",
+  });
 
-    const [
-      errors,
-      setErrors,
-    ] = useState({});
+  const [errors, setErrors] = useState({});
 
-    /* =======================================================
-       LOAD ACCOUNT GROUPS
-    ======================================================= */
+  /* =======================================================
+     LOAD ACCOUNT GROUPS
+  ======================================================= */
 
-    useEffect(() => {
-      const fetchGroups =
-        async () => {
-          setIsLoadingGroups(
-            true
-          );
+  useEffect(() => {
+    const fetchGroups = async () => {
+      setIsLoadingGroups(true);
 
-          try {
-            const response =
-              await listAccountGroups();
+      try {
+        const response = await listAccountGroups();
 
-            const data =
-              response?.data
-                ?.results ||
-              response?.data ||
-              [];
+        const data = response?.data?.results || response?.data || [];
 
-            setGroups(
-              Array.isArray(data)
-                ? data
-                : []
-            );
-          } catch (error) {
-            console.error(
-              "Error fetching account groups:",
-              error
-            );
+        setGroups(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error("Error fetching account groups:", error);
 
-            toaster.create({
-              title:
-                "Unable to load account groups",
-              description:
-                "Please refresh the page and try again.",
-              type: "error",
-              duration: 4000,
-            });
-          } finally {
-            setIsLoadingGroups(
-              false
-            );
-          }
-        };
-
-      fetchGroups();
-    }, []);
-
-    /* =======================================================
-       HANDLE CHANGE
-    ======================================================= */
-
-    const handleChange =
-      (field) =>
-      (event) => {
-        const value =
-          event.target.value;
-
-        setFormData(
-          (previous) => ({
-            ...previous,
-            [field]: value,
-          })
-        );
-
-        if (errors[field]) {
-          setErrors(
-            (previous) => ({
-              ...previous,
-              [field]: "",
-            })
-          );
-        }
-      };
-
-    /* =======================================================
-       VALIDATE
-    ======================================================= */
-
-    const validate = () => {
-      const newErrors = {};
-
-      if (
-        !formData.ledger_name.trim()
-      ) {
-        newErrors.ledger_name =
-          "Ledger name is required.";
+        toaster.create({
+          title: "Unable to load account groups",
+          description: "Please refresh the page and try again.",
+          type: "error",
+          duration: 4000,
+        });
+      } finally {
+        setIsLoadingGroups(false);
       }
-
-      if (
-        !formData.account_group
-      ) {
-        newErrors.account_group =
-          "Please select an account group.";
-      }
-
-      if (
-        formData.op_balance !== "" &&
-        Number.isNaN(
-          Number(
-            formData.op_balance
-          )
-        )
-      ) {
-        newErrors.op_balance =
-          "Please enter a valid opening balance.";
-      }
-
-      setErrors(
-        newErrors
-      );
-
-      return (
-        Object.keys(
-          newErrors
-        ).length === 0
-      );
     };
 
-    /* =======================================================
-       HANDLE SUBMIT
-    ======================================================= */
+    fetchGroups();
+  }, []);
 
-    const handleSubmit =
-      async (event) => {
-        event.preventDefault();
+  /* =======================================================
+     HANDLE CHANGE
+  ======================================================= */
 
-        if (!validate()) {
-          return;
-        }
+  const handleChange = (field) => (event) => {
+    const value = event.target.value;
 
-        setIsSubmitting(true);
+    setFormData((previous) => ({
+      ...previous,
+      [field]: value,
+    }));
 
-        /*
-         * Build payload explicitly.
-         *
-         * Empty optional fields are not
-         * sent as undefined because some
-         * Django serializers handle
-         * undefined inconsistently.
-         */
+    if (errors[field]) {
+      setErrors((previous) => ({
+        ...previous,
+        [field]: "",
+      }));
+    }
+  };
 
-        const payload = {
-          ledger_name:
-            formData.ledger_name.trim(),
+  /* =======================================================
+     VALIDATE
+  ======================================================= */
 
-          account_group:
-            Number(
-              formData.account_group
-            ),
+  const validate = () => {
+    const newErrors = {};
 
-          op_balance:
-            formData.op_balance === ""
-              ? 0
-              : Number(
-                  formData.op_balance
-                ),
+    if (!formData.ledger_name.trim()) {
+      newErrors.ledger_name = "Ledger name is required.";
+    }
 
-          op_balance_type:
-            formData.op_balance_type,
+    if (!formData.account_group) {
+      newErrors.account_group = "Please select an account group.";
+    }
 
-          opening_balance_date:
-            formData.opening_balance_date,
+    if (
+      formData.op_balance !== "" &&
+      Number.isNaN(Number(formData.op_balance))
+    ) {
+      newErrors.op_balance = "Please enter a valid opening balance.";
+    }
 
-          status: true,
-        };
+    setErrors(newErrors);
 
-        if (
-          formData.ledger_code.trim()
-        ) {
-          payload.ledger_code =
-            formData.ledger_code.trim();
-        }
+    return Object.keys(newErrors).length === 0;
+  };
 
-        if (
-          formData.alias.trim()
-        ) {
-          payload.alias =
-            formData.alias.trim();
-        }
+  /* =======================================================
+     HANDLE SUBMIT
+  ======================================================= */
 
-        console.log(
-          "Creating account ledger with payload:",
-          payload
-        );
+  const handleSubmit = async (event) => {
+    event.preventDefault();
 
-        try {
-          const response =
-            await createAccountLedger(
-              payload
-            );
+    if (!validate()) {
+      return;
+    }
 
-          console.log(
-            "Account ledger created:",
-            response?.data
-          );
+    setIsSubmitting(true);
 
-          toaster.create({
-            title: "Success",
-            description:
-              "Account ledger created successfully.",
-            type: "success",
-            duration: 3000,
-          });
+    /*
+     * Build payload explicitly.
+     *
+     * Empty optional fields are not sent as undefined
+     * because some Django serializers handle undefined
+     * inconsistently.
+     */
 
-          navigate(
-            "/account-ledgers"
-          );
-        } catch (error) {
-          console.error(
-            "Error creating account ledger:",
-            error
-          );
+    const payload = {
+      ledger_name: formData.ledger_name.trim(),
 
-          /*
-           * Get the actual Django
-           * validation response.
-           */
+      account_group: Number(formData.account_group),
 
-          const backendData =
-            error?.response?.data;
+      op_balance:
+        formData.op_balance === "" ? 0 : Number(formData.op_balance),
 
-          console.error(
-            "Backend response:",
-            backendData
-          );
+      opening_balance_date: formData.opening_balance_date,
 
-          console.error(
-            "HTTP status:",
-            error?.response?.status
-          );
+      status: true,
+    };
 
-          /*
-           * Convert Django validation
-           * errors into field errors.
-           */
+    if (formData.ledger_code.trim()) {
+      payload.ledger_code = formData.ledger_code.trim();
+    }
 
-          if (
-            backendData &&
-            typeof backendData ===
-              "object"
-          ) {
-            const backendErrors =
-              {};
+    if (formData.alias.trim()) {
+      payload.alias = formData.alias.trim();
+    }
 
-            Object.entries(
-              backendData
-            ).forEach(
-              ([
-                field,
-                message,
-              ]) => {
-                if (
-                  Array.isArray(
-                    message
-                  )
-                ) {
-                  backendErrors[
-                    field
-                  ] =
-                    message.join(
-                      ", "
-                    );
-                } else if (
-                  typeof message ===
-                  "string"
-                ) {
-                  backendErrors[
-                    field
-                  ] = message;
-                }
-              }
-            );
+    console.log("Creating account ledger with payload:", payload);
 
-            if (
-              Object.keys(
-                backendErrors
-              ).length > 0
-            ) {
-              setErrors(
-                backendErrors
-              );
-            }
+    try {
+      const response = await createAccountLedger(payload);
+
+      console.log("Account ledger created:", response?.data);
+
+      toaster.create({
+        title: "Success",
+        description: "Account ledger created successfully.",
+        type: "success",
+        duration: 3000,
+      });
+
+      navigate("/account-ledgers");
+    } catch (error) {
+      console.error("Error creating account ledger:", error);
+
+      /*
+       * Get the actual Django validation response.
+       */
+
+      const backendData = error?.response?.data;
+
+      console.error("Backend response:", backendData);
+
+      console.error("HTTP status:", error?.response?.status);
+
+      /*
+       * Convert Django validation errors into field errors.
+       */
+
+      if (backendData && typeof backendData === "object") {
+        const backendErrors = {};
+
+        Object.entries(backendData).forEach(([field, message]) => {
+          if (Array.isArray(message)) {
+            backendErrors[field] = message.join(", ");
+          } else if (typeof message === "string") {
+            backendErrors[field] = message;
           }
+        });
 
-          /*
-           * Build readable toast
-           * message.
-           */
-
-          let description =
-            "Failed to create account ledger.";
-
-          if (
-            backendData?.error
-          ) {
-            description =
-              backendData.error;
-          } else if (
-            backendData?.detail
-          ) {
-            description =
-              backendData.detail;
-          } else if (
-            backendData &&
-            typeof backendData ===
-              "object"
-          ) {
-            const messages =
-              Object.entries(
-                backendData
-              )
-                .map(
-                  ([
-                    field,
-                    message,
-                  ]) => {
-                    const readable =
-                      Array.isArray(
-                        message
-                      )
-                        ? message.join(
-                            ", "
-                          )
-                        : String(
-                            message
-                          );
-
-                    return `${field}: ${readable}`;
-                  }
-                )
-                .join(" | ");
-
-            if (messages) {
-              description =
-                messages;
-            }
-          }
-
-          toaster.create({
-            title:
-              "Unable to create account ledger",
-            description,
-            type: "error",
-            duration: 6000,
-          });
-        } finally {
-          setIsSubmitting(
-            false
-          );
+        if (Object.keys(backendErrors).length > 0) {
+          setErrors(backendErrors);
         }
-      };
+      }
 
-    /* =======================================================
-       RENDER
-    ======================================================= */
+      /*
+       * Build readable toast message.
+       */
 
-    return (
+      let description = "Failed to create account ledger.";
+
+      if (backendData?.error) {
+        description = backendData.error;
+      } else if (backendData?.detail) {
+        description = backendData.detail;
+      } else if (backendData && typeof backendData === "object") {
+        const messages = Object.entries(backendData)
+          .map(([field, message]) => {
+            const readable = Array.isArray(message)
+              ? message.join(", ")
+              : String(message);
+
+            return `${field}: ${readable}`;
+          })
+          .join(" | ");
+
+        if (messages) {
+          description = messages;
+        }
+      }
+
+      toaster.create({
+        title: "Unable to create account ledger",
+        description,
+        type: "error",
+        duration: 6000,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  /* =======================================================
+     RENDER
+  ======================================================= */
+
+  return (
+    <Box minH="100vh" bg="white" display="flex" flexDirection="column">
+      {/* HEADER / NAVBAR */}
+
+      <Navbar />
+
+      {/* MAIN */}
+
       <Box
-        minH="100vh"
-        bg="white"
-        display="flex"
-        flexDirection="column"
+        flex="1"
+        w="100%"
+        px={{ base: 3, md: 4 }}
+        py={{ base: 3, md: 4 }}
       >
-        {/* =================================================
-            HEADER / NAVBAR
-        ================================================= */}
+        {/* BREADCRUMB */}
 
-        <Navbar />
+        <HStack gap={2} fontSize="11px" color={muted} mb={2}>
+          <Text
+            color={primaryMaroon}
+            cursor="pointer"
+            onClick={() => navigate("/admin/masters")}
+          >
+            Masters
+          </Text>
 
-        {/* =================================================
-            MAIN
-        ================================================= */}
+          <Text>/</Text>
 
-        <Box
-          flex="1"
-          w="100%"
-          px={{
-            base: 3,
-            md: 4,
-          }}
-          py={{
-            base: 3,
-            md: 4,
-          }}
+          <Text
+            color={primaryMaroon}
+            cursor="pointer"
+            onClick={() => navigate("/account-ledgers")}
+          >
+            Account Ledgers
+          </Text>
+
+          <Text>/</Text>
+
+          <Text>Add Account Ledger</Text>
+        </HStack>
+
+        {/* PAGE HEADER */}
+
+        <Flex
+          justify="space-between"
+          align={{ base: "flex-start", md: "center" }}
+          direction={{ base: "column", md: "row" }}
+          gap={3}
+          mb={4}
         >
-          {/* =================================================
-              BREADCRUMB
-          ================================================= */}
-
-          <HStack
-            gap={2}
-            fontSize="11px"
-            color={muted}
-            mb={2}
-          >
+          <Box>
             <Text
-              color={primaryMaroon}
-              cursor="pointer"
-              onClick={() =>
-                navigate(
-                  "/admin/masters"
-                )
-              }
+              fontSize="10px"
+              fontWeight="700"
+              color={red}
+              textTransform="uppercase"
+              letterSpacing="0.08em"
+              mb={1}
             >
-              Masters
+              ACCOUNT LEDGERS
             </Text>
 
-            <Text>/</Text>
-
-            <Text
-              color={primaryMaroon}
-              cursor="pointer"
-              onClick={() =>
-                navigate(
-                  "/account-ledgers"
-                )
-              }
+            <Heading
+              fontSize={{ base: "22px", md: "26px" }}
+              fontWeight="800"
+              color={dark}
+              lineHeight="1.15"
             >
-              Account Ledgers
-            </Text>
-
-            <Text>/</Text>
-
-            <Text>
               Add Account Ledger
+            </Heading>
+
+            <Text color={muted} fontSize="11px" mt={1}>
+              Create a ledger account and define its opening balance.
             </Text>
-          </HStack>
+          </Box>
+        </Flex>
 
-          {/* =================================================
-              PAGE HEADER
-          ================================================= */}
+        {/* FORM */}
 
-          <Flex
-            justify="space-between"
-            align={{
-              base: "flex-start",
-              md: "center",
-            }}
-            direction={{
-              base: "column",
-              md: "row",
-            }}
-            gap={3}
-            mb={4}
+        <form onSubmit={handleSubmit}>
+          <Box
+            bg="white"
+            border={`1px solid ${border}`}
+            borderRadius="8px"
+            overflow="hidden"
+            width="100%"
           >
-            <Box>
-              <Text
-                fontSize="10px"
-                fontWeight="700"
-                color={red}
-                textTransform="uppercase"
-                letterSpacing="0.08em"
-                mb={1}
-              >
-                ACCOUNT LEDGERS
+            {/* SECTION HEADER */}
+
+            <Box px={{ base: 4, md: 5 }} pt={4} pb={3}>
+              <Text fontSize="14px" fontWeight="800" color={dark}>
+                Account Ledger Details
               </Text>
 
-              <Heading
-                fontSize={{
-                  base: "22px",
-                  md: "26px",
-                }}
-                fontWeight="800"
-                color={dark}
-                lineHeight="1.15"
-              >
-                Add Account Ledger
-              </Heading>
-
-              <Text
-                color={muted}
-                fontSize="11px"
-                mt={1}
-              >
-                Create a ledger account
-                and define its opening
-                balance.
-              </Text>
-            </Box>
-          </Flex>
-
-          {/* =================================================
-              FORM
-          ================================================= */}
-
-          <form
-            onSubmit={handleSubmit}
-          >
-            <Box
-              bg="white"
-              border={`1px solid ${border}`}
-              borderRadius="8px"
-              overflow="hidden"
-              width="100%"
-            >
-              {/* =================================================
-                  SECTION HEADER
-              ================================================= */}
-
               <Box
-                px={{
-                  base: 4,
-                  md: 5,
-                }}
-                pt={4}
-                pb={3}
-              >
-                <Text
-                  fontSize="14px"
-                  fontWeight="800"
-                  color={dark}
-                >
-                  Account Ledger Details
-                </Text>
-
-                <Box
-                  mt={2}
-                  height="3px"
-                  width="55px"
-                  bg={primaryMaroon}
-                  borderRadius="full"
-                />
-              </Box>
-
-              <Box
-                borderBottom={`1px solid ${border}`}
+                mt={2}
+                height="3px"
+                width="55px"
+                bg={primaryMaroon}
+                borderRadius="full"
               />
+            </Box>
 
-              {/* =================================================
-                  LEDGER INFORMATION
-              ================================================= */}
+            <Box borderBottom={`1px solid ${border}`} />
 
-              <Box
-                px={{
-                  base: 4,
-                  md: 5,
-                }}
-                py={5}
-              >
-                <VStack
-                  align="stretch"
-                  spacing={5}
-                >
-                  <Box>
-                    <Text
-                      fontSize="13px"
-                      fontWeight="800"
-                      color={dark}
-                      mb={3}
-                    >
-                      Ledger Information
-                    </Text>
+            {/* LEDGER INFORMATION */}
 
-                    <Grid
-                      templateColumns={{
-                        base: "1fr",
-                        md: "1fr 1fr",
-                      }}
-                      gap={4}
-                    >
-                      {/* LEDGER NAME */}
+            <Box px={{ base: 4, md: 5 }} py={5}>
+              <VStack align="stretch" gap={5}>
+                <Box>
+                  <Text fontSize="13px" fontWeight="800" color={dark} mb={3}>
+                    Ledger Information
+                  </Text>
 
-                      <GridItem>
-                        <FieldLabel required>
-                          Ledger Name
-                        </FieldLabel>
+                  <Grid
+                    templateColumns={{ base: "1fr", md: "1fr 1fr" }}
+                    gap={4}
+                  >
+                    {/* LEDGER NAME */}
 
-                        <TextField
-                          placeholder="Enter ledger name"
-                          value={
-                            formData.ledger_name
-                          }
-                          onChange={handleChange(
-                            "ledger_name"
-                          )}
-                          error={
-                            errors.ledger_name
-                          }
-                        />
-                      </GridItem>
+                    <GridItem>
+                      <FieldLabel required>Ledger Name</FieldLabel>
 
-                      {/* LEDGER CODE */}
+                      <TextField
+                        placeholder="Enter ledger name"
+                        maxLength={100}
+                        value={formData.ledger_name}
+                        onChange={handleChange("ledger_name")}
+                        error={errors.ledger_name}
+                      />
+                    </GridItem>
 
-                      <GridItem>
-                        <FieldLabel>
-                          Ledger Code
-                        </FieldLabel>
+                    {/* LEDGER CODE */}
 
-                        <TextField
-                          placeholder="Enter ledger code (optional)"
-                          value={
-                            formData.ledger_code
-                          }
-                          onChange={handleChange(
-                            "ledger_code"
-                          )}
-                          error={
-                            errors.ledger_code
-                          }
-                        />
-                      </GridItem>
+                    <GridItem>
+                      <FieldLabel>Ledger Code</FieldLabel>
 
-                      {/* ALIAS */}
+                      <TextField
+                        placeholder="Enter ledger code (optional)"
+                        value={formData.ledger_code}
+                        onChange={handleChange("ledger_code")}
+                        error={errors.ledger_code}
+                      />
+                    </GridItem>
 
-                      <GridItem>
-                        <FieldLabel>
-                          Alias
-                        </FieldLabel>
+                    {/* ALIAS */}
 
-                        <TextField
-                          placeholder="Enter alias (optional)"
-                          value={
-                            formData.alias
-                          }
-                          onChange={handleChange(
-                            "alias"
-                          )}
-                          error={
-                            errors.alias
-                          }
-                        />
-                      </GridItem>
+                    <GridItem>
+                      <FieldLabel>Alias</FieldLabel>
 
-                      {/* ACCOUNT GROUP */}
+                      <TextField
+                        placeholder="Enter alias (optional)"
+                        value={formData.alias}
+                        onChange={handleChange("alias")}
+                        error={errors.alias}
+                      />
+                    </GridItem>
 
-                      <GridItem>
-                        <FieldLabel required>
-                          Account Group
-                        </FieldLabel>
+                    {/* ACCOUNT GROUP */}
 
-                        <AccountGroupSelect
-                          value={
-                            formData.account_group
-                          }
-                          onChange={handleChange(
-                            "account_group"
-                          )}
-                          groups={groups}
-                          error={
-                            errors.account_group
-                          }
-                        />
+                    <GridItem>
+                      <FieldLabel required>Account Group</FieldLabel>
 
-                        {isLoadingGroups && (
-                          <Text
-                            fontSize="10px"
-                            color={muted}
-                            mt={1}
-                          >
-                            Loading account
-                            groups...
-                          </Text>
-                        )}
-                      </GridItem>
-                    </Grid>
-                  </Box>
-
-                  {/* =================================================
-                      DIVIDER
-                  ================================================= */}
-
-                  <Box
-                    borderBottom={`1px solid #EEF1F5`}
-                  />
-
-                  {/* =================================================
-                      OPENING BALANCE
-                  ================================================= */}
-
-                  <Box>
-                    <HStack
-                      spacing={2}
-                      mb={3}
-                      align="center"
-                    >
-                      <Text
-                        fontSize="13px"
-                        fontWeight="800"
-                        color={dark}
-                      >
-                        Opening Balance
-                      </Text>
-
-                      <HStack
-                        spacing={1}
-                        color={muted}
-                      >
-                        <Icon
-                          as={LuCalendar}
-                          boxSize={3.5}
-                        />
-
-                        <Text fontSize="10px">
-                          Balance as on{" "}
-                          {todayDisplay()}
-                        </Text>
-                      </HStack>
-                    </HStack>
-
-                    <FieldLabel>
-                      Opening Balance as on{" "}
-                      {todayDisplay()}
-                    </FieldLabel>
-
-                    <Flex
-                      border="1px solid"
-                      borderColor={
-                        errors.op_balance
-                          ? "red.500"
-                          : border
-                      }
-                      borderRadius="6px"
-                      overflow="hidden"
-                      align="stretch"
-                      height="40px"
-                    >
-                      {/* RUPEE ICON */}
-
-                      <Flex
-                        align="center"
-                        px={3}
-                        bg="white"
-                      >
-                        <Icon
-                          as={
-                            LuIndianRupee
-                          }
-                          boxSize={3.5}
-                          color="gray.400"
-                        />
-                      </Flex>
-
-                      {/* AMOUNT */}
-
-                      <Input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={
-                          formData.op_balance
-                        }
-                        onChange={handleChange(
-                          "op_balance"
-                        )}
-                        height="40px"
-                        fontSize="12px"
-                        border="none"
-                        borderRadius="0"
-                        _focus={{
-                          boxShadow:
-                            "none",
-                        }}
-                        flex="1"
+                      <AccountGroupSelect
+                        value={formData.account_group}
+                        onChange={handleChange("account_group")}
+                        groups={groups}
+                        error={errors.account_group}
                       />
 
-                      {/* DR / CR */}
+                      {isLoadingGroups && (
+                        <Text fontSize="10px" color={muted} mt={1}>
+                          Loading account groups...
+                        </Text>
+                      )}
+                    </GridItem>
+                  </Grid>
+                </Box>
 
-                      <DrCrToggle
-                        value={
-                          formData.op_balance_type
-                        }
-                        onChange={(
-                          side
-                        ) =>
-                          setFormData(
-                            (
-                              previous
-                            ) => ({
-                              ...previous,
-                              op_balance_type:
-                                side,
-                            })
-                          )
-                        }
+                {/* DIVIDER */}
+
+                <Box borderBottom="1px solid #EEF1F5" />
+
+                {/* OPENING BALANCE */}
+
+                <Box>
+                  <HStack gap={2} mb={3} align="center">
+                    <Text fontSize="13px" fontWeight="800" color={dark}>
+                      Opening Balance
+                    </Text>
+
+                    <HStack gap={1} color={muted}>
+                      <Icon as={LuCalendar} boxSize={3.5} />
+
+                      <Text fontSize="10px">
+                        Balance as on {todayDisplay()}
+                      </Text>
+                    </HStack>
+                  </HStack>
+
+                  <FieldLabel>
+                    Opening Balance as on {todayDisplay()}
+                  </FieldLabel>
+
+                  <Flex
+                    border="1px solid"
+                    borderColor={errors.op_balance ? "red.500" : border}
+                    borderRadius="6px"
+                    overflow="hidden"
+                    align="stretch"
+                    height="40px"
+                  >
+                    {/* RUPEE ICON */}
+
+                    <Flex align="center" px={3} bg="white">
+                      <Icon
+                        as={LuIndianRupee}
+                        boxSize={3.5}
+                        color="gray.400"
                       />
                     </Flex>
 
-                    {errors.op_balance && (
-                      <Text
-                        fontSize="10px"
-                        color="red.500"
-                        mt={1}
-                      >
-                        {
-                          errors.op_balance
-                        }
-                      </Text>
-                    )}
+                    {/* AMOUNT */}
 
-                    <Text
-                      fontSize="10px"
-                      color={muted}
-                      mt={1}
-                    >
-                      Enter zero if the
-                      ledger has no
-                      opening balance.
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={formData.op_balance}
+                      onChange={handleChange("op_balance")}
+                      height="40px"
+                      fontSize="12px"
+                      border="none"
+                      borderRadius="0"
+                      _focus={{ boxShadow: "none" }}
+                      flex="1"
+                    />
+                  </Flex>
+
+                  {errors.op_balance && (
+                    <Text fontSize="10px" color="red.500" mt={1}>
+                      {errors.op_balance}
                     </Text>
-                  </Box>
-                </VStack>
-              </Box>
+                  )}
+
+                  <Text fontSize="10px" color={muted} mt={1}>
+                    Enter zero if the ledger has no opening balance.
+                  </Text>
+                </Box>
+              </VStack>
             </Box>
+          </Box>
 
-            {/* =================================================
-                BUTTONS
-            ================================================= */}
+          {/* BUTTONS */}
 
-            <Flex
-              justify="flex-end"
-              gap={2}
-              mt={4}
+          <Flex justify="flex-end" gap={2} mt={4}>
+            <Button
+              type="button"
+              variant="outline"
+              borderColor={primaryMaroon}
+              color={primaryMaroon}
+              bg="white"
+              borderRadius="6px"
+              height="36px"
+              fontSize="11px"
+              px={6}
+              onClick={() => navigate("/account-ledgers")}
+              disabled={isSubmitting}
+              _hover={{ bg: "rgba(174,32,80,0.05)" }}
             >
-              <Button
-                type="button"
-                variant="outline"
-                borderColor={
-                  primaryMaroon
-                }
-                color={
-                  primaryMaroon
-                }
-                bg="white"
-                borderRadius="6px"
-                height="36px"
-                fontSize="11px"
-                px={6}
-                onClick={() =>
-                  navigate(
-                    "/account-ledgers"
-                  )
-                }
-                isDisabled={
-                  isSubmitting
-                }
-                _hover={{
-                  bg: "rgba(174,32,80,0.05)",
-                }}
-              >
-                Cancel
-              </Button>
+              Cancel
+            </Button>
 
-              <Button
-                type="submit"
-                bg={primaryMaroon}
-                color="white"
-                borderRadius="6px"
-                height="36px"
-                fontSize="11px"
-                px={7}
-                loading={
-                  isSubmitting
-                }
-                loadingText="Saving..."
-                _hover={{
-                  bg: "#8a1a3e",
-                }}
-              >
-                Save Ledger
-              </Button>
-            </Flex>
-          </form>
-        </Box>
-
-        {/* =================================================
-            FOOTER
-        ================================================= */}
-
-        <Footer />
+            <Button
+              type="submit"
+              bg={primaryMaroon}
+              color="white"
+              borderRadius="6px"
+              height="36px"
+              fontSize="11px"
+              px={7}
+              loading={isSubmitting}
+              loadingText="Saving..."
+              _hover={{ bg: "#8a1a3e" }}
+            >
+              Save Ledger
+            </Button>
+          </Flex>
+        </form>
       </Box>
-    );
-  };
+
+      {/* FOOTER */}
+
+      <Footer />
+    </Box>
+  );
+};
 
 export default AccountLedgerAddPage;
-

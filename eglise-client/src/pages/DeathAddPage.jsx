@@ -414,26 +414,20 @@ const DeathAddPage = () => {
       const payload = {
         member: Number(formData.member),
 
-        died_on:
-          formData.died_on,
+        died_on: formData.died_on,
 
-        funeral_on:
-          formData.funeral_on,
+        funeral_on: formData.funeral_on,
 
-        tomb_type:
-          Number(formData.tomb_type),
+        tomb_type: Number(formData.tomb_type),
 
-        tomb_fee:
-          Number(formData.tomb_fee),
+        tomb_fee: Number(formData.tomb_fee),
 
-        tomb_idn:
-          formData.tomb_idn || "",
+        tomb_idn: formData.tomb_idn || "",
 
         reason_of_death:
           formData.reason_of_death.trim(),
 
-        remarks:
-          formData.remarks.trim(),
+        remarks: formData.remarks.trim(),
       };
 
       console.log(
@@ -441,9 +435,49 @@ const DeathAddPage = () => {
         payload
       );
 
-      await createDeathRecord(payload);
+      const response =
+        await createDeathRecord(payload);
 
-      navigate("/death", {
+      console.log(
+        "createDeathRecord response:",
+        response?.data
+      );
+
+      // ----------------------------------------------
+      // Extract the new record's ID from the response.
+      // Backend shape can vary — handle the common ones.
+      // ----------------------------------------------
+
+      const created = response?.data ?? {};
+
+      const newId =
+        created?.id ??
+        created?.pk ??
+        created?._id ??
+        created?.data?.id ??
+        created?.data?.pk ??
+        created?.death?.id ??
+        created?.record?.id;
+
+      if (!newId) {
+        console.error(
+          "No ID returned from createDeathRecord:",
+          response
+        );
+
+        setPageError(
+          "Death record saved, but the server did not return an ID. Please open the Death Register list to view it."
+        );
+
+        return;
+      }
+
+      // ----------------------------------------------
+      // ✅ Redirect to the detail view page
+      // which reads useParams().id
+      // ----------------------------------------------
+
+      navigate(`/death/${newId}`, {
         replace: true,
       });
     } catch (error) {
@@ -524,7 +558,7 @@ const DeathAddPage = () => {
   // ==========================================================
 
   const handleCancel = () => {
-    navigate("/death-register")
+    navigate("/death-register");
   };
 
   // ==========================================================
@@ -970,8 +1004,6 @@ const DeathAddPage = () => {
               </FormField>
 
             </SimpleGrid>
-
-           
 
             {/* ==================================================
                 REASON

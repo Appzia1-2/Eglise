@@ -1,15 +1,8 @@
-// src/admin/pages/AccountGroupEditPage.jsx
+// src/admin/pages/Accountledgereditpage.jsx
 
-import React, {
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
-import {
-  useNavigate,
-  useParams,
-} from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 import {
   Box,
@@ -29,28 +22,27 @@ import {
 
 import {
   LuNetwork,
-  LuFolderTree,
   LuCalendar,
-  LuBookOpen,
   LuClipboardList,
   LuUser,
   LuTriangleAlert,
   LuClock,
   LuTrash2,
-  LuBookMarked,
+  LuBookOpen,
+  LuIndianRupee,
 } from "react-icons/lu";
 
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 
+import { toaster } from "../components/ui/toaster";
+
 import {
-  getAccountGroup,
-  updateAccountGroup,
-  deleteAccountGroup,
+  getAccountLedger,
+  updateAccountLedger,
+  deleteAccountLedger,
   listAccountGroups,
 } from "../api/registryServices";
-
-import { toaster } from "../components/ui/toaster";
 
 /* =========================================================
    COLORS
@@ -66,27 +58,13 @@ const red = "#D7193F";
    HELPERS
 ========================================================= */
 
-const pick = (
-  obj,
-  keys,
-  fallback = "—"
-) => {
+const pick = (obj, keys, fallback = "—") => {
   for (const key of keys) {
     const value = key
       .split(".")
-      .reduce(
-        (acc, k) =>
-          acc == null
-            ? acc
-            : acc[k],
-        obj
-      );
+      .reduce((acc, k) => (acc == null ? acc : acc[k]), obj);
 
-    if (
-      value !== undefined &&
-      value !== null &&
-      value !== ""
-    ) {
+    if (value !== undefined && value !== null && value !== "") {
       return value;
     }
   }
@@ -99,47 +77,35 @@ const formatDate = (dateString) => {
     return "—";
   }
 
-  const date =
-    new Date(dateString);
+  const date = new Date(dateString);
 
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
+  if (Number.isNaN(date.getTime())) {
     return "—";
   }
 
-  return date.toLocaleDateString(
-    "en-GB",
-    {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    }
-  );
+  return date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 };
+
+const formatAmount = (amount) =>
+  `₹ ${Number(amount || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 
 /* =========================================================
    FIELD LABEL
 ========================================================= */
 
-const FieldLabel = ({
-  children,
-  required,
-}) => (
-  <Text
-    fontSize="sm"
-    fontWeight="700"
-    color="#1a1a2e"
-    mb={1.5}
-  >
-    {children}{" "}
+const FieldLabel = ({ children, required }) => (
+  <Text fontSize="12px" fontWeight="700" color={dark} mb={1.5}>
+    {children}
+
     {required && (
-      <Text
-        as="span"
-        color="red.500"
-      >
+      <Text as="span" color="red.500" ml={1}>
         *
       </Text>
     )}
@@ -150,34 +116,22 @@ const FieldLabel = ({
    TEXT FIELD
 ========================================================= */
 
-const TextField = ({
-  error,
-  ...props
-}) => (
+const TextField = ({ error, ...props }) => (
   <>
     <Input
-      height="46px"
-      fontSize="14px"
-      borderColor={
-        error
-          ? "red.500"
-          : "gray.200"
-      }
-      borderRadius="8px"
+      height="40px"
+      fontSize="12px"
+      borderColor={error ? "red.500" : border}
+      borderRadius="6px"
       _focus={{
-        borderColor:
-          primaryMaroon,
+        borderColor: primaryMaroon,
         boxShadow: `0 0 0 1px ${primaryMaroon}`,
       }}
       {...props}
     />
 
     {error && (
-      <Text
-        fontSize="xs"
-        color="red.500"
-        mt={1}
-      >
+      <Text fontSize="10px" color="red.500" mt={1}>
         {error}
       </Text>
     )}
@@ -188,123 +142,72 @@ const TextField = ({
    ACCOUNT GROUP SELECT
 ========================================================= */
 
-const AccountGroupSelect = ({
-  value,
-  onChange,
-  groups,
-  error,
-  currentId,
-}) => {
-  const availableGroups =
-    groups.filter(
-      (group) =>
-        String(group.id) !==
-        String(currentId)
-    );
+const AccountGroupSelect = ({ value, onChange, groups, error }) => (
+  <>
+    <Box position="relative">
+      <Icon
+        as={LuNetwork}
+        boxSize={4}
+        color="gray.400"
+        position="absolute"
+        left="12px"
+        top="50%"
+        transform="translateY(-50%)"
+        zIndex={1}
+        pointerEvents="none"
+      />
 
-  return (
-    <>
-      <Box position="relative">
-        <Icon
-          as={LuNetwork}
-          boxSize={4}
-          color="gray.400"
-          position="absolute"
-          left="14px"
-          top="50%"
-          transform="translateY(-50%)"
-          zIndex={1}
-          pointerEvents="none"
-        />
+      <Box
+        as="select"
+        value={value}
+        onChange={onChange}
+        style={{
+          width: "100%",
+          padding: "0 12px 0 36px",
+          borderRadius: "6px",
+          border: `1px solid ${error ? "#e53e3e" : border}`,
+          fontSize: "12px",
+          height: "40px",
+          background: "white",
+          outline: "none",
+          color: value ? dark : "#a0aec0",
+          cursor: "pointer",
+        }}
+      >
+        <option value="">Select account group</option>
 
-        <Box
-          as="select"
-          value={value}
-          onChange={onChange}
-          style={{
-            width: "100%",
-            padding:
-              "12px 14px 12px 38px",
-            borderRadius: "8px",
-            border: `1.5px solid ${
-              error
-                ? "#e53e3e"
-                : "#e2e8f0"
-            }`,
-            fontSize: "14px",
-            height: "46px",
-            background: "white",
-            outline: "none",
-            color: value
-              ? "#1a1a2e"
-              : "#a0aec0",
-          }}
-        >
-          <option value="">
-            Top Level Group
+        {groups.map((group) => (
+          <option key={group.id} value={group.id}>
+            {group.group_name}
           </option>
-
-          {availableGroups.map(
-            (group) => (
-              <option
-                key={group.id}
-                value={group.id}
-              >
-                {group.group_name}
-              </option>
-            )
-          )}
-        </Box>
+        ))}
       </Box>
+    </Box>
 
-      {error && (
-        <Text
-          fontSize="xs"
-          color="red.500"
-          mt={1}
-        >
-          {error}
-        </Text>
-      )}
-    </>
-  );
-};
+    {error && (
+      <Text fontSize="10px" color="red.500" mt={1}>
+        {error}
+      </Text>
+    )}
+  </>
+);
 
 /* =========================================================
    SIDEBAR CARD
 ========================================================= */
 
-const SidebarCard = ({
-  icon,
-  iconColor,
-  title,
-  children,
-}) => (
+const SidebarCard = ({ icon, iconColor, title, children }) => (
   <Box
     bg="white"
-    borderRadius="xl"
+    borderRadius="8px"
     border="1px solid"
-    borderColor="gray.200"
+    borderColor={border}
     p={4}
   >
-    <HStack
-      spacing={2}
-      mb={2}
-    >
-      <Icon
-        as={icon}
-        boxSize={4}
-        color={
-          iconColor ||
-          primaryMaroon
-        }
-      />
+    <HStack gap={2} mb={2}>
+      <Icon as={icon} boxSize={4} color={iconColor || primaryMaroon} />
 
-      <Text
-        fontSize="sm"
-        fontWeight="800"
-        color="#1a1a2e"
-      >
+      <Text fontSize="13px" fontWeight="800" color={dark}>
         {title}
       </Text>
     </HStack>
@@ -317,196 +220,81 @@ const SidebarCard = ({
    MAIN PAGE
 ========================================================= */
 
-const AccountGroupEditPage = () => {
-  const { id } =
-    useParams();
+const AccountLedgerEditPage = () => {
+  const { id } = useParams();
 
-  const navigate =
-    useNavigate();
+  const navigate = useNavigate();
 
-  const [
-    isLoading,
-    setIsLoading,
-  ] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const [
-    isSubmitting,
-    setIsSubmitting,
-  ] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [
-    groups,
-    setGroups,
-  ] = useState([]);
+  const [groups, setGroups] = useState([]);
 
-  const [
-    group,
-    setGroup,
-  ] = useState(null);
+  const [ledger, setLedger] = useState(null);
 
-  const [
-    linkedLedgers,
-    setLinkedLedgers,
-  ] = useState(0);
-
-  const [
-    formData,
-    setFormData,
-  ] = useState({
-    group_name: "",
-    group_code: "",
+  const [formData, setFormData] = useState({
+    ledger_name: "",
+    ledger_code: "",
     alias: "",
-    under_group: "",
+    account_group: "",
+    op_balance: "",
     status: true,
   });
 
-  const [
-    initialData,
-    setInitialData,
-  ] = useState(null);
+  const [initialData, setInitialData] = useState(null);
 
-  const [
-    errors,
-    setErrors,
-  ] = useState({});
+  const [errors, setErrors] = useState({});
+
+  const isReserved = Boolean(ledger?.reserved);
 
   /* =========================================================
      LOAD DATA
   ========================================================= */
 
   useEffect(() => {
-    fetchData();
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
-
-  const fetchData =
-    async () => {
+    const fetchData = async () => {
       setIsLoading(true);
 
       try {
-        const [
-          groupRes,
-          groupsRes,
-        ] = await Promise.all([
-          getAccountGroup(id),
+        const [ledgerRes, groupsRes] = await Promise.all([
+          getAccountLedger(id),
           listAccountGroups(),
         ]);
 
-        const groupData =
-          groupRes?.data ||
-          null;
+        const ledgerData = ledgerRes?.data || null;
 
-        const groupsData =
-          groupsRes?.data
-            ?.results ||
-          groupsRes?.data ||
-          [];
+        const groupsData = groupsRes?.data?.results || groupsRes?.data || [];
 
-        setGroup(groupData);
+        setLedger(ledgerData);
 
-        const safeGroups =
-          Array.isArray(
-            groupsData
-          )
-            ? groupsData
-            : [];
-
-        setGroups(
-          safeGroups
-        );
-
-        /* =================================================
-           LINKED LEDGERS COUNT
-        ================================================= */
-
-        const ledgerCount = Number(
-          pick(
-            groupData,
-            [
-              "ledgers_count",
-              "linked_ledgers_count",
-            ],
-            0
-          )
-        );
-
-        setLinkedLedgers(
-          ledgerCount
-        );
-
-        /* =================================================
-           FORM DATA
-        ================================================= */
+        setGroups(Array.isArray(groupsData) ? groupsData : []);
 
         const initial = {
-          group_name:
-            pick(
-              groupData,
-              ["group_name"],
-              ""
-            ),
+          ledger_name: pick(ledgerData, ["ledger_name"], ""),
 
-          group_code:
-            pick(
-              groupData,
-              [
-                "group_code",
-                "code",
-              ],
-              ""
-            ),
+          ledger_code: String(pick(ledgerData, ["ledger_code"], "")),
 
-          alias:
-            pick(
-              groupData,
-              ["alias"],
-              ""
-            ),
+          alias: pick(ledgerData, ["alias"], ""),
 
-          under_group:
-            String(
-              pick(
-                groupData,
-                [
-                  "under_group.id",
-                  "under_group",
-                ],
-                ""
-              )
-            ),
+          account_group: String(
+            pick(ledgerData, ["account_group.id", "account_group"], "")
+          ),
 
-          status:
-            Boolean(
-              pick(
-                groupData,
-                [
-                  "status",
-                  "is_active",
-                ],
-                true
-              )
-            ),
+          op_balance: String(pick(ledgerData, ["op_balance"], "")),
+
+          status: Boolean(pick(ledgerData, ["status", "is_active"], true)),
         };
 
-        setFormData(
-          initial
-        );
+        setFormData(initial);
 
-        setInitialData(
-          initial
-        );
+        setInitialData(initial);
       } catch (error) {
-        console.error(
-          "Error fetching account group:",
-          error
-        );
+        console.error("Error fetching account ledger:", error);
 
         toaster.create({
-          title:
-            "Error",
-          description:
-            "Failed to load account group.",
+          title: "Error",
+          description: "Failed to load account ledger.",
           type: "error",
           duration: 4000,
         });
@@ -515,336 +303,214 @@ const AccountGroupEditPage = () => {
       }
     };
 
+    fetchData();
+  }, [id]);
+
   /* =========================================================
      HANDLE CHANGE
   ========================================================= */
 
-  const handleChange =
-    (field) =>
-    (e) => {
-      const value =
-        e.target.value;
+  const handleChange = (field) => (e) => {
+    const value = e.target.value;
 
-      setFormData(
-        (prev) => ({
-          ...prev,
-          [field]: value,
-        })
-      );
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
 
-      if (errors[field]) {
-        setErrors(
-          (prev) => ({
-            ...prev,
-            [field]: "",
-          })
-        );
-      }
-    };
+    if (errors[field]) {
+      setErrors((prev) => ({
+        ...prev,
+        [field]: "",
+      }));
+    }
+  };
 
   /* =========================================================
      MODIFIED FIELDS
   ========================================================= */
 
-  const modifiedFields =
-    useMemo(() => {
-      if (!initialData) {
-        return [];
-      }
+  const modifiedFields = useMemo(() => {
+    if (!initialData) {
+      return [];
+    }
 
-      return Object.keys(
-        initialData
-      ).filter(
-        (key) =>
-          String(
-            formData[key]
-          ) !==
-          String(
-            initialData[key]
-          )
-      );
-    }, [
-      formData,
-      initialData,
-    ]);
+    return Object.keys(initialData).filter(
+      (key) => String(formData[key]) !== String(initialData[key])
+    );
+  }, [formData, initialData]);
 
   /* =========================================================
      VALIDATE
   ========================================================= */
 
-  const validate =
-    () => {
-      const newErrors = {};
+  const validate = () => {
+    const newErrors = {};
 
-      if (
-        !formData.group_name.trim()
-      ) {
-        newErrors.group_name =
-          "Group name is required";
-      }
+    if (!formData.ledger_name.trim()) {
+      newErrors.ledger_name = "Ledger name is required.";
+    }
 
-      /* Prevent group from becoming
-         its own parent */
+    if (!formData.account_group) {
+      newErrors.account_group = "Please select an account group.";
+    }
 
-      if (
-        formData.under_group &&
-        String(
-          formData.under_group
-        ) === String(id)
-      ) {
-        newErrors.under_group =
-          "A group cannot be its own parent.";
-      }
+    /* ledger_code is an integer field in the model */
 
-      setErrors(
-        newErrors
-      );
+    if (
+      formData.ledger_code.trim() &&
+      !/^\d+$/.test(formData.ledger_code.trim())
+    ) {
+      newErrors.ledger_code = "Ledger code must be a whole number.";
+    }
 
-      return (
-        Object.keys(
-          newErrors
-        ).length === 0
-      );
-    };
+    if (
+      formData.op_balance !== "" &&
+      Number.isNaN(Number(formData.op_balance))
+    ) {
+      newErrors.op_balance = "Please enter a valid opening balance.";
+    }
+
+    setErrors(newErrors);
+
+    return Object.keys(newErrors).length === 0;
+  };
 
   /* =========================================================
      SUBMIT
   ========================================================= */
 
-  const handleSubmit =
-    async (e) => {
-      e.preventDefault();
+  const handleSubmit = async (e) => {
+    e.preventDefault();
 
-      if (!validate()) {
-        return;
-      }
+    if (!validate()) {
+      return;
+    }
 
-      setIsSubmitting(
-        true
-      );
+    setIsSubmitting(true);
 
-      const payload = {
-        group_name:
-          formData.group_name.trim(),
+    const payload = {
+      ledger_name: formData.ledger_name.trim(),
 
-        status:
-          formData.status,
-      };
+      account_group: Number(formData.account_group),
 
-      if (
-        formData.group_code.trim()
-      ) {
-        payload.group_code =
-          formData.group_code.trim();
-      } else {
-        payload.group_code = "";
-      }
+      ledger_code: formData.ledger_code.trim()
+        ? Number(formData.ledger_code.trim())
+        : null,
 
-      if (
-        formData.alias.trim()
-      ) {
-        payload.alias =
-          formData.alias.trim();
-      } else {
-        payload.alias = "";
-      }
+      alias: formData.alias.trim(),
 
-      if (
-        formData.under_group
-      ) {
-        payload.under_group =
-          Number(
-            formData.under_group
-          );
-      } else {
-        payload.under_group =
-          null;
-      }
+      op_balance: formData.op_balance === "" ? 0 : Number(formData.op_balance),
 
-      try {
-        await updateAccountGroup(
-          id,
-          payload
-        );
-
-        toaster.create({
-          title:
-            "Success",
-          description:
-            "Account group updated successfully.",
-          type: "success",
-          duration: 3000,
-        });
-
-        navigate(
-          `/account-groups/${id}`
-        );
-      } catch (error) {
-        console.error(
-          "Error updating account group:",
-          error
-        );
-
-        const backendData =
-          error?.response?.data;
-
-        const backendErrors =
-          {};
-
-        if (
-          backendData &&
-          typeof backendData ===
-            "object"
-        ) {
-          Object.entries(
-            backendData
-          ).forEach(
-            ([field, message]) => {
-              if (
-                Array.isArray(
-                  message
-                )
-              ) {
-                backendErrors[field] =
-                  message.join(
-                    ", "
-                  );
-              } else if (
-                typeof message ===
-                "string"
-              ) {
-                backendErrors[field] =
-                  message;
-              }
-            }
-          );
-        }
-
-        if (
-          Object.keys(
-            backendErrors
-          ).length > 0
-        ) {
-          setErrors(
-            backendErrors
-          );
-        }
-
-        let description =
-          "Failed to update account group.";
-
-        if (
-          backendData?.error
-        ) {
-          description =
-            backendData.error;
-        } else if (
-          backendData?.detail
-        ) {
-          description =
-            backendData.detail;
-        } else if (
-          Object.keys(
-            backendErrors
-          ).length > 0
-        ) {
-          description =
-            Object.entries(
-              backendErrors
-            )
-              .map(
-                ([field, message]) =>
-                  `${field}: ${message}`
-              )
-              .join(" | ");
-        }
-
-        toaster.create({
-          title:
-            "Unable to update account group",
-          description,
-          type: "error",
-          duration: 6000,
-        });
-      } finally {
-        setIsSubmitting(
-          false
-        );
-      }
+      status: formData.status,
     };
+
+    try {
+      await updateAccountLedger(id, payload);
+
+      toaster.create({
+        title: "Success",
+        description: "Account ledger updated successfully.",
+        type: "success",
+        duration: 3000,
+      });
+
+      navigate(`/account-ledgers/${id}`);
+    } catch (error) {
+      console.error("Error updating account ledger:", error);
+
+      const backendData = error?.response?.data;
+
+      const backendErrors = {};
+
+      if (backendData && typeof backendData === "object") {
+        Object.entries(backendData).forEach(([field, message]) => {
+          if (Array.isArray(message)) {
+            backendErrors[field] = message.join(", ");
+          } else if (typeof message === "string") {
+            backendErrors[field] = message;
+          }
+        });
+      }
+
+      if (Object.keys(backendErrors).length > 0) {
+        setErrors(backendErrors);
+      }
+
+      let description = "Failed to update account ledger.";
+
+      if (backendData?.error) {
+        description = backendData.error;
+      } else if (backendData?.detail) {
+        description = backendData.detail;
+      } else if (Object.keys(backendErrors).length > 0) {
+        description = Object.entries(backendErrors)
+          .map(([field, message]) => `${field}: ${message}`)
+          .join(" | ");
+      }
+
+      toaster.create({
+        title: "Unable to update account ledger",
+        description,
+        type: "error",
+        duration: 6000,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   /* =========================================================
      DELETE
   ========================================================= */
 
-  const handleDelete =
-    async () => {
-      const confirmed =
-        window.confirm(
-          `Delete "${formData.group_name}"? This action cannot be undone.`
-        );
+  const handleDelete = async () => {
+    if (isReserved) {
+      toaster.create({
+        title: "Cannot delete account ledger",
+        description: "This is a reserved system ledger.",
+        type: "error",
+        duration: 5000,
+      });
 
-      if (!confirmed) {
-        return;
-      }
+      return;
+    }
 
-      if (
-        linkedLedgers > 0
-      ) {
-        toaster.create({
-          title:
-            "Cannot delete account group",
-          description:
-            `This group has ${linkedLedgers} linked ledger${
-              linkedLedgers > 1
-                ? "s"
-                : ""
-            }. Remove the linked ledgers first.`,
-          type: "error",
-          duration: 5000,
-        });
+    const confirmed = window.confirm(
+      `Delete "${formData.ledger_name}"? This action cannot be undone.`
+    );
 
-        return;
-      }
+    if (!confirmed) {
+      return;
+    }
 
-      try {
-        await deleteAccountGroup(
-          id
-        );
+    try {
+      await deleteAccountLedger(id);
 
-        toaster.create({
-          title:
-            "Deleted",
-          description:
-            "Account group has been deleted.",
-          type: "success",
-          duration: 3000,
-        });
+      toaster.create({
+        title: "Deleted",
+        description: "Account ledger has been deleted.",
+        type: "success",
+        duration: 3000,
+      });
 
-        navigate(
-          "/account-groups"
-        );
-      } catch (error) {
-        console.error(
-          "Error deleting account group:",
-          error
-        );
+      navigate("/account-ledgers");
+    } catch (error) {
+      console.error("Error deleting account ledger:", error);
 
-        const backendData =
-          error?.response?.data;
+      const backendData = error?.response?.data;
 
-        toaster.create({
-          title:
-            "Unable to delete account group",
-          description:
-            backendData?.error ||
-            backendData?.detail ||
-            "This account group may contain linked records.",
-          type: "error",
-          duration: 5000,
-        });
-      }
-    };
+      toaster.create({
+        title: "Unable to delete account ledger",
+        description:
+          backendData?.error ||
+          backendData?.detail ||
+          "This account ledger may have linked records.",
+        type: "error",
+        duration: 5000,
+      });
+    }
+  };
 
   /* =========================================================
      LOADING
@@ -852,39 +518,25 @@ const AccountGroupEditPage = () => {
 
   if (isLoading) {
     return (
-      <Box
-        minH="100vh"
-        bg="white"
-        display="flex"
-        flexDirection="column"
-      >
+      <Box minH="100vh" bg="white" display="flex" flexDirection="column">
         <Navbar />
 
-        <Box
-          flex="1"
-          w="100%"
-        >
-          <Flex
-            justify="center"
-            align="center"
-            minH="400px"
-          >
+        <Box flex="1" w="100%">
+          <Flex justify="center" align="center" minH="400px">
             <Box
               width="40px"
               height="40px"
               border="4px solid"
               borderColor="gray.200"
-              borderTopColor={
-                primaryMaroon
-              }
+              borderTopColor={primaryMaroon}
               borderRadius="50%"
-              animation="accountGroupSpin 1s linear infinite"
+              animation="accountLedgerSpin 1s linear infinite"
             />
           </Flex>
 
           <style>
             {`
-              @keyframes accountGroupSpin {
+              @keyframes accountLedgerSpin {
                 0% {
                   transform: rotate(0deg);
                 }
@@ -903,302 +555,215 @@ const AccountGroupEditPage = () => {
   }
 
   /* =========================================================
+     NOT FOUND
+  ========================================================= */
+
+  if (!ledger) {
+    return (
+      <Box minH="100vh" bg="white" display="flex" flexDirection="column">
+        <Navbar />
+
+        <Box flex="1" w="100%" px={{ base: 3, md: 4 }} py={5}>
+          <Box
+            border="1px solid"
+            borderColor={border}
+            borderRadius="8px"
+            p={8}
+            textAlign="center"
+          >
+            <Text fontSize="18px" fontWeight="700" color={dark} mb={2}>
+              Account Ledger Not Found
+            </Text>
+
+            <Text fontSize="12px" color={muted} mb={5}>
+              The requested account ledger could not be loaded.
+            </Text>
+
+            <Button
+              bg={primaryMaroon}
+              color="white"
+              h="36px"
+              fontSize="12px"
+              borderRadius="6px"
+              onClick={() => navigate("/account-ledgers")}
+              _hover={{ bg: "#8a1a3e" }}
+            >
+              Back to Account Ledgers
+            </Button>
+          </Box>
+        </Box>
+
+        <Footer />
+      </Box>
+    );
+  }
+
+  /* =========================================================
      DISPLAY DATA
   ========================================================= */
 
-  const parentGroupName =
-    pick(
-      group,
-      [
-        "under_group.group_name",
-        "under_group_name",
-      ],
-      "Top Level Group"
-    );
+  const selectedGroupName =
+    groups.find((g) => String(g.id) === String(formData.account_group))
+      ?.group_name || "—";
 
-  const createdAt =
-    pick(
-      group,
-      ["created_at"],
-      null
-    );
+  const createdAt = pick(ledger, ["created_at"], null);
 
-  const updatedAt =
-    pick(
-      group,
-      ["updated_at"],
-      null
-    );
+  const updatedAt = pick(ledger, ["updated_at"], null);
 
   /* =========================================================
      PAGE
   ========================================================= */
 
   return (
-    <Box
-      minH="100vh"
-      bg="white"
-      display="flex"
-      flexDirection="column"
-    >
-      {/* =====================================================
-          NAVBAR
-      ===================================================== */}
+    <Box minH="100vh" bg="white" display="flex" flexDirection="column">
+      {/* NAVBAR */}
 
       <Navbar />
 
-      {/* =====================================================
-          MAIN
-      ===================================================== */}
+      {/* MAIN */}
 
-      <Box
-        flex="1"
-        w="100%"
-      >
-        <Box
-          w="100%"
-          px={{
-            base: 3,
-            md: 4,
-          }}
-          py={{
-            base: 3,
-            md: 4,
-          }}
-        >
-          {/* =================================================
-              BREADCRUMB
-          ================================================= */}
+      <Box flex="1" w="100%">
+        <Box w="100%" px={{ base: 3, md: 4 }} py={{ base: 3, md: 4 }}>
+          {/* BREADCRUMB */}
 
           <HStack
-            fontSize="xs"
-            color="gray.400"
-            fontWeight="600"
+            fontSize="11px"
+            color={muted}
             mb={2}
-            spacing={1}
-            wrap="wrap"
+            gap={2}
+            flexWrap="wrap"
           >
             <Text
-              as="span"
-              color={
-                primaryMaroon
-              }
+              color={primaryMaroon}
               cursor="pointer"
-              onClick={() =>
-                navigate(
-                  "/admin/masters"
-                )
-              }
+              onClick={() => navigate("/admin/masters")}
             >
               Masters
             </Text>
 
-            <Text as="span">
-              /
-            </Text>
+            <Text>/</Text>
 
             <Text
-              as="span"
-              color={
-                primaryMaroon
-              }
+              color={primaryMaroon}
               cursor="pointer"
-              onClick={() =>
-                navigate(
-                  "/account-groups"
-                )
-              }
+              onClick={() => navigate("/account-ledgers")}
             >
-              Account Groups
+              Account Ledgers
             </Text>
 
-            <Text as="span">
-              /
-            </Text>
+            <Text>/</Text>
 
             <Text
-              as="span"
-              color={
-                primaryMaroon
-              }
+              color={primaryMaroon}
+              cursor="pointer"
+              onClick={() => navigate(`/account-ledgers/${id}`)}
             >
-              {formData.group_name ||
-                "Group"}
+              {formData.ledger_name || "Ledger"}
             </Text>
 
-            <Text as="span">
-              /
-            </Text>
+            <Text>/</Text>
 
-            <Text as="span">
-              Edit
-            </Text>
+            <Text>Edit</Text>
           </HStack>
 
-          {/* =================================================
-              PAGE HEADER
-          ================================================= */}
+          {/* PAGE HEADER */}
 
-          <VStack
-            align="start"
-            spacing={1}
-            mb={5}
-          >
+          <Box mb={4}>
+            <Text fontSize="10px" fontWeight="700" color={red} mb={1}>
+              ACCOUNT LEDGERS
+            </Text>
+
             <Heading
-              fontSize="2xl"
+              fontSize={{ base: "22px", md: "26px" }}
               fontWeight="800"
-              color="#1a1a2e"
+              color={dark}
+              lineHeight="1.15"
             >
-              Edit Account Group
+              Edit Account Ledger
             </Heading>
 
-            <Text
-              color="gray.500"
-              fontSize="sm"
-            >
-              Update group information
-              and hierarchy.
+            <Text color={muted} fontSize="11px" mt={1}>
+              Update ledger information and opening balance.
             </Text>
-          </VStack>
+          </Box>
 
-          {/* =================================================
-              HERO INFO BAR
-          ================================================= */}
+          {/* HERO INFO BAR */}
 
           <Box
             bg="white"
             border="1px solid"
-            borderColor="gray.200"
-            borderRadius="xl"
-            p={5}
-            mb={5}
+            borderColor={border}
+            borderRadius="8px"
+            p={4}
+            mb={4}
           >
-            <Flex
-              align="center"
-              gap={6}
-              wrap="wrap"
-            >
-              {/* =============================================
-                  GROUP INFO
-              ============================================= */}
+            <Flex align="center" gap={6} flexWrap="wrap">
+              {/* LEDGER INFO */}
 
-              <HStack
-                spacing={4}
-                flex="1"
-                minW="260px"
-              >
+              <HStack gap={3} flex="1" minW="260px">
                 <Circle
-                  size="56px"
+                  size="52px"
                   bg="rgba(174,32,80,0.08)"
-                  color={
-                    primaryMaroon
-                  }
+                  color={primaryMaroon}
+                  flexShrink={0}
                 >
-                  <Icon
-                    as={LuNetwork}
-                    boxSize={6}
-                  />
+                  <Icon as={LuBookOpen} boxSize={6} />
                 </Circle>
 
-                <Box>
-                  <Heading
-                    fontSize="xl"
-                    fontWeight="800"
-                    color="#1a1a2e"
-                  >
-                    {formData.group_name ||
-                      "—"}
+                <Box minW={0}>
+                  <Heading fontSize="19px" fontWeight="700" color={dark}>
+                    {formData.ledger_name || "—"}
                   </Heading>
 
                   <HStack
-                    spacing={2}
+                    gap={2}
                     mt={1}
-                    color="gray.500"
-                    fontSize="sm"
+                    color={muted}
+                    fontSize="11px"
                     flexWrap="wrap"
                   >
-                    <Text>
-  {formData.group_code || "—"}
-</Text>
+                    <Text>{formData.ledger_code || "—"}</Text>
 
-                    <Text>
-                      •
-                    </Text>
+                    <Text>•</Text>
 
-                    <Text>
-                      Under:{" "}
-                      {parentGroupName}
-                    </Text>
+                    <Text>Group: {selectedGroupName}</Text>
 
                     <Badge
-                      bg={
-                        formData.status
-                          ? "green.50"
-                          : "gray.100"
-                      }
-                      color={
-                        formData.status
-                          ? "green.600"
-                          : "gray.600"
-                      }
-                      fontSize="11px"
+                      bg={formData.status ? "green.50" : "gray.100"}
+                      color={formData.status ? "green.600" : "gray.600"}
+                      fontSize="10px"
                       px={2}
                       py={1}
                       borderRadius="full"
                     >
-                      {formData.status
-                        ? "Active"
-                        : "Inactive"}
+                      {formData.status ? "Active" : "Inactive"}
                     </Badge>
                   </HStack>
                 </Box>
               </HStack>
 
-              {/* =============================================
-                  LINKED LEDGERS
-              ============================================= */}
+              {/* OPENING BALANCE */}
 
               <Box
-                borderLeft={{
-                  base: "none",
-                  md: "1px solid",
-                }}
-                borderColor="gray.200"
-                pl={{
-                  base: 0,
-                  md: 6,
-                }}
+                borderLeft={{ base: "none", md: `1px solid ${border}` }}
+                pl={{ base: 0, md: 6 }}
               >
-                <HStack
-                  spacing={4}
-                >
+                <HStack gap={3}>
                   <Circle
-                    size="48px"
+                    size="44px"
                     bg="rgba(174,32,80,0.08)"
-                    color={
-                      primaryMaroon
-                    }
+                    color={primaryMaroon}
                   >
-                    <Icon
-                      as={LuBookMarked}
-                      boxSize={5}
-                    />
+                    <Icon as={LuIndianRupee} boxSize={5} />
                   </Circle>
 
                   <Box>
-                    <Text
-                      fontSize="xl"
-                      fontWeight="800"
-                      color="#1a1a2e"
-                    >
-                      {linkedLedgers}
+                    <Text fontSize="18px" fontWeight="700" color={dark}>
+                      {formatAmount(formData.op_balance)}
                     </Text>
 
-                    <Text
-                      fontSize="sm"
-                      color="gray.500"
-                    >
-                      Linked Ledgers
+                    <Text fontSize="11px" color={muted}>
+                      Opening Balance
                     </Text>
                   </Box>
                 </HStack>
@@ -1206,216 +771,182 @@ const AccountGroupEditPage = () => {
             </Flex>
           </Box>
 
-          {/* =================================================
-              FORM
-          ================================================= */}
+          {/* FORM */}
 
-          <form
-            onSubmit={
-              handleSubmit
-            }
-          >
+          <form onSubmit={handleSubmit}>
             <Grid
-              templateColumns={{
-                base: "1fr",
-                lg: "2fr 1fr",
-              }}
-              gap={5}
+              templateColumns={{ base: "1fr", lg: "2fr 1fr" }}
+              gap={4}
               alignItems="start"
             >
-              {/* =============================================
-                  LEFT FORM
-              ============================================= */}
+              {/* LEFT FORM */}
 
               <GridItem>
                 <Box
                   bg="white"
-                  borderRadius="xl"
+                  borderRadius="8px"
                   border="1px solid"
-                  borderColor="gray.200"
+                  borderColor={border}
                   overflow="hidden"
                 >
-                  <Box
-                    px={6}
-                    pt={5}
-                  >
-                    <Text
-                      fontSize="md"
-                      fontWeight="800"
-                      color={
-                        primaryMaroon
-                      }
-                      mb={2}
-                    >
-                      Account Group Details
+                  <Box px={5} pt={4} pb={3}>
+                    <Text fontSize="14px" fontWeight="800" color={dark}>
+                      Account Ledger Details
                     </Text>
 
                     <Box
+                      mt={2}
                       height="3px"
-                      width="60px"
-                      bg={
-                        primaryMaroon
-                      }
+                      width="55px"
+                      bg={primaryMaroon}
                       borderRadius="full"
                     />
                   </Box>
 
-                  <Box
-                    borderBottom="1px solid"
-                    borderColor="gray.200"
-                    mt={3}
-                  />
+                  <Box borderBottom={`1px solid ${border}`} />
 
-                  <Box p={6}>
-                    <VStack
-                      align="stretch"
-                      spacing={5}
-                    >
-                      {/* ===================================
-                          BASIC DETAILS
-                      =================================== */}
+                  <Box px={5} py={5}>
+                    <VStack align="stretch" gap={5}>
+                      {/* LEDGER INFORMATION */}
 
                       <Grid
-                        templateColumns={{
-                          base: "1fr",
-                          md: "1fr 1fr",
-                        }}
-                        gap={5}
+                        templateColumns={{ base: "1fr", md: "1fr 1fr" }}
+                        gap={4}
                       >
-                        {/* GROUP NAME */}
+                        {/* LEDGER NAME */}
 
                         <GridItem>
-                          <FieldLabel
-                            required
-                          >
-                            Group Name
-                          </FieldLabel>
+                          <FieldLabel required>Ledger Name</FieldLabel>
 
                           <TextField
-                            value={
-                              formData.group_name
-                            }
-                            onChange={handleChange(
-                              "group_name"
-                            )}
-                            error={
-                              errors.group_name
-                            }
-                            placeholder="Enter group name"
+                            placeholder="Enter ledger name"
+                            maxLength={100}
+                            value={formData.ledger_name}
+                            onChange={handleChange("ledger_name")}
+                            error={errors.ledger_name}
                           />
                         </GridItem>
 
-                        {/* GROUP CODE */}
+                        {/* LEDGER CODE */}
 
                         <GridItem>
-                          <FieldLabel>
-                            Group Code
-                          </FieldLabel>
+                          <FieldLabel>Ledger Code</FieldLabel>
 
                           <TextField
-                            value={
-                              formData.group_code
-                            }
-                            onChange={handleChange(
-                              "group_code"
-                            )}
-                            error={
-                              errors.group_code
-                            }
-                            placeholder="Enter group code"
+                            placeholder="Enter ledger code (optional)"
+                            inputMode="numeric"
+                            value={formData.ledger_code}
+                            onChange={handleChange("ledger_code")}
+                            error={errors.ledger_code}
                           />
                         </GridItem>
 
                         {/* ALIAS */}
 
                         <GridItem>
-                          <FieldLabel>
-                            Alias
-                          </FieldLabel>
+                          <FieldLabel>Alias</FieldLabel>
 
                           <TextField
-                            value={
-                              formData.alias
-                            }
-                            onChange={handleChange(
-                              "alias"
-                            )}
-                            error={
-                              errors.alias
-                            }
-                            placeholder="Enter alias"
+                            placeholder="Enter alias (optional)"
+                            value={formData.alias}
+                            onChange={handleChange("alias")}
+                            error={errors.alias}
                           />
                         </GridItem>
 
-                        {/* UNDER GROUP */}
+                        {/* ACCOUNT GROUP */}
 
                         <GridItem>
-                          <FieldLabel>
-                            Under Group
-                          </FieldLabel>
+                          <FieldLabel required>Account Group</FieldLabel>
 
                           <AccountGroupSelect
-                            value={
-                              formData.under_group
-                            }
-                            onChange={handleChange(
-                              "under_group"
-                            )}
-                            groups={
-                              groups
-                            }
-                            error={
-                              errors.under_group
-                            }
-                            currentId={
-                              id
-                            }
+                            value={formData.account_group}
+                            onChange={handleChange("account_group")}
+                            groups={groups}
+                            error={errors.account_group}
                           />
-
-                          <Text
-                            fontSize="xs"
-                            color="gray.500"
-                            mt={1}
-                          >
-                            Leave empty for
-                            a top-level
-                            group.
-                          </Text>
                         </GridItem>
                       </Grid>
 
-                      {/* ===================================
-                          STATUS
-                      =================================== */}
+                      <Box borderBottom="1px solid #EEF1F5" />
+
+                      {/* OPENING BALANCE */}
 
                       <Box>
-                        <FieldLabel>
-                          Status
-                        </FieldLabel>
-
-                        <HStack
-                          spacing={3}
+                        <Text
+                          fontSize="13px"
+                          fontWeight="800"
+                          color={dark}
+                          mb={3}
                         >
+                          Opening Balance
+                        </Text>
+
+                        <FieldLabel>Amount</FieldLabel>
+
+                        <Flex
+                          border="1px solid"
+                          borderColor={errors.op_balance ? "red.500" : border}
+                          borderRadius="6px"
+                          overflow="hidden"
+                          align="stretch"
+                          height="40px"
+                        >
+                          <Flex align="center" px={3} bg="white">
+                            <Icon
+                              as={LuIndianRupee}
+                              boxSize={3.5}
+                              color="gray.400"
+                            />
+                          </Flex>
+
+                          <Input
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={formData.op_balance}
+                            onChange={handleChange("op_balance")}
+                            height="40px"
+                            fontSize="12px"
+                            border="none"
+                            borderRadius="0"
+                            _focus={{ boxShadow: "none" }}
+                            flex="1"
+                          />
+                        </Flex>
+
+                        {errors.op_balance && (
+                          <Text fontSize="10px" color="red.500" mt={1}>
+                            {errors.op_balance}
+                          </Text>
+                        )}
+
+                        <Text fontSize="10px" color={muted} mt={1}>
+                          Enter zero if the ledger has no opening balance.
+                        </Text>
+                      </Box>
+
+                      <Box borderBottom="1px solid #EEF1F5" />
+
+                      {/* STATUS */}
+
+                      <Box>
+                        <FieldLabel>Status</FieldLabel>
+
+                        <HStack gap={3}>
                           <Box
                             as="button"
                             type="button"
                             onClick={() =>
-                              setFormData(
-                                (prev) => ({
-                                  ...prev,
-                                  status:
-                                    !prev.status,
-                                })
-                              )
+                              setFormData((prev) => ({
+                                ...prev,
+                                status: !prev.status,
+                              }))
                             }
                             width="44px"
                             height="24px"
                             borderRadius="full"
-                            bg={
-                              formData.status
-                                ? primaryMaroon
-                                : "gray.300"
-                            }
+                            bg={formData.status ? primaryMaroon : "gray.300"}
                             position="relative"
                             transition="background 0.2s ease"
                             aria-label="Toggle status"
@@ -1423,11 +954,7 @@ const AccountGroupEditPage = () => {
                             <Box
                               position="absolute"
                               top="2px"
-                              left={
-                                formData.status
-                                  ? "22px"
-                                  : "2px"
-                              }
+                              left={formData.status ? "22px" : "2px"}
                               width="20px"
                               height="20px"
                               borderRadius="full"
@@ -1437,14 +964,8 @@ const AccountGroupEditPage = () => {
                             />
                           </Box>
 
-                          <Text
-                            fontSize="sm"
-                            fontWeight="600"
-                            color="#1a1a2e"
-                          >
-                            {formData.status
-                              ? "Active"
-                              : "Inactive"}
+                          <Text fontSize="12px" fontWeight="600" color={dark}>
+                            {formData.status ? "Active" : "Inactive"}
                           </Text>
                         </HStack>
                       </Box>
@@ -1453,192 +974,68 @@ const AccountGroupEditPage = () => {
                 </Box>
               </GridItem>
 
-              {/* =============================================
-                  RIGHT SIDEBAR
-              ============================================= */}
+              {/* RIGHT SIDEBAR */}
 
               <GridItem>
-                <VStack
-                  align="stretch"
-                  spacing={4}
-                >
-                  {/* =========================================
-                      RECORD INFORMATION
-                  ========================================= */}
+                <VStack align="stretch" gap={3}>
+                  {/* RECORD INFORMATION */}
 
                   <SidebarCard
-                    icon={
-                      LuClipboardList
-                    }
+                    icon={LuClipboardList}
                     title="Record Information"
                   >
-                    <VStack
-                      align="stretch"
-                      spacing={3}
-                      mt={2}
-                    >
-                      <HStack
-                        spacing={2}
-                        align="start"
-                      >
+                    <VStack align="stretch" gap={3} mt={2}>
+                      <HStack gap={2} align="start">
                         <Icon
-                          as={
-                            LuCalendar
-                          }
+                          as={LuCalendar}
                           boxSize={4}
                           color="gray.400"
                           mt={0.5}
                         />
 
                         <Box>
-                          <Text
-                            fontSize="xs"
-                            color="gray.500"
-                          >
+                          <Text fontSize="11px" color={muted}>
                             Created
                           </Text>
 
-                          <Text
-                            fontSize="sm"
-                            fontWeight="600"
-                            color="#1a1a2e"
-                          >
-                            {formatDate(
-                              createdAt
-                            )}
+                          <Text fontSize="12px" fontWeight="600" color={dark}>
+                            {formatDate(createdAt)}
                           </Text>
                         </Box>
                       </HStack>
 
-                      <HStack
-                        spacing={2}
-                        align="start"
-                      >
+                      <HStack gap={2} align="start">
                         <Icon
-                          as={
-                            LuUser
-                          }
+                          as={LuUser}
                           boxSize={4}
                           color="gray.400"
                           mt={0.5}
                         />
 
                         <Box>
-                          <Text
-                            fontSize="xs"
-                            color="gray.500"
-                          >
+                          <Text fontSize="11px" color={muted}>
                             Last updated
                           </Text>
 
-                          <Text
-                            fontSize="sm"
-                            fontWeight="600"
-                            color="#1a1a2e"
-                          >
-                            {formatDate(
-                              updatedAt
-                            )}
+                          <Text fontSize="12px" fontWeight="600" color={dark}>
+                            {formatDate(updatedAt)}
                           </Text>
                         </Box>
                       </HStack>
                     </VStack>
                   </SidebarCard>
 
-                  {/* =========================================
-                      LINKED LEDGERS
-                  ========================================= */}
+                  {/* UNSAVED CHANGES */}
 
-                  <SidebarCard
-                    icon={
-                      LuBookOpen
-                    }
-                    title="Linked Ledgers"
-                  >
-                    <HStack
-                      spacing={3}
-                      mt={2}
-                      align="start"
-                    >
-                      <Circle
-                        size="38px"
-                        bg="rgba(174,32,80,0.08)"
-                        color={
-                          primaryMaroon
-                        }
-                      >
-                        <Icon
-                          as={
-                            LuBookMarked
-                          }
-                          boxSize={4}
-                        />
-                      </Circle>
-
-                      <Box>
-                        <Text
-                          fontSize="lg"
-                          fontWeight="800"
-                          color="#1a1a2e"
-                        >
-                          {
-                            linkedLedgers
-                          }
-                        </Text>
-
-                        <Text
-                          fontSize="xs"
-                          color="gray.500"
-                        >
-                          Ledger
-                          {linkedLedgers !==
-                          1
-                            ? "s"
-                            : ""}{" "}
-                          linked to
-                          this group
-                        </Text>
-                      </Box>
-                    </HStack>
-
-                    {linkedLedgers >
-                      0 && (
-                      <Text
-                        fontSize="xs"
-                        color="gray.500"
-                        mt={3}
-                      >
-                        Linked ledgers
-                        must be moved
-                        before this
-                        group can be
-                        deleted.
-                      </Text>
-                    )}
-                  </SidebarCard>
-
-                  {/* =========================================
-                      UNSAVED CHANGES
-                  ========================================= */}
-
-                  {modifiedFields.length >
-                    0 && (
+                  {modifiedFields.length > 0 && (
                     <SidebarCard
-                      icon={
-                        LuTriangleAlert
-                      }
+                      icon={LuTriangleAlert}
                       iconColor="orange.500"
                       title="Unsaved Changes"
                     >
-                      <HStack
-                        spacing={2}
-                        align="start"
-                        mt={1}
-                      >
+                      <HStack gap={2} align="start" mt={1}>
                         <Icon
-                          as={
-                            LuClock
-                          }
+                          as={LuClock}
                           boxSize={4}
                           color="orange.500"
                           mt={0.5}
@@ -1646,96 +1043,57 @@ const AccountGroupEditPage = () => {
 
                         <Box>
                           <Text
-                            fontSize="sm"
+                            fontSize="12px"
                             fontWeight="700"
                             color="orange.600"
                           >
-                            {
-                              modifiedFields.length
-                            }{" "}
-                            field
-                            {modifiedFields.length >
-                            1
-                              ? "s"
-                              : ""}{" "}
-                            modified
+                            {modifiedFields.length} field
+                            {modifiedFields.length > 1 ? "s" : ""} modified
                           </Text>
 
-                          <Text
-                            fontSize="xs"
-                            color="gray.500"
-                          >
-                            Please review
-                            your changes
-                            before
-                            saving.
+                          <Text fontSize="11px" color={muted}>
+                            Please review your changes before saving.
                           </Text>
                         </Box>
                       </HStack>
                     </SidebarCard>
                   )}
 
-                  {/* =========================================
-                      DANGER ZONE
-                  ========================================= */}
+                  {/* DANGER ZONE */}
 
                   <SidebarCard
-                    icon={
-                      LuTrash2
-                    }
+                    icon={LuTrash2}
                     iconColor="red.500"
                     title="Danger Zone"
                   >
                     <Box
                       as="button"
                       type="button"
-                      onClick={
-                        handleDelete
-                      }
+                      onClick={handleDelete}
                       textAlign="left"
                       mt={1}
                       display="flex"
                       alignItems="start"
                       gap={2}
                       width="100%"
-                      cursor={
-                        linkedLedgers >
-                        0
-                          ? "not-allowed"
-                          : "pointer"
-                      }
-                      opacity={
-                        linkedLedgers >
-                        0
-                          ? 0.55
-                          : 1
-                      }
+                      cursor={isReserved ? "not-allowed" : "pointer"}
+                      opacity={isReserved ? 0.55 : 1}
                     >
                       <Icon
-                        as={
-                          LuTrash2
-                        }
+                        as={LuTrash2}
                         boxSize={4}
                         color="red.500"
                         mt={0.5}
                       />
 
                       <Box>
-                        <Text
-                          fontSize="sm"
-                          fontWeight="700"
-                          color="red.500"
-                        >
-                          Delete Account Group
+                        <Text fontSize="12px" fontWeight="700" color="red.500">
+                          Delete Account Ledger
                         </Text>
 
-                        <Text
-                          fontSize="xs"
-                          color="gray.500"
-                        >
-                          {linkedLedgers >
-                          0
-                            ? "Remove linked ledgers before deleting."
+                        <Text fontSize="11px" color={muted}>
+                          {isReserved
+                            ? "Reserved system ledgers cannot be deleted."
                             : "This action cannot be undone."}
                         </Text>
                       </Box>
@@ -1745,70 +1103,50 @@ const AccountGroupEditPage = () => {
               </GridItem>
             </Grid>
 
-            {/* =================================================
-                ACTION BUTTONS
-            ================================================= */}
+            {/* ACTION BUTTONS */}
 
-            <Flex
-              justify="flex-end"
-              gap={3}
-              mt={5}
-              pb={2}
-            >
+            <Flex justify="flex-end" gap={2} mt={4} pb={2}>
               <Button
+                type="button"
                 variant="outline"
-                borderColor={
-                  primaryMaroon
-                }
-                color={
-                  primaryMaroon
-                }
+                borderColor={primaryMaroon}
+                color={primaryMaroon}
                 bg="white"
-                _hover={{
-                  bg: "rgba(174,32,80,0.05)",
-                }}
-                px={8}
-                onClick={() =>
-                  navigate(
-                    `/account-groups/${id}`
-                  )
-                }
-                isDisabled={
-                  isSubmitting
-                }
+                borderRadius="6px"
+                height="36px"
+                fontSize="11px"
+                px={6}
+                onClick={() => navigate(`/account-ledgers/${id}`)}
+                disabled={isSubmitting}
+                _hover={{ bg: "rgba(174,32,80,0.05)" }}
               >
                 Cancel
               </Button>
 
               <Button
                 type="submit"
-                bg={
-                  primaryMaroon
-                }
+                bg={primaryMaroon}
                 color="white"
-                _hover={{
-                  bg: "#8a1a3e",
-                }}
-                px={8}
-                loading={
-                  isSubmitting
-                }
+                borderRadius="6px"
+                height="36px"
+                fontSize="11px"
+                px={7}
+                loading={isSubmitting}
                 loadingText="Updating..."
+                _hover={{ bg: "#8a1a3e" }}
               >
-                Update Account Group
+                Update Account Ledger
               </Button>
             </Flex>
           </form>
         </Box>
       </Box>
 
-      {/* =====================================================
-          FOOTER
-      ===================================================== */}
+      {/* FOOTER */}
 
       <Footer />
     </Box>
   );
 };
 
-export default AccountGroupEditPage;
+export default AccountLedgerEditPage;
