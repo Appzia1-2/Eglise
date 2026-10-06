@@ -1935,8 +1935,17 @@ class Baptism(models.Model):
     panchayath = models.CharField(max_length=150,blank=True,null=True)
     priest_name = models.CharField(max_length=150,blank=True,null=True)
 
-    god_father = models.CharField(max_length=150)
-    god_mother = models.CharField(max_length=150)
+    god_father = models.CharField(
+    max_length=150,
+    blank=True,
+    null=True,
+    )
+
+    god_mother = models.CharField(
+    max_length=150,
+    blank=True,
+    null=True,
+    )
 
     father_name = models.CharField(max_length=150)
     mother_name = models.CharField(max_length=150)
