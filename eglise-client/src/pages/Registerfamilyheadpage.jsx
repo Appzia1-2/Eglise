@@ -26,6 +26,12 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 
 import {
+  notifySuccess,
+  notifyError,
+  getErrorMessage,
+} from "../utils/notify";
+
+import {
   createHead,
   listFamilies,
   listWards,
@@ -37,6 +43,29 @@ import {
 // ============================================================
 
 const PRIMARY = "var(--primary-maroon)";
+
+// Fields that live on Step 1. If the backend reports an error
+// on one of these, the user is sent back to Step 1.
+const STEP1_FIELDS = [
+  "family",
+  "ward",
+  "grade",
+  "house_name",
+  "name",
+  "baptismal_name",
+  "gender",
+  "email",
+  "dob",
+  "mobile_no",
+  "phone_no",
+  "blood_group",
+  "marital_status",
+  "spouse_name",
+  "father_name",
+  "mother_name",
+  "address",
+  "family_image",
+];
 
 // ============================================================
 // STEP 1 INITIAL VALUES
@@ -238,7 +267,8 @@ const RegisterFamilyHeadPage = () => {
           error
         );
 
-        window.alert(
+        notifyError(
+          "Load failed",
           "Unable to load family, ward or grade information."
         );
       } finally {
@@ -282,7 +312,8 @@ const RegisterFamilyHeadPage = () => {
     // --------------------------------------------------------
 
     if (!file.type.startsWith("image/")) {
-      window.alert(
+      notifyError(
+        "Invalid file",
         "Please select a valid image file."
       );
 
@@ -295,7 +326,8 @@ const RegisterFamilyHeadPage = () => {
     // --------------------------------------------------------
 
     if (file.size > 2 * 1024 * 1024) {
-      window.alert(
+      notifyError(
+        "File too large",
         "Photo must be less than 2 MB."
       );
 
@@ -443,8 +475,9 @@ const RegisterFamilyHeadPage = () => {
       // SUCCESS
       // ------------------------------------------------------
 
-      window.alert(
-        "Family head created successfully!"
+      notifySuccess(
+        "Family head created",
+        "The family head was registered successfully."
       );
 
       navigate("/family-heads");
@@ -454,57 +487,46 @@ const RegisterFamilyHeadPage = () => {
         error
       );
 
-      console.error(
-        "Backend response:",
-        error?.response?.data
-      );
-
-      const responseData =
+      const errData =
         error?.response?.data;
 
-      let message =
-        "Failed to create family head.";
+      console.error(
+        "Backend response:",
+        errData
+      );
+
+      // ------------------------------------------------------
+      // If the error belongs to a Step 1 field (email, house
+      // name, etc.), take the user back to Step 1.
+      // ------------------------------------------------------
 
       if (
-        typeof responseData === "string"
+        errData &&
+        typeof errData === "object" &&
+        !Array.isArray(errData) &&
+        STEP1_FIELDS.some(
+          (field) => field in errData
+        )
       ) {
-        message = responseData;
-      } else if (
-        responseData?.error
-      ) {
-        message =
-          responseData.error;
-      } else if (
-        responseData?.detail
-      ) {
-        message =
-          responseData.detail;
-      } else if (
-        responseData &&
-        typeof responseData === "object"
-      ) {
-        const entries =
-          Object.entries(
-            responseData
-          );
+        setActiveStep(0);
 
-        if (entries.length > 0) {
-          const [
-            field,
-            messages,
-          ] = entries[0];
-
-          const errorMessage =
-            Array.isArray(messages)
-              ? messages.join(", ")
-              : String(messages);
-
-          message =
-            `${field}: ${errorMessage}`;
-        }
+        window.scrollTo({
+          top: 0,
+          behavior: "smooth",
+        });
       }
 
-      window.alert(message);
+      // ------------------------------------------------------
+      // Show a clean message (never raw HTML / stack traces)
+      // ------------------------------------------------------
+
+      notifyError(
+        "Could not create family head",
+        getErrorMessage(
+          error,
+          "Failed to create family head."
+        )
+      );
     } finally {
       setSubmitting(false);
     }
@@ -713,6 +735,7 @@ const Step1Form = ({
         touched,
         handleChange,
         handleBlur,
+        setFieldValue,
       }) => (
         <Form>
           <Box
@@ -1295,9 +1318,19 @@ const Step1Form = ({
                   value={
                     values.marital_status
                   }
-                  onChange={
-                    handleChange
-                  }
+                  onChange={(e) => {
+                    handleChange(e);
+
+                    // Spouse only allowed when married
+                    if (
+                      e.target.value !== "MARRIED"
+                    ) {
+                      setFieldValue(
+                        "spouse_name",
+                        ""
+                      );
+                    }
+                  }}
                   onBlur={
                     handleBlur
                   }
@@ -1340,7 +1373,16 @@ const Step1Form = ({
                   onBlur={
                     handleBlur
                   }
-                  placeholder="Enter spouse name"
+                  disabled={
+                    values.marital_status !==
+                    "MARRIED"
+                  }
+                  placeholder={
+                    values.marital_status ===
+                    "MARRIED"
+                      ? "Enter spouse name"
+                      : "Available when marital status is Married"
+                  }
                 />
 
                 <InputField
@@ -1984,6 +2026,7 @@ const InputField = ({
   type = "text",
   required = false,
   error,
+  disabled = false,
 }) => {
   return (
     <Field.Root
@@ -2010,6 +2053,7 @@ const InputField = ({
 
       <Input
         name={name}
+        disabled={disabled}
         type={type}
         value={value ?? ""}
         onChange={onChange}

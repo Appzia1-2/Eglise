@@ -38,6 +38,12 @@ import {
   listFamilyMembers,
 } from "../api/registryServices";
 
+import {
+  notifySuccess,
+  notifyError,
+  getErrorMessage,
+} from "../utils/notify";
+
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 
@@ -96,80 +102,6 @@ const getDisplayName = (value) => {
   }
 
   return String(value);
-};
-
-/* ============================================================
-   ERROR MESSAGE
-============================================================ */
-
-const getBackendErrorMessage = (error) => {
-  const data = error?.response?.data;
-
-  console.error("FULL BACKEND ERROR:", data);
-
-  if (!data) {
-    return "Unable to connect to the server.";
-  }
-
-  if (Array.isArray(data.non_field_errors)) {
-    return data.non_field_errors.join(" ");
-  }
-
-  if (Array.isArray(data.detail)) {
-    return data.detail.join(" ");
-  }
-
-  if (typeof data.detail === "string") {
-    return data.detail;
-  }
-
-  if (typeof data.error === "string") {
-    return data.error;
-  }
-
-  const fieldNames = [
-    "name",
-    "baptismal_name",
-    "relationship",
-    "gender",
-    "email",
-    "mobile_no",
-    "phone_no",
-    "blood_group",
-    "marital_status",
-    "spouse_name",
-    "dob",
-    "father_name",
-    "mother_name",
-    "date_of_baptism",
-    "parish_of_baptism",
-    "educational_qualification",
-    "sunday_school_qualification",
-    "profession",
-    "grade",
-    "joining_date",
-    "transferred_from",
-    "family",
-    "house_name",
-    "house_sequence",
-  ];
-
-  for (const field of fieldNames) {
-    if (
-      Array.isArray(data[field]) &&
-      data[field].length > 0
-    ) {
-      return `${field.replaceAll("_", " ")}: ${data[field].join(
-        " "
-      )}`;
-    }
-
-    if (typeof data[field] === "string") {
-      return `${field.replaceAll("_", " ")}: ${data[field]}`;
-    }
-  }
-
-  return "Failed to add dependent.";
 };
 
 /* ============================================================
@@ -280,9 +212,12 @@ const AddMemberPage = () => {
         error
       );
 
-      window.alert(
-        getBackendErrorMessage(error) ||
+      notifyError(
+        "Load failed",
+        getErrorMessage(
+          error,
           "Failed to load form data."
+        )
       );
 
       navigate(
@@ -346,14 +281,16 @@ const AddMemberPage = () => {
       );
 
       if (!familyId) {
-        window.alert(
+        notifyError(
+          "Missing information",
           "Family information is missing from the selected family head."
         );
         return;
       }
 
       if (!head?.house_name) {
-        window.alert(
+        notifyError(
+          "Missing information",
           "House name is missing from the selected family head."
         );
         return;
@@ -418,7 +355,11 @@ const AddMemberPage = () => {
           values.marital_status;
       }
 
-      if (values.spouse_name?.trim()) {
+      // Spouse only allowed when married
+      if (
+        values.marital_status === "MARRIED" &&
+        values.spouse_name?.trim()
+      ) {
         memberData.spouse_name =
           values.spouse_name.trim();
       }
@@ -490,8 +431,9 @@ const AddMemberPage = () => {
 
       await createMember(memberData);
 
-      window.alert(
-        "Dependent added successfully!"
+      notifySuccess(
+        "Dependent added",
+        "The dependent was added successfully."
       );
 
       navigate(
@@ -508,10 +450,13 @@ const AddMemberPage = () => {
         error?.response?.data
       );
 
-      const message =
-        getBackendErrorMessage(error);
-
-      window.alert(message);
+      notifyError(
+        "Could not add dependent",
+        getErrorMessage(
+          error,
+          "Failed to add dependent."
+        )
+      );
     } finally {
       setSubmitting(false);
     }
@@ -1208,7 +1153,12 @@ const AddMemberPage = () => {
 
                         {/* SPOUSE */}
 
-                        <Field.Root>
+                        <Field.Root
+                          disabled={
+                            values.marital_status !==
+                            "MARRIED"
+                          }
+                        >
                           <Field.Label
                             {...labelProps}
                           >
@@ -1223,8 +1173,29 @@ const AddMemberPage = () => {
                             onChange={
                               handleChange
                             }
-                            placeholder="Enter spouse name"
+                            disabled={
+                              values.marital_status !==
+                              "MARRIED"
+                            }
+                            placeholder={
+                              values.marital_status ===
+                              "MARRIED"
+                                ? "Enter spouse name"
+                                : "Available when marital status is Married"
+                            }
                             {...inputProps}
+                            bg={
+                              values.marital_status ===
+                              "MARRIED"
+                                ? "white"
+                                : "#F4F6F9"
+                            }
+                            cursor={
+                              values.marital_status ===
+                              "MARRIED"
+                                ? "text"
+                                : "not-allowed"
+                            }
                           />
                         </Field.Root>
 
@@ -1598,9 +1569,20 @@ const AddMemberPage = () => {
                               value={
                                 values.marital_status
                               }
-                              onChange={
-                                handleChange
-                              }
+                              onChange={(event) => {
+                                handleChange(event);
+
+                                // Spouse only allowed when married
+                                if (
+                                  event.target.value !==
+                                  "MARRIED"
+                                ) {
+                                  setFieldValue(
+                                    "spouse_name",
+                                    ""
+                                  );
+                                }
+                              }}
                               {...inputProps}
                             >
                               <option value="">
@@ -1743,8 +1725,7 @@ const AddMemberPage = () => {
 
                         <Field.Root>
                           <Field.Label
-                            {...labelProps
-                            }
+                            {...labelProps}
                           >
                             Joining Date
                           </Field.Label>

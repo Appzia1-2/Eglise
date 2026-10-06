@@ -32,8 +32,38 @@ import {
   listGrades,
 } from "../api/registryServices";
 
+import {
+  notifySuccess,
+  notifyError,
+  getErrorMessage,
+} from "../utils/notify";
+
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+
+// Fields that live on Step 1. If the backend reports an error
+// on one of these, the user is sent back to Step 1.
+const STEP1_FIELDS = [
+  "family",
+  "ward",
+  "grade",
+  "house_name",
+  "name",
+  "baptismal_name",
+  "gender",
+  "email",
+  "dob",
+  "mobile_no",
+  "phone_no",
+  "blood_group",
+  "marital_status",
+  "spouse_name",
+  "spouse",
+  "father_name",
+  "mother_name",
+  "address",
+  "family_image",
+];
 
 const EditFamilyHeadPage = () => {
   const { headId } = useParams();
@@ -98,7 +128,10 @@ const EditFamilyHeadPage = () => {
     } catch (error) {
       console.error("Error fetching family head:", error);
 
-      window.alert("Failed to load family head.");
+      notifyError(
+        "Load failed",
+        getErrorMessage(error, "Failed to load family head.")
+      );
 
       navigate("/family-heads");
     } finally {
@@ -280,8 +313,23 @@ const EditFamilyHeadPage = () => {
       return;
     }
 
+    if (!file.type.startsWith("image/")) {
+      notifyError(
+        "Invalid file",
+        "Please select a valid image file."
+      );
+
+      event.target.value = "";
+      return;
+    }
+
     if (file.size > 2 * 1024 * 1024) {
-      window.alert("Image must be less than 2 MB.");
+      notifyError(
+        "File too large",
+        "Image must be less than 2 MB."
+      );
+
+      event.target.value = "";
       return;
     }
 
@@ -326,13 +374,23 @@ const EditFamilyHeadPage = () => {
         }
       });
 
+      // Empty values are skipped above, so send spouse_name
+      // explicitly when the member is no longer married.
+      // Otherwise the old spouse name would stay in the database.
+      if (values.marital_status !== "MARRIED") {
+        formData.set("spouse_name", "");
+      }
+
       if (photoFile) {
         formData.append("family_image", photoFile);
       }
 
       await updateHead(headId, formData);
 
-      window.alert("Family head updated successfully!");
+      notifySuccess(
+        "Family head updated",
+        "The family head was updated successfully."
+      );
 
       navigate(`/family-heads/${headId}`);
     } catch (error) {
@@ -341,31 +399,33 @@ const EditFamilyHeadPage = () => {
         error
       );
 
-      const responseData = error?.response?.data;
+      const errData = error?.response?.data;
 
-      let message =
-        responseData?.error ||
-        responseData?.detail ||
-        "Failed to update family head.";
+      console.error("Backend response:", errData);
 
+      // If the error belongs to a Step 1 field, take the user
+      // back to Step 1 so they can see and fix it.
       if (
-        typeof responseData === "object" &&
-        !responseData?.error &&
-        !responseData?.detail
+        errData &&
+        typeof errData === "object" &&
+        !Array.isArray(errData) &&
+        STEP1_FIELDS.some((field) => field in errData)
       ) {
-        const firstError =
-          Object.values(responseData)[0];
+        setStep(1);
 
-        if (Array.isArray(firstError)) {
-          message = firstError[0];
-        } else if (
-          typeof firstError === "string"
-        ) {
-          message = firstError;
-        }
+        window.scrollTo({
+          top: 0,
+          behavior: "smooth",
+        });
       }
 
-      window.alert(message);
+      notifyError(
+        "Could not update family head",
+        getErrorMessage(
+          error,
+          "Failed to update family head."
+        )
+      );
     }
   };
 
@@ -439,6 +499,14 @@ const EditFamilyHeadPage = () => {
     boxShadow: "none",
     paddingLeft: "9px",
     paddingRight: "9px",
+  };
+
+  // Style for a disabled input (e.g. spouse when not married)
+  const disabledInputStyle = {
+    ...inputStyle,
+    background: "#f4f6f9",
+    color: "#8491a5",
+    cursor: "not-allowed",
   };
 
   const selectStyle = {
@@ -1098,6 +1166,7 @@ const EditFamilyHeadPage = () => {
               handleBlur,
               isSubmitting,
               setTouched,
+              setFieldValue,
               validateForm,
             }) => (
               <Form>
@@ -1798,9 +1867,20 @@ const EditFamilyHeadPage = () => {
                                   value={
                                     values.marital_status
                                   }
-                                  onChange={
-                                    handleChange
-                                  }
+                                  onChange={(e) => {
+                                    handleChange(e);
+
+                                    // Spouse only allowed when married
+                                    if (
+                                      e.target.value !==
+                                      "MARRIED"
+                                    ) {
+                                      setFieldValue(
+                                        "spouse_name",
+                                        ""
+                                      );
+                                    }
+                                  }}
                                   onBlur={
                                     handleBlur
                                   }
@@ -1848,9 +1928,21 @@ const EditFamilyHeadPage = () => {
                                   onBlur={
                                     handleBlur
                                   }
-                                  placeholder="Enter spouse name"
+                                  disabled={
+                                    values.marital_status !==
+                                    "MARRIED"
+                                  }
+                                  placeholder={
+                                    values.marital_status ===
+                                    "MARRIED"
+                                      ? "Enter spouse name"
+                                      : "Available when marital status is Married"
+                                  }
                                   style={
-                                    inputStyle
+                                    values.marital_status ===
+                                    "MARRIED"
+                                      ? inputStyle
+                                      : disabledInputStyle
                                   }
                                 />
                               </FieldWrapper>

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -14,7 +14,6 @@ import {
 
 import { LuSave, LuArrowLeft } from "react-icons/lu";
 
-import apiClient from "../api/apiClient";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import {
@@ -23,6 +22,7 @@ import {
   listMembers,
   listRelationships,
 } from "../api/registryServices";
+import { toaster } from "../components/ui/toaster";
 
 /* ============================================================
    HELPERS
@@ -31,15 +31,28 @@ import {
 const getResponseData = (response) => {
   const data = response?.data;
 
-  if (Array.isArray(data)) {
-    return data;
-  }
-
-  if (Array.isArray(data?.results)) {
-    return data.results;
-  }
-
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.results)) return data.results;
   return data || [];
+};
+
+/* ============================================================
+   TOAST HELPER
+============================================================ */
+
+const showToast = ({
+  title,
+  description,
+  type = "info",
+  duration = 4000,
+}) => {
+  toaster.create({
+    title,
+    description,
+    type,
+    duration,
+    closable: true,
+  });
 };
 
 /* ============================================================
@@ -50,25 +63,16 @@ const inputProps = {
   h: "34px",
   minH: "34px",
   px: "10px",
-
   border: "1px solid",
   borderColor: "#CBD5E1",
-
   borderRadius: "5px",
   fontSize: "12px",
   color: "#14265B",
   bg: "white",
   outline: "none",
   boxSizing: "border-box",
-
-  _placeholder: {
-    color: "#7890B8",
-  },
-
-  _hover: {
-    borderColor: "#AEBACC",
-  },
-
+  _placeholder: { color: "#7890B8" },
+  _hover: { borderColor: "#AEBACC" },
   _focus: {
     borderColor: "#3974D8",
     boxShadow: "0 0 0 1px #3974D8",
@@ -80,29 +84,6 @@ const labelProps = {
   fontWeight: "600",
   color: "#14265B",
   mb: "2px",
-};
-
-/* ============================================================
-   FIELD ERROR DISPLAY COMPONENT
-============================================================ */
-
-const FieldError = ({ error }) => {
-  if (!error) return null;
-
-  return (
-    <Box
-      bg="#FFF5F5"
-      border="1px solid #F3C4C4"
-      borderRadius="4px"
-      px="8px"
-      py="4px"
-      mb="4px"
-    >
-      <Text fontSize="10px" color="#C00000" fontWeight="500">
-        {error}
-      </Text>
-    </Box>
-  );
 };
 
 /* ============================================================
@@ -119,44 +100,44 @@ const FormField = ({
   placeholder = "",
   disabled = false,
   error = "",
-}) => {
-  return (
-    <Box>
-      <Text {...labelProps}>
-        {label}
-        {required && (
-          <Text as="span" color="#E00000" ml="2px">
-            *
-          </Text>
-        )}
-      </Text>
+}) => (
+  <Box>
+    <Text {...labelProps}>
+      {label}
+      {required && (
+        <Text as="span" color="#E00000" ml="2px">
+          *
+        </Text>
+      )}
+    </Text>
 
-      <FieldError error={error} />
-
-      <Box
-        as="input"
-        name={name}
-        type={type}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        disabled={disabled}
-        w="100%"
-        {...inputProps}
-        bg={disabled ? "#F3F5F8" : "white"}
-        cursor={disabled ? "not-allowed" : "text"}
-        borderColor={error ? "#F3C4C4" : "#CBD5E1"}
-        _focus={error ? {
-          borderColor: "#F3C4C4",
-          boxShadow: "0 0 0 1px #F3C4C4",
-        } : {
-          borderColor: "#3974D8",
-          boxShadow: "0 0 0 1px #3974D8",
-        }}
-      />
-    </Box>
-  );
-};
+    <Box
+      as="input"
+      name={name}
+      type={type}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      disabled={disabled}
+      w="100%"
+      {...inputProps}
+      bg={disabled ? "#F3F5F8" : "white"}
+      cursor={disabled ? "not-allowed" : "text"}
+      borderColor={error ? "#F3C4C4" : "#CBD5E1"}
+      _focus={
+        error
+          ? {
+              borderColor: "#F3C4C4",
+              boxShadow: "0 0 0 1px #F3C4C4",
+            }
+          : {
+              borderColor: "#3974D8",
+              boxShadow: "0 0 0 1px #3974D8",
+            }
+      }
+    />
+  </Box>
+);
 
 /* ============================================================
    SELECT
@@ -172,51 +153,50 @@ const FormSelect = ({
   placeholder = "Select",
   disabled = false,
   error = "",
-}) => {
-  return (
-    <Box>
-      <Text {...labelProps}>
-        {label}
-        {required && (
-          <Text as="span" color="#E00000" ml="2px">
-            *
-          </Text>
-        )}
-      </Text>
+}) => (
+  <Box>
+    <Text {...labelProps}>
+      {label}
+      {required && (
+        <Text as="span" color="#E00000" ml="2px">
+          *
+        </Text>
+      )}
+    </Text>
 
-      <FieldError error={error} />
-
-      <Box
-        as="select"
-        name={name}
-        value={value}
-        onChange={onChange}
-        disabled={disabled}
-        w="100%"
-        {...inputProps}
-        px="8px"
-        cursor={disabled ? "not-allowed" : "pointer"}
-        bg={disabled ? "#F3F5F8" : "white"}
-        borderColor={error ? "#F3C4C4" : "#CBD5E1"}
-        _focus={error ? {
-          borderColor: "#F3C4C4",
-          boxShadow: "0 0 0 1px #F3C4C4",
-        } : {
-          borderColor: "#3974D8",
-          boxShadow: "0 0 0 1px #3974D8",
-        }}
-      >
-        <option value="">{placeholder}</option>
-
-        {options.map((option) => (
-          <option key={String(option.value)} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </Box>
+    <Box
+      as="select"
+      name={name}
+      value={value}
+      onChange={onChange}
+      disabled={disabled}
+      w="100%"
+      {...inputProps}
+      px="8px"
+      cursor={disabled ? "not-allowed" : "pointer"}
+      bg={disabled ? "#F3F5F8" : "white"}
+      borderColor={error ? "#F3C4C4" : "#CBD5E1"}
+      _focus={
+        error
+          ? {
+              borderColor: "#F3C4C4",
+              boxShadow: "0 0 0 1px #F3C4C4",
+            }
+          : {
+              borderColor: "#3974D8",
+              boxShadow: "0 0 0 1px #3974D8",
+            }
+      }
+    >
+      <option value="">{placeholder}</option>
+      {options.map((option) => (
+        <option key={String(option.value)} value={option.value}>
+          {option.label}
+        </option>
+      ))}
     </Box>
-  );
-};
+  </Box>
+);
 
 /* ============================================================
    TEXTAREA
@@ -231,53 +211,47 @@ const FormTextarea = ({
   placeholder = "",
   rows = 3,
   error = "",
-}) => {
-  return (
-    <Box>
-      <Text {...labelProps}>
-        {label}
-        {required && (
-          <Text as="span" color="#E00000" ml="2px">
-            *
-          </Text>
-        )}
-      </Text>
+}) => (
+  <Box>
+    <Text {...labelProps}>
+      {label}
+      {required && (
+        <Text as="span" color="#E00000" ml="2px">
+          *
+        </Text>
+      )}
+    </Text>
 
-      <FieldError error={error} />
-
-      <Box
-        as="textarea"
-        name={name}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        rows={rows}
-        w="100%"
-        px="10px"
-        py="7px"
-        border="1px solid"
-        borderColor={error ? "#F3C4C4" : "#CBD5E1"}
-        borderRadius="5px"
-        bg="white"
-        color="#14265B"
-        fontSize="12px"
-        resize="vertical"
-        outline="none"
-        boxSizing="border-box"
-        _hover={{
-          borderColor: error ? "#F3C4C4" : "#AEBACC",
-        }}
-        _focus={{
-          borderColor: error ? "#F3C4C4" : "#3974D8",
-          boxShadow: error ? "0 0 0 1px #F3C4C4" : "0 0 0 1px #3974D8",
-        }}
-        _placeholder={{
-          color: "#7890B8",
-        }}
-      />
-    </Box>
-  );
-};
+    <Box
+      as="textarea"
+      name={name}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      rows={rows}
+      w="100%"
+      px="10px"
+      py="7px"
+      border="1px solid"
+      borderColor={error ? "#F3C4C4" : "#CBD5E1"}
+      borderRadius="5px"
+      bg="white"
+      color="#14265B"
+      fontSize="12px"
+      resize="vertical"
+      outline="none"
+      boxSizing="border-box"
+      _hover={{ borderColor: error ? "#F3C4C4" : "#AEBACC" }}
+      _focus={{
+        borderColor: error ? "#F3C4C4" : "#3974D8",
+        boxShadow: error
+          ? "0 0 0 1px #F3C4C4"
+          : "0 0 0 1px #3974D8",
+      }}
+      _placeholder={{ color: "#7890B8" }}
+    />
+  </Box>
+);
 
 /* ============================================================
    PHONE INPUT
@@ -292,56 +266,50 @@ const PhoneInput = ({
   placeholder = "",
   disabled = false,
   error = "",
-}) => {
-  return (
-    <Box>
-      <Text {...labelProps}>
-        {label}
-        {required && (
-          <Text as="span" color="#E00000" ml="2px">
-            *
-          </Text>
-        )}
-      </Text>
+}) => (
+  <Box>
+    <Text {...labelProps}>
+      {label}
+      {required && (
+        <Text as="span" color="#E00000" ml="2px">
+          *
+        </Text>
+      )}
+    </Text>
 
-      <FieldError error={error} />
+    <Flex gap="7px">
+      <Box as="select" w="70px" {...inputProps} px="6px" disabled>
+        <option>+91</option>
+      </Box>
 
-      <Flex gap="7px">
-        <Box
-          as="select"
-          w="70px"
-          {...inputProps}
-          px="6px"
-          disabled
-        >
-          <option>+91</option>
-        </Box>
-
-        <Box
-          as="input"
-          name={name}
-          type="tel"
-          value={value}
-          onChange={onChange}
-          placeholder={placeholder}
-          disabled={disabled}
-          flex="1"
-          {...inputProps}
-          bg={disabled ? "#F3F5F8" : "white"}
-          cursor={disabled ? "not-allowed" : "text"}
-          borderColor={error ? "#F3C4C4" : "#CBD5E1"}
-          _focus={error ? {
-            borderColor: "#F3C4C4",
-            boxShadow: "0 0 0 1px #F3C4C4",
-          } : {
-            borderColor: "#3974D8",
-            boxShadow: "0 0 0 1px #3974D8",
-          }}
-        />
-      </Flex>
-    </Box>
-  );
-};
+      <Box
+        as="input"
+        name={name}
+        type="tel"
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        disabled={disabled}
+        flex="1"
+        {...inputProps}
+        bg={disabled ? "#F3F5F8" : "white"}
+        cursor={disabled ? "not-allowed" : "text"}
+        borderColor={error ? "#F3C4C4" : "#CBD5E1"}
+        _focus={
+          error
+            ? {
+                borderColor: "#F3C4C4",
+                boxShadow: "0 0 0 1px #F3C4C4",
+              }
+            : {
+                borderColor: "#3974D8",
+                boxShadow: "0 0 0 1px #3974D8",
+              }
+        }
+      />
+    </Flex>
+  </Box>
+);
 
 /* ============================================================
    INITIAL FORM
@@ -350,7 +318,7 @@ const PhoneInput = ({
 const initialForm = {
   marriage_type: "ADD_BRIDE",
   date: "",
-  
+
   // Groom fields
   groom_family: "",
   groom_member: "",
@@ -364,7 +332,7 @@ const initialForm = {
   groom_address: "",
   groom_phone: "",
   groom_confession_date: "",
-  
+
   // Bride fields
   bride_family: "",
   bride_member: "",
@@ -378,7 +346,7 @@ const initialForm = {
   bride_confession_date: "",
   bride_is_internal: true,
   groom_is_internal: true,
-  
+
   // Common
   relationship: "",
   family: "",
@@ -389,6 +357,40 @@ const initialForm = {
   minister_of_marriage: "",
   other_priests: "",
   remarks: "",
+};
+
+/* ============================================================
+   FIELD LABELS (for toast messages)
+============================================================ */
+
+const FIELD_LABELS = {
+  marriage_type: "Marriage Type",
+  date: "Marriage Date",
+  groom_family: "Groom's Family",
+  groom_member: "Groom",
+  groom_name: "Groom Name",
+  groom_nationality: "Groom Nationality",
+  groom_father: "Groom's Father Name",
+  groom_mother: "Groom's Mother Name",
+  groom_dob: "Groom's Date of Birth",
+  groom_house_name: "Groom's House Name",
+  groom_address: "Groom's Address",
+  bride_family: "Bride's Family",
+  bride_member: "Bride",
+  bride_name: "Bride Name",
+  bride_nationality: "Bride Nationality",
+  bride_father: "Bride's Father Name",
+  bride_mother: "Bride's Mother Name",
+  bride_dob: "Bride's Date of Birth",
+  bride_address: "Bride's Address",
+  bride_confession_date: "Bride Confession Date",
+  groom_confession_date: "Groom Confession Date",
+  relationship: "Relationship",
+  transfer_to: "Transfer To Parish",
+  vicar_name: "Vicar Name",
+  witness_groom_side: "Groom Side Witness",
+  witness_bride_side: "Bride Side Witness",
+  minister_of_marriage: "Minister of Marriage",
 };
 
 /* ============================================================
@@ -406,8 +408,6 @@ const MarriageAddPage = () => {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
 
   /* ==========================================================
@@ -416,11 +416,11 @@ const MarriageAddPage = () => {
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadData = async () => {
     setLoading(true);
-    setError("");
 
     try {
       const [familiesRes, membersRes, relationshipsRes] = await Promise.all([
@@ -429,36 +429,34 @@ const MarriageAddPage = () => {
         listRelationships(),
       ]);
 
-      const familiesData = getResponseData(familiesRes);
-      const membersData = getResponseData(membersRes);
-      const relationshipsData = getResponseData(relationshipsRes);
-
-      setFamilies(familiesData);
-      setMembers(membersData);
-      setRelationships(relationshipsData);
-
-      console.log("✓ Families loaded:", familiesData.length);
-      console.log("✓ Members loaded:", membersData.length);
-      console.log("✓ Relationships loaded:", relationshipsData.length);
+      setFamilies(getResponseData(familiesRes));
+      setMembers(getResponseData(membersRes));
+      setRelationships(getResponseData(relationshipsRes));
     } catch (err) {
       console.error("Error loading marriage form data:", err);
-      setError(
-        err?.response?.data?.detail ||
-          "Unable to load the required data. Please try again."
-      );
+
+      showToast({
+        title: "Failed to load data",
+        description:
+          err?.response?.data?.detail ||
+          "Unable to load the required data. Please try again.",
+        type: "error",
+        duration: 6000,
+      });
     } finally {
       setLoading(false);
     }
   };
 
   /* ==========================================================
-     HELPERS - Get Available Grooms/Brides
+     HELPERS — get available grooms / brides
   ========================================================== */
 
   const getAvailableGrooms = (familyId) => {
     if (!familyId) return [];
 
-    const familyIdInt = typeof familyId === "string" ? parseInt(familyId) : familyId;
+    const familyIdInt =
+      typeof familyId === "string" ? parseInt(familyId) : familyId;
 
     return members
       .filter((m) => {
@@ -484,7 +482,8 @@ const MarriageAddPage = () => {
   const getAvailableBrides = (familyId) => {
     if (!familyId) return [];
 
-    const familyIdInt = typeof familyId === "string" ? parseInt(familyId) : familyId;
+    const familyIdInt =
+      typeof familyId === "string" ? parseInt(familyId) : familyId;
 
     return members
       .filter((m) => {
@@ -517,17 +516,25 @@ const MarriageAddPage = () => {
 
   const relationshipOptions = relationships.map((relationship) => ({
     value: relationship.id,
-    label: relationship.name || relationship.relationship_name || `Relationship #${relationship.id}`,
+    label:
+      relationship.name ||
+      relationship.relationship_name ||
+      `Relationship #${relationship.id}`,
   }));
 
-  const type = formData.marriage_type || "ADD_BRIDE";
-  const selectedGroomFamily = formData.groom_family;
-  const selectedBrideFamily = formData.bride_family;
-  const groomIsInternal = formData.groom_is_internal === true || formData.groom_is_internal === "true";
-  const brideIsInternal = formData.bride_is_internal === true || formData.bride_is_internal === "true";
+  const isAddBride = formData.marriage_type === "ADD_BRIDE";
+  const isTransferBride = formData.marriage_type === "TRANSFER_BRIDE";
 
-  const groomOptions = getAvailableGrooms(selectedGroomFamily);
-  const brideOptions = getAvailableBrides(selectedBrideFamily);
+  const groomIsInternal =
+    formData.groom_is_internal === true ||
+    formData.groom_is_internal === "true";
+
+  const brideIsInternal =
+    formData.bride_is_internal === true ||
+    formData.bride_is_internal === "true";
+
+  const groomOptions = getAvailableGrooms(formData.groom_family);
+  const brideOptions = getAvailableBrides(formData.bride_family);
 
   /* ==========================================================
      CHANGE HANDLERS
@@ -536,17 +543,11 @@ const MarriageAddPage = () => {
   const handleChange = (event) => {
     const { name, value } = event.target;
 
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
 
-    setFieldErrors((prev) => ({
-      ...prev,
-      [name]: undefined,
-    }));
-
-    setError("");
+    setFieldErrors((prev) =>
+      prev[name] ? { ...prev, [name]: undefined } : prev
+    );
   };
 
   const handleMarriageTypeChange = (event) => {
@@ -564,7 +565,6 @@ const MarriageAddPage = () => {
     }));
 
     setFieldErrors({});
-    setError("");
   };
 
   const handleBrideTypeChange = (event) => {
@@ -584,7 +584,6 @@ const MarriageAddPage = () => {
     }));
 
     setFieldErrors({});
-    setError("");
   };
 
   const handleGroomTypeChange = (event) => {
@@ -606,7 +605,6 @@ const MarriageAddPage = () => {
     }));
 
     setFieldErrors({});
-    setError("");
   };
 
   const handleGroomFamilyChange = (event) => {
@@ -642,95 +640,262 @@ const MarriageAddPage = () => {
   };
 
   /* ==========================================================
+     REQUIRED FIELDS PER SCENARIO
+  ========================================================== */
+
+  const getRequiredFields = () => {
+    const common = ["marriage_type", "date"];
+
+    // ADD_BRIDE — Internal bride
+    if (isAddBride && brideIsInternal) {
+      return [
+        ...common,
+        "groom_family",
+        "groom_member",
+        "bride_family",
+        "bride_member",
+        "groom_nationality",
+        "bride_nationality",
+        "witness_groom_side",
+        "witness_bride_side",
+        "minister_of_marriage",
+      ];
+    }
+
+    // ADD_BRIDE — External bride
+    if (isAddBride && !brideIsInternal) {
+      return [
+        ...common,
+        "groom_family",
+        "groom_member",
+        "bride_name",
+        "bride_dob",
+        "bride_father",
+        "bride_mother",
+        "groom_nationality",
+        "bride_nationality",
+        "witness_groom_side",
+        "witness_bride_side",
+        "minister_of_marriage",
+      ];
+    }
+
+    // TRANSFER_BRIDE
+    if (isTransferBride) {
+      const fields = [
+        ...common,
+        "bride_family",
+        "bride_member",
+        "bride_father",
+        "bride_mother",
+        "transfer_to",
+        "vicar_name",
+        "groom_confession_date",
+        "bride_confession_date",
+        "groom_nationality",
+        "bride_nationality",
+      ];
+
+      if (groomIsInternal) {
+        fields.push("groom_family", "groom_member");
+      } else {
+        fields.push("groom_name");
+      }
+
+      return fields;
+    }
+
+    return common;
+  };
+
+  /* ==========================================================
+     VALIDATE
+  ========================================================== */
+
+  const validateForm = () => {
+    const requiredFields = getRequiredFields();
+    const errors = {};
+    const missing = [];
+
+    requiredFields.forEach((field) => {
+      const value = formData[field];
+
+      if (value === "" || value === null || value === undefined) {
+        errors[field] = `${FIELD_LABELS[field] || field} is required`;
+        missing.push(FIELD_LABELS[field] || field);
+      }
+    });
+
+    setFieldErrors(errors);
+    return { errors, missing };
+  };
+
+  /* ==========================================================
+     BUILD PAYLOAD
+     — Only send fields that exist on the Marriage model.
+     — Text fields → "" (never null).
+     — FK fields → null when empty.
+     — Date fields → null when empty.
+  ========================================================== */
+
+  const buildPayload = () => {
+    const payload = {
+      marriage_type: formData.marriage_type,
+      date: formData.date,
+
+      // Nullable FK fields
+      groom_family: formData.groom_family
+        ? Number(formData.groom_family)
+        : null,
+      groom_member: formData.groom_member
+        ? Number(formData.groom_member)
+        : null,
+      bride_family: formData.bride_family
+        ? Number(formData.bride_family)
+        : null,
+      bride_member: formData.bride_member
+        ? Number(formData.bride_member)
+        : null,
+
+      // Groom text fields — "" not null
+      groom_name: formData.groom_name || "",
+      groom_house_name: formData.groom_house_name || "",
+      groom_family_name: formData.groom_family_name || "",
+      groom_address: formData.groom_address || "",
+      groom_father: formData.groom_father || "",
+      groom_mother: formData.groom_mother || "",
+
+      // Bride text fields
+      bride_name: formData.bride_name || "",
+      bride_address: formData.bride_address || "",
+      bride_father: formData.bride_father || "",
+      bride_mother: formData.bride_mother || "",
+
+      // Nationalities — backend field names differ!
+      nationality_of_groom: formData.groom_nationality || "",
+      nationality_of_bride: formData.bride_nationality || "",
+
+      // Witness / minister / remarks
+      witness_groom_side: formData.witness_groom_side || "",
+      witness_bride_side: formData.witness_bride_side || "",
+      minister_of_marriage: formData.minister_of_marriage || "",
+      other_priests: formData.other_priests || "",
+      transfer_to: formData.transfer_to || "",
+      remarks: formData.remarks || "",
+
+      // Dates — null is OK
+      groom_dob: formData.groom_dob || null,
+      bride_dob: formData.bride_dob || null,
+
+      // Booleans
+      bride_is_internal: formData.bride_is_internal,
+      groom_is_internal: formData.groom_is_internal,
+    };
+
+    // Confession dates — only for TRANSFER_BRIDE
+    if (isTransferBride) {
+      payload.groom_confession_date =
+        formData.groom_confession_date || null;
+      payload.bride_confession_date =
+        formData.bride_confession_date || null;
+    }
+
+    // Relationship with main member — only for ADD_BRIDE internal bride
+    if (isAddBride && brideIsInternal && formData.relationship) {
+      payload.relation_of_bride_with_main_member = Number(
+        formData.relationship
+      );
+    }
+
+    return payload;
+  };
+
+  /* ==========================================================
      SUBMIT
   ========================================================== */
 
   const handleSubmit = async (event) => {
     event.preventDefault();
 
+    const { errors, missing } = validateForm();
+
+    if (Object.keys(errors).length > 0) {
+      showToast({
+        title: "Missing required fields",
+        description:
+          missing.length === 1
+            ? `${missing[0]} is required.`
+            : `Please fill: ${missing.join(", ")}.`,
+        type: "warning",
+        duration: 5000,
+      });
+      return;
+    }
+
     setSaving(true);
-    setError("");
     setFieldErrors({});
 
     try {
-      const payload = {
-        marriage_type: formData.marriage_type,
-        date: formData.date,
-        groom_family: formData.groom_family || null,
-        groom_member: formData.groom_member || null,
-        groom_name: formData.groom_name || null,
-        groom_nationality: formData.groom_nationality || null,
-        groom_father: formData.groom_father || null,
-        groom_mother: formData.groom_mother || null,
-        groom_dob: formData.groom_dob || null,
-        groom_house_name: formData.groom_house_name || null,
-        groom_family_name: formData.groom_family_name || null,
-        groom_address: formData.groom_address || null,
-        groom_phone: formData.groom_phone || null,
-        groom_confession_date: formData.groom_confession_date || null,
-        bride_family: formData.bride_family || null,
-        bride_member: formData.bride_member || null,
-        bride_name: formData.bride_name || null,
-        bride_nationality: formData.bride_nationality || null,
-        bride_father: formData.bride_father || null,
-        bride_mother: formData.bride_mother || null,
-        bride_dob: formData.bride_dob || null,
-        bride_address: formData.bride_address || null,
-        bride_phone: formData.bride_phone || null,
-        bride_confession_date: formData.bride_confession_date || null,
-        bride_is_internal: formData.bride_is_internal,
-        groom_is_internal: formData.groom_is_internal,
-        relationship: formData.relationship || null,
-        family: formData.family || null,
-        transfer_to: formData.transfer_to || null,
-        vicar_name: formData.vicar_name || null,
-        witness_groom_side: formData.witness_groom_side || null,
-        witness_bride_side: formData.witness_bride_side || null,
-        minister_of_marriage: formData.minister_of_marriage || null,
-        other_priests: formData.other_priests || null,
-        remarks: formData.remarks || null,
-      };
-
-      console.log("=== MARRIAGE SUBMISSION ===");
-      console.log("Payload:", JSON.stringify(payload, null, 2));
+      const payload = buildPayload();
 
       await createMarriage(payload);
+
+      showToast({
+        title: isTransferBride ? "Bride transferred" : "Marriage recorded",
+        description: isTransferBride
+          ? "The bride transfer was recorded successfully."
+          : "The marriage record was created successfully.",
+        type: "success",
+        duration: 4000,
+      });
+
       navigate("/marriage");
     } catch (err) {
-      console.error("✗ Error creating marriage:", err);
+      console.error("Error creating marriage:", err);
 
       const responseData = err?.response?.data;
 
-      console.error("=== API ERROR DETAILS ===");
-      console.error("Status code:", err?.response?.status);
-      console.error("Response data:", JSON.stringify(responseData, null, 2));
-
-      if (responseData && typeof responseData === "object") {
+      if (
+        responseData &&
+        typeof responseData === "object" &&
+        !Array.isArray(responseData)
+      ) {
         const errors = {};
 
         Object.entries(responseData).forEach(([key, value]) => {
-          if (Array.isArray(value)) {
-            errors[key] = value.join(", ");
-          } else if (typeof value === "string") {
-            errors[key] = value;
-          } else {
-            errors[key] = JSON.stringify(value);
-          }
+          if (Array.isArray(value)) errors[key] = value.join(", ");
+          else if (typeof value === "string") errors[key] = value;
+          else errors[key] = JSON.stringify(value);
         });
 
         setFieldErrors(errors);
 
         const generalError =
-          responseData.detail ||
-          responseData.non_field_errors?.[0];
+          responseData.detail || responseData.non_field_errors?.[0];
 
-        if (generalError) {
-          setError(generalError);
-        } else if (Object.keys(errors).length > 0) {
-          setError(`Validation failed for: ${Object.keys(errors).join(", ")}`);
-        }
+        const fieldMessages = Object.values(errors).filter(Boolean);
+        const onlyOneFieldError = fieldMessages.length === 1 && !generalError;
+
+        showToast({
+          title: "Could not save marriage",
+          description:
+            generalError ||
+            (onlyOneFieldError
+              ? fieldMessages[0]
+              : `Please check: ${Object.keys(errors)
+                  .map((k) => FIELD_LABELS[k] || k)
+                  .join(", ")}`),
+          type: "error",
+          duration: 7000,
+        });
       } else {
-        setError("Unable to create marriage record. Please try again.");
+        showToast({
+          title: "Could not save marriage",
+          description:
+            "Unable to create marriage record. Please try again.",
+          type: "error",
+          duration: 7000,
+        });
       }
     } finally {
       setSaving(false);
@@ -745,19 +910,16 @@ const MarriageAddPage = () => {
     return (
       <>
         <Navbar />
-
         <Box minH="calc(100vh - 120px)" bg="white">
           <Flex minH="400px" align="center" justify="center">
             <VStack gap="3">
               <Spinner size="md" color="#E00000" />
-
               <Text fontSize="11px" color="#7081A3">
                 Loading marriage form...
               </Text>
             </VStack>
           </Flex>
         </Box>
-
         <Footer />
       </>
     );
@@ -767,12 +929,10 @@ const MarriageAddPage = () => {
      UI
   ========================================================== */
 
-  const isAddBride = formData.marriage_type === "ADD_BRIDE";
-  const isTransferBride = formData.marriage_type === "TRANSFER_BRIDE";
-
   const getPageTitle = () => {
     if (isTransferBride) return "Transfer Bride from Parish";
-    if (isAddBride && !brideIsInternal) return "Add Marriage – Bride from Other Parish";
+    if (isAddBride && !brideIsInternal)
+      return "Add Marriage – Bride from Other Parish";
     return "Add Marriage";
   };
 
@@ -848,23 +1008,6 @@ const MarriageAddPage = () => {
           </Flex>
         </Box>
 
-        {/* GENERAL ERROR */}
-        {error && (
-          <Box
-            bg="#FFF5F5"
-            border="1px solid"
-            borderColor="#F3C4C4"
-            borderRadius="6px"
-            px="10px"
-            py="8px"
-            mb="10px"
-          >
-            <Text fontSize="11px" color="#C00000" fontWeight="500">
-              {error}
-            </Text>
-          </Box>
-        )}
-
         {/* FORM CARD */}
         <Box
           as="form"
@@ -875,17 +1018,12 @@ const MarriageAddPage = () => {
           borderRadius="6px"
           overflow="hidden"
         >
-          {/* FORM BODY */}
           <Box p={{ base: "14px", md: "16px" }}>
-            {/* SECTION TITLE */}
             <Text fontSize="14px" fontWeight="600" color="#14265B" mb="10px">
               Marriage Information
             </Text>
 
-            {/* =================================================
-                ROW 1: Marriage Type & Date
-            ================================================= */}
-
+            {/* ROW 1 — Marriage Type & Date */}
             <SimpleGrid
               columns={{ base: 1, md: 2, lg: 3 }}
               columnGap={{ base: "14px", md: "24px" }}
@@ -901,7 +1039,10 @@ const MarriageAddPage = () => {
                 error={fieldErrors.marriage_type}
                 options={[
                   { value: "ADD_BRIDE", label: "Add Bride to Parish" },
-                  { value: "TRANSFER_BRIDE", label: "Transfer Bride from Parish" },
+                  {
+                    value: "TRANSFER_BRIDE",
+                    label: "Transfer Bride from Parish",
+                  },
                 ]}
                 placeholder="Select marriage type"
               />
@@ -919,9 +1060,8 @@ const MarriageAddPage = () => {
             </SimpleGrid>
 
             {/* =================================================
-                ADD BRIDE - SAME PARISH
+                ADD BRIDE — INTERNAL
             ================================================= */}
-
             {isAddBride && brideIsInternal && (
               <>
                 <SimpleGrid
@@ -950,7 +1090,11 @@ const MarriageAddPage = () => {
                     disabled={!formData.groom_family}
                     error={fieldErrors.groom_member}
                     options={groomOptions}
-                    placeholder={formData.groom_family ? "Select groom (SINGLE, WIDOWED, DIVORCED)" : "Select family first"}
+                    placeholder={
+                      formData.groom_family
+                        ? "Select groom (SINGLE, WIDOWED, DIVORCED)"
+                        : "Select family first"
+                    }
                   />
 
                   <FormSelect
@@ -961,8 +1105,14 @@ const MarriageAddPage = () => {
                     required
                     error={fieldErrors.bride_is_internal}
                     options={[
-                      { value: "true", label: "Internal Bride (Church Member)" },
-                      { value: "false", label: "External Bride (Non-Member)" },
+                      {
+                        value: "true",
+                        label: "Internal Bride (Church Member)",
+                      },
+                      {
+                        value: "false",
+                        label: "External Bride (Non-Member)",
+                      },
                     ]}
                     placeholder="Select bride type"
                   />
@@ -994,7 +1144,11 @@ const MarriageAddPage = () => {
                     disabled={!formData.bride_family}
                     error={fieldErrors.bride_member}
                     options={brideOptions}
-                    placeholder={formData.bride_family ? "Select bride (SINGLE, WIDOWED, DIVORCED)" : "Select family first"}
+                    placeholder={
+                      formData.bride_family
+                        ? "Select bride (SINGLE, WIDOWED, DIVORCED)"
+                        : "Select family first"
+                    }
                   />
 
                   <FormSelect
@@ -1033,17 +1187,6 @@ const MarriageAddPage = () => {
                     required
                     error={fieldErrors.bride_nationality}
                     placeholder="Enter bride nationality"
-                  />
-
-                  <FormSelect
-                    label="Primary Family (Groom's Family)"
-                    name="family"
-                    value={formData.family}
-                    onChange={handleChange}
-                    required
-                    error={fieldErrors.family}
-                    options={familyOptions}
-                    placeholder="Select family"
                   />
                 </SimpleGrid>
 
@@ -1112,9 +1255,8 @@ const MarriageAddPage = () => {
             )}
 
             {/* =================================================
-                ADD BRIDE - OTHER PARISH
+                ADD BRIDE — EXTERNAL
             ================================================= */}
-
             {isAddBride && !brideIsInternal && (
               <>
                 <SimpleGrid
@@ -1143,7 +1285,11 @@ const MarriageAddPage = () => {
                     disabled={!formData.groom_family}
                     error={fieldErrors.groom_member}
                     options={groomOptions}
-                    placeholder={formData.groom_family ? "Select groom (SINGLE, WIDOWED, DIVORCED)" : "Select family first"}
+                    placeholder={
+                      formData.groom_family
+                        ? "Select groom (SINGLE, WIDOWED, DIVORCED)"
+                        : "Select family first"
+                    }
                   />
 
                   <FormSelect
@@ -1154,8 +1300,14 @@ const MarriageAddPage = () => {
                     required
                     error={fieldErrors.bride_is_internal}
                     options={[
-                      { value: "true", label: "Internal Bride (Church Member)" },
-                      { value: "false", label: "External Bride (Non-Member)" },
+                      {
+                        value: "true",
+                        label: "Internal Bride (Church Member)",
+                      },
+                      {
+                        value: "false",
+                        label: "External Bride (Non-Member)",
+                      },
                     ]}
                     placeholder="Select bride type"
                   />
@@ -1185,7 +1337,6 @@ const MarriageAddPage = () => {
                     onChange={handleChange}
                     required
                     error={fieldErrors.bride_dob}
-                    placeholder="Select date"
                   />
 
                   <FormField
@@ -1261,17 +1412,6 @@ const MarriageAddPage = () => {
                     error={fieldErrors.bride_nationality}
                     placeholder="Enter bride nationality"
                   />
-
-                  <FormSelect
-                    label="Primary Family (Groom's Family)"
-                    name="family"
-                    value={formData.family}
-                    onChange={handleChange}
-                    required
-                    error={fieldErrors.family}
-                    options={familyOptions}
-                    placeholder="Select family"
-                  />
                 </SimpleGrid>
 
                 <SimpleGrid
@@ -1341,7 +1481,6 @@ const MarriageAddPage = () => {
             {/* =================================================
                 TRANSFER BRIDE
             ================================================= */}
-
             {isTransferBride && (
               <>
                 <SimpleGrid
@@ -1370,7 +1509,11 @@ const MarriageAddPage = () => {
                     disabled={!formData.bride_family}
                     error={fieldErrors.bride_member}
                     options={brideOptions}
-                    placeholder={formData.bride_family ? "Select bride (SINGLE, WIDOWED, DIVORCED)" : "Select family first"}
+                    placeholder={
+                      formData.bride_family
+                        ? "Select bride (SINGLE, WIDOWED, DIVORCED)"
+                        : "Select family first"
+                    }
                   />
 
                   <FormSelect
@@ -1381,8 +1524,14 @@ const MarriageAddPage = () => {
                     required
                     error={fieldErrors.groom_is_internal}
                     options={[
-                      { value: "true", label: "Internal Groom (Church Member)" },
-                      { value: "false", label: "External Groom (Non-Member)" },
+                      {
+                        value: "true",
+                        label: "Internal Groom (Church Member)",
+                      },
+                      {
+                        value: "false",
+                        label: "External Groom (Non-Member)",
+                      },
                     ]}
                     placeholder="Select groom type"
                   />
@@ -1415,7 +1564,11 @@ const MarriageAddPage = () => {
                       disabled={!formData.groom_family}
                       error={fieldErrors.groom_member}
                       options={groomOptions}
-                      placeholder={formData.groom_family ? "Select groom (SINGLE, WIDOWED, DIVORCED)" : "Select family first"}
+                      placeholder={
+                        formData.groom_family
+                          ? "Select groom (SINGLE, WIDOWED, DIVORCED)"
+                          : "Select family first"
+                      }
                     />
                   </SimpleGrid>
                 ) : (
@@ -1442,7 +1595,6 @@ const MarriageAddPage = () => {
                       value={formData.groom_dob}
                       onChange={handleChange}
                       error={fieldErrors.groom_dob}
-                      placeholder="Select date"
                     />
 
                     <FormField
@@ -1508,7 +1660,6 @@ const MarriageAddPage = () => {
                     onChange={handleChange}
                     required
                     error={fieldErrors.groom_confession_date}
-                    placeholder="Select date"
                   />
 
                   <FormField
@@ -1519,18 +1670,6 @@ const MarriageAddPage = () => {
                     onChange={handleChange}
                     required
                     error={fieldErrors.bride_confession_date}
-                    placeholder="Select date"
-                  />
-
-                  <FormSelect
-                    label="Primary Family (Bride's Family)"
-                    name="family"
-                    value={formData.family}
-                    onChange={handleChange}
-                    required
-                    error={fieldErrors.family}
-                    options={familyOptions}
-                    placeholder="Select family"
                   />
                 </SimpleGrid>
 
@@ -1561,16 +1700,14 @@ const MarriageAddPage = () => {
                   />
 
                   {!groomIsInternal && (
-                    <>
-                      <FormField
-                        label="Groom Father Name"
-                        name="groom_father"
-                        value={formData.groom_father}
-                        onChange={handleChange}
-                        error={fieldErrors.groom_father}
-                        placeholder="Enter groom father name"
-                      />
-                    </>
+                    <FormField
+                      label="Groom Father Name"
+                      name="groom_father"
+                      value={formData.groom_father}
+                      onChange={handleChange}
+                      error={fieldErrors.groom_father}
+                      placeholder="Enter groom father name"
+                    />
                   )}
                 </SimpleGrid>
 
@@ -1609,31 +1746,6 @@ const MarriageAddPage = () => {
                     required
                     error={fieldErrors.bride_mother}
                     placeholder="Enter bride mother name"
-                  />
-                </SimpleGrid>
-
-                <SimpleGrid
-                  columns={{ base: 1, md: 2 }}
-                  columnGap={{ base: "14px", md: "24px" }}
-                  rowGap="7px"
-                  mb="7px"
-                >
-                  <PhoneInput
-                    label="Groom Phone Number"
-                    name="groom_phone"
-                    value={formData.groom_phone}
-                    onChange={handleChange}
-                    error={fieldErrors.groom_phone}
-                    placeholder="Enter phone number"
-                  />
-
-                  <PhoneInput
-                    label="Bride Phone Number"
-                    name="bride_phone"
-                    value={formData.bride_phone}
-                    onChange={handleChange}
-                    error={fieldErrors.bride_phone}
-                    placeholder="Enter phone number"
                   />
                 </SimpleGrid>
 

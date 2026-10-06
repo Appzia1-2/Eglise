@@ -17,6 +17,7 @@ import { LuSave } from "react-icons/lu";
 import apiClient from "../api/apiClient";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import { toaster } from "../components/ui/toaster";
 
 // ============================================================
 // HELPERS
@@ -25,15 +26,28 @@ import Footer from "../components/Footer";
 const getResponseData = (response) => {
   const data = response?.data;
 
-  if (Array.isArray(data)) {
-    return data;
-  }
-
-  if (Array.isArray(data?.results)) {
-    return data.results;
-  }
-
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.results)) return data.results;
   return data || [];
+};
+
+// ============================================================
+// TOAST HELPER
+// ============================================================
+
+const showToast = ({
+  title,
+  description,
+  type = "info",
+  duration = 4000,
+}) => {
+  toaster.create({
+    title,
+    description,
+    type,
+    duration,
+    closable: true,
+  });
 };
 
 // ============================================================
@@ -44,25 +58,16 @@ const inputProps = {
   h: "34px",
   minH: "34px",
   px: "10px",
-
   border: "1px solid",
   borderColor: "#CBD5E1",
-
   borderRadius: "5px",
   fontSize: "12px",
   color: "#14265B",
   bg: "white",
   outline: "none",
   boxSizing: "border-box",
-
-  _placeholder: {
-    color: "#7890B8",
-  },
-
-  _hover: {
-    borderColor: "#AEBACC",
-  },
-
+  _placeholder: { color: "#7890B8" },
+  _hover: { borderColor: "#AEBACC" },
   _focus: {
     borderColor: "#3974D8",
     boxShadow: "0 0 0 1px #3974D8",
@@ -74,33 +79,6 @@ const labelProps = {
   fontWeight: "600",
   color: "#14265B",
   mb: "2px",
-};
-
-// ============================================================
-// FIELD ERROR DISPLAY COMPONENT
-// ============================================================
-
-const FieldError = ({ error }) => {
-  if (!error) return null;
-
-  return (
-    <Box
-      bg="#FFF5F5"
-      border="1px solid #F3C4C4"
-      borderRadius="4px"
-      px="8px"
-      py="4px"
-      mb="4px"
-    >
-      <Text
-        fontSize="10px"
-        color="#C00000"
-        fontWeight="500"
-      >
-        {error}
-      </Text>
-    </Box>
-  );
 };
 
 // ============================================================
@@ -117,45 +95,44 @@ const FormField = ({
   placeholder = "",
   disabled = false,
   error = "",
-}) => {
-  return (
-    <Box>
-      <Text {...labelProps}>
-        {label}
+}) => (
+  <Box>
+    <Text {...labelProps}>
+      {label}
+      {required && (
+        <Text as="span" color="#E00000" ml="2px">
+          *
+        </Text>
+      )}
+    </Text>
 
-        {required && (
-          <Text as="span" color="#E00000" ml="2px">
-            *
-          </Text>
-        )}
-      </Text>
-
-      <FieldError error={error} />
-
-      <Box
-        as="input"
-        name={name}
-        type={type}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        disabled={disabled}
-        w="100%"
-        {...inputProps}
-        bg={disabled ? "#F3F5F8" : "white"}
-        cursor={disabled ? "not-allowed" : "text"}
-        borderColor={error ? "#F3C4C4" : "#CBD5E1"}
-        _focus={error ? {
-          borderColor: "#F3C4C4",
-          boxShadow: "0 0 0 1px #F3C4C4",
-        } : {
-          borderColor: "#3974D8",
-          boxShadow: "0 0 0 1px #3974D8",
-        }}
-      />
-    </Box>
-  );
-};
+    <Box
+      as="input"
+      name={name}
+      type={type}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      disabled={disabled}
+      w="100%"
+      {...inputProps}
+      bg={disabled ? "#F3F5F8" : "white"}
+      cursor={disabled ? "not-allowed" : "text"}
+      borderColor={error ? "#F3C4C4" : "#CBD5E1"}
+      _focus={
+        error
+          ? {
+              borderColor: "#F3C4C4",
+              boxShadow: "0 0 0 1px #F3C4C4",
+            }
+          : {
+              borderColor: "#3974D8",
+              boxShadow: "0 0 0 1px #3974D8",
+            }
+      }
+    />
+  </Box>
+);
 
 // ============================================================
 // SELECT
@@ -171,55 +148,50 @@ const FormSelect = ({
   placeholder = "Select",
   disabled = false,
   error = "",
-}) => {
-  return (
-    <Box>
-      <Text {...labelProps}>
-        {label}
+}) => (
+  <Box>
+    <Text {...labelProps}>
+      {label}
+      {required && (
+        <Text as="span" color="#E00000" ml="2px">
+          *
+        </Text>
+      )}
+    </Text>
 
-        {required && (
-          <Text as="span" color="#E00000" ml="2px">
-            *
-          </Text>
-        )}
-      </Text>
-
-      <FieldError error={error} />
-
-      <Box
-        as="select"
-        name={name}
-        value={value}
-        onChange={onChange}
-        disabled={disabled}
-        w="100%"
-        {...inputProps}
-        px="8px"
-        cursor={disabled ? "not-allowed" : "pointer"}
-        bg={disabled ? "#F3F5F8" : "white"}
-        borderColor={error ? "#F3C4C4" : "#CBD5E1"}
-        _focus={error ? {
-          borderColor: "#F3C4C4",
-          boxShadow: "0 0 0 1px #F3C4C4",
-        } : {
-          borderColor: "#3974D8",
-          boxShadow: "0 0 0 1px #3974D8",
-        }}
-      >
-        <option value="">{placeholder}</option>
-
-        {options.map((option) => (
-          <option
-            key={String(option.value)}
-            value={option.value}
-          >
-            {option.label}
-          </option>
-        ))}
-      </Box>
+    <Box
+      as="select"
+      name={name}
+      value={value}
+      onChange={onChange}
+      disabled={disabled}
+      w="100%"
+      {...inputProps}
+      px="8px"
+      cursor={disabled ? "not-allowed" : "pointer"}
+      bg={disabled ? "#F3F5F8" : "white"}
+      borderColor={error ? "#F3C4C4" : "#CBD5E1"}
+      _focus={
+        error
+          ? {
+              borderColor: "#F3C4C4",
+              boxShadow: "0 0 0 1px #F3C4C4",
+            }
+          : {
+              borderColor: "#3974D8",
+              boxShadow: "0 0 0 1px #3974D8",
+            }
+      }
+    >
+      <option value="">{placeholder}</option>
+      {options.map((option) => (
+        <option key={String(option.value)} value={option.value}>
+          {option.label}
+        </option>
+      ))}
     </Box>
-  );
-};
+  </Box>
+);
 
 // ============================================================
 // TEXTAREA
@@ -234,54 +206,47 @@ const FormTextarea = ({
   placeholder = "",
   rows = 3,
   error = "",
-}) => {
-  return (
-    <Box>
-      <Text {...labelProps}>
-        {label}
+}) => (
+  <Box>
+    <Text {...labelProps}>
+      {label}
+      {required && (
+        <Text as="span" color="#E00000" ml="2px">
+          *
+        </Text>
+      )}
+    </Text>
 
-        {required && (
-          <Text as="span" color="#E00000" ml="2px">
-            *
-          </Text>
-        )}
-      </Text>
-
-      <FieldError error={error} />
-
-      <Box
-        as="textarea"
-        name={name}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        rows={rows}
-        w="100%"
-        px="10px"
-        py="7px"
-        border="1px solid"
-        borderColor={error ? "#F3C4C4" : "#CBD5E1"}
-        borderRadius="5px"
-        bg="white"
-        color="#14265B"
-        fontSize="12px"
-        resize="vertical"
-        outline="none"
-        boxSizing="border-box"
-        _hover={{
-          borderColor: error ? "#F3C4C4" : "#AEBACC",
-        }}
-        _focus={{
-          borderColor: error ? "#F3C4C4" : "#3974D8",
-          boxShadow: error ? "0 0 0 1px #F3C4C4" : "0 0 0 1px #3974D8",
-        }}
-        _placeholder={{
-          color: "#7890B8",
-        }}
-      />
-    </Box>
-  );
-};
+    <Box
+      as="textarea"
+      name={name}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      rows={rows}
+      w="100%"
+      px="10px"
+      py="7px"
+      border="1px solid"
+      borderColor={error ? "#F3C4C4" : "#CBD5E1"}
+      borderRadius="5px"
+      bg="white"
+      color="#14265B"
+      fontSize="12px"
+      resize="vertical"
+      outline="none"
+      boxSizing="border-box"
+      _hover={{ borderColor: error ? "#F3C4C4" : "#AEBACC" }}
+      _focus={{
+        borderColor: error ? "#F3C4C4" : "#3974D8",
+        boxShadow: error
+          ? "0 0 0 1px #F3C4C4"
+          : "0 0 0 1px #3974D8",
+      }}
+      _placeholder={{ color: "#7890B8" }}
+    />
+  </Box>
+);
 
 // ============================================================
 // INITIAL FORM
@@ -289,36 +254,80 @@ const FormTextarea = ({
 
 const initialForm = {
   baptism_category: "PARISH",
-
   date_of_baptism: "",
   name: "",
   baptismal_name: "",
   gender: "",
   dob: "",
   place_of_birth: "",
-
   parish_of_baptism: "",
   panchayath: "",
   priest_name: "",
-
   god_father: "",
   god_mother: "",
-
   father_name: "",
   mother_name: "",
-
   family: "",
   main_member: "",
   relation_with_main_member: "",
-
   email: "",
   mobile_number: "",
-
   present_address: "",
   permanent_address: "",
   same_as_present: false,
-
   remarks: "",
+};
+
+// ============================================================
+// REQUIRED FIELDS PER CATEGORY
+// ============================================================
+
+const COMMON_REQUIRED = [
+  "date_of_baptism",
+  "name",
+  "baptismal_name",
+  "gender",
+  "dob",
+  "place_of_birth",
+  "parish_of_baptism",
+  "panchayath",
+  "priest_name",
+  "father_name",
+];
+
+const PARISH_REQUIRED = [
+  ...COMMON_REQUIRED,
+  "family",
+  "main_member",
+  "relation_with_main_member",
+];
+
+const OTHER_REQUIRED = [
+  ...COMMON_REQUIRED,
+  "present_address",
+  "permanent_address",
+];
+
+// Human-readable labels (for toast messages)
+const FIELD_LABELS = {
+  date_of_baptism: "Date of Baptism",
+  name: "Name",
+  baptismal_name: "Baptism Name",
+  gender: "Gender",
+  dob: "Date of Birth",
+  place_of_birth: "Place of Birth",
+  parish_of_baptism: "Parish of Baptism",
+  panchayath: "Panchayath",
+  priest_name: "Priest Name",
+  father_name: "Father Name",
+  mother_name: "Mother Name",
+  family: "Family Name",
+  main_member: "Main Member",
+  relation_with_main_member: "Relationship",
+  present_address: "Present Address",
+  permanent_address: "Permanent Address",
+  mobile_number: "Mobile Number",
+  email: "Email",
 };
 
 // ============================================================
@@ -329,15 +338,12 @@ const BaptismAddPage = () => {
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState(initialForm);
-
   const [families, setFamilies] = useState([]);
   const [members, setMembers] = useState([]);
   const [relationships, setRelationships] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
 
   // ==========================================================
@@ -346,45 +352,34 @@ const BaptismAddPage = () => {
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadData = async () => {
     setLoading(true);
-    setError("");
 
     try {
-      const [
-        familiesResponse,
-        membersResponse,
-        relationshipsResponse,
-      ] = await Promise.all([
-        apiClient.get("/api/registry/families/"),
-        apiClient.get("/api/registry/members/"),
-        apiClient.get("/api/registry/relationships/"),
-      ]);
+      const [familiesResponse, membersResponse, relationshipsResponse] =
+        await Promise.all([
+          apiClient.get("/api/registry/families/"),
+          apiClient.get("/api/registry/members/"),
+          apiClient.get("/api/registry/relationships/"),
+        ]);
 
-      const familiesData = getResponseData(familiesResponse);
-      const membersData = getResponseData(membersResponse);
-      const relationshipsData = getResponseData(relationshipsResponse);
-
-      setFamilies(familiesData);
-      setMembers(membersData);
-      setRelationships(relationshipsData);
-
-      // DEBUG
-      console.log("✓ Families loaded:", familiesData.length);
-      console.log("✓ Members loaded:", membersData.length);
-      console.log("✓ Relationships loaded:", relationshipsData.length);
+      setFamilies(getResponseData(familiesResponse));
+      setMembers(getResponseData(membersResponse));
+      setRelationships(getResponseData(relationshipsResponse));
     } catch (err) {
-      console.error(
-        "Error loading baptism form data:",
-        err
-      );
+      console.error("Error loading baptism form data:", err);
 
-      setError(
-        err?.response?.data?.detail ||
-          "Unable to load the required data. Please try again."
-      );
+      showToast({
+        title: "Failed to load data",
+        description:
+          err?.response?.data?.detail ||
+          "Unable to load the required data. Please try again.",
+        type: "error",
+        duration: 6000,
+      });
     } finally {
       setLoading(false);
     }
@@ -397,17 +392,12 @@ const BaptismAddPage = () => {
   const handleChange = (event) => {
     const { name, value } = event.target;
 
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
 
-    setFieldErrors((prev) => ({
-      ...prev,
-      [name]: undefined,
-    }));
-
-    setError("");
+    // Clear the red border for this field once user edits it
+    setFieldErrors((prev) =>
+      prev[name] ? { ...prev, [name]: undefined } : prev
+    );
   };
 
   // ==========================================================
@@ -419,57 +409,25 @@ const BaptismAddPage = () => {
 
     setFormData((prev) => ({
       ...prev,
-
       baptism_category: value,
 
-      family:
-        value === "PARISH"
-          ? prev.family
-          : "",
-
-      main_member:
-        value === "PARISH"
-          ? prev.main_member
-          : "",
-
+      family: value === "PARISH" ? prev.family : "",
+      main_member: value === "PARISH" ? prev.main_member : "",
       relation_with_main_member:
-        value === "PARISH"
-          ? prev.relation_with_main_member
-          : "",
+        value === "PARISH" ? prev.relation_with_main_member : "",
 
-      email:
-        value === "OTHER"
-          ? prev.email
-          : "",
-
-      mobile_number:
-        value === "OTHER"
-          ? prev.mobile_number
-          : "",
-
+      email: value === "OTHER" ? prev.email : "",
+      mobile_number: value === "OTHER" ? prev.mobile_number : "",
       present_address:
-        value === "OTHER"
-          ? prev.present_address
-          : "",
-
+        value === "OTHER" ? prev.present_address : "",
       permanent_address:
-        value === "OTHER"
-          ? prev.permanent_address
-          : "",
-
+        value === "OTHER" ? prev.permanent_address : "",
       same_as_present:
-        value === "OTHER"
-          ? prev.same_as_present
-          : false,
-
-      remarks:
-        value === "OTHER"
-          ? prev.remarks
-          : "",
+        value === "OTHER" ? prev.same_as_present : false,
+      remarks: value === "OTHER" ? prev.remarks : "",
     }));
 
     setFieldErrors({});
-    setError("");
   };
 
   // ==========================================================
@@ -477,27 +435,18 @@ const BaptismAddPage = () => {
   // ==========================================================
 
   const familyMembers = useMemo(() => {
-    if (!formData.family) {
-      return [];
-    }
+    if (!formData.family) return [];
 
     return members.filter((member) => {
-      const memberFamily =
-        member.family ??
-        member.family_id;
-
+      const memberFamily = member.family ?? member.family_id;
       const familyId =
         typeof memberFamily === "object"
           ? memberFamily?.id
           : memberFamily;
 
       return (
-        String(familyId) ===
-          String(formData.family) &&
-        (
-          member.is_family_head === true ||
-          member.is_family_head === 1
-        )
+        String(familyId) === String(formData.family) &&
+        (member.is_family_head === true || member.is_family_head === 1)
       );
     });
   }, [members, formData.family]);
@@ -514,24 +463,19 @@ const BaptismAddPage = () => {
       `Family #${family.id}`,
   }));
 
-  const memberOptions = familyMembers.map(
-    (member) => ({
-      value: member.id,
-      label:
-        member.name ||
-        `Member #${member.id}`,
-    })
-  );
+  const memberOptions = familyMembers.map((member) => ({
+    value: member.id,
+    label: member.name || `Member #${member.id}`,
+  }));
 
-  const relationshipOptions =
-    relationships.map((relationship) => ({
-      value: relationship.id,
-      label:
-        relationship.name ||
-        relationship.relationship_name ||
-        relationship.relation_name ||
-        `Relationship #${relationship.id}`,
-    }));
+  const relationshipOptions = relationships.map((relationship) => ({
+    value: relationship.id,
+    label:
+      relationship.name ||
+      relationship.relationship_name ||
+      relationship.relation_name ||
+      `Relationship #${relationship.id}`,
+  }));
 
   // ==========================================================
   // FAMILY CHANGE
@@ -565,9 +509,7 @@ const BaptismAddPage = () => {
     setFormData((prev) => ({
       ...prev,
       same_as_present: checked,
-      permanent_address: checked
-        ? prev.present_address
-        : "",
+      permanent_address: checked ? prev.present_address : "",
     }));
   };
 
@@ -581,10 +523,9 @@ const BaptismAddPage = () => {
     setFormData((prev) => ({
       ...prev,
       present_address: value,
-      permanent_address:
-        prev.same_as_present
-          ? value
-          : prev.permanent_address,
+      permanent_address: prev.same_as_present
+        ? value
+        : prev.permanent_address,
     }));
 
     setFieldErrors((prev) => ({
@@ -593,8 +534,52 @@ const BaptismAddPage = () => {
       permanent_address: undefined,
       address: undefined,
     }));
+  };
 
-    setError("");
+  // ==========================================================
+  // VALIDATE
+  // ==========================================================
+
+  const validateForm = () => {
+    const requiredFields =
+      formData.baptism_category === "PARISH"
+        ? PARISH_REQUIRED
+        : OTHER_REQUIRED;
+
+    const errors = {};
+    const missing = [];
+
+    // -------- Required fields --------
+    requiredFields.forEach((field) => {
+      const value = formData[field];
+
+      if (value === "" || value === null || value === undefined) {
+        errors[field] = `${
+          FIELD_LABELS[field] || field
+        } is required`;
+        missing.push(FIELD_LABELS[field] || field);
+      }
+    });
+
+    // -------- Date cross-check --------
+    // Date of Baptism cannot be earlier than Date of Birth.
+    // (Same-day is allowed — only strictly-earlier is rejected.)
+    if (formData.dob && formData.date_of_baptism) {
+      const dob = new Date(formData.dob);
+      const baptismDate = new Date(formData.date_of_baptism);
+
+      const dobValid = !Number.isNaN(dob.getTime());
+      const baptismValid = !Number.isNaN(baptismDate.getTime());
+
+      if (dobValid && baptismValid && baptismDate < dob) {
+        errors.date_of_baptism =
+          "Date of Baptism cannot be earlier than Date of Birth";
+      }
+    }
+
+    setFieldErrors(errors);
+
+    return { errors, missing };
   };
 
   // ==========================================================
@@ -604,249 +589,143 @@ const BaptismAddPage = () => {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
+    // ---- Client-side validation ----
+    const { errors, missing } = validateForm();
+
+    if (Object.keys(errors).length > 0) {
+      // Prefer explicit rule errors (e.g. date ordering) over the
+      // generic "missing fields" list when both exist.
+      const explicitMessages = Object.entries(errors)
+        .filter(([key]) => !missing.includes(FIELD_LABELS[key]))
+        .map(([, msg]) => msg);
+
+      let description;
+
+      if (explicitMessages.length > 0) {
+        description = explicitMessages.join("\n");
+      } else if (missing.length === 1) {
+        description = `${missing[0]} is required.`;
+      } else {
+        description = `Please fill: ${missing.join(", ")}.`;
+      }
+
+      showToast({
+        title: "Please fix the form",
+        description,
+        type: "warning",
+        duration: 5000,
+      });
+      return;
+    }
+
     setSaving(true);
-    setError("");
     setFieldErrors({});
 
     try {
       const payload = {
-        baptism_category:
-          formData.baptism_category,
+        baptism_category: formData.baptism_category,
+        date_of_baptism: formData.date_of_baptism,
+        name: formData.name,
+        baptismal_name: formData.baptismal_name,
+        gender: formData.gender,
+        dob: formData.dob || null,
+        place_of_birth: formData.place_of_birth,
+        parish_of_baptism: formData.parish_of_baptism,
+        panchayath: formData.panchayath,
+        priest_name: formData.priest_name,
+        god_father: formData.god_father,
+        god_mother: formData.god_mother,
+        father_name: formData.father_name,
+        mother_name: formData.mother_name,
 
-        date_of_baptism:
-          formData.date_of_baptism,
-
-        name:
-          formData.name,
-
-        baptismal_name:
-          formData.baptismal_name,
-
-        gender:
-          formData.gender,
-
-        dob:
-          formData.dob || null,
-
-        place_of_birth:
-          formData.place_of_birth,
-
-        parish_of_baptism:
-          formData.parish_of_baptism,
-
-        // Text fields
-        panchayath:
-          formData.panchayath,
-
-        priest_name:
-          formData.priest_name,
-
-        god_father:
-          formData.god_father,
-
-        god_mother:
-          formData.god_mother,
-
-        father_name:
-          formData.father_name,
-
-        mother_name:
-          formData.mother_name,
-
-        // ======================================================
-        // ADDRESS FIELD (REQUIRED FOR ALL CATEGORIES)
-        // ======================================================
+        // Required "address" — falls back to parish of baptism
         address:
           formData.present_address ||
           formData.parish_of_baptism ||
           "",
       };
 
-      // ======================================================
-      // PARISH MEMBER DATA
-      // ======================================================
-
-      if (
-        formData.baptism_category ===
-        "PARISH"
-      ) {
-        payload.family =
-          formData.family
-            ? Number(formData.family)
-            : null;
-
-        payload.main_member =
-          formData.main_member
-            ? Number(formData.main_member)
-            : null;
-
+      if (formData.baptism_category === "PARISH") {
+        payload.family = formData.family
+          ? Number(formData.family)
+          : null;
+        payload.main_member = formData.main_member
+          ? Number(formData.main_member)
+          : null;
         payload.relation_with_main_member =
           formData.relation_with_main_member
-            ? Number(
-                formData.relation_with_main_member
-              )
+            ? Number(formData.relation_with_main_member)
             : null;
       }
 
-      // ======================================================
-      // OTHER MEMBER DATA
-      // ======================================================
-
-      if (
-        formData.baptism_category ===
-        "OTHER"
-      ) {
-        payload.email =
-          formData.email;
-
-        payload.mobile_number =
-          formData.mobile_number;
-
-        payload.present_address =
-          formData.present_address;
-
-        payload.permanent_address =
-          formData.permanent_address;
-
-        payload.remarks =
-          formData.remarks;
+      if (formData.baptism_category === "OTHER") {
+        payload.email = formData.email;
+        payload.mobile_number = formData.mobile_number;
+        payload.present_address = formData.present_address;
+        payload.permanent_address = formData.permanent_address;
+        payload.remarks = formData.remarks;
       }
 
-      // ======================================================
-      // DEBUG PAYLOAD
-      // ======================================================
+      await apiClient.post("/api/registry/baptisms/", payload);
 
-      console.log("=== BAPTISM SUBMISSION ===");
-      console.log("Category:", formData.baptism_category);
-      console.log("Payload keys:", Object.keys(payload));
-      console.log(
-        "Full payload:",
-        JSON.stringify(payload, null, 2)
-      );
-
-      // ======================================================
-      // API REQUEST
-      // ======================================================
-
-      const response =
-        await apiClient.post(
-          "/api/registry/baptisms/",
-          payload
-        );
-
-      console.log(
-        "✓ Baptism created successfully:",
-        response.data
-      );
+      showToast({
+        title: "Baptism recorded",
+        description: "The baptism record was created successfully.",
+        type: "success",
+        duration: 4000,
+      });
 
       navigate("/baptism");
     } catch (err) {
-      console.error(
-        "✗ Error creating baptism:",
-        err
-      );
+      console.error("Error creating baptism:", err);
 
-      // ======================================================
-      // SHOW EXACT BACKEND RESPONSE
-      // ======================================================
+      const responseData = err?.response?.data;
 
-      const responseData =
-        err?.response?.data;
-
-      console.error("=== API ERROR DETAILS ===");
-      console.error(
-        "Status code:",
-        err?.response?.status
-      );
-      console.error(
-        "Response data:",
-        JSON.stringify(responseData, null, 2)
-      );
-      console.error(
-        "Request headers:",
-        err?.response?.headers
-      );
-
-      // Log what was sent
-      console.error(
-        "Payload that was sent:",
-        JSON.stringify({
-          baptism_category: formData.baptism_category,
-          date_of_baptism: formData.date_of_baptism,
-          name: formData.name,
-          baptismal_name: formData.baptismal_name,
-          gender: formData.gender,
-          dob: formData.dob || null,
-          place_of_birth: formData.place_of_birth,
-          parish_of_baptism: formData.parish_of_baptism,
-          panchayath: formData.panchayath,
-          priest_name: formData.priest_name,
-          god_father: formData.god_father,
-          god_mother: formData.god_mother,
-          father_name: formData.father_name,
-          mother_name: formData.mother_name,
-          ...(formData.baptism_category === "PARISH" && {
-            family: formData.family ? Number(formData.family) : null,
-            main_member: formData.main_member ? Number(formData.main_member) : null,
-            relation_with_main_member: formData.relation_with_main_member ? Number(formData.relation_with_main_member) : null,
-          }),
-          ...(formData.baptism_category === "OTHER" && {
-            email: formData.email,
-            mobile_number: formData.mobile_number,
-            present_address: formData.present_address,
-            permanent_address: formData.permanent_address,
-            address: formData.present_address,
-            remarks: formData.remarks,
-          }),
-        }, null, 2)
-      );
-
-      // Parse field errors
+      // -------- Map backend field errors --------
       if (
         responseData &&
-        typeof responseData === "object"
+        typeof responseData === "object" &&
+        !Array.isArray(responseData)
       ) {
         const errors = {};
 
-        Object.entries(
-          responseData
-        ).forEach(([key, value]) => {
-          if (Array.isArray(value)) {
-            errors[key] =
-              value.join(", ");
-          } else if (
-            typeof value === "string"
-          ) {
-            errors[key] = value;
-          } else {
-            errors[key] =
-              JSON.stringify(value);
-          }
+        Object.entries(responseData).forEach(([key, value]) => {
+          if (Array.isArray(value)) errors[key] = value.join(", ");
+          else if (typeof value === "string") errors[key] = value;
+          else errors[key] = JSON.stringify(value);
         });
-
-        console.error(
-          "Parsed field errors:",
-          errors
-        );
 
         setFieldErrors(errors);
 
-        // Get general error
         const generalError =
           responseData.detail ||
           responseData.non_field_errors?.[0];
 
-        if (generalError) {
-          setError(generalError);
-        } else if (Object.keys(errors).length > 0) {
-          setError(
-            `Validation failed for: ${Object.keys(errors).join(", ")}`
-          );
-        }
+        // Prefer a specific field message if only one exists
+        const fieldMessages = Object.values(errors).filter(Boolean);
+        const onlyOneFieldError =
+          fieldMessages.length === 1 && !generalError;
+
+        showToast({
+          title: "Could not save baptism",
+          description:
+            generalError ||
+            (onlyOneFieldError
+              ? fieldMessages[0]
+              : `Please check: ${Object.keys(errors)
+                  .map((k) => FIELD_LABELS[k] || k)
+                  .join(", ")}`),
+          type: "error",
+          duration: 7000,
+        });
       } else {
-        setError(
-          "Unable to create baptism record. Please try again."
-        );
+        showToast({
+          title: "Could not save baptism",
+          description:
+            "Unable to create baptism record. Please try again.",
+          type: "error",
+          duration: 7000,
+        });
       }
     } finally {
       setSaving(false);
@@ -861,32 +740,16 @@ const BaptismAddPage = () => {
     return (
       <>
         <Navbar />
-
-        <Box
-          minH="calc(100vh - 120px)"
-          bg="white"
-        >
-          <Flex
-            minH="400px"
-            align="center"
-            justify="center"
-          >
+        <Box minH="calc(100vh - 120px)" bg="white">
+          <Flex minH="400px" align="center" justify="center">
             <VStack gap="3">
-              <Spinner
-                size="md"
-                color="#E00000"
-              />
-
-              <Text
-                fontSize="11px"
-                color="#7081A3"
-              >
+              <Spinner size="md" color="#E00000" />
+              <Text fontSize="11px" color="#7081A3">
                 Loading baptism form...
               </Text>
             </VStack>
           </Flex>
         </Box>
-
         <Footer />
       </>
     );
@@ -896,88 +759,28 @@ const BaptismAddPage = () => {
   // UI
   // ==========================================================
 
-  const isParish =
-    formData.baptism_category ===
-    "PARISH";
+  const isParish = formData.baptism_category === "PARISH";
 
   return (
-    <Box
-      minH="100vh"
-      bg="white"
-    >
-      {/* ======================================================
-          NAVBAR
-      ====================================================== */}
-
+    <Box minH="100vh" bg="white">
       <Navbar />
-
-      {/* ======================================================
-          MAIN CONTENT
-      ====================================================== */}
 
       <Box
         maxW="1400px"
         mx="auto"
-        px={{
-          base: "16px",
-          md: "24px",
-          lg: "30px",
-        }}
-        py={{
-          base: "14px",
-          md: "16px",
-        }}
+        px={{ base: "16px", md: "24px", lg: "30px" }}
+        py={{ base: "14px", md: "16px" }}
       >
-        {/* ==================================================
-            BREADCRUMB
-        ================================================== */}
-
-        <Flex
-          align="center"
-          gap="7px"
-          mb="10px"
-          flexWrap="wrap"
-        >
-          <Text
-            fontSize="11px"
-            color="#3974D8"
-          >
-            Masters
-          </Text>
-
-          <Text
-            fontSize="11px"
-            color="#A1ADC0"
-          >
-            /
-          </Text>
-
-          <Text
-            fontSize="11px"
-            color="#3974D8"
-          >
-            Baptism Register
-          </Text>
-
-          <Text
-            fontSize="11px"
-            color="#A1ADC0"
-          >
-            /
-          </Text>
-
-          <Text
-            fontSize="11px"
-            color="#7081A3"
-          >
-            Add Baptism
-          </Text>
+        {/* BREADCRUMB */}
+        <Flex align="center" gap="7px" mb="10px" flexWrap="wrap">
+          <Text fontSize="11px" color="#3974D8">Masters</Text>
+          <Text fontSize="11px" color="#A1ADC0">/</Text>
+          <Text fontSize="11px" color="#3974D8">Baptism Register</Text>
+          <Text fontSize="11px" color="#A1ADC0">/</Text>
+          <Text fontSize="11px" color="#7081A3">Add Baptism</Text>
         </Flex>
 
-        {/* ==================================================
-            PAGE HEADER
-        ================================================== */}
-
+        {/* HEADER */}
         <Box mb="12px">
           <Text
             fontSize="10px"
@@ -991,10 +794,7 @@ const BaptismAddPage = () => {
           </Text>
 
           <Heading
-            fontSize={{
-              base: "22px",
-              md: "25px",
-            }}
+            fontSize={{ base: "22px", md: "25px" }}
             fontWeight="600"
             color="#14265B"
             fontFamily="Outfit, sans-serif"
@@ -1005,45 +805,14 @@ const BaptismAddPage = () => {
               : "Add Baptism – Other Parish Member"}
           </Heading>
 
-          <Text
-            fontSize="11px"
-            color="#7081A3"
-            mt="3px"
-          >
+          <Text fontSize="11px" color="#7081A3" mt="3px">
             {isParish
               ? "Register baptism details for a parish member."
               : "Register baptism details for a member from another parish."}
           </Text>
         </Box>
 
-        {/* ==================================================
-            GENERAL ERROR
-        ================================================== */}
-
-        {error && (
-          <Box
-            bg="#FFF5F5"
-            border="1px solid"
-            borderColor="#F3C4C4"
-            borderRadius="6px"
-            px="10px"
-            py="8px"
-            mb="10px"
-          >
-            <Text
-              fontSize="11px"
-              color="#C00000"
-              fontWeight="500"
-            >
-              {error}
-            </Text>
-          </Box>
-        )}
-
-        {/* ==================================================
-            FORM CARD
-        ================================================== */}
-
+        {/* FORM CARD */}
         <Box
           as="form"
           onSubmit={handleSubmit}
@@ -1053,20 +822,7 @@ const BaptismAddPage = () => {
           borderRadius="6px"
           overflow="hidden"
         >
-          {/* ==================================================
-              FORM BODY
-          ================================================== */}
-
-          <Box
-            p={{
-              base: "14px",
-              md: "16px",
-            }}
-          >
-            {/* =================================================
-                SECTION TITLE
-            ================================================= */}
-
+          <Box p={{ base: "14px", md: "16px" }}>
             <Text
               fontSize="14px"
               fontWeight="600"
@@ -1076,49 +832,25 @@ const BaptismAddPage = () => {
               Baptism Information
             </Text>
 
-            {/* =================================================
-                PARISH MEMBER
-            ================================================= */}
-
             {isParish ? (
               <>
                 {/* ROW 1 */}
-
                 <SimpleGrid
-                  columns={{
-                    base: 1,
-                    md: 2,
-                    lg: 3,
-                  }}
-                  columnGap={{
-                    base: "14px",
-                    md: "24px",
-                  }}
+                  columns={{ base: 1, md: 2, lg: 3 }}
+                  columnGap={{ base: "14px", md: "24px" }}
                   rowGap="7px"
                   mb="7px"
                 >
                   <FormSelect
                     label="Baptism Category"
                     name="baptism_category"
-                    value={
-                      formData.baptism_category
-                    }
-                    onChange={
-                      handleCategoryChange
-                    }
+                    value={formData.baptism_category}
+                    onChange={handleCategoryChange}
                     required
                     error={fieldErrors.baptism_category}
                     options={[
-                      {
-                        value: "PARISH",
-                        label:
-                          "Parish Member",
-                      },
-                      {
-                        value: "OTHER",
-                        label:
-                          "Other / Outsider",
-                      },
+                      { value: "PARISH", label: "Parish Member" },
+                      { value: "OTHER", label: "Other / Outsider" },
                     ]}
                     placeholder="Select baptism category"
                   />
@@ -1127,9 +859,7 @@ const BaptismAddPage = () => {
                     label="Date of Baptism"
                     name="date_of_baptism"
                     type="date"
-                    value={
-                      formData.date_of_baptism
-                    }
+                    value={formData.date_of_baptism}
                     onChange={handleChange}
                     required
                     error={fieldErrors.date_of_baptism}
@@ -1147,26 +877,16 @@ const BaptismAddPage = () => {
                 </SimpleGrid>
 
                 {/* ROW 2 */}
-
                 <SimpleGrid
-                  columns={{
-                    base: 1,
-                    md: 2,
-                    lg: 3,
-                  }}
-                  columnGap={{
-                    base: "14px",
-                    md: "24px",
-                  }}
+                  columns={{ base: 1, md: 2, lg: 3 }}
+                  columnGap={{ base: "14px", md: "24px" }}
                   rowGap="7px"
                   mb="7px"
                 >
                   <FormField
                     label="Parish of Baptism"
                     name="parish_of_baptism"
-                    value={
-                      formData.parish_of_baptism
-                    }
+                    value={formData.parish_of_baptism}
                     onChange={handleChange}
                     required
                     error={fieldErrors.parish_of_baptism}
@@ -1176,9 +896,7 @@ const BaptismAddPage = () => {
                   <FormField
                     label="Baptism Name"
                     name="baptismal_name"
-                    value={
-                      formData.baptismal_name
-                    }
+                    value={formData.baptismal_name}
                     onChange={handleChange}
                     required
                     error={fieldErrors.baptismal_name}
@@ -1193,31 +911,17 @@ const BaptismAddPage = () => {
                     required
                     error={fieldErrors.gender}
                     options={[
-                      {
-                        value: "MALE",
-                        label: "Male",
-                      },
-                      {
-                        value: "FEMALE",
-                        label: "Female",
-                      },
+                      { value: "MALE", label: "Male" },
+                      { value: "FEMALE", label: "Female" },
                     ]}
                     placeholder="Select gender"
                   />
                 </SimpleGrid>
 
                 {/* ROW 3 */}
-
                 <SimpleGrid
-                  columns={{
-                    base: 1,
-                    md: 2,
-                    lg: 3,
-                  }}
-                  columnGap={{
-                    base: "14px",
-                    md: "24px",
-                  }}
+                  columns={{ base: 1, md: 2, lg: 3 }}
+                  columnGap={{ base: "14px", md: "24px" }}
                   rowGap="7px"
                   mb="7px"
                 >
@@ -1234,22 +938,17 @@ const BaptismAddPage = () => {
                   <FormField
                     label="Place of Birth"
                     name="place_of_birth"
-                    value={
-                      formData.place_of_birth
-                    }
+                    value={formData.place_of_birth}
                     onChange={handleChange}
                     required
                     error={fieldErrors.place_of_birth}
                     placeholder="Enter place of birth"
                   />
 
-                  {/* TEXT INPUT */}
                   <FormField
                     label="Panchayath"
                     name="panchayath"
-                    value={
-                      formData.panchayath
-                    }
+                    value={formData.panchayath}
                     onChange={handleChange}
                     required
                     error={fieldErrors.panchayath}
@@ -1258,27 +957,16 @@ const BaptismAddPage = () => {
                 </SimpleGrid>
 
                 {/* ROW 4 */}
-
                 <SimpleGrid
-                  columns={{
-                    base: 1,
-                    md: 2,
-                    lg: 3,
-                  }}
-                  columnGap={{
-                    base: "14px",
-                    md: "24px",
-                  }}
+                  columns={{ base: 1, md: 2, lg: 3 }}
+                  columnGap={{ base: "14px", md: "24px" }}
                   rowGap="7px"
                   mb="7px"
                 >
-                  {/* TEXT INPUT */}
                   <FormField
                     label="Priest Name"
                     name="priest_name"
-                    value={
-                      formData.priest_name
-                    }
+                    value={formData.priest_name}
                     onChange={handleChange}
                     required
                     error={fieldErrors.priest_name}
@@ -1288,9 +976,7 @@ const BaptismAddPage = () => {
                   <FormField
                     label="God Father"
                     name="god_father"
-                    value={
-                      formData.god_father
-                    }
+                    value={formData.god_father}
                     onChange={handleChange}
                     error={fieldErrors.god_father}
                     placeholder="Enter god father name"
@@ -1299,9 +985,7 @@ const BaptismAddPage = () => {
                   <FormField
                     label="God Mother"
                     name="god_mother"
-                    value={
-                      formData.god_mother
-                    }
+                    value={formData.god_mother}
                     onChange={handleChange}
                     error={fieldErrors.god_mother}
                     placeholder="Enter god mother name"
@@ -1309,26 +993,16 @@ const BaptismAddPage = () => {
                 </SimpleGrid>
 
                 {/* ROW 5 */}
-
                 <SimpleGrid
-                  columns={{
-                    base: 1,
-                    md: 2,
-                    lg: 3,
-                  }}
-                  columnGap={{
-                    base: "14px",
-                    md: "24px",
-                  }}
+                  columns={{ base: 1, md: 2, lg: 3 }}
+                  columnGap={{ base: "14px", md: "24px" }}
                   rowGap="7px"
                   mb="7px"
                 >
                   <FormField
                     label="Father Name"
                     name="father_name"
-                    value={
-                      formData.father_name
-                    }
+                    value={formData.father_name}
                     onChange={handleChange}
                     required
                     error={fieldErrors.father_name}
@@ -1338,9 +1012,7 @@ const BaptismAddPage = () => {
                   <FormField
                     label="Mother Name"
                     name="mother_name"
-                    value={
-                      formData.mother_name
-                    }
+                    value={formData.mother_name}
                     onChange={handleChange}
                     required
                     error={fieldErrors.mother_name}
@@ -1349,26 +1021,16 @@ const BaptismAddPage = () => {
                 </SimpleGrid>
 
                 {/* ROW 6 */}
-
                 <SimpleGrid
-                  columns={{
-                    base: 1,
-                    md: 2,
-                    lg: 3,
-                  }}
-                  columnGap={{
-                    base: "14px",
-                    md: "24px",
-                  }}
+                  columns={{ base: 1, md: 2, lg: 3 }}
+                  columnGap={{ base: "14px", md: "24px" }}
                   rowGap="7px"
                 >
                   <FormSelect
                     label="Family Name"
                     name="family"
                     value={formData.family}
-                    onChange={
-                      handleFamilyChange
-                    }
+                    onChange={handleFamilyChange}
                     required
                     error={fieldErrors.family}
                     options={familyOptions}
@@ -1378,9 +1040,7 @@ const BaptismAddPage = () => {
                   <FormSelect
                     label="Main Member (Head)"
                     name="main_member"
-                    value={
-                      formData.main_member
-                    }
+                    value={formData.main_member}
                     onChange={handleChange}
                     required
                     disabled={!formData.family}
@@ -1396,62 +1056,36 @@ const BaptismAddPage = () => {
                   <FormSelect
                     label="Relationship"
                     name="relation_with_main_member"
-                    value={
-                      formData.relation_with_main_member
-                    }
+                    value={formData.relation_with_main_member}
                     onChange={handleChange}
                     required
                     error={fieldErrors.relation_with_main_member}
-                    options={
-                      relationshipOptions
-                    }
+                    options={relationshipOptions}
                     placeholder="Select relationship"
                   />
                 </SimpleGrid>
               </>
             ) : (
               <>
-                {/* =================================================
-                    OTHER PARISH MEMBER
-                ================================================= */}
+                {/* ============ OTHER PARISH MEMBER ============ */}
 
                 {/* ROW 1 */}
-
                 <SimpleGrid
-                  columns={{
-                    base: 1,
-                    md: 2,
-                    lg: 3,
-                  }}
-                  columnGap={{
-                    base: "14px",
-                    md: "24px",
-                  }}
+                  columns={{ base: 1, md: 2, lg: 3 }}
+                  columnGap={{ base: "14px", md: "24px" }}
                   rowGap="7px"
                   mb="7px"
                 >
                   <FormSelect
                     label="Baptism Category"
                     name="baptism_category"
-                    value={
-                      formData.baptism_category
-                    }
-                    onChange={
-                      handleCategoryChange
-                    }
+                    value={formData.baptism_category}
+                    onChange={handleCategoryChange}
                     required
                     error={fieldErrors.baptism_category}
                     options={[
-                      {
-                        value: "PARISH",
-                        label:
-                          "Parish Member",
-                      },
-                      {
-                        value: "OTHER",
-                        label:
-                          "Other / Outsider",
-                      },
+                      { value: "PARISH", label: "Parish Member" },
+                      { value: "OTHER", label: "Other / Outsider" },
                     ]}
                     placeholder="Select baptism category"
                   />
@@ -1460,9 +1094,7 @@ const BaptismAddPage = () => {
                     label="Date of Baptism"
                     name="date_of_baptism"
                     type="date"
-                    value={
-                      formData.date_of_baptism
-                    }
+                    value={formData.date_of_baptism}
                     onChange={handleChange}
                     required
                     error={fieldErrors.date_of_baptism}
@@ -1480,26 +1112,16 @@ const BaptismAddPage = () => {
                 </SimpleGrid>
 
                 {/* ROW 2 */}
-
                 <SimpleGrid
-                  columns={{
-                    base: 1,
-                    md: 2,
-                    lg: 3,
-                  }}
-                  columnGap={{
-                    base: "14px",
-                    md: "24px",
-                  }}
+                  columns={{ base: 1, md: 2, lg: 3 }}
+                  columnGap={{ base: "14px", md: "24px" }}
                   rowGap="7px"
                   mb="7px"
                 >
                   <FormField
                     label="Baptism Name"
                     name="baptismal_name"
-                    value={
-                      formData.baptismal_name
-                    }
+                    value={formData.baptismal_name}
                     onChange={handleChange}
                     required
                     error={fieldErrors.baptismal_name}
@@ -1514,14 +1136,8 @@ const BaptismAddPage = () => {
                     required
                     error={fieldErrors.gender}
                     options={[
-                      {
-                        value: "MALE",
-                        label: "Male",
-                      },
-                      {
-                        value: "FEMALE",
-                        label: "Female",
-                      },
+                      { value: "MALE", label: "Male" },
+                      { value: "FEMALE", label: "Female" },
                     ]}
                     placeholder="Select gender"
                   />
@@ -1538,26 +1154,16 @@ const BaptismAddPage = () => {
                 </SimpleGrid>
 
                 {/* ROW 3 */}
-
                 <SimpleGrid
-                  columns={{
-                    base: 1,
-                    md: 2,
-                    lg: 3,
-                  }}
-                  columnGap={{
-                    base: "14px",
-                    md: "24px",
-                  }}
+                  columns={{ base: 1, md: 2, lg: 3 }}
+                  columnGap={{ base: "14px", md: "24px" }}
                   rowGap="7px"
                   mb="7px"
                 >
                   <FormField
                     label="Place of Birth"
                     name="place_of_birth"
-                    value={
-                      formData.place_of_birth
-                    }
+                    value={formData.place_of_birth}
                     onChange={handleChange}
                     required
                     error={fieldErrors.place_of_birth}
@@ -1567,22 +1173,17 @@ const BaptismAddPage = () => {
                   <FormField
                     label="Parish of Baptism"
                     name="parish_of_baptism"
-                    value={
-                      formData.parish_of_baptism
-                    }
+                    value={formData.parish_of_baptism}
                     onChange={handleChange}
                     required
                     error={fieldErrors.parish_of_baptism}
                     placeholder="Enter parish of baptism"
                   />
 
-                  {/* TEXT INPUT */}
                   <FormField
                     label="Priest Name"
                     name="priest_name"
-                    value={
-                      formData.priest_name
-                    }
+                    value={formData.priest_name}
                     onChange={handleChange}
                     required
                     error={fieldErrors.priest_name}
@@ -1591,27 +1192,16 @@ const BaptismAddPage = () => {
                 </SimpleGrid>
 
                 {/* ROW 4 */}
-
                 <SimpleGrid
-                  columns={{
-                    base: 1,
-                    md: 2,
-                    lg: 3,
-                  }}
-                  columnGap={{
-                    base: "14px",
-                    md: "24px",
-                  }}
+                  columns={{ base: 1, md: 2, lg: 3 }}
+                  columnGap={{ base: "14px", md: "24px" }}
                   rowGap="7px"
                   mb="7px"
                 >
-                  {/* TEXT INPUT */}
                   <FormField
                     label="Panchayath"
                     name="panchayath"
-                    value={
-                      formData.panchayath
-                    }
+                    value={formData.panchayath}
                     onChange={handleChange}
                     required
                     error={fieldErrors.panchayath}
@@ -1621,9 +1211,7 @@ const BaptismAddPage = () => {
                   <FormField
                     label="God Father"
                     name="god_father"
-                    value={
-                      formData.god_father
-                    }
+                    value={formData.god_father}
                     onChange={handleChange}
                     error={fieldErrors.god_father}
                     placeholder="Enter god father name"
@@ -1632,9 +1220,7 @@ const BaptismAddPage = () => {
                   <FormField
                     label="God Mother"
                     name="god_mother"
-                    value={
-                      formData.god_mother
-                    }
+                    value={formData.god_mother}
                     onChange={handleChange}
                     error={fieldErrors.god_mother}
                     placeholder="Enter god mother name"
@@ -1642,26 +1228,16 @@ const BaptismAddPage = () => {
                 </SimpleGrid>
 
                 {/* ROW 5 */}
-
                 <SimpleGrid
-                  columns={{
-                    base: 1,
-                    md: 2,
-                    lg: 3,
-                  }}
-                  columnGap={{
-                    base: "14px",
-                    md: "24px",
-                  }}
+                  columns={{ base: 1, md: 2, lg: 3 }}
+                  columnGap={{ base: "14px", md: "24px" }}
                   rowGap="7px"
                   mb="7px"
                 >
                   <FormField
                     label="Father Name"
                     name="father_name"
-                    value={
-                      formData.father_name
-                    }
+                    value={formData.father_name}
                     onChange={handleChange}
                     required
                     error={fieldErrors.father_name}
@@ -1671,9 +1247,7 @@ const BaptismAddPage = () => {
                   <FormField
                     label="Mother Name"
                     name="mother_name"
-                    value={
-                      formData.mother_name
-                    }
+                    value={formData.mother_name}
                     onChange={handleChange}
                     error={fieldErrors.mother_name}
                     placeholder="Enter mother name"
@@ -1691,73 +1265,47 @@ const BaptismAddPage = () => {
                 </SimpleGrid>
 
                 {/* ROW 6 */}
-
                 <SimpleGrid
-                  columns={{
-                    base: 1,
-                    md: 2,
-                    lg: 3,
-                  }}
-                  columnGap={{
-                    base: "14px",
-                    md: "24px",
-                  }}
+                  columns={{ base: 1, md: 2, lg: 3 }}
+                  columnGap={{ base: "14px", md: "24px" }}
                   rowGap="7px"
                   mb="7px"
                 >
                   <Box>
-                    <Text {...labelProps}>
-                      Mobile Number
-                    </Text>
-
-                    <FieldError 
-                      error={fieldErrors.mobile_number} 
-                    />
+                    <Text {...labelProps}>Mobile Number</Text>
 
                     <Flex gap="7px">
-                      <Box
-                        as="select"
-                        w="70px"
-                        {...inputProps}
-                        px="6px"
-                      >
-                        <option>
-                          +91
-                        </option>
+                      <Box as="select" w="70px" {...inputProps} px="6px">
+                        <option>+91</option>
                       </Box>
 
                       <Box
                         as="input"
                         name="mobile_number"
                         type="tel"
-                        value={
-                          formData.mobile_number
-                        }
+                        value={formData.mobile_number}
                         onChange={handleChange}
                         placeholder="Enter mobile number"
                         flex="1"
                         {...inputProps}
+                        borderColor={
+                          fieldErrors.mobile_number ? "#F3C4C4" : "#CBD5E1"
+                        }
                       />
                     </Flex>
                   </Box>
 
-                  <Box
-                    gridColumn={{
-                      base: "auto",
-                      md: "span 2",
-                    }}
-                  >
+                  <Box gridColumn={{ base: "auto", md: "span 2" }}>
                     <FormTextarea
                       label="Present Address"
                       name="present_address"
-                      value={
-                        formData.present_address
-                      }
-                      onChange={
-                        handlePresentAddressChange
-                      }
+                      value={formData.present_address}
+                      onChange={handlePresentAddressChange}
                       required
-                      error={fieldErrors.present_address || fieldErrors.address}
+                      error={
+                        fieldErrors.present_address ||
+                        fieldErrors.address
+                      }
                       placeholder="Enter present address"
                       rows={2}
                     />
@@ -1765,16 +1313,9 @@ const BaptismAddPage = () => {
                 </SimpleGrid>
 
                 {/* ROW 7 */}
-
                 <SimpleGrid
-                  columns={{
-                    base: 1,
-                    md: 2,
-                  }}
-                  columnGap={{
-                    base: "14px",
-                    md: "24px",
-                  }}
+                  columns={{ base: 1, md: 2 }}
+                  columnGap={{ base: "14px", md: "24px" }}
                   rowGap="7px"
                   alignItems="start"
                 >
@@ -1782,9 +1323,7 @@ const BaptismAddPage = () => {
                     <FormTextarea
                       label="Permanent Address"
                       name="permanent_address"
-                      value={
-                        formData.permanent_address
-                      }
+                      value={formData.permanent_address}
                       onChange={handleChange}
                       required
                       error={fieldErrors.permanent_address}
@@ -1792,29 +1331,18 @@ const BaptismAddPage = () => {
                       rows={2}
                     />
 
-                    <Flex
-                      align="center"
-                      gap="6px"
-                      mt="6px"
-                    >
+                    <Flex align="center" gap="6px" mt="6px">
                       <Box
                         as="input"
                         type="checkbox"
-                        checked={
-                          formData.same_as_present
-                        }
-                        onChange={
-                          handleSameAddress
-                        }
+                        checked={formData.same_as_present}
+                        onChange={handleSameAddress}
                         w="14px"
                         h="14px"
                         accentColor="#E00000"
                       />
 
-                      <Text
-                        fontSize="10px"
-                        color="#14265B"
-                      >
+                      <Text fontSize="10px" color="#14265B">
                         Same as Present Address
                       </Text>
                     </Flex>
@@ -1834,18 +1362,12 @@ const BaptismAddPage = () => {
             )}
           </Box>
 
-          {/* ==================================================
-              FORM FOOTER
-          ================================================== */}
-
+          {/* FORM FOOTER */}
           <Flex
             justify="flex-end"
             align="center"
             gap="8px"
-            px={{
-              base: "14px",
-              md: "16px",
-            }}
+            px={{ base: "14px", md: "16px" }}
             py="10px"
             borderTop="1px solid"
             borderColor="#DDE4EE"
@@ -1864,13 +1386,9 @@ const BaptismAddPage = () => {
               borderColor="#E00000"
               color="#E00000"
               bg="white"
-              onClick={() =>
-                navigate("/baptism")
-              }
+              onClick={() => navigate("/baptism")}
               disabled={saving}
-              _hover={{
-                bg: "#FFF5F5",
-              }}
+              _hover={{ bg: "#FFF5F5" }}
             >
               Cancel
             </Button>
@@ -1886,16 +1404,11 @@ const BaptismAddPage = () => {
               bg="#E00000"
               color="white"
               disabled={saving}
-              _hover={{
-                bg: "#C90000",
-              }}
+              _hover={{ bg: "#C90000" }}
             >
               {saving ? (
                 <>
-                  <Spinner
-                    size="xs"
-                    mr="5px"
-                  />
+                  <Spinner size="xs" mr="5px" />
                   Saving...
                 </>
               ) : (
@@ -1908,10 +1421,6 @@ const BaptismAddPage = () => {
           </Flex>
         </Box>
       </Box>
-
-      {/* ======================================================
-          FOOTER
-      ====================================================== */}
 
       <Footer />
     </Box>

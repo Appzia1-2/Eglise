@@ -43,6 +43,13 @@ import {
   listFamilyHeads,
 } from "../api/registryServices";
 
+import {
+  notifySuccess,
+  notifyError,
+  notifyWarning,
+  getErrorMessage,
+} from "../utils/notify";
+
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 
@@ -152,6 +159,12 @@ const getInitials = (name) => {
     .toUpperCase();
 };
 
+// Trimmed string, "" when empty
+const text = (value) =>
+  value === null || value === undefined
+    ? ""
+    : String(value).trim();
+
 /* ============================================================
    FORM FIELD
 ============================================================ */
@@ -168,6 +181,7 @@ const FormField = ({
   touched,
   children,
   required = false,
+  disabled = false,
 }) => {
   const invalid = Boolean(touched && error);
 
@@ -204,6 +218,7 @@ const FormField = ({
           onBlur={onBlur}
           type={type}
           placeholder={placeholder}
+          disabled={disabled}
           h="34px"
           minH="34px"
           px="10px"
@@ -215,7 +230,12 @@ const FormField = ({
           borderRadius="5px"
           fontSize="11.5px"
           color={NAVY}
-          bg="white"
+          bg={disabled ? "#F4F6F9" : "white"}
+          cursor={
+            disabled
+              ? "not-allowed"
+              : "text"
+          }
           _hover={{
             borderColor: invalid
               ? RED
@@ -328,7 +348,8 @@ const ChangeHeadModal = ({
 
   const handleConfirm = () => {
     if (!selectedHeadId) {
-      window.alert(
+      notifyWarning(
+        "Select a family head",
         "Please select a family head to transfer this member to."
       );
       return;
@@ -705,8 +726,12 @@ const EditMemberPage = () => {
         error
       );
 
-      window.alert(
-        "Failed to load dependent data."
+      notifyError(
+        "Load failed",
+        getErrorMessage(
+          error,
+          "Failed to load dependent data."
+        )
       );
 
       navigate(
@@ -734,8 +759,9 @@ const EditMemberPage = () => {
         newHeadId
       );
 
-      window.alert(
-        "Member successfully transferred to new family head!"
+      notifySuccess(
+        "Member transferred",
+        "The member was transferred to the new family head."
       );
 
       await fetchData();
@@ -747,47 +773,17 @@ const EditMemberPage = () => {
         error
       );
 
-      let errorMessage =
-        "Failed to transfer member to new head.";
+      console.error(
+        "Backend response:",
+        error?.response?.data
+      );
 
-      if (error?.response?.data) {
-        const data =
-          error.response.data;
-
-        if (
-          typeof data === "object"
-        ) {
-          if (data.detail) {
-            errorMessage =
-              data.detail;
-          } else if (data.error) {
-            errorMessage =
-              data.error;
-          } else {
-            const firstError =
-              Object.keys(data)[0];
-
-            if (
-              firstError &&
-              Array.isArray(
-                data[firstError]
-              )
-            ) {
-              errorMessage = `${firstError}: ${data[firstError][0]}`;
-            } else if (
-              firstError &&
-              typeof data[
-                firstError
-              ] === "string"
-            ) {
-              errorMessage = `${firstError}: ${data[firstError]}`;
-            }
-          }
-        }
-      }
-
-      window.alert(
-        `❌ ${errorMessage}`
+      notifyError(
+        "Could not transfer member",
+        getErrorMessage(
+          error,
+          "Failed to transfer member to new head."
+        )
       );
     } finally {
       setIsSubmittingChange(false);
@@ -812,9 +808,14 @@ const EditMemberPage = () => {
           "Relationship is required"
         ),
 
-      gender: Yup.string().required(
-        "Gender is required"
-      ),
+      gender: Yup.string()
+        .oneOf(
+          ["MALE", "FEMALE"],
+          "Please select a valid gender"
+        )
+        .required(
+          "Gender is required"
+        ),
 
       mobile_no: Yup.string()
         .trim()
@@ -851,119 +852,93 @@ const EditMemberPage = () => {
     }
   ) => {
     try {
-      const updateData = {};
+      /*
+       * Every editable field is sent, including empty ones.
+       * Previously empty values were skipped, so clearing a
+       * field (e.g. father name) did not update the record.
+       *
+       *  - text fields   -> "" when cleared
+       *  - date fields   -> null when cleared
+       *  - email         -> null when cleared (it is unique)
+       *  - spouse name   -> only kept when married
+       */
+      const updateData = {
+        name: text(values.name),
 
-      if (values.name?.trim()) {
-        updateData.name =
-          values.name.trim();
-      }
+        baptismal_name: text(
+          values.baptismal_name
+        ),
 
-      if (
-        values.baptismal_name?.trim()
-      ) {
-        updateData.baptismal_name =
-          values.baptismal_name.trim();
-      }
+        gender: values.gender,
 
-      if (values.gender) {
-        updateData.gender =
-          values.gender;
-      }
+        marital_status:
+          values.marital_status,
 
-      if (values.marital_status) {
-        updateData.marital_status =
-          values.marital_status;
-      }
+        dob: values.dob || null,
 
-      if (values.dob) {
-        updateData.dob =
-          values.dob;
-      }
+        mobile_no: text(
+          values.mobile_no
+        ),
 
-      if (values.mobile_no?.trim()) {
-        updateData.mobile_no =
-          values.mobile_no.trim();
-      }
+        email:
+          text(values.email) || null,
 
-      if (values.email?.trim()) {
-        updateData.email =
-          values.email.trim();
-      }
+        blood_group:
+          values.blood_group || "",
 
-      if (values.blood_group) {
-        updateData.blood_group =
-          values.blood_group;
-      }
+        spouse_name:
+          values.marital_status ===
+          "MARRIED"
+            ? text(values.spouse_name)
+            : "",
 
-      if (values.spouse_name?.trim()) {
-        updateData.spouse_name =
-          values.spouse_name.trim();
-      }
+        father_name: text(
+          values.father_name
+        ),
 
-      if (values.father_name?.trim()) {
-        updateData.father_name =
-          values.father_name.trim();
-      }
+        mother_name: text(
+          values.mother_name
+        ),
 
-      if (values.mother_name?.trim()) {
-        updateData.mother_name =
-          values.mother_name.trim();
-      }
+        date_of_baptism:
+          values.date_of_baptism ||
+          null,
 
-      if (values.date_of_baptism) {
-        updateData.date_of_baptism =
-          values.date_of_baptism;
-      }
+        parish_of_baptism: text(
+          values.parish_of_baptism
+        ),
 
-      if (
-        values.parish_of_baptism?.trim()
-      ) {
-        updateData.parish_of_baptism =
-          values.parish_of_baptism.trim();
-      }
+        educational_qualification:
+          text(
+            values.educational_qualification
+          ),
 
-      if (
-        values.educational_qualification?.trim()
-      ) {
-        updateData.educational_qualification =
-          values.educational_qualification.trim();
-      }
+        sunday_school_qualification:
+          text(
+            values.sunday_school_qualification
+          ),
 
-      if (
-        values.sunday_school_qualification?.trim()
-      ) {
-        updateData.sunday_school_qualification =
-          values.sunday_school_qualification.trim();
-      }
+        profession: text(
+          values.profession
+        ),
 
-      if (values.profession?.trim()) {
-        updateData.profession =
-          values.profession.trim();
-      }
+        joining_date:
+          values.joining_date ||
+          null,
+      };
 
-      if (values.joining_date) {
-        updateData.joining_date =
-          values.joining_date;
-      }
+      const relationshipId = Number(
+        values.relationship
+      );
 
       if (
-        values.relationship !== "" &&
-        values.relationship != null
+        !Number.isNaN(
+          relationshipId
+        ) &&
+        relationshipId > 0
       ) {
-        const relationshipId =
-          Number(
-            values.relationship
-          );
-
-        if (
-          !Number.isNaN(
-            relationshipId
-          ) &&
-          relationshipId > 0
-        ) {
-          updateData.relationship =
-            relationshipId;
-        }
+        updateData.relationship =
+          relationshipId;
       }
 
       console.log(
@@ -976,8 +951,9 @@ const EditMemberPage = () => {
         updateData
       );
 
-      window.alert(
-        "Dependent updated successfully!"
+      notifySuccess(
+        "Dependent updated",
+        "The dependent was updated successfully."
       );
 
       navigate(
@@ -989,50 +965,17 @@ const EditMemberPage = () => {
         error
       );
 
-      let errorMessage =
-        "Failed to update dependent.";
+      console.error(
+        "Backend response:",
+        error?.response?.data
+      );
 
-      if (error?.response?.data) {
-        const data =
-          error.response.data;
-
-        if (
-          typeof data === "object"
-        ) {
-          if (data.detail) {
-            errorMessage =
-              data.detail;
-          } else if (data.error) {
-            errorMessage =
-              data.error;
-          } else {
-            const firstError =
-              Object.keys(data)[0];
-
-            if (
-              firstError &&
-              Array.isArray(
-                data[firstError]
-              )
-            ) {
-              errorMessage = `${firstError}: ${data[firstError][0]}`;
-            } else if (
-              firstError &&
-              typeof data[
-                firstError
-              ] === "string"
-            ) {
-              errorMessage = `${firstError}: ${data[firstError]}`;
-            } else {
-              errorMessage =
-                JSON.stringify(data);
-            }
-          }
-        }
-      }
-
-      window.alert(
-        `❌ ${errorMessage}`
+      notifyError(
+        "Could not update dependent",
+        getErrorMessage(
+          error,
+          "Failed to update dependent."
+        )
       );
     } finally {
       setSubmitting(false);
@@ -1630,6 +1573,7 @@ const EditMemberPage = () => {
                 touched,
                 handleChange,
                 handleBlur,
+                setFieldValue,
                 isSubmitting,
               }) => (
                 <Form>
@@ -1855,10 +1799,6 @@ const EditMemberPage = () => {
                           <option value="FEMALE">
                             Female
                           </option>
-
-                          <option value="OTHER">
-                            Other
-                          </option>
                         </SelectField>
                       </FormField>
 
@@ -1912,9 +1852,21 @@ const EditMemberPage = () => {
                           value={
                             values.marital_status
                           }
-                          onChange={
-                            handleChange
-                          }
+                          onChange={(event) => {
+                            handleChange(event);
+
+                            // Spouse only allowed when married
+                            if (
+                              event.target
+                                .value !==
+                              "MARRIED"
+                            ) {
+                              setFieldValue(
+                                "spouse_name",
+                                ""
+                              );
+                            }
+                          }}
                           onBlur={
                             handleBlur
                           }
@@ -1958,6 +1910,16 @@ const EditMemberPage = () => {
                         }
                         onBlur={
                           handleBlur
+                        }
+                        disabled={
+                          values.marital_status !==
+                          "MARRIED"
+                        }
+                        placeholder={
+                          values.marital_status ===
+                          "MARRIED"
+                            ? "Enter spouse name"
+                            : "Available when marital status is Married"
                         }
                       />
 
@@ -2044,12 +2006,30 @@ const EditMemberPage = () => {
                             value={
                               values.mobile_no
                             }
-                            onChange={
-                              handleChange
-                            }
+                            onChange={(
+                              event
+                            ) => {
+                              const digits =
+                                event.target.value
+                                  .replace(
+                                    /\D/g,
+                                    ""
+                                  )
+                                  .slice(
+                                    0,
+                                    10
+                                  );
+
+                              setFieldValue(
+                                "mobile_no",
+                                digits
+                              );
+                            }}
                             onBlur={
                               handleBlur
                             }
+                            inputMode="numeric"
+                            maxLength={10}
                             h="34px"
                             minH="34px"
                             px="10px"

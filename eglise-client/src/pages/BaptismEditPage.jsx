@@ -30,6 +30,7 @@ import apiClient from "../api/apiClient";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { getBaptism, updateBaptism } from "../api/registryServices";
+import { toaster } from "../components/ui/toaster";
 
 /* ============================================================
    COLORS
@@ -81,6 +82,25 @@ const getInitials = (name) => {
 };
 
 /* ============================================================
+   TOAST HELPER
+============================================================ */
+
+const showToast = ({
+  title,
+  description,
+  type = "info",
+  duration = 4000,
+}) => {
+  toaster.create({
+    title,
+    description,
+    type,
+    duration,
+    closable: true,
+  });
+};
+
+/* ============================================================
    FORM FIELD
 ============================================================ */
 
@@ -93,12 +113,11 @@ const FormField = ({
   type = "text",
   placeholder = "",
   error,
-  touched,
   children,
   required = false,
   disabled = false,
 }) => {
-  const invalid = Boolean(touched && error);
+  const invalid = Boolean(error);
 
   return (
     <Box>
@@ -142,12 +161,6 @@ const FormField = ({
           }}
           _placeholder={{ color: "#98A2B3" }}
         />
-      )}
-
-      {invalid && (
-        <Text fontSize="8px" color={RED} mt="1px">
-          {error}
-        </Text>
       )}
     </Box>
   );
@@ -228,11 +241,10 @@ const TextareaField = ({
   onBlur,
   placeholder = "",
   error,
-  touched,
   required = false,
   rows = 2,
 }) => {
-  const invalid = Boolean(touched && error);
+  const invalid = Boolean(error);
 
   return (
     <Box>
@@ -270,12 +282,6 @@ const TextareaField = ({
         }}
         _placeholder={{ color: "#98A2B3" }}
       />
-
-      {invalid && (
-        <Text fontSize="8px" color={RED} mt="1px">
-          {error}
-        </Text>
-      )}
     </Box>
   );
 };
@@ -334,6 +340,58 @@ const initialForm = {
 };
 
 /* ============================================================
+   REQUIRED FIELDS PER CATEGORY
+============================================================ */
+
+const COMMON_REQUIRED = [
+  "date_of_baptism",
+  "name",
+  "baptismal_name",
+  "gender",
+  "place_of_birth",
+  "parish_of_baptism",
+  "panchayath",
+  "priest_name",
+  "father_name",
+];
+
+const PARISH_REQUIRED = [
+  ...COMMON_REQUIRED,
+  "family",
+  "main_member",
+  "relation_with_main_member",
+];
+
+const OTHER_REQUIRED = [
+  ...COMMON_REQUIRED,
+  "dob",
+  "present_address",
+  "permanent_address",
+];
+
+const FIELD_LABELS = {
+  baptism_category: "Baptism Category",
+  date_of_baptism: "Date of Baptism",
+  name: "Name",
+  baptismal_name: "Baptism Name",
+  gender: "Gender",
+  dob: "Date of Birth",
+  place_of_birth: "Place of Birth",
+  parish_of_baptism: "Parish of Baptism",
+  panchayath: "Panchayath",
+  priest_name: "Priest Name",
+  father_name: "Father Name",
+  mother_name: "Mother Name",
+  family: "Family Name",
+  main_member: "Main Member",
+  relation_with_main_member: "Relationship",
+  present_address: "Present Address",
+  permanent_address: "Permanent Address",
+  mobile_number: "Mobile Number",
+  email: "Email",
+};
+
+/* ============================================================
    BAPTISM EDIT PAGE
 ============================================================ */
 
@@ -350,8 +408,6 @@ const BaptismEditPage = () => {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
 
   /* ==========================================================
@@ -360,20 +416,24 @@ const BaptismEditPage = () => {
 
   useEffect(() => {
     loadPage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const loadPage = async () => {
     setLoading(true);
-    setError("");
 
     try {
-      const [baptismResponse, familiesResponse, membersResponse, relationshipsResponse] =
-        await Promise.all([
-          getBaptism(id),
-          apiClient.get("/api/registry/families/"),
-          apiClient.get("/api/registry/members/"),
-          apiClient.get("/api/registry/relationships/"),
-        ]);
+      const [
+        baptismResponse,
+        familiesResponse,
+        membersResponse,
+        relationshipsResponse,
+      ] = await Promise.all([
+        getBaptism(id),
+        apiClient.get("/api/registry/families/"),
+        apiClient.get("/api/registry/members/"),
+        apiClient.get("/api/registry/relationships/"),
+      ]);
 
       const record = baptismResponse.data;
       setBaptism(record);
@@ -409,7 +469,14 @@ const BaptismEditPage = () => {
       });
     } catch (err) {
       console.error("Error loading baptism:", err);
-      setError(err?.response?.data?.detail || "Unable to load baptism record.");
+
+      showToast({
+        title: "Failed to load record",
+        description:
+          err?.response?.data?.detail || "Unable to load baptism record.",
+        type: "error",
+        duration: 6000,
+      });
     } finally {
       setLoading(false);
     }
@@ -429,8 +496,9 @@ const BaptismEditPage = () => {
   const handleChange = (event) => {
     const { name, value } = event.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
-    setError("");
+    setFieldErrors((prev) =>
+      prev[name] ? { ...prev, [name]: undefined } : prev
+    );
   };
 
   const handleBlur = () => {};
@@ -442,10 +510,10 @@ const BaptismEditPage = () => {
       baptism_category: value,
       family: value === "PARISH" ? prev.family : "",
       main_member: value === "PARISH" ? prev.main_member : "",
-      relation_with_main_member: value === "PARISH" ? prev.relation_with_main_member : "",
+      relation_with_main_member:
+        value === "PARISH" ? prev.relation_with_main_member : "",
     }));
     setFieldErrors({});
-    setError("");
   };
 
   const handleFamilyChange = (event) => {
@@ -476,7 +544,6 @@ const BaptismEditPage = () => {
       present_address: undefined,
       permanent_address: undefined,
     }));
-    setError("");
   };
 
   const handleSameAddress = (event) => {
@@ -496,7 +563,8 @@ const BaptismEditPage = () => {
     if (!formData.family) return [];
     return members.filter((member) => {
       const memberFamily = member.family ?? member.family_id;
-      const familyId = typeof memberFamily === "object" ? memberFamily?.id : memberFamily;
+      const familyId =
+        typeof memberFamily === "object" ? memberFamily?.id : memberFamily;
       return (
         String(familyId) === String(formData.family) &&
         (member.is_family_head === true || member.is_family_head === 1)
@@ -516,8 +584,62 @@ const BaptismEditPage = () => {
 
   const relationshipOptions = relationships.map((relationship) => ({
     value: relationship.id,
-    label: relationship.name || relationship.relationship_name || relationship.relation_name || `Relationship #${relationship.id}`,
+    label:
+      relationship.name ||
+      relationship.relationship_name ||
+      relationship.relation_name ||
+      `Relationship #${relationship.id}`,
   }));
+
+  /* ==========================================================
+     VALIDATE
+  ========================================================== */
+
+  const validateForm = () => {
+    const requiredFields = isParish ? PARISH_REQUIRED : OTHER_REQUIRED;
+
+    const errors = {};
+    const missing = [];
+
+    requiredFields.forEach((field) => {
+      // Skip locked fields when member is already created
+      if (
+        memberAlreadyCreated &&
+        [
+          "family",
+          "main_member",
+          "relation_with_main_member",
+          "baptism_category",
+        ].includes(field)
+      ) {
+        return;
+      }
+
+      const value = formData[field];
+      if (value === "" || value === null || value === undefined) {
+        errors[field] = `${FIELD_LABELS[field] || field} is required`;
+        missing.push(FIELD_LABELS[field] || field);
+      }
+    });
+
+    // -------- Date cross-check --------
+    // Date of Baptism cannot be earlier than Date of Birth.
+    if (formData.dob && formData.date_of_baptism) {
+      const dob = new Date(formData.dob);
+      const baptismDate = new Date(formData.date_of_baptism);
+
+      const dobValid = !Number.isNaN(dob.getTime());
+      const baptismValid = !Number.isNaN(baptismDate.getTime());
+
+      if (dobValid && baptismValid && baptismDate < dob) {
+        errors.date_of_baptism =
+          "Date of Baptism cannot be earlier than Date of Birth";
+      }
+    }
+
+    setFieldErrors(errors);
+    return { errors, missing };
+  };
 
   /* ==========================================================
      SUBMIT
@@ -525,8 +647,35 @@ const BaptismEditPage = () => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+
+    const { errors, missing } = validateForm();
+
+    if (Object.keys(errors).length > 0) {
+      // Prefer explicit rule errors over the generic "missing" list
+      const explicitMessages = Object.entries(errors)
+        .filter(([key]) => !missing.includes(FIELD_LABELS[key]))
+        .map(([, msg]) => msg);
+
+      let description;
+
+      if (explicitMessages.length > 0) {
+        description = explicitMessages.join("\n");
+      } else if (missing.length === 1) {
+        description = `${missing[0]} is required.`;
+      } else {
+        description = `Please fill: ${missing.join(", ")}.`;
+      }
+
+      showToast({
+        title: "Please fix the form",
+        description,
+        type: "warning",
+        duration: 5000,
+      });
+      return;
+    }
+
     setSaving(true);
-    setError("");
     setFieldErrors({});
 
     try {
@@ -550,7 +699,9 @@ const BaptismEditPage = () => {
 
       if (formData.baptism_category === "PARISH") {
         payload.family = formData.family ? Number(formData.family) : null;
-        payload.main_member = formData.main_member ? Number(formData.main_member) : null;
+        payload.main_member = formData.main_member
+          ? Number(formData.main_member)
+          : null;
         payload.relation_with_main_member = formData.relation_with_main_member
           ? Number(formData.relation_with_main_member)
           : null;
@@ -565,30 +716,61 @@ const BaptismEditPage = () => {
       }
 
       await updateBaptism(id, payload);
+
+      showToast({
+        title: "Changes saved",
+        description: "The baptism record was updated successfully.",
+        type: "success",
+        duration: 4000,
+      });
+
       navigate(`/baptism/${id}`);
     } catch (err) {
       console.error("Error updating baptism:", err);
+
       const responseData = err?.response?.data;
 
-      if (responseData && typeof responseData === "object") {
+      if (
+        responseData &&
+        typeof responseData === "object" &&
+        !Array.isArray(responseData)
+      ) {
         const errors = {};
         Object.entries(responseData).forEach(([key, value]) => {
-          if (Array.isArray(value)) {
-            errors[key] = value.join(", ");
-          } else if (typeof value === "string") {
-            errors[key] = value;
-          } else {
-            errors[key] = JSON.stringify(value);
-          }
+          if (Array.isArray(value)) errors[key] = value.join(", ");
+          else if (typeof value === "string") errors[key] = value;
+          else errors[key] = JSON.stringify(value);
         });
         setFieldErrors(errors);
-        setError(
-          responseData.detail ||
-            responseData.non_field_errors?.[0] ||
-            "Please correct the highlighted fields."
-        );
+
+        const generalError =
+          responseData.detail || responseData.non_field_errors?.[0];
+
+        // If exactly one field error and no general error, show that
+        // field's actual message directly instead of a key list.
+        const fieldMessages = Object.values(errors).filter(Boolean);
+        const onlyOneFieldError =
+          fieldMessages.length === 1 && !generalError;
+
+        showToast({
+          title: "Could not save changes",
+          description:
+            generalError ||
+            (onlyOneFieldError
+              ? fieldMessages[0]
+              : `Please check: ${Object.keys(errors)
+                  .map((k) => FIELD_LABELS[k] || k)
+                  .join(", ")}`),
+          type: "error",
+          duration: 7000,
+        });
       } else {
-        setError("Unable to update baptism record.");
+        showToast({
+          title: "Could not save changes",
+          description: "Unable to update baptism record.",
+          type: "error",
+          duration: 7000,
+        });
       }
     } finally {
       setSaving(false);
@@ -631,8 +813,10 @@ const BaptismEditPage = () => {
      VALUES FOR TOP BAR
   ========================================================== */
 
-  const familyName = baptism?.family_name || baptism?.family?.family_name || null;
-  const parishName = formData.parish_of_baptism || baptism?.parish_of_baptism || null;
+  const familyName =
+    baptism?.family_name || baptism?.family?.family_name || null;
+  const parishName =
+    formData.parish_of_baptism || baptism?.parish_of_baptism || null;
   const wardName = baptism?.ward_name || "—";
 
   const image = baptism?.image_url || baptism?.image || null;
@@ -653,37 +837,65 @@ const BaptismEditPage = () => {
         pb="10px"
       >
         <Box maxW="1540px" mx="auto" width="100%">
-          {/* ==================================================
-              BREADCRUMB
-          ================================================== */}
-
+          {/* BREADCRUMB */}
           <Flex align="center" gap="6px" mb="8px" flexWrap="wrap">
-            <Text fontSize="10px" color="#3674D9" cursor="pointer" onClick={() => navigate("/")}>
+            <Text
+              fontSize="10px"
+              color="#3674D9"
+              cursor="pointer"
+              onClick={() => navigate("/")}
+            >
               Masters
             </Text>
             <Text fontSize="10px" color="#98A2B3">/</Text>
-            <Text fontSize="10px" color="#3674D9" cursor="pointer" onClick={() => navigate("/baptism")}>
+            <Text
+              fontSize="10px"
+              color="#3674D9"
+              cursor="pointer"
+              onClick={() => navigate("/baptism")}
+            >
               Baptism Register
             </Text>
             <Text fontSize="10px" color="#98A2B3">/</Text>
-            <Text fontSize="10px" color="#3674D9" cursor="pointer" onClick={() => navigate(`/baptism/${id}`)}>
+            <Text
+              fontSize="10px"
+              color="#3674D9"
+              cursor="pointer"
+              onClick={() => navigate(`/baptism/${id}`)}
+            >
               {formData.name || "Record"}
             </Text>
             <Text fontSize="10px" color="#98A2B3">/</Text>
             <Text fontSize="10px" color="#3674D9">Edit</Text>
           </Flex>
 
-          {/* ==================================================
-              PAGE TITLE
-          ================================================== */}
-
-          <Flex align="center" justify="space-between" flexWrap="wrap" gap="8px" mb="8px">
+          {/* PAGE TITLE */}
+          <Flex
+            align="center"
+            justify="space-between"
+            flexWrap="wrap"
+            gap="8px"
+            mb="8px"
+          >
             <Box>
-              <Text fontSize="9px" fontWeight="800" color={RED} letterSpacing="0.25px" mb="1px">
+              <Text
+                fontSize="9px"
+                fontWeight="800"
+                color={RED}
+                letterSpacing="0.25px"
+                mb="1px"
+              >
                 BAPTISM REGISTER
               </Text>
-              <Heading fontSize={{ base: "18px", md: "20px" }} fontWeight="700" color={NAVY} lineHeight="1.1">
-                {isParish ? "Edit Baptism" : "Edit Baptism – Other Parish Member"}
+              <Heading
+                fontSize={{ base: "18px", md: "20px" }}
+                fontWeight="700"
+                color={NAVY}
+                lineHeight="1.1"
+              >
+                {isParish
+                  ? "Edit Baptism"
+                  : "Edit Baptism – Other Parish Member"}
               </Heading>
               <Text fontSize="10px" color={MUTED} mt="2px">
                 {isParish
@@ -693,22 +905,7 @@ const BaptismEditPage = () => {
             </Box>
           </Flex>
 
-          {/* ==================================================
-              GENERAL ERROR
-          ================================================== */}
-
-          {error && (
-            <Box bg="#FFF8FA" border="1px solid #FECACA" borderRadius="4px" px="10px" py="6px" mb="8px">
-              <Text fontSize="10px" color={RED} fontWeight="500">
-                {error}
-              </Text>
-            </Box>
-          )}
-
-          {/* ==================================================
-              BAPTISM SUMMARY
-          ================================================== */}
-
+          {/* BAPTISM SUMMARY */}
           <Box
             bg="white"
             border="1px solid"
@@ -743,7 +940,12 @@ const BaptismEditPage = () => {
                 </Avatar.Root>
 
                 <Box>
-                  <Text fontSize="15px" fontWeight="700" color={NAVY} lineHeight="1.2">
+                  <Text
+                    fontSize="15px"
+                    fontWeight="700"
+                    color={NAVY}
+                    lineHeight="1.2"
+                  >
                     {formData.name || "Baptism Record"}
                   </Text>
                   <Text fontSize="11px" color={NAVY} mt="2px">
@@ -798,10 +1000,7 @@ const BaptismEditPage = () => {
             </Grid>
           </Box>
 
-          {/* ==================================================
-              CONTENT AREA
-          ================================================== */}
-
+          {/* CONTENT AREA */}
           <Grid
             templateColumns={{
               base: "1fr",
@@ -810,10 +1009,7 @@ const BaptismEditPage = () => {
             gap="14px"
             alignItems="start"
           >
-            {/* =================================================
-                LEFT FORM
-            ================================================= */}
-
+            {/* LEFT FORM */}
             <Box
               as="form"
               onSubmit={handleSubmit}
@@ -832,7 +1028,10 @@ const BaptismEditPage = () => {
                 <Text fontSize="10px" color={MUTED} fontWeight="500">
                   {baptism?.register_number && (
                     <>
-                      Reg No: <Text as="span" color={NAVY} fontWeight="600">{baptism.register_number}</Text>
+                      Reg No:{" "}
+                      <Text as="span" color={NAVY} fontWeight="600">
+                        {baptism.register_number}
+                      </Text>
                     </>
                   )}
                 </Text>
@@ -860,7 +1059,6 @@ const BaptismEditPage = () => {
                       required
                       disabled={memberAlreadyCreated}
                       error={fieldErrors.baptism_category}
-                      touched={fieldErrors.baptism_category}
                     >
                       <SelectField
                         name="baptism_category"
@@ -883,7 +1081,6 @@ const BaptismEditPage = () => {
                       onBlur={handleBlur}
                       required
                       error={fieldErrors.parish_of_baptism}
-                      touched={fieldErrors.parish_of_baptism}
                     />
 
                     <FormField
@@ -894,7 +1091,6 @@ const BaptismEditPage = () => {
                       onBlur={handleBlur}
                       required
                       error={fieldErrors.gender}
-                      touched={fieldErrors.gender}
                     >
                       <SelectField
                         name="gender"
@@ -918,7 +1114,6 @@ const BaptismEditPage = () => {
                       onBlur={handleBlur}
                       required
                       error={fieldErrors.date_of_baptism}
-                      touched={fieldErrors.date_of_baptism}
                     />
 
                     <FormField
@@ -929,7 +1124,6 @@ const BaptismEditPage = () => {
                       onBlur={handleBlur}
                       required
                       error={fieldErrors.name}
-                      touched={fieldErrors.name}
                     />
 
                     <FormField
@@ -940,7 +1134,6 @@ const BaptismEditPage = () => {
                       onBlur={handleBlur}
                       required
                       error={fieldErrors.baptismal_name}
-                      touched={fieldErrors.baptismal_name}
                     />
 
                     <FormField
@@ -951,7 +1144,6 @@ const BaptismEditPage = () => {
                       onChange={handleChange}
                       onBlur={handleBlur}
                       error={fieldErrors.dob}
-                      touched={fieldErrors.dob}
                     />
 
                     <FormField
@@ -962,7 +1154,6 @@ const BaptismEditPage = () => {
                       onBlur={handleBlur}
                       required
                       error={fieldErrors.place_of_birth}
-                      touched={fieldErrors.place_of_birth}
                     />
 
                     <FormField
@@ -972,7 +1163,6 @@ const BaptismEditPage = () => {
                       onChange={handleChange}
                       onBlur={handleBlur}
                       error={fieldErrors.god_father}
-                      touched={fieldErrors.god_father}
                     />
 
                     <FormField
@@ -982,7 +1172,6 @@ const BaptismEditPage = () => {
                       onChange={handleChange}
                       onBlur={handleBlur}
                       error={fieldErrors.god_mother}
-                      touched={fieldErrors.god_mother}
                     />
 
                     <FormField
@@ -993,7 +1182,6 @@ const BaptismEditPage = () => {
                       onBlur={handleBlur}
                       required
                       error={fieldErrors.father_name}
-                      touched={fieldErrors.father_name}
                     />
 
                     <FormField
@@ -1004,7 +1192,6 @@ const BaptismEditPage = () => {
                       onBlur={handleBlur}
                       required
                       error={fieldErrors.mother_name}
-                      touched={fieldErrors.mother_name}
                     />
 
                     <FormField
@@ -1015,7 +1202,6 @@ const BaptismEditPage = () => {
                       onBlur={handleBlur}
                       required
                       error={fieldErrors.panchayath}
-                      touched={fieldErrors.panchayath}
                     />
 
                     <FormField
@@ -1026,7 +1212,6 @@ const BaptismEditPage = () => {
                       onBlur={handleBlur}
                       required
                       error={fieldErrors.priest_name}
-                      touched={fieldErrors.priest_name}
                     />
 
                     <FormField
@@ -1038,7 +1223,6 @@ const BaptismEditPage = () => {
                       required
                       disabled={memberAlreadyCreated}
                       error={fieldErrors.relation_with_main_member}
-                      touched={fieldErrors.relation_with_main_member}
                     >
                       <SelectField
                         name="relation_with_main_member"
@@ -1046,7 +1230,9 @@ const BaptismEditPage = () => {
                         onChange={handleChange}
                         onBlur={handleBlur}
                         disabled={memberAlreadyCreated}
-                        invalid={Boolean(fieldErrors.relation_with_main_member)}
+                        invalid={Boolean(
+                          fieldErrors.relation_with_main_member
+                        )}
                       >
                         <option value="">Select</option>
                         {relationshipOptions.map((option) => (
@@ -1066,7 +1252,6 @@ const BaptismEditPage = () => {
                       required
                       disabled={memberAlreadyCreated}
                       error={fieldErrors.family}
-                      touched={fieldErrors.family}
                     >
                       <SelectField
                         name="family"
@@ -1094,7 +1279,6 @@ const BaptismEditPage = () => {
                       required
                       disabled={memberAlreadyCreated || !formData.family}
                       error={fieldErrors.main_member}
-                      touched={fieldErrors.main_member}
                     >
                       <SelectField
                         name="main_member"
@@ -1116,7 +1300,8 @@ const BaptismEditPage = () => {
                     {memberAlreadyCreated && (
                       <Box gridColumn="1 / -1">
                         <Text fontSize="9px" color={MUTED}>
-                          Family, main member, relationship and category cannot be changed.
+                          Family, main member, relationship and category cannot
+                          be changed.
                         </Text>
                       </Box>
                     )}
@@ -1142,7 +1327,6 @@ const BaptismEditPage = () => {
                       onBlur={handleBlur}
                       required
                       error={fieldErrors.date_of_baptism}
-                      touched={fieldErrors.date_of_baptism}
                     />
 
                     <FormField
@@ -1153,7 +1337,6 @@ const BaptismEditPage = () => {
                       onBlur={handleBlur}
                       required
                       error={fieldErrors.baptism_category}
-                      touched={fieldErrors.baptism_category}
                     >
                       <SelectField
                         name="baptism_category"
@@ -1175,7 +1358,6 @@ const BaptismEditPage = () => {
                       onBlur={handleBlur}
                       required
                       error={fieldErrors.gender}
-                      touched={fieldErrors.gender}
                     >
                       <SelectField
                         name="gender"
@@ -1198,7 +1380,6 @@ const BaptismEditPage = () => {
                       onBlur={handleBlur}
                       required
                       error={fieldErrors.baptismal_name}
-                      touched={fieldErrors.baptismal_name}
                     />
 
                     <FormField
@@ -1209,7 +1390,6 @@ const BaptismEditPage = () => {
                       onBlur={handleBlur}
                       required
                       error={fieldErrors.parish_of_baptism}
-                      touched={fieldErrors.parish_of_baptism}
                     />
 
                     <FormField
@@ -1220,7 +1400,6 @@ const BaptismEditPage = () => {
                       onBlur={handleBlur}
                       required
                       error={fieldErrors.place_of_birth}
-                      touched={fieldErrors.place_of_birth}
                     />
 
                     <FormField
@@ -1231,7 +1410,6 @@ const BaptismEditPage = () => {
                       onBlur={handleBlur}
                       required
                       error={fieldErrors.priest_name}
-                      touched={fieldErrors.priest_name}
                     />
 
                     <FormField
@@ -1241,7 +1419,6 @@ const BaptismEditPage = () => {
                       onChange={handleChange}
                       onBlur={handleBlur}
                       error={fieldErrors.god_father}
-                      touched={fieldErrors.god_father}
                     />
 
                     <FormField
@@ -1251,7 +1428,6 @@ const BaptismEditPage = () => {
                       onChange={handleChange}
                       onBlur={handleBlur}
                       error={fieldErrors.god_mother}
-                      touched={fieldErrors.god_mother}
                     />
 
                     <FormField
@@ -1262,7 +1438,6 @@ const BaptismEditPage = () => {
                       onBlur={handleBlur}
                       required
                       error={fieldErrors.name}
-                      touched={fieldErrors.name}
                     />
 
                     <FormField
@@ -1274,7 +1449,6 @@ const BaptismEditPage = () => {
                       onBlur={handleBlur}
                       required
                       error={fieldErrors.dob}
-                      touched={fieldErrors.dob}
                     />
 
                     <FormField
@@ -1285,7 +1459,6 @@ const BaptismEditPage = () => {
                       onBlur={handleBlur}
                       required
                       error={fieldErrors.panchayath}
-                      touched={fieldErrors.panchayath}
                     />
 
                     <FormField
@@ -1296,7 +1469,6 @@ const BaptismEditPage = () => {
                       onBlur={handleBlur}
                       required
                       error={fieldErrors.father_name}
-                      touched={fieldErrors.father_name}
                     />
 
                     <FormField
@@ -1307,7 +1479,6 @@ const BaptismEditPage = () => {
                       onBlur={handleBlur}
                       required
                       error={fieldErrors.mother_name}
-                      touched={fieldErrors.mother_name}
                     />
 
                     <FormField
@@ -1318,7 +1489,6 @@ const BaptismEditPage = () => {
                       onChange={handleChange}
                       onBlur={handleBlur}
                       error={fieldErrors.email}
-                      touched={fieldErrors.email}
                     />
 
                     <FormField
@@ -1328,7 +1498,6 @@ const BaptismEditPage = () => {
                       onChange={handleChange}
                       onBlur={handleBlur}
                       error={fieldErrors.mobile_number}
-                      touched={fieldErrors.mobile_number}
                     />
 
                     <Box gridColumn="1 / -1">
@@ -1339,8 +1508,9 @@ const BaptismEditPage = () => {
                         onChange={handlePresentAddressChange}
                         onBlur={handleBlur}
                         required
-                        error={fieldErrors.present_address || fieldErrors.address}
-                        touched={fieldErrors.present_address || fieldErrors.address}
+                        error={
+                          fieldErrors.present_address || fieldErrors.address
+                        }
                         rows={2}
                       />
                     </Box>
@@ -1354,7 +1524,6 @@ const BaptismEditPage = () => {
                         onBlur={handleBlur}
                         required
                         error={fieldErrors.permanent_address}
-                        touched={fieldErrors.permanent_address}
                         rows={2}
                       />
                       <Flex align="center" gap="4px" mt="4px">
@@ -1367,7 +1536,9 @@ const BaptismEditPage = () => {
                           h="12px"
                           accentColor={RED}
                         />
-                        <Text fontSize="9px" color={NAVY}>Same as Present Address</Text>
+                        <Text fontSize="9px" color={NAVY}>
+                          Same as Present Address
+                        </Text>
                       </Flex>
                     </Box>
 
@@ -1379,7 +1550,6 @@ const BaptismEditPage = () => {
                         onChange={handleChange}
                         onBlur={handleBlur}
                         error={fieldErrors.remarks}
-                        touched={fieldErrors.remarks}
                         rows={2}
                       />
                     </Box>
@@ -1387,10 +1557,7 @@ const BaptismEditPage = () => {
                 )}
               </Box>
 
-              {/* =============================================
-                  FORM FOOTER
-              ============================================= */}
-
+              {/* FORM FOOTER */}
               <Flex
                 justify="flex-end"
                 gap="10px"
@@ -1444,13 +1611,8 @@ const BaptismEditPage = () => {
               </Flex>
             </Box>
 
-            {/* =================================================
-                RIGHT SIDEBAR
-            ================================================= */}
-
+            {/* RIGHT SIDEBAR */}
             <VStack align="stretch" gap="10px">
-              {/* RECORD INFORMATION */}
-
               <Box
                 bg="white"
                 border="1px solid"
@@ -1462,7 +1624,13 @@ const BaptismEditPage = () => {
                   Record Information
                 </Text>
 
-                <Flex align="flex-start" gap="10px" pb="12px" borderBottom="1px solid" borderColor="#E5EAF1">
+                <Flex
+                  align="flex-start"
+                  gap="10px"
+                  pb="12px"
+                  borderBottom="1px solid"
+                  borderColor="#E5EAF1"
+                >
                   <Box color={NAVY} mt="1px">
                     <LuCalendarDays size="16" />
                   </Box>
@@ -1471,7 +1639,9 @@ const BaptismEditPage = () => {
                       Created
                     </Text>
                     <Text fontSize="10px" color={NAVY} mt="3px">
-                      {baptism?.created_at ? formatDate(baptism.created_at) : "—"}
+                      {baptism?.created_at
+                        ? formatDate(baptism.created_at)
+                        : "—"}
                     </Text>
                   </Box>
                 </Flex>
@@ -1485,7 +1655,9 @@ const BaptismEditPage = () => {
                       Last updated
                     </Text>
                     <Text fontSize="10px" color={NAVY} mt="3px">
-                      {baptism?.updated_at ? formatDate(baptism.updated_at) : "—"}
+                      {baptism?.updated_at
+                        ? formatDate(baptism.updated_at)
+                        : "—"}
                     </Text>
                     {baptism?.updated_by && (
                       <Text fontSize="8px" color={MUTED} mt="2px">
@@ -1496,8 +1668,6 @@ const BaptismEditPage = () => {
                 </Flex>
               </Box>
 
-              {/* CONTEXT INFORMATION */}
-
               <Box
                 bg="white"
                 border="1px solid"
@@ -1506,7 +1676,9 @@ const BaptismEditPage = () => {
                 p="12px"
               >
                 <Text fontSize="12px" fontWeight="700" color={NAVY} mb="10px">
-                  {isParish ? "Parish Member Context" : "Other Parish Member Context"}
+                  {isParish
+                    ? "Parish Member Context"
+                    : "Other Parish Member Context"}
                 </Text>
 
                 {isParish ? (
@@ -1519,7 +1691,9 @@ const BaptismEditPage = () => {
                     <ContextInfoBox
                       icon={<LuUser size="16" />}
                       label="Main Member"
-                      value={baptism?.main_member_name || baptism?.main_member}
+                      value={
+                        baptism?.main_member_name || baptism?.main_member
+                      }
                     />
                     <ContextInfoBox
                       icon={<LuMapPin size="16" />}
@@ -1561,7 +1735,11 @@ const BaptismEditPage = () => {
                     <ContextInfoBox
                       icon={<LuPhone size="16" />}
                       label="Mobile"
-                      value={formData.mobile_number ? `+91 ${formData.mobile_number}` : null}
+                      value={
+                        formData.mobile_number
+                          ? `+91 ${formData.mobile_number}`
+                          : null
+                      }
                     />
                     <Button
                       variant="ghost"
