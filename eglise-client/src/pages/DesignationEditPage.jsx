@@ -38,12 +38,35 @@ import {
   deleteDesignation,
 } from "../api/registryServices";
 
+import { toaster } from "../components/ui/toaster";
+
 const PRIMARY_MAROON = "var(--primary-maroon)";
 
 const RED = "#D7193F";
 const DARK = "#182338";
 const MUTED = "#60708C";
 const BORDER = "#DCE2EA";
+
+
+// ============================================================
+// TOAST HELPER
+// ============================================================
+
+const showToast = ({
+  title,
+  description,
+  type = "info",
+  duration = 4000,
+}) => {
+  toaster.create({
+    title,
+    description,
+    type,
+    duration,
+    closable: true,
+  });
+};
+
 
 const DesignationEditPage = () => {
   const navigate = useNavigate();
@@ -62,7 +85,7 @@ const DesignationEditPage = () => {
   const [updating, setUpdating] = useState(false);
   const [archiving, setArchiving] = useState(false);
 
-  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // ==========================================================
   // LOAD DESIGNATION
@@ -70,40 +93,45 @@ const DesignationEditPage = () => {
 
   useEffect(() => {
     fetchDesignation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchDesignation = async () => {
     try {
       setLoading(true);
-      setError("");
 
       const response = await getDesignation(id);
 
       const found = response?.data ?? response;
 
       if (!found) {
-        setError("Designation not found.");
+        showToast({
+          title: "Designation not found",
+          description:
+            "The requested designation record could not be found.",
+          type: "error",
+          duration: 6000,
+        });
         return;
       }
 
       setDesignation(found);
 
-      const designationName =
-        found.designation_name || "";
+      const designationName = found.designation_name || "";
 
       setName(designationName);
       setOriginalName(designationName);
     } catch (err) {
-      console.error(
-        "Error fetching designation:",
-        err
-      );
+      console.error("Error fetching designation:", err);
 
-      const apiError =
-        err?.response?.data?.detail ||
-        "Unable to load designation.";
-
-      setError(apiError);
+      showToast({
+        title: "Failed to load record",
+        description:
+          err?.response?.data?.detail ||
+          "Unable to load designation. Please try again.",
+        type: "error",
+        duration: 6000,
+      });
     } finally {
       setLoading(false);
     }
@@ -113,8 +141,7 @@ const DesignationEditPage = () => {
   // UNSAVED CHANGES
   // ==========================================================
 
-  const hasChanges =
-    name.trim() !== originalName.trim();
+  const hasChanges = name.trim() !== originalName.trim();
 
   // ==========================================================
   // UPDATE
@@ -124,38 +151,92 @@ const DesignationEditPage = () => {
     const trimmedName = name.trim();
 
     if (!trimmedName) {
-      setError(
-        "Designation name is required."
-      );
+      setFieldErrors({
+        designation_name: "Designation name is required.",
+      });
+      showToast({
+        title: "Please fix the form",
+        description: "Designation Name is required.",
+        type: "warning",
+        duration: 5000,
+      });
       return;
     }
 
     if (!hasChanges) {
+      showToast({
+        title: "No changes to save",
+        description:
+          "Please modify the designation name before updating.",
+        type: "info",
+        duration: 4000,
+      });
       return;
     }
 
     try {
       setUpdating(true);
-      setError("");
+      setFieldErrors({});
 
       await updateDesignation(id, {
         designation_name: trimmedName,
       });
 
+      showToast({
+        title: "Changes saved",
+        description:
+          "The designation record was updated successfully.",
+        type: "success",
+        duration: 4000,
+      });
+
       navigate(`/designation/${id}`);
     } catch (err) {
-      console.error(
-        "Error updating designation:",
-        err
-      );
+      console.error("Error updating designation:", err);
 
-      const apiError =
-        err?.response?.data
-          ?.designation_name?.[0] ||
-        err?.response?.data?.detail ||
-        "Unable to update designation.";
+      const responseData = err?.response?.data;
 
-      setError(apiError);
+      if (
+        responseData &&
+        typeof responseData === "object" &&
+        !Array.isArray(responseData)
+      ) {
+        const errors = {};
+
+        Object.entries(responseData).forEach(([key, value]) => {
+          if (Array.isArray(value)) errors[key] = value.join(", ");
+          else if (typeof value === "string") errors[key] = value;
+          else errors[key] = JSON.stringify(value);
+        });
+
+        setFieldErrors(errors);
+
+        const generalError =
+          responseData.detail || responseData.non_field_errors?.[0];
+
+        const fieldMessages = Object.values(errors).filter(Boolean);
+        const onlyOneFieldError =
+          fieldMessages.length === 1 && !generalError;
+
+        showToast({
+          title: "Could not save changes",
+          description:
+            generalError ||
+            (onlyOneFieldError
+              ? fieldMessages[0]
+              : "Unable to update designation. Please try again."),
+          type: "error",
+          duration: 7000,
+        });
+      } else {
+        showToast({
+          title: "Could not save changes",
+          description:
+            "Unable to update designation. Please try again.",
+          type: "error",
+          duration: 7000,
+        });
+      }
     } finally {
       setUpdating(false);
     }
@@ -176,22 +257,29 @@ const DesignationEditPage = () => {
 
     try {
       setArchiving(true);
-      setError("");
 
       await deleteDesignation(id);
 
+      showToast({
+        title: "Record archived",
+        description:
+          "The designation record was archived successfully.",
+        type: "success",
+        duration: 4000,
+      });
+
       navigate("/designation");
     } catch (err) {
-      console.error(
-        "Error archiving designation:",
-        err
-      );
+      console.error("Error archiving designation:", err);
 
-      const apiError =
-        err?.response?.data?.detail ||
-        "Unable to archive designation.";
-
-      setError(apiError);
+      showToast({
+        title: "Could not archive record",
+        description:
+          err?.response?.data?.detail ||
+          "Unable to archive designation. Please try again.",
+        type: "error",
+        duration: 7000,
+      });
     } finally {
       setArchiving(false);
     }
@@ -220,14 +308,11 @@ const DesignationEditPage = () => {
       return "-";
     }
 
-    return date.toLocaleDateString(
-      "en-GB",
-      {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }
-    );
+    return date.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
   };
 
   // ==========================================================
@@ -262,15 +347,8 @@ const DesignationEditPage = () => {
       >
         <Navbar />
 
-        <Box
-          flex="1"
-          px={6}
-          py={5}
-        >
-          <Text
-            color={MUTED}
-            fontSize="13px"
-          >
+        <Box flex="1" px={6} py={5}>
+          <Text color={MUTED} fontSize="13px">
             Loading designation...
           </Text>
         </Box>
@@ -293,33 +371,18 @@ const DesignationEditPage = () => {
       flexDirection="column"
       overflow="hidden"
     >
-      {/* NAVBAR */}
-
       <Box flexShrink={0}>
         <Navbar />
       </Box>
 
-      {/* MAIN CONTENT */}
-
-      <Box
-        flex="1"
-        minH="0"
-        overflow="hidden"
-      >
+      <Box flex="1" minH="0" overflow="hidden">
         <Container
           maxW="none"
           height="100%"
-          px={{
-            base: 4,
-            md: 6,
-          }}
-          py={{
-            base: 2,
-            md: 3,
-          }}
+          px={{ base: 4, md: 6 }}
+          py={{ base: 2, md: 3 }}
         >
           {/* BREADCRUMB */}
-
           <HStack
             gap={2}
             mb={2}
@@ -327,90 +390,54 @@ const DesignationEditPage = () => {
             fontSize="12px"
             flexWrap="wrap"
           >
-            <Text>
-              Masters
-            </Text>
-
+            <Text>Masters</Text>
             <Text>/</Text>
-
-            <Text>
-              Designation Master
-            </Text>
-
+            <Text>Designation Master</Text>
             <Text>/</Text>
-
             <Text>
-              {designation?.designation_name ||
-                "Designation"}
+              {designation?.designation_name || "Designation"}
             </Text>
-
             <Text>/</Text>
-
-            <Text>
-              Edit
-            </Text>
+            <Text>Edit</Text>
           </HStack>
 
           {/* PAGE HEADER */}
-
           <Box mb={3}>
             <Heading
               color={DARK}
-              fontSize={{
-                base: "22px",
-                md: "26px",
-              }}
+              fontSize={{ base: "22px", md: "26px" }}
               lineHeight="1.15"
               mb={1}
             >
               Edit Designation
             </Heading>
 
-            <Text
-              color={MUTED}
-              fontSize="12px"
-            >
+            <Text color={MUTED} fontSize="12px">
               Update designation information.
             </Text>
           </Box>
 
           {/* TWO COLUMN LAYOUT */}
-
           <Grid
             templateColumns={{
               base: "1fr",
               lg: "minmax(0, 3fr) minmax(280px, 1fr)",
             }}
-            gap={{
-              base: 3,
-              lg: 4,
-            }}
+            gap={{ base: 3, lg: 4 }}
             alignItems="start"
           >
-            {/* ==================================================
-                LEFT COLUMN
-            ================================================== */}
-
+            {/* LEFT COLUMN */}
             <Box>
               {/* HEADER CARD */}
-
               <Box
                 border="1px solid"
                 borderColor={BORDER}
                 borderRadius="9px"
-                px={{
-                  base: 3,
-                  md: 4,
-                }}
+                px={{ base: 3, md: 4 }}
                 py={3}
                 mb={3}
               >
-                <Flex
-                  align="center"
-                  gap={4}
-                >
-                  {/* AVATAR */}
-
+                <Flex align="center" gap={4}>
                   <Flex
                     width="58px"
                     height="58px"
@@ -426,31 +453,20 @@ const DesignationEditPage = () => {
                       fontWeight="600"
                       color={RED}
                     >
-                      {(
-                        designation
-                          ?.designation_name ||
-                        "D"
-                      )
+                      {(designation?.designation_name || "D")
                         .charAt(0)
                         .toUpperCase()}
                     </Text>
                   </Flex>
 
-                  {/* DESIGNATION INFO */}
-
                   <Box>
                     <Heading
                       color={DARK}
-                      fontSize={{
-                        base: "20px",
-                        md: "22px",
-                      }}
+                      fontSize={{ base: "20px", md: "22px" }}
                       lineHeight="1.2"
                       mb={1}
                     >
-                      {designation
-                        ?.designation_name ||
-                        "-"}
+                      {designation?.designation_name || "-"}
                     </Heading>
 
                     <HStack
@@ -459,10 +475,7 @@ const DesignationEditPage = () => {
                       fontSize="12px"
                       flexWrap="wrap"
                     >
-                      <Text>
-                        {designationCode}
-                      </Text>
-
+                      <Text>{designationCode}</Text>
                       <Text>•</Text>
 
                       <Box
@@ -483,7 +496,6 @@ const DesignationEditPage = () => {
               </Box>
 
               {/* DETAILS CARD */}
-
               <Box
                 border="1px solid"
                 borderColor={BORDER}
@@ -491,7 +503,6 @@ const DesignationEditPage = () => {
                 overflow="hidden"
               >
                 {/* TAB HEADER */}
-
                 <Box
                   height="42px"
                   borderBottom="1px solid"
@@ -521,12 +532,8 @@ const DesignationEditPage = () => {
                 </Box>
 
                 {/* FORM */}
-
                 <Box
-                  px={{
-                    base: 3,
-                    md: 4,
-                  }}
+                  px={{ base: 3, md: 4 }}
                   py={3}
                   minH="250px"
                 >
@@ -540,7 +547,6 @@ const DesignationEditPage = () => {
                   </Text>
 
                   {/* NAME */}
-
                   <Box>
                     <Text
                       fontSize="12px"
@@ -549,11 +555,7 @@ const DesignationEditPage = () => {
                       mb={2}
                     >
                       Designation Name{" "}
-
-                      <Text
-                        as="span"
-                        color={RED}
-                      >
+                      <Text as="span" color={RED}>
                         *
                       </Text>
                     </Text>
@@ -562,60 +564,38 @@ const DesignationEditPage = () => {
                       value={name}
                       onChange={(e) => {
                         setName(e.target.value);
-                        setError("");
+                        setFieldErrors((prev) =>
+                          prev.designation_name
+                            ? { ...prev, designation_name: "" }
+                            : prev
+                        );
                       }}
                       placeholder="Enter designation name"
                       height="38px"
                       fontSize="12px"
                       borderColor={
-                        hasChanges
+                        fieldErrors.designation_name
+                          ? "#F3C4C4"
+                          : hasChanges
                           ? RED
                           : BORDER
                       }
                       borderRadius="6px"
                       color={DARK}
-                      _placeholder={{
-                        color: "#8B98AB",
-                      }}
+                      _placeholder={{ color: "#8B98AB" }}
                       _focus={{
-                        borderColor:
-                          PRIMARY_MAROON,
-                        boxShadow:
-                          `0 0 0 1px ${PRIMARY_MAROON}`,
+                        borderColor: PRIMARY_MAROON,
+                        boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                       }}
                     />
                   </Box>
-
-                  {/* ERROR */}
-
-                  {error && (
-                    <Box
-                      mt={3}
-                      px={3}
-                      py={2}
-                      border="1px solid #FED7D7"
-                      bg="#FFF5F5"
-                      borderRadius="6px"
-                    >
-                      <Text
-                        color="#C53030"
-                        fontSize="11px"
-                      >
-                        {error}
-                      </Text>
-                    </Box>
-                  )}
                 </Box>
               </Box>
             </Box>
 
-            {/* ==================================================
-                RIGHT COLUMN
-            ================================================== */}
-
+            {/* RIGHT COLUMN */}
             <Box>
               {/* RECORD INFORMATION */}
-
               <Box
                 border="1px solid"
                 borderColor={BORDER}
@@ -623,10 +603,7 @@ const DesignationEditPage = () => {
                 p={3}
                 mb={2}
               >
-                <HStack
-                  gap={2}
-                  mb={3}
-                >
+                <HStack gap={2} mb={3}>
                   <Flex
                     width="26px"
                     height="26px"
@@ -635,10 +612,7 @@ const DesignationEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuFileText
-                      size={14}
-                      color={RED}
-                    />
+                    <LuFileText size={14} color={RED} />
                   </Flex>
 
                   <Text
@@ -651,12 +625,7 @@ const DesignationEditPage = () => {
                 </HStack>
 
                 {/* CREATED */}
-
-                <HStack
-                  align="flex-start"
-                  gap={2}
-                  mb={3}
-                >
+                <HStack align="flex-start" gap={2} mb={3}>
                   <Flex
                     width="25px"
                     height="25px"
@@ -665,17 +634,11 @@ const DesignationEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuCalendarDays
-                      size={13}
-                      color={MUTED}
-                    />
+                    <LuCalendarDays size={13} color={MUTED} />
                   </Flex>
 
                   <Box>
-                    <Text
-                      color="#8290A4"
-                      fontSize="10px"
-                    >
+                    <Text color="#8290A4" fontSize="10px">
                       Created
                     </Text>
 
@@ -690,11 +653,7 @@ const DesignationEditPage = () => {
                 </HStack>
 
                 {/* UPDATED */}
-
-                <HStack
-                  align="flex-start"
-                  gap={2}
-                >
+                <HStack align="flex-start" gap={2}>
                   <Flex
                     width="25px"
                     height="25px"
@@ -703,17 +662,11 @@ const DesignationEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuUserRound
-                      size={13}
-                      color={MUTED}
-                    />
+                    <LuUserRound size={13} color={MUTED} />
                   </Flex>
 
                   <Box>
-                    <Text
-                      color="#8290A4"
-                      fontSize="10px"
-                    >
+                    <Text color="#8290A4" fontSize="10px">
                       Last updated
                     </Text>
 
@@ -729,7 +682,6 @@ const DesignationEditPage = () => {
               </Box>
 
               {/* UNSAVED CHANGES */}
-
               <Box
                 border="1px solid"
                 borderColor={BORDER}
@@ -737,10 +689,7 @@ const DesignationEditPage = () => {
                 p={3}
                 mb={2}
               >
-                <HStack
-                  gap={2}
-                  mb={3}
-                >
+                <HStack gap={2} mb={3}>
                   <Flex
                     width="26px"
                     height="26px"
@@ -749,10 +698,7 @@ const DesignationEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuTriangleAlert
-                      size={14}
-                      color="#F26B00"
-                    />
+                    <LuTriangleAlert size={14} color="#F26B00" />
                   </Flex>
 
                   <Text
@@ -764,10 +710,7 @@ const DesignationEditPage = () => {
                   </Text>
                 </HStack>
 
-                <HStack
-                  align="flex-start"
-                  gap={2}
-                >
+                <HStack align="flex-start" gap={2}>
                   <Flex
                     width="25px"
                     height="25px"
@@ -776,10 +719,7 @@ const DesignationEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuClock3
-                      size={13}
-                      color="#F26B00"
-                    />
+                    <LuClock3 size={13} color="#F26B00" />
                   </Flex>
 
                   <Box>
@@ -793,11 +733,7 @@ const DesignationEditPage = () => {
                         : "No changes"}
                     </Text>
 
-                    <Text
-                      color={MUTED}
-                      fontSize="10px"
-                      mt={1}
-                    >
+                    <Text color={MUTED} fontSize="10px" mt={1}>
                       {hasChanges
                         ? "Please review your changes before saving."
                         : "Make changes to the designation information."}
@@ -807,17 +743,13 @@ const DesignationEditPage = () => {
               </Box>
 
               {/* DANGER ZONE */}
-
               <Box
                 border="1px solid"
                 borderColor={BORDER}
                 borderRadius="9px"
                 p={3}
               >
-                <HStack
-                  gap={2}
-                  mb={3}
-                >
+                <HStack gap={2} mb={3}>
                   <Flex
                     width="26px"
                     height="26px"
@@ -826,10 +758,7 @@ const DesignationEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuArchive
-                      size={14}
-                      color={RED}
-                    />
+                    <LuArchive size={14} color={RED} />
                   </Flex>
 
                   <Text
@@ -858,11 +787,8 @@ const DesignationEditPage = () => {
                 >
                   <LuArchive
                     size={14}
-                    style={{
-                      marginRight: "8px",
-                    }}
+                    style={{ marginRight: "8px" }}
                   />
-
                   Archive Designation Record
                 </Button>
 
@@ -872,8 +798,7 @@ const DesignationEditPage = () => {
                   mt={2}
                   ml={1}
                 >
-                  This designation record will
-                  remain in history.
+                  This designation record will remain in history.
                 </Text>
               </Box>
             </Box>
@@ -882,24 +807,16 @@ const DesignationEditPage = () => {
       </Box>
 
       {/* BOTTOM ACTION BAR */}
-
       <Box
         borderTop="1px solid"
         borderColor={BORDER}
         bg="white"
-        px={{
-          base: 4,
-          md: 6,
-        }}
+        px={{ base: 4, md: 6 }}
         py={2}
         flexShrink={0}
       >
-        <Flex
-          justify="flex-end"
-          gap={2}
-        >
+        <Flex justify="flex-end" gap={2}>
           {/* CANCEL */}
-
           <Button
             variant="outline"
             height="36px"
@@ -909,52 +826,34 @@ const DesignationEditPage = () => {
             borderRadius="6px"
             fontSize="12px"
             onClick={handleCancel}
-            _hover={{
-              bg: "#FFF5F7",
-            }}
+            _hover={{ bg: "#FFF5F7" }}
           >
             Cancel
           </Button>
 
           {/* UPDATE */}
-
           <Button
             height="36px"
             minW="150px"
-            bg={
-              hasChanges
-                ? PRIMARY_MAROON
-                : "#D9DCE1"
-            }
-            color={
-              hasChanges
-                ? "white"
-                : "#8A929D"
-            }
+            bg={hasChanges ? PRIMARY_MAROON : "#D9DCE1"}
+            color={hasChanges ? "white" : "#8A929D"}
             borderRadius="6px"
             fontSize="12px"
             disabled={!hasChanges}
             loading={updating}
             onClick={handleUpdate}
             _hover={{
-              bg: hasChanges
-                ? "#650A18"
-                : "#D9DCE1",
+              bg: hasChanges ? "#650A18" : "#D9DCE1",
             }}
           >
             <LuSave
               size={14}
-              style={{
-                marginRight: "7px",
-              }}
+              style={{ marginRight: "7px" }}
             />
-
             Update
           </Button>
         </Flex>
       </Box>
-
-      {/* FOOTER */}
 
       <Box flexShrink={0}>
         <Footer />

@@ -10,8 +10,8 @@ from rest_framework.permissions import IsAuthenticated
 from accounts.permissions import IsChurchAuthenticated,IsChurchUser, IsMemberUser
 from accounts.utils import create_family_head_user
 from registry.services import calculate_new_bill_amount, calculate_prorated_upgrade_amount, generate_folio_number, get_next_subscription_action, handle_member_death
-from .models import Baptism, Bill, Church, DeathRegister, Designation, DheshaKuri, Diocese, Events, Grade, Marriage, Priest,  RegisterSetting, Relationship, TombFee, TombType, UpgradeRequest,  Ward, Family, Member, Package, Offering, VisitorMaster, Subscription, AccountGroupMaster, AccountLedgerMaster, PaymentMaster, QurbanaReceipts, CommitteeMaster,  LegacyBaptism, LegacyMarriage, LegacyDeath
-from .serializers import BaptismSerializer, BillDetailSerializer, BillListSerializer, ChurchDetailSerializer,MemberDetailSerializer, ChurchListSerializer, DeathRegisterSerializer, DesignationSerializer, DheshaKuriSerializer, DioceseSerializer, EventSerializer, FamilyHeadCreateSerializer, FamilyHeadUpdateSerializer, FamilyMemberSerializer, GradeSerializer, InactiveMemberSerializer, MarriageCertificateSerializer, MarriageSerializer, MemberProfileSerializer, MobileFamilyBaptismSerializer, MobileFamilyDetailSerializer, MobileFamilyListSerializer, MobileFamilyMemberSerializer,  PriestNameSerializer,PriestSerializer, RegisterSettingSerializer, RelationshipSerializer, SubscriptionExpirySerializer, TombFeeSerializer, TombTypeSerializer, UpgradeSerializer,  WardSerializer, FamilySerializer, MemberSerializer,PackageSerializer, WardWithFamilyCountSerializer, OfferingSerializer, VisitorMasterSerializer, SubscriptionSerializer, AccountGroupMasterSerializer, AccountLedgerMasterSerializer, PaymentMasterSerializer, QurbanaReceiptsSerializer, CommitteeMasterSerializer, MemberDirectorySerializer, LegacyBaptismSerializer, LegacyMarriageSerializer, LegacyDeathSerializer, LegacyBaptismListSerializer, LegacyMarriageListSerializer, LegacyDeathListSerializer
+from .models import Baptism, Bill, Church, DeathRegister, Designation, DheshaKuri, Diocese, Events, Grade, Marriage, Priest,  RegisterSetting, Relationship, TombFee, TombType, UpgradeRequest,  Ward, Family, Member, Package, Offering, VisitorMaster, Subscription, AccountGroupMaster, AccountLedgerMaster, PaymentMaster, QurbanaReceipts, CommitteeMaster,  LegacyBaptism, LegacyMarriage, LegacyDeath, ReceiptMaster, ReceiptLine,  LedgerEntry
+from .serializers import BaptismSerializer, BillDetailSerializer, BillListSerializer,LedgerEntrySerializer, ChurchDetailSerializer,MemberDetailSerializer, ChurchListSerializer, DeathRegisterSerializer, DesignationSerializer, DheshaKuriSerializer, DioceseSerializer, EventSerializer, FamilyHeadCreateSerializer, FamilyHeadUpdateSerializer, FamilyMemberSerializer, GradeSerializer, InactiveMemberSerializer, MarriageCertificateSerializer, MarriageSerializer, MemberProfileSerializer, MobileFamilyBaptismSerializer, MobileFamilyDetailSerializer, MobileFamilyListSerializer, MobileFamilyMemberSerializer,  PriestNameSerializer,PriestSerializer, RegisterSettingSerializer, RelationshipSerializer, SubscriptionExpirySerializer, TombFeeSerializer, TombTypeSerializer, UpgradeSerializer,  WardSerializer, FamilySerializer, MemberSerializer,PackageSerializer, WardWithFamilyCountSerializer, OfferingSerializer, VisitorMasterSerializer, SubscriptionSerializer, AccountGroupMasterSerializer, AccountLedgerMasterSerializer, PaymentMasterSerializer, QurbanaReceiptsSerializer, CommitteeMasterSerializer, MemberDirectorySerializer, LegacyBaptismSerializer, LegacyMarriageSerializer, LegacyDeathSerializer, LegacyBaptismListSerializer, LegacyMarriageListSerializer, LegacyDeathListSerializer,ReceiptMasterSerializer, ReceiptMasterListSerializer, ReceiptCancelSerializer
 from rest_framework.generics import ListAPIView
 from .models import ChurchSubscription
 from .serializers import SubscribeSerializer,UpgradeRequestSerializer
@@ -3404,18 +3404,74 @@ class AccountLedgerMasterDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return AccountLedgerMaster.objects.filter(church=self.request.user.church)
-    
+
+
+from .models import BankAccount
+from .serializers import BankAccountSerializer, PaymentCancelSerializer
+# ============================================================
+# BANK ACCOUNT VIEWS
+# ============================================================
+
+class BankAccountListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated, IsChurchUser]
+    serializer_class = BankAccountSerializer
+
+    def get_queryset(self):
+        return BankAccount.objects.filter(
+            church=self.request.user.church
+        ).order_by("bank_name")
+
+    def perform_create(self, serializer):
+        serializer.save(church=self.request.user.church)
+
+
+class BankAccountDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated, IsChurchUser]
+    serializer_class = BankAccountSerializer
+
+    def get_queryset(self):
+        return BankAccount.objects.filter(church=self.request.user.church)
+
+
+# ============================================================
+# PAYMENT VIEWS
+# ============================================================
+
 class PaymentMasterListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated, IsChurchUser]
     serializer_class = PaymentMasterSerializer
 
     def get_queryset(self):
-        return PaymentMaster.objects.filter(
-            church=self.request.user.church
-        ).order_by("-payment_date")
+        qs = (
+            PaymentMaster.objects
+            .filter(church=self.request.user.church)
+            .select_related("account_ledger", "bank_account")
+            .order_by("-payment_date", "-id")
+        )
 
+        payment_type = self.request.query_params.get("payment_type")
+        if payment_type and payment_type != "ALL":
+            qs = qs.filter(payment_type=payment_type)
+
+        search = self.request.query_params.get("search")
+        if search:
+            qs = qs.filter(
+                Q(voucher_number__icontains=search) |
+                Q(party_name__icontains=search)
+            )
+
+        return qs
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["church"] = self.request.user.church
+        return context
+
+    @transaction.atomic
     def perform_create(self, serializer):
-        serializer.save(church=self.request.user.church)
+        payment = serializer.save(church=self.request.user.church)
+        payment.post_to_ledger()
+
 
 
 class PaymentMasterDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -3423,7 +3479,246 @@ class PaymentMasterDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = PaymentMasterSerializer
 
     def get_queryset(self):
-        return PaymentMaster.objects.filter(church=self.request.user.church)
+        return PaymentMaster.objects.filter(
+            church=self.request.user.church
+        ).select_related("account_ledger", "bank_account")
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["church"] = self.request.user.church
+        return context
+
+    @transaction.atomic
+    def perform_update(self, serializer):
+        payment = serializer.save()
+
+        # If amount / ledger / date changed, reverse then re-post
+        if any(k in serializer.validated_data for k in
+               ("amount", "account_ledger", "payment_date", "payment_type")):
+            payment.reverse_ledger_entry()
+            payment.post_to_ledger()
+
+
+class PaymentCancelAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsChurchUser]
+
+    def post(self, request, pk):
+        try:
+            payment = PaymentMaster.objects.get(
+                pk=pk,
+                church=request.user.church
+            )
+        except PaymentMaster.DoesNotExist:
+            return Response(
+                {"detail": "Payment not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if payment.is_cancelled:
+            return Response(
+                {"detail": "This payment is already cancelled."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = PaymentCancelSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        with transaction.atomic():
+            payment.is_cancelled = True
+            payment.cancel_reason = serializer.validated_data["cancel_reason"]
+            payment.cancel_remarks = serializer.validated_data["cancel_remarks"]
+            payment.cancelled_at = timezone.now()
+            payment.save(update_fields=[
+                "is_cancelled",
+                "cancel_reason",
+                "cancel_remarks",
+                "cancelled_at",
+                "updated_at",
+            ])
+
+            # 🔥 Reverse the ledger entry
+            payment.reverse_ledger_entry()
+
+        return Response(
+            {
+                "detail": "Payment cancelled successfully.",
+                "payment_id": payment.id,
+                "voucher_number": payment.voucher_number,
+            },
+            status=status.HTTP_200_OK
+        )
+
+from decimal import Decimal
+from django.db.models import Count, Sum, Q, F
+
+class LedgerEntryListAPIView(ListAPIView):
+    """
+    List ledger entries with optional filters:
+
+      ?ledger=<id>
+      ?book=cash | bank      -> filter by account_group.group_name
+      ?from=YYYY-MM-DD
+      ?to=YYYY-MM-DD
+      ?include_cancelled=true
+
+    Adds a `running_balance` field to each row.
+    """
+    permission_classes = [IsAuthenticated, IsChurchUser]
+    serializer_class = LedgerEntrySerializer
+
+    def get_queryset(self):
+        church = self.request.user.church
+
+        qs = LedgerEntry.objects.filter(
+            church=church
+        ).select_related(
+            "ledger",
+            "ledger__account_group",
+            "payment",
+            "receipt",
+        )
+
+        # ---------- ledger filter ----------
+        ledger_id = self.request.query_params.get("ledger")
+        if ledger_id:
+            qs = qs.filter(ledger_id=ledger_id)
+
+        # ---------- book filter (cash / bank) ----------
+        book = (self.request.query_params.get("book") or "").lower().strip()
+        if book == "cash":
+            qs = qs.filter(
+                Q(ledger__account_group__group_name__icontains="cash")
+                | Q(ledger__ledger_name__icontains="cash")
+            )
+        elif book == "bank":
+            qs = qs.filter(
+                Q(ledger__account_group__group_name__icontains="bank")
+                | Q(ledger__ledger_name__icontains="bank")
+            )
+
+        # ---------- date range ----------
+        date_from = self.request.query_params.get("from")
+        if date_from:
+            qs = qs.filter(entry_date__gte=date_from)
+
+        date_to = self.request.query_params.get("to")
+        if date_to:
+            qs = qs.filter(entry_date__lte=date_to)
+
+        # ---------- cancelled ----------
+        include_cancelled = self.request.query_params.get("include_cancelled")
+        if include_cancelled not in ("true", "1", "yes"):
+            qs = qs.filter(is_cancelled=False)
+
+        # Chronological order (oldest first) — required for running balance
+        return qs.order_by("entry_date", "id")
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+
+        # Build running balance map from the SAME queryset (already ordered asc)
+        running_map = self._compute_running_balances(queryset)
+
+        # If a single ledger is selected, also compute totals
+        opening = 0.0
+        total_debit = 0.0
+        total_credit = 0.0
+        closing = 0.0
+
+        ledger_id = self.request.query_params.get("ledger")
+        if ledger_id:
+            try:
+                from .models import AccountLedgerMaster
+                ledger = AccountLedgerMaster.objects.get(
+                    id=ledger_id, church=request.user.church
+                )
+                opening = float(ledger.op_balance or 0)
+
+                agg = queryset.aggregate(
+                    debits=Sum("amount", filter=Q(entry_type="DEBIT")),
+                    credits=Sum("amount", filter=Q(entry_type="CREDIT")),
+                )
+                total_debit = float(agg["debits"] or 0)
+                total_credit = float(agg["credits"] or 0)
+                closing = opening + total_debit - total_credit
+            except Exception:
+                pass
+
+        serializer = self.get_serializer(
+            queryset,
+            many=True,
+            context={
+                **self.get_serializer_context(),
+                "running_balance_context": running_map,
+            },
+        )
+
+        data = list(serializer.data)
+        data.reverse()  # newest first for display
+
+        return Response({
+            "count": len(data),
+            "opening_balance": opening,
+            "total_debit": round(total_debit, 2),
+            "total_credit": round(total_credit, 2),
+            "closing_balance": round(closing, 2),
+            "results": data,
+        })
+
+    def _compute_running_balances(self, queryset):
+        from collections import defaultdict
+        from .models import AccountLedgerMaster
+
+        balances = defaultdict(lambda: None)
+        ledger_ids = {e.ledger_id for e in queryset}
+        openings = {
+            l.id: float(l.op_balance or 0)
+            for l in AccountLedgerMaster.objects.filter(id__in=ledger_ids)
+        }
+
+        result = {}
+        for entry in queryset:
+            if balances[entry.ledger_id] is None:
+                balances[entry.ledger_id] = openings.get(entry.ledger_id, 0.0)
+            amt = float(entry.amount or 0)
+            if entry.entry_type == "DEBIT":
+                balances[entry.ledger_id] += amt
+            else:
+                balances[entry.ledger_id] -= amt
+            result[entry.id] = round(balances[entry.ledger_id], 2)
+
+        return result
+
+    def _build_running_balance_context(self):
+        # Placeholder; the real map is injected in list()
+        return {}
+
+
+class LedgerBalanceAPIView(APIView):
+    """
+    Get current balance for a single ledger.
+    GET /account-ledgers/<pk>/balance/
+    """
+    permission_classes = [IsAuthenticated, IsChurchUser]
+
+    def get(self, request, pk):
+        try:
+            ledger = AccountLedgerMaster.objects.get(
+                pk=pk, church=request.user.church
+            )
+        except AccountLedgerMaster.DoesNotExist:
+            return Response(
+                {"detail": "Ledger not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        return Response({
+            "id": ledger.id,
+            "ledger_name": ledger.ledger_name,
+            "ledger_nature": ledger.ledger_nature,
+            "op_balance": float(ledger.op_balance or 0),
+            "current_balance": round(ledger.get_current_balance(), 2),
+        })
     
 class QurbanaReceiptsListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated, IsChurchUser]
@@ -3918,3 +4213,129 @@ class LegacyDeathDetailAPIView(RetrieveUpdateDestroyAPIView):
         context = super().get_serializer_context()
         context["church"] = self.request.user.church
         return context
+
+# ============================================================
+# RECEIPTS
+# ============================================================
+
+class ReceiptListCreateAPIView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated, IsChurchUser]
+    serializer_class = ReceiptMasterSerializer
+
+    def get_queryset(self):
+        qs = (
+            ReceiptMaster.objects
+            .filter(church=self.request.user.church)
+            .select_related("member", "bank_account")
+            .prefetch_related("lines", "lines__ledger")
+            .order_by("-receipt_date", "-id")
+        )
+
+        search = self.request.query_params.get("search")
+        if search:
+            qs = qs.filter(
+                Q(receipt_number__icontains=search) |
+                Q(member__name__icontains=search)
+            )
+
+        date_from = self.request.query_params.get("from")
+        if date_from:
+            qs = qs.filter(receipt_date__gte=date_from)
+
+        date_to = self.request.query_params.get("to")
+        if date_to:
+            qs = qs.filter(receipt_date__lte=date_to)
+
+        payment_type = self.request.query_params.get("payment_type")
+        if payment_type and payment_type != "ALL":
+            qs = qs.filter(payment_type=payment_type)
+
+        status_param = self.request.query_params.get("status")
+        if status_param == "POSTED":
+            qs = qs.filter(is_cancelled=False)
+        elif status_param == "CANCELLED":
+            qs = qs.filter(is_cancelled=True)
+
+        return qs
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["church"] = self.request.user.church
+        return context
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = ReceiptMasterListSerializer(
+            queryset, many=True, context={"request": request}
+        )
+        return Response({
+            "count": queryset.count(),
+            "results": serializer.data,
+        })
+
+
+class ReceiptDetailAPIView(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsAuthenticated, IsChurchUser]
+    serializer_class = ReceiptMasterSerializer
+
+    def get_queryset(self):
+        return (
+            ReceiptMaster.objects
+            .filter(church=self.request.user.church)
+            .select_related("member", "bank_account")
+            .prefetch_related("lines", "lines__ledger")
+        )
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["church"] = self.request.user.church
+        return context
+
+
+class ReceiptCancelAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsChurchUser]
+
+    def post(self, request, pk):
+        try:
+            receipt = ReceiptMaster.objects.get(
+                pk=pk,
+                church=request.user.church
+            )
+        except ReceiptMaster.DoesNotExist:
+            return Response(
+                {"detail": "Receipt not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if receipt.is_cancelled:
+            return Response(
+                {"detail": "This receipt is already cancelled."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = ReceiptCancelSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        with transaction.atomic():
+            receipt.is_cancelled = True
+            receipt.cancel_reason = serializer.validated_data["cancel_reason"]
+            receipt.cancel_remarks = serializer.validated_data["cancel_remarks"]
+            receipt.cancelled_at = timezone.now()
+            receipt.save(update_fields=[
+                "is_cancelled",
+                "cancel_reason",
+                "cancel_remarks",
+                "cancelled_at",
+                "updated_at",
+            ])
+
+            receipt.reverse_ledger_entry()
+
+        return Response(
+            {
+                "detail": "Receipt cancelled successfully.",
+                "receipt_id": receipt.id,
+                "receipt_number": receipt.receipt_number,
+            },
+            status=status.HTTP_200_OK
+        )

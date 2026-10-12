@@ -21,11 +21,47 @@ import {
   listGrades,
 } from "../api/registryServices";
 
+import { toaster } from "../components/ui/toaster";
+
 const PRIMARY_MAROON = "var(--primary-maroon)";
 const RED = "#D7193F";
 const DARK = "#182338";
 const MUTED = "#60708C";
 const BORDER = "#DCE2EA";
+
+
+// ============================================================
+// TOAST HELPER
+// ============================================================
+
+const showToast = ({
+  title,
+  description,
+  type = "info",
+  duration = 4000,
+}) => {
+  toaster.create({
+    title,
+    description,
+    type,
+    duration,
+    closable: true,
+  });
+};
+
+
+// ============================================================
+// FIELD LABELS
+// ============================================================
+
+const FIELD_LABELS = {
+  grade: "Grade",
+  term: "Term",
+  start_date: "Start Date",
+  end_date: "End Date",
+  amount: "Amount",
+};
+
 
 const SubscriptionAddPage = () => {
   const navigate = useNavigate();
@@ -46,7 +82,7 @@ const SubscriptionAddPage = () => {
 
   const [loadingGrades, setLoadingGrades] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // ==========================================================
   // LOAD GRADES
@@ -54,6 +90,7 @@ const SubscriptionAddPage = () => {
 
   useEffect(() => {
     fetchGrades();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchGrades = async () => {
@@ -74,10 +111,14 @@ const SubscriptionAddPage = () => {
     } catch (err) {
       console.error("Error loading grades:", err);
 
-      setError(
-        err?.response?.data?.detail ||
-          "Unable to load grades."
-      );
+      showToast({
+        title: "Failed to load grades",
+        description:
+          err?.response?.data?.detail ||
+          "Unable to load grades. Please try again.",
+        type: "error",
+        duration: 6000,
+      });
     } finally {
       setLoadingGrades(false);
     }
@@ -95,7 +136,62 @@ const SubscriptionAddPage = () => {
       [name]: value,
     }));
 
-    setError("");
+    setFieldErrors((prev) =>
+      prev[name] ? { ...prev, [name]: "" } : prev
+    );
+  };
+
+  // ==========================================================
+  // VALIDATE
+  // ==========================================================
+
+  const validate = () => {
+    const errors = {};
+    const missing = [];
+
+    if (!formData.grade) {
+      errors.grade = "Please select a grade.";
+      missing.push(FIELD_LABELS.grade);
+    }
+
+    if (!formData.term.trim()) {
+      errors.term = "Term is required.";
+      missing.push(FIELD_LABELS.term);
+    }
+
+    if (!formData.start_date) {
+      errors.start_date = "Start date is required.";
+      missing.push(FIELD_LABELS.start_date);
+    }
+
+    if (!formData.end_date) {
+      errors.end_date = "End date is required.";
+      missing.push(FIELD_LABELS.end_date);
+    }
+
+    if (!formData.amount) {
+      errors.amount = "Amount is required.";
+      missing.push(FIELD_LABELS.amount);
+    } else {
+      const amount = Number(formData.amount);
+
+      if (Number.isNaN(amount) || amount <= 0) {
+        errors.amount = "Amount must be greater than zero.";
+      }
+    }
+
+    // Date cross-check (rule error, not missing)
+    if (
+      formData.start_date &&
+      formData.end_date &&
+      new Date(formData.end_date) < new Date(formData.start_date)
+    ) {
+      errors.end_date =
+        "End date cannot be before start date.";
+    }
+
+    setFieldErrors(errors);
+    return { errors, missing };
   };
 
   // ==========================================================
@@ -103,56 +199,38 @@ const SubscriptionAddPage = () => {
   // ==========================================================
 
   const handleSubmit = async () => {
-    setError("");
+    const { errors, missing } = validate();
 
-    if (!formData.grade) {
-      setError("Please select a grade.");
-      return;
-    }
+    if (Object.keys(errors).length > 0) {
+      // Prefer explicit rule errors over missing-fields list
+      const explicitMessages = Object.entries(errors)
+        .filter(([key]) => !missing.includes(FIELD_LABELS[key]))
+        .map(([, msg]) => msg);
 
-    if (!formData.term.trim()) {
-      setError("Term is required.");
-      return;
-    }
+      let description;
 
-    if (!formData.start_date) {
-      setError("Start date is required.");
-      return;
-    }
+      if (explicitMessages.length > 0) {
+        description = explicitMessages.join("\n");
+      } else if (missing.length === 1) {
+        description = `${missing[0]} is required.`;
+      } else {
+        description = `Please fill: ${missing.join(", ")}.`;
+      }
 
-    if (!formData.end_date) {
-      setError("End date is required.");
-      return;
-    }
-
-    if (!formData.amount) {
-      setError("Amount is required.");
-      return;
-    }
-
-    // Date validation
-    if (
-      new Date(formData.end_date) <
-      new Date(formData.start_date)
-    ) {
-      setError(
-        "End date cannot be before start date."
-      );
-      return;
-    }
-
-    // Amount validation
-    const amount = Number(formData.amount);
-
-    if (Number.isNaN(amount) || amount <= 0) {
-      setError(
-        "Amount must be greater than zero."
-      );
+      showToast({
+        title: "Please fix the form",
+        description,
+        type: "warning",
+        duration: 5000,
+      });
       return;
     }
 
     try {
       setSaving(true);
+      setFieldErrors({});
+
+      const amount = Number(formData.amount);
 
       const payload = {
         grade: Number(formData.grade),
@@ -163,30 +241,65 @@ const SubscriptionAddPage = () => {
         is_cancelled: false,
       };
 
-      console.log(
-        "Creating subscription with payload:",
-        payload
-      );
-
       await createSubscription(payload);
+
+      showToast({
+        title: "Subscription created",
+        description:
+          "The subscription record was created successfully.",
+        type: "success",
+        duration: 4000,
+      });
 
       navigate("/subscriptions");
     } catch (err) {
-      console.error(
-        "Error creating subscription:",
-        err
-      );
+      console.error("Error creating subscription:", err);
 
-      const apiError =
-        err?.response?.data?.grade?.[0] ||
-        err?.response?.data?.term?.[0] ||
-        err?.response?.data?.start_date?.[0] ||
-        err?.response?.data?.end_date?.[0] ||
-        err?.response?.data?.amount?.[0] ||
-        err?.response?.data?.detail ||
-        "Unable to create subscription.";
+      const responseData = err?.response?.data;
 
-      setError(apiError);
+      if (
+        responseData &&
+        typeof responseData === "object" &&
+        !Array.isArray(responseData)
+      ) {
+        const errors = {};
+
+        Object.entries(responseData).forEach(([key, value]) => {
+          if (Array.isArray(value)) errors[key] = value.join(", ");
+          else if (typeof value === "string") errors[key] = value;
+          else errors[key] = JSON.stringify(value);
+        });
+
+        setFieldErrors(errors);
+
+        const generalError =
+          responseData.detail || responseData.non_field_errors?.[0];
+
+        const fieldMessages = Object.values(errors).filter(Boolean);
+        const onlyOneFieldError =
+          fieldMessages.length === 1 && !generalError;
+
+        showToast({
+          title: "Could not create subscription",
+          description:
+            generalError ||
+            (onlyOneFieldError
+              ? fieldMessages[0]
+              : `Please check: ${Object.keys(errors)
+                  .map((k) => FIELD_LABELS[k] || k)
+                  .join(", ")}`),
+          type: "error",
+          duration: 7000,
+        });
+      } else {
+        showToast({
+          title: "Could not create subscription",
+          description:
+            "Unable to create subscription. Please try again.",
+          type: "error",
+          duration: 7000,
+        });
+      }
     } finally {
       setSaving(false);
     }
@@ -212,13 +325,9 @@ const SubscriptionAddPage = () => {
     color: DARK,
     bg: "white",
 
-    _placeholder: {
-      color: "#98A2B3",
-    },
+    _placeholder: { color: "#98A2B3" },
 
-    _hover: {
-      borderColor: "#BFC7D4",
-    },
+    _hover: { borderColor: "#BFC7D4" },
 
     _focus: {
       borderColor: PRIMARY_MAROON,
@@ -240,11 +349,7 @@ const SubscriptionAddPage = () => {
       {children}
 
       {required && (
-        <Text
-          as="span"
-          color={RED}
-          ml="2px"
-        >
+        <Text as="span" color={RED} ml="2px">
           *
         </Text>
       )}
@@ -262,71 +367,35 @@ const SubscriptionAddPage = () => {
       display="flex"
       flexDirection="column"
     >
-      {/* ======================================================
-          NAVBAR
-      ====================================================== */}
-
       <Navbar />
-
-      {/* ======================================================
-          MAIN CONTENT
-      ====================================================== */}
 
       <Box flex="1" w="100%">
         <Box
           w="100%"
-          px={{
-            base: 3,
-            md: 5,
-          }}
-          py={{
-            base: 3,
-            md: 5,
-          }}
+          px={{ base: 3, md: 5 }}
+          py={{ base: 3, md: 5 }}
         >
-          {/* ==================================================
-              BREADCRUMB
-          ================================================== */}
-
+          {/* BREADCRUMB */}
           <HStack
             gap={2}
             mb={3}
             color={MUTED}
             fontSize="12px"
           >
-            <Text>
-              Activities
-            </Text>
-
+            <Text>Activities</Text>
             <Text>/</Text>
-
-            <Text>
-              Subscriptions
-            </Text>
-
+            <Text>Subscriptions</Text>
             <Text>/</Text>
-
-            <Text color={DARK}>
-              Add Subscription
-            </Text>
+            <Text color={DARK}>Add Subscription</Text>
           </HStack>
 
-          {/* ==================================================
-              PAGE HEADER
-          ================================================== */}
-
+          {/* PAGE HEADER */}
           <Flex
             justify="space-between"
-            align={{
-              base: "flex-start",
-              md: "center",
-            }}
+            align={{ base: "flex-start", md: "center" }}
             gap={3}
             mb={4}
-            direction={{
-              base: "column",
-              md: "row",
-            }}
+            direction={{ base: "column", md: "row" }}
           >
             <Box>
               <Text
@@ -340,45 +409,30 @@ const SubscriptionAddPage = () => {
 
               <Heading
                 color={DARK}
-                fontSize={{
-                  base: "24px",
-                  md: "28px",
-                }}
+                fontSize={{ base: "24px", md: "28px" }}
                 lineHeight="1.2"
                 mb={1}
               >
                 Add Subscription
               </Heading>
 
-              <Text
-                color={MUTED}
-                fontSize="12px"
-              >
+              <Text color={MUTED} fontSize="12px">
                 Create a subscription record.
               </Text>
             </Box>
           </Flex>
 
-          {/* ==================================================
-              FORM CARD
-          ================================================== */}
-
+          {/* FORM CARD */}
           <Box
             border="1px solid"
             borderColor={BORDER}
             borderRadius="9px"
             bg="white"
-            p={{
-              base: 4,
-              md: 6,
-            }}
+            p={{ base: 4, md: 6 }}
             width="100%"
             boxShadow="0 1px 3px rgba(16, 24, 40, 0.04)"
           >
-            {/* ==================================================
-                CARD HEADER
-            ================================================== */}
-
+            {/* CARD HEADER */}
             <Box mb={5}>
               <Text
                 fontSize="13px"
@@ -393,14 +447,8 @@ const SubscriptionAddPage = () => {
               </Text>
             </Box>
 
-            {/* ==================================================
-                SECTION TITLE
-            ================================================== */}
-
-            <Flex
-              align="center"
-              mb={4}
-            >
+            {/* SECTION TITLE */}
+            <Flex align="center" mb={4}>
               <Text
                 fontSize="13px"
                 fontWeight="700"
@@ -410,27 +458,15 @@ const SubscriptionAddPage = () => {
               </Text>
             </Flex>
 
-            {/* ==================================================
-                GRADE + TERM
-            ================================================== */}
-
+            {/* GRADE + TERM */}
             <Grid
-              templateColumns={{
-                base: "1fr",
-                md: "1fr 1fr",
-              }}
-              gap={{
-                base: 4,
-                md: 5,
-              }}
+              templateColumns={{ base: "1fr", md: "1fr 1fr" }}
+              gap={{ base: 4, md: 5 }}
               mb={4}
             >
               {/* GRADE */}
-
               <Box>
-                <FieldLabel>
-                  Grade
-                </FieldLabel>
+                <FieldLabel>Grade</FieldLabel>
 
                 <select
                   name="grade"
@@ -441,7 +477,9 @@ const SubscriptionAddPage = () => {
                     width: "100%",
                     height: "42px",
                     fontSize: "13px",
-                    border: `1px solid ${BORDER}`,
+                    border: `1px solid ${
+                      fieldErrors.grade ? "#F3C4C4" : BORDER
+                    }`,
                     borderRadius: "7px",
                     padding: "0 14px",
                     color: DARK,
@@ -456,7 +494,9 @@ const SubscriptionAddPage = () => {
                     e.target.style.boxShadow = `0 0 0 1px ${PRIMARY_MAROON}`;
                   }}
                   onBlur={(e) => {
-                    e.target.style.borderColor = BORDER;
+                    e.target.style.borderColor = fieldErrors.grade
+                      ? "#F3C4C4"
+                      : BORDER;
                     e.target.style.boxShadow = "none";
                   }}
                 >
@@ -467,10 +507,7 @@ const SubscriptionAddPage = () => {
                   </option>
 
                   {grades.map((grade) => (
-                    <option
-                      key={grade.id}
-                      value={grade.id}
-                    >
+                    <option key={grade.id} value={grade.id}>
                       {grade.name}
                     </option>
                   ))}
@@ -478,11 +515,8 @@ const SubscriptionAddPage = () => {
               </Box>
 
               {/* TERM */}
-
               <Box>
-                <FieldLabel>
-                  Term
-                </FieldLabel>
+                <FieldLabel>Term</FieldLabel>
 
                 <Input
                   name="term"
@@ -490,31 +524,22 @@ const SubscriptionAddPage = () => {
                   onChange={handleChange}
                   placeholder="Enter term"
                   {...inputStyle}
+                  borderColor={
+                    fieldErrors.term ? "#F3C4C4" : BORDER
+                  }
                 />
               </Box>
             </Grid>
 
-            {/* ==================================================
-                START DATE + END DATE
-            ================================================== */}
-
+            {/* START DATE + END DATE */}
             <Grid
-              templateColumns={{
-                base: "1fr",
-                md: "1fr 1fr",
-              }}
-              gap={{
-                base: 4,
-                md: 5,
-              }}
+              templateColumns={{ base: "1fr", md: "1fr 1fr" }}
+              gap={{ base: 4, md: 5 }}
               mb={4}
             >
               {/* START DATE */}
-
               <Box>
-                <FieldLabel>
-                  Start Date
-                </FieldLabel>
+                <FieldLabel>Start Date</FieldLabel>
 
                 <Input
                   name="start_date"
@@ -522,15 +547,15 @@ const SubscriptionAddPage = () => {
                   value={formData.start_date}
                   onChange={handleChange}
                   {...inputStyle}
+                  borderColor={
+                    fieldErrors.start_date ? "#F3C4C4" : BORDER
+                  }
                 />
               </Box>
 
               {/* END DATE */}
-
               <Box>
-                <FieldLabel>
-                  End Date
-                </FieldLabel>
+                <FieldLabel>End Date</FieldLabel>
 
                 <Input
                   name="end_date"
@@ -538,24 +563,19 @@ const SubscriptionAddPage = () => {
                   value={formData.end_date}
                   onChange={handleChange}
                   {...inputStyle}
+                  borderColor={
+                    fieldErrors.end_date ? "#F3C4C4" : BORDER
+                  }
                 />
               </Box>
             </Grid>
 
-            {/* ==================================================
-                AMOUNT
-            ================================================== */}
-
+            {/* AMOUNT */}
             <Box
               mb={5}
-              maxW={{
-                base: "100%",
-                md: "50%",
-              }}
+              maxW={{ base: "100%", md: "50%" }}
             >
-              <FieldLabel>
-                Amount
-              </FieldLabel>
+              <FieldLabel>Amount</FieldLabel>
 
               <Flex>
                 <Box
@@ -586,17 +606,15 @@ const SubscriptionAddPage = () => {
                   placeholder="Enter amount"
                   h="42px"
                   fontSize="13px"
-                  borderColor={BORDER}
+                  borderColor={
+                    fieldErrors.amount ? "#F3C4C4" : BORDER
+                  }
                   borderRadius="0 7px 7px 0"
                   borderLeft="none"
                   color={DARK}
                   bg="white"
-                  _placeholder={{
-                    color: "#98A2B3",
-                  }}
-                  _hover={{
-                    borderColor: "#BFC7D4",
-                  }}
+                  _placeholder={{ color: "#98A2B3" }}
+                  _hover={{ borderColor: "#BFC7D4" }}
                   _focus={{
                     borderColor: PRIMARY_MAROON,
                     boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
@@ -605,43 +623,14 @@ const SubscriptionAddPage = () => {
               </Flex>
             </Box>
 
-            {/* ==================================================
-                ERROR
-            ================================================== */}
-
-            {error && (
-              <Box
-                mb={4}
-                px={4}
-                py={2.5}
-                border="1px solid #FED7D7"
-                bg="#FFF5F5"
-                borderRadius="7px"
-              >
-                <Text
-                  color="#C53030"
-                  fontSize="12px"
-                  fontWeight="500"
-                >
-                  {error}
-                </Text>
-              </Box>
-            )}
-
-            {/* ==================================================
-                DIVIDER
-            ================================================== */}
-
+            {/* DIVIDER */}
             <Box
               borderTop="1px solid"
               borderColor="#E6EAF0"
               mb={4}
             />
 
-            {/* ==================================================
-                BUTTONS
-            ================================================== */}
-
+            {/* BUTTONS */}
             <Flex
               justify="flex-end"
               align="center"
@@ -658,9 +647,7 @@ const SubscriptionAddPage = () => {
                 fontWeight="600"
                 onClick={handleCancel}
                 disabled={saving}
-                _hover={{
-                  bg: "#FFF5F7",
-                }}
+                _hover={{ bg: "#FFF5F7" }}
               >
                 Cancel
               </Button>
@@ -676,9 +663,7 @@ const SubscriptionAddPage = () => {
                 loading={saving}
                 disabled={saving}
                 onClick={handleSubmit}
-                _hover={{
-                  bg: "#650A18",
-                }}
+                _hover={{ bg: "#650A18" }}
               >
                 Save Subscription
               </Button>
@@ -686,10 +671,6 @@ const SubscriptionAddPage = () => {
           </Box>
         </Box>
       </Box>
-
-      {/* ======================================================
-          FOOTER
-      ====================================================== */}
 
       <Footer />
     </Box>

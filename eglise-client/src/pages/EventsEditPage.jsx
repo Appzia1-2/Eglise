@@ -38,12 +38,35 @@ import {
   deleteEvent,
 } from "../api/registryServices";
 
+import { toaster } from "../components/ui/toaster";
+
 const PRIMARY_MAROON = "var(--primary-maroon)";
 
 const RED = "#D7193F";
 const DARK = "#182338";
 const MUTED = "#60708C";
 const BORDER = "#DCE2EA";
+
+
+// ============================================================
+// TOAST HELPER
+// ============================================================
+
+const showToast = ({
+  title,
+  description,
+  type = "info",
+  duration = 4000,
+}) => {
+  toaster.create({
+    title,
+    description,
+    type,
+    duration,
+    closable: true,
+  });
+};
+
 
 const EventsEditPage = () => {
   const navigate = useNavigate();
@@ -62,7 +85,7 @@ const EventsEditPage = () => {
   const [updating, setUpdating] = useState(false);
   const [archiving, setArchiving] = useState(false);
 
-  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // ==========================================================
   // LOAD EVENT
@@ -70,12 +93,12 @@ const EventsEditPage = () => {
 
   useEffect(() => {
     fetchEvent();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchEvent = async () => {
     try {
       setLoading(true);
-      setError("");
 
       const response = await listEvents();
 
@@ -90,7 +113,13 @@ const EventsEditPage = () => {
       );
 
       if (!found) {
-        setError("Event not found.");
+        showToast({
+          title: "Event not found",
+          description:
+            "The requested event record could not be found.",
+          type: "error",
+          duration: 6000,
+        });
         return;
       }
 
@@ -101,16 +130,16 @@ const EventsEditPage = () => {
       setName(eventName);
       setOriginalName(eventName);
     } catch (err) {
-      console.error(
-        "Error fetching event:",
-        err
-      );
+      console.error("Error fetching event:", err);
 
-      const apiError =
-        err?.response?.data?.detail ||
-        "Unable to load event.";
-
-      setError(apiError);
+      showToast({
+        title: "Failed to load record",
+        description:
+          err?.response?.data?.detail ||
+          "Unable to load event. Please try again.",
+        type: "error",
+        duration: 6000,
+      });
     } finally {
       setLoading(false);
     }
@@ -120,8 +149,7 @@ const EventsEditPage = () => {
   // UNSAVED CHANGES
   // ==========================================================
 
-  const hasChanges =
-    name.trim() !== originalName.trim();
+  const hasChanges = name.trim() !== originalName.trim();
 
   // ==========================================================
   // UPDATE
@@ -131,36 +159,88 @@ const EventsEditPage = () => {
     const trimmedName = name.trim();
 
     if (!trimmedName) {
-      setError("Event name is required.");
+      setFieldErrors({ name: "Event name is required." });
+      showToast({
+        title: "Please fix the form",
+        description: "Event Name is required.",
+        type: "warning",
+        duration: 5000,
+      });
       return;
     }
 
     if (!hasChanges) {
+      showToast({
+        title: "No changes to save",
+        description:
+          "Please modify the event name before updating.",
+        type: "info",
+        duration: 4000,
+      });
       return;
     }
 
     try {
       setUpdating(true);
-      setError("");
+      setFieldErrors({});
 
       await updateEvent(id, {
         name: trimmedName,
       });
 
-      // Redirect to Events list page after successful update
+      showToast({
+        title: "Changes saved",
+        description: "The event record was updated successfully.",
+        type: "success",
+        duration: 4000,
+      });
+
       navigate("/events");
     } catch (err) {
-      console.error(
-        "Error updating event:",
-        err
-      );
+      console.error("Error updating event:", err);
 
-      const apiError =
-        err?.response?.data?.name?.[0] ||
-        err?.response?.data?.detail ||
-        "Unable to update event.";
+      const responseData = err?.response?.data;
 
-      setError(apiError);
+      if (
+        responseData &&
+        typeof responseData === "object" &&
+        !Array.isArray(responseData)
+      ) {
+        const errors = {};
+
+        Object.entries(responseData).forEach(([key, value]) => {
+          if (Array.isArray(value)) errors[key] = value.join(", ");
+          else if (typeof value === "string") errors[key] = value;
+          else errors[key] = JSON.stringify(value);
+        });
+
+        setFieldErrors(errors);
+
+        const generalError =
+          responseData.detail || responseData.non_field_errors?.[0];
+
+        const fieldMessages = Object.values(errors).filter(Boolean);
+        const onlyOneFieldError =
+          fieldMessages.length === 1 && !generalError;
+
+        showToast({
+          title: "Could not save changes",
+          description:
+            generalError ||
+            (onlyOneFieldError
+              ? fieldMessages[0]
+              : "Unable to update event. Please try again."),
+          type: "error",
+          duration: 7000,
+        });
+      } else {
+        showToast({
+          title: "Could not save changes",
+          description: "Unable to update event. Please try again.",
+          type: "error",
+          duration: 7000,
+        });
+      }
     } finally {
       setUpdating(false);
     }
@@ -181,23 +261,28 @@ const EventsEditPage = () => {
 
     try {
       setArchiving(true);
-      setError("");
 
       await deleteEvent(id);
 
-      // Redirect to Events list page after successful archive
+      showToast({
+        title: "Record archived",
+        description: "The event record was archived successfully.",
+        type: "success",
+        duration: 4000,
+      });
+
       navigate("/events");
     } catch (err) {
-      console.error(
-        "Error archiving event:",
-        err
-      );
+      console.error("Error archiving event:", err);
 
-      const apiError =
-        err?.response?.data?.detail ||
-        "Unable to archive event.";
-
-      setError(apiError);
+      showToast({
+        title: "Could not archive record",
+        description:
+          err?.response?.data?.detail ||
+          "Unable to archive event. Please try again.",
+        type: "error",
+        duration: 7000,
+      });
     } finally {
       setArchiving(false);
     }
@@ -208,7 +293,6 @@ const EventsEditPage = () => {
   // ==========================================================
 
   const handleCancel = () => {
-    // Redirect to Events list page on cancel
     navigate("/events");
   };
 
@@ -227,14 +311,11 @@ const EventsEditPage = () => {
       return "-";
     }
 
-    return date.toLocaleDateString(
-      "en-GB",
-      {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }
-    );
+    return date.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
   };
 
   // ==========================================================
@@ -242,14 +323,10 @@ const EventsEditPage = () => {
   // ==========================================================
 
   const createdDate =
-    event?.created_at ||
-    event?.created ||
-    event?.created_on;
+    event?.created_at || event?.created || event?.created_on;
 
   const updatedDate =
-    event?.updated_at ||
-    event?.updated ||
-    event?.updated_on;
+    event?.updated_at || event?.updated || event?.updated_on;
 
   const eventCode = `EV-${String(
     event?.id || "0001"
@@ -269,15 +346,8 @@ const EventsEditPage = () => {
       >
         <Navbar />
 
-        <Box
-          flex="1"
-          px={6}
-          py={5}
-        >
-          <Text
-            color={MUTED}
-            fontSize="13px"
-          >
+        <Box flex="1" px={6} py={5}>
+          <Text color={MUTED} fontSize="13px">
             Loading event...
           </Text>
         </Box>
@@ -300,64 +370,34 @@ const EventsEditPage = () => {
       flexDirection="column"
       overflow="hidden"
     >
-      {/* NAVBAR */}
-
       <Box flexShrink={0}>
         <Navbar />
       </Box>
 
-      {/* MAIN CONTENT */}
-
-      <Box
-        flex="1"
-        minH="0"
-        overflow="hidden"
-      >
+      <Box flex="1" minH="0" overflow="hidden">
         <Container
           maxW="none"
           height="100%"
-          px={{
-            base: 3,
-            md: 4,
-          }}
-          py={{
-            base: 2,
-            md: 3,
-          }}
+          px={{ base: 3, md: 4 }}
+          py={{ base: 2, md: 3 }}
         >
           {/* BREADCRUMB */}
-
           <HStack
             gap={2}
             mb={2}
             color={MUTED}
             fontSize="11px"
           >
-            <Text>
-              Masters
-            </Text>
-
+            <Text>Masters</Text>
             <Text>/</Text>
-
-            <Text>
-              Events Master
-            </Text>
-
+            <Text>Events Master</Text>
             <Text>/</Text>
-
-            <Text>
-              {event?.name || "Event"}
-            </Text>
-
+            <Text>{event?.name || "Event"}</Text>
             <Text>/</Text>
-
-            <Text>
-              Edit
-            </Text>
+            <Text>Edit</Text>
           </HStack>
 
           {/* PAGE HEADER */}
-
           <Box mb={3}>
             <Text
               fontSize="10px"
@@ -370,60 +410,40 @@ const EventsEditPage = () => {
 
             <Heading
               color={DARK}
-              fontSize={{
-                base: "22px",
-                md: "26px",
-              }}
+              fontSize={{ base: "22px", md: "26px" }}
               lineHeight="1.15"
               mb={1}
             >
               Edit Event
             </Heading>
 
-            <Text
-              color={MUTED}
-              fontSize="11px"
-            >
+            <Text color={MUTED} fontSize="11px">
               Update event information.
             </Text>
           </Box>
 
           {/* TWO COLUMN LAYOUT */}
-
           <Grid
             templateColumns={{
               base: "1fr",
               lg: "minmax(0, 3fr) minmax(280px, 1fr)",
             }}
-            gap={{
-              base: 3,
-              lg: 4,
-            }}
+            gap={{ base: 3, lg: 4 }}
             alignItems="start"
           >
             {/* LEFT COLUMN */}
-
             <Box>
               {/* HEADER CARD */}
-
               <Box
                 border="1px solid"
                 borderColor={BORDER}
                 borderRadius="8px"
-                px={{
-                  base: 3,
-                  md: 4,
-                }}
+                px={{ base: 3, md: 4 }}
                 py={3}
                 mb={3}
                 bg="white"
               >
-                <Flex
-                  align="center"
-                  gap={4}
-                >
-                  {/* AVATAR */}
-
+                <Flex align="center" gap={4}>
                   <Flex
                     width="58px"
                     height="58px"
@@ -445,15 +465,10 @@ const EventsEditPage = () => {
                     </Text>
                   </Flex>
 
-                  {/* EVENT INFO */}
-
                   <Box>
                     <Heading
                       color={DARK}
-                      fontSize={{
-                        base: "20px",
-                        md: "22px",
-                      }}
+                      fontSize={{ base: "20px", md: "22px" }}
                       lineHeight="1.2"
                       mb={1}
                     >
@@ -465,10 +480,7 @@ const EventsEditPage = () => {
                       color={MUTED}
                       fontSize="12px"
                     >
-                      <Text>
-                        {eventCode}
-                      </Text>
-
+                      <Text>{eventCode}</Text>
                       <Text>•</Text>
 
                       <Box
@@ -489,7 +501,6 @@ const EventsEditPage = () => {
               </Box>
 
               {/* DETAILS CARD */}
-
               <Box
                 border="1px solid"
                 borderColor={BORDER}
@@ -498,7 +509,6 @@ const EventsEditPage = () => {
                 bg="white"
               >
                 {/* TAB HEADER */}
-
                 <Box
                   height="42px"
                   borderBottom="1px solid"
@@ -528,12 +538,8 @@ const EventsEditPage = () => {
                 </Box>
 
                 {/* FORM */}
-
                 <Box
-                  px={{
-                    base: 3,
-                    md: 4,
-                  }}
+                  px={{ base: 3, md: 4 }}
                   py={3}
                   minH="250px"
                 >
@@ -547,7 +553,6 @@ const EventsEditPage = () => {
                   </Text>
 
                   {/* NAME */}
-
                   <Box>
                     <Text
                       fontSize="12px"
@@ -556,11 +561,7 @@ const EventsEditPage = () => {
                       mb={2}
                     >
                       Event Name{" "}
-
-                      <Text
-                        as="span"
-                        color={RED}
-                      >
+                      <Text as="span" color={RED}>
                         *
                       </Text>
                     </Text>
@@ -569,58 +570,36 @@ const EventsEditPage = () => {
                       value={name}
                       onChange={(e) => {
                         setName(e.target.value);
-                        setError("");
+                        setFieldErrors((prev) =>
+                          prev.name ? { ...prev, name: "" } : prev
+                        );
                       }}
                       placeholder="Enter event name"
                       height="38px"
                       fontSize="12px"
                       borderColor={
-                        hasChanges
+                        fieldErrors.name
+                          ? "#F3C4C4"
+                          : hasChanges
                           ? RED
                           : BORDER
                       }
                       borderRadius="6px"
                       color={DARK}
-                      _placeholder={{
-                        color: "#8B98AB",
-                      }}
+                      _placeholder={{ color: "#8B98AB" }}
                       _focus={{
-                        borderColor:
-                          PRIMARY_MAROON,
-                        boxShadow:
-                          `0 0 0 1px ${PRIMARY_MAROON}`,
+                        borderColor: PRIMARY_MAROON,
+                        boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                       }}
                     />
                   </Box>
-
-                  {/* ERROR */}
-
-                  {error && (
-                    <Box
-                      mt={3}
-                      px={3}
-                      py={2}
-                      border="1px solid #FED7D7"
-                      bg="#FFF5F5"
-                      borderRadius="6px"
-                    >
-                      <Text
-                        color="#C53030"
-                        fontSize="11px"
-                      >
-                        {error}
-                      </Text>
-                    </Box>
-                  )}
                 </Box>
               </Box>
             </Box>
 
             {/* RIGHT COLUMN */}
-
             <Box>
               {/* RECORD INFORMATION */}
-
               <Box
                 border="1px solid"
                 borderColor={BORDER}
@@ -629,10 +608,7 @@ const EventsEditPage = () => {
                 mb={2}
                 bg="white"
               >
-                <HStack
-                  gap={2}
-                  mb={3}
-                >
+                <HStack gap={2} mb={3}>
                   <Flex
                     width="26px"
                     height="26px"
@@ -641,10 +617,7 @@ const EventsEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuFileText
-                      size={14}
-                      color={RED}
-                    />
+                    <LuFileText size={14} color={RED} />
                   </Flex>
 
                   <Text
@@ -656,13 +629,7 @@ const EventsEditPage = () => {
                   </Text>
                 </HStack>
 
-                {/* CREATED */}
-
-                <HStack
-                  align="flex-start"
-                  gap={2}
-                  mb={3}
-                >
+                <HStack align="flex-start" gap={2} mb={3}>
                   <Flex
                     width="25px"
                     height="25px"
@@ -671,17 +638,11 @@ const EventsEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuCalendarDays
-                      size={13}
-                      color={MUTED}
-                    />
+                    <LuCalendarDays size={13} color={MUTED} />
                   </Flex>
 
                   <Box>
-                    <Text
-                      color="#8290A4"
-                      fontSize="10px"
-                    >
+                    <Text color="#8290A4" fontSize="10px">
                       Created
                     </Text>
 
@@ -695,12 +656,7 @@ const EventsEditPage = () => {
                   </Box>
                 </HStack>
 
-                {/* UPDATED */}
-
-                <HStack
-                  align="flex-start"
-                  gap={2}
-                >
+                <HStack align="flex-start" gap={2}>
                   <Flex
                     width="25px"
                     height="25px"
@@ -709,17 +665,11 @@ const EventsEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuUserRound
-                      size={13}
-                      color={MUTED}
-                    />
+                    <LuUserRound size={13} color={MUTED} />
                   </Flex>
 
                   <Box>
-                    <Text
-                      color="#8290A4"
-                      fontSize="10px"
-                    >
+                    <Text color="#8290A4" fontSize="10px">
                       Last updated
                     </Text>
 
@@ -735,7 +685,6 @@ const EventsEditPage = () => {
               </Box>
 
               {/* UNSAVED CHANGES */}
-
               <Box
                 border="1px solid"
                 borderColor={BORDER}
@@ -744,10 +693,7 @@ const EventsEditPage = () => {
                 mb={2}
                 bg="white"
               >
-                <HStack
-                  gap={2}
-                  mb={3}
-                >
+                <HStack gap={2} mb={3}>
                   <Flex
                     width="26px"
                     height="26px"
@@ -756,10 +702,7 @@ const EventsEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuTriangleAlert
-                      size={14}
-                      color="#F26B00"
-                    />
+                    <LuTriangleAlert size={14} color="#F26B00" />
                   </Flex>
 
                   <Text
@@ -771,10 +714,7 @@ const EventsEditPage = () => {
                   </Text>
                 </HStack>
 
-                <HStack
-                  align="flex-start"
-                  gap={2}
-                >
+                <HStack align="flex-start" gap={2}>
                   <Flex
                     width="25px"
                     height="25px"
@@ -783,10 +723,7 @@ const EventsEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuClock3
-                      size={13}
-                      color="#F26B00"
-                    />
+                    <LuClock3 size={13} color="#F26B00" />
                   </Flex>
 
                   <Box>
@@ -800,11 +737,7 @@ const EventsEditPage = () => {
                         : "No changes"}
                     </Text>
 
-                    <Text
-                      color={MUTED}
-                      fontSize="10px"
-                      mt={1}
-                    >
+                    <Text color={MUTED} fontSize="10px" mt={1}>
                       {hasChanges
                         ? "Please review your changes before saving."
                         : "Make changes to the event information."}
@@ -814,7 +747,6 @@ const EventsEditPage = () => {
               </Box>
 
               {/* DANGER ZONE */}
-
               <Box
                 border="1px solid"
                 borderColor={BORDER}
@@ -822,10 +754,7 @@ const EventsEditPage = () => {
                 p={3}
                 bg="white"
               >
-                <HStack
-                  gap={2}
-                  mb={3}
-                >
+                <HStack gap={2} mb={3}>
                   <Flex
                     width="26px"
                     height="26px"
@@ -834,10 +763,7 @@ const EventsEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuArchive
-                      size={14}
-                      color={RED}
-                    />
+                    <LuArchive size={14} color={RED} />
                   </Flex>
 
                   <Text
@@ -867,11 +793,8 @@ const EventsEditPage = () => {
                 >
                   <LuArchive
                     size={14}
-                    style={{
-                      marginRight: "8px",
-                    }}
+                    style={{ marginRight: "8px" }}
                   />
-
                   Archive Event Record
                 </Button>
 
@@ -881,8 +804,7 @@ const EventsEditPage = () => {
                   mt={2}
                   ml={1}
                 >
-                  This event record will
-                  remain in history.
+                  This event record will remain in history.
                 </Text>
               </Box>
             </Box>
@@ -891,24 +813,16 @@ const EventsEditPage = () => {
       </Box>
 
       {/* BOTTOM ACTION BAR */}
-
       <Box
         borderTop="1px solid"
         borderColor={BORDER}
         bg="white"
-        px={{
-          base: 3,
-          md: 4,
-        }}
+        px={{ base: 3, md: 4 }}
         py={2}
         flexShrink={0}
       >
-        <Flex
-          justify="flex-end"
-          gap={2}
-        >
+        <Flex justify="flex-end" gap={2}>
           {/* CANCEL */}
-
           <Button
             variant="outline"
             height="36px"
@@ -918,28 +832,17 @@ const EventsEditPage = () => {
             borderRadius="6px"
             fontSize="12px"
             onClick={handleCancel}
-            _hover={{
-              bg: "#FFF5F7",
-            }}
+            _hover={{ bg: "#FFF5F7" }}
           >
             Cancel
           </Button>
 
           {/* UPDATE */}
-
           <Button
             height="36px"
             minW="150px"
-            bg={
-              hasChanges
-                ? PRIMARY_MAROON
-                : "#D9DCE1"
-            }
-            color={
-              hasChanges
-                ? "white"
-                : "#8A929D"
-            }
+            bg={hasChanges ? PRIMARY_MAROON : "#D9DCE1"}
+            color={hasChanges ? "white" : "#8A929D"}
             borderRadius="6px"
             fontSize="12px"
             disabled={!hasChanges}
@@ -947,24 +850,17 @@ const EventsEditPage = () => {
             loadingText="Updating..."
             onClick={handleUpdate}
             _hover={{
-              bg: hasChanges
-                ? "#650A18"
-                : "#D9DCE1",
+              bg: hasChanges ? "#650A18" : "#D9DCE1",
             }}
           >
             <LuSave
               size={14}
-              style={{
-                marginRight: "7px",
-              }}
+              style={{ marginRight: "7px" }}
             />
-
             Update
           </Button>
         </Flex>
       </Box>
-
-      {/* FOOTER */}
 
       <Box flexShrink={0}>
         <Footer />

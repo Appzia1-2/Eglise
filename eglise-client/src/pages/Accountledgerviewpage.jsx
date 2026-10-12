@@ -1,6 +1,6 @@
 // src/pages/AccountLedgerViewPage.jsx
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -34,7 +34,8 @@ import { toaster } from "../components/ui/toaster";
 
 import {
   getAccountLedger,
-  listLedgerTransactions,
+  listLedgerEntries,
+  getLedgerBalance, // ✅ optional, used for live balance
 } from "../api/registryServices";
 
 const PRIMARY_MAROON = "var(--primary-maroon)";
@@ -90,30 +91,24 @@ const formatDate = (dateString) => {
   });
 };
 
-const voucherTypeStyle = {
-  RECEIPT: {
-    bg: "#ECFDF3",
-    color: "#16804A",
-    label: "Receipt",
-  },
+const entryBadgeStyle = (txn) => {
+  if (txn?.is_reversal) {
+    return { bg: "#F5F3FF", color: "#7C3AED", label: "Reversal" };
+  }
 
-  PAYMENT: {
-    bg: "#FFF1F3",
-    color: "#D7193F",
-    label: "Payment",
-  },
+  if (txn?.is_cancelled) {
+    return { bg: "#F3F4F6", color: "#667085", label: "Cancelled" };
+  }
 
-  OPENING: {
-    bg: "#EFF6FF",
-    color: "#2563EB",
-    label: "Opening",
-  },
+  if (txn?.entry_type === "DEBIT") {
+    return { bg: "#FFF1F3", color: "#D7193F", label: "Debit" };
+  }
 
-  JOURNAL: {
-    bg: "#F5F3FF",
-    color: "#7C3AED",
-    label: "Journal",
-  },
+  if (txn?.entry_type === "CREDIT") {
+    return { bg: "#ECFDF3", color: "#16804A", label: "Credit" };
+  }
+
+  return { bg: "#F2F4F7", color: "#667085", label: "—" };
 };
 
 /* =========================================================
@@ -179,6 +174,7 @@ const AccountLedgerViewPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [ledger, setLedger] = useState(null);
   const [transactions, setTransactions] = useState([]);
+  const [liveBalance, setLiveBalance] = useState(null);
 
   /* =======================================================
      LOAD DATA
@@ -193,28 +189,42 @@ const AccountLedgerViewPage = () => {
       setIsLoading(true);
 
       try {
+        // ---- 1. Fetch the ledger itself ----
         const ledgerResponse = await getAccountLedger(id);
-
-        const ledgerData = ledgerResponse?.data ?? ledgerResponse ?? null;
-
+        const ledgerData =
+          ledgerResponse?.data ?? ledgerResponse ?? null;
         setLedger(ledgerData);
 
+        // ---- 2. Fetch recent ledger entries ----
         try {
-          const transactionResponse = await listLedgerTransactions(id, {
-            limit: 4,
+          const entriesResponse = await listLedgerEntries({
+            ledger: id,
           });
 
-          const transactionData =
-            transactionResponse?.data?.results ??
-            transactionResponse?.data ??
-            transactionResponse ??
+          const raw =
+            entriesResponse?.data?.results ??
+            entriesResponse?.data ??
+            entriesResponse ??
             [];
 
-          setTransactions(Array.isArray(transactionData) ? transactionData : []);
-        } catch (transactionError) {
-          console.warn("Could not load transactions:", transactionError);
+          const list = Array.isArray(raw) ? raw : [];
 
+          // Backend returns newest-first. Show 4 recent.
+          setTransactions(list.slice(0, 4));
+        } catch (entryError) {
+          console.warn("Could not load ledger entries:", entryError);
           setTransactions([]);
+        }
+
+        // ---- 3. Live balance (from backend) ----
+        try {
+          const balanceResponse = await getLedgerBalance(id);
+          const balanceData =
+            balanceResponse?.data ?? balanceResponse ?? null;
+          setLiveBalance(balanceData?.current_balance ?? null);
+        } catch (balanceError) {
+          console.warn("Could not load ledger balance:", balanceError);
+          setLiveBalance(null);
         }
       } catch (error) {
         console.error("Error fetching account ledger:", error);
@@ -241,6 +251,15 @@ const AccountLedgerViewPage = () => {
   }, [id]);
 
   /* =======================================================
+     DERIVED
+  ======================================================= */
+
+  const openingBalance = useMemo(() => {
+    if (!ledger) return 0;
+    return Number(pick(ledger, ["op_balance", "opening_balance"], 0));
+  }, [ledger]);
+
+  /* =======================================================
      LOADING
   ======================================================= */
 
@@ -265,12 +284,8 @@ const AccountLedgerViewPage = () => {
           <style>
             {`
               @keyframes ledgerSpin {
-                from {
-                  transform: rotate(0deg);
-                }
-                to {
-                  transform: rotate(360deg);
-                }
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
               }
             `}
           </style>
@@ -332,9 +347,7 @@ const AccountLedgerViewPage = () => {
   ======================================================= */
 
   const ledgerName = pick(ledger, ["ledger_name", "name"], "—");
-
   const ledgerCode = pick(ledger, ["ledger_code", "code"], "—");
-
   const alias = pick(ledger, ["alias"], "—");
 
   const groupName = pick(
@@ -349,7 +362,11 @@ const AccountLedgerViewPage = () => {
     "—"
   );
 
-  const nature = pick(ledger, ["account_group.nature", "nature"], "—");
+  const nature = pick(
+    ledger,
+    ["ledger_nature_display", "ledger_nature", "account_group.nature", "nature"],
+    "—"
+  );
 
   const rawStatus = pick(ledger, ["status", "is_active"], true);
 
@@ -359,11 +376,12 @@ const AccountLedgerViewPage = () => {
     rawStatus === "true" ||
     String(rawStatus).toLowerCase() === "active";
 
-  const openingBalance = Number(
-    pick(ledger, ["op_balance", "opening_balance"], 0)
-  );
-
   const balanceAsOn = pick(ledger, ["opening_balance_date"], null);
+
+  const currentBalance =
+    liveBalance !== null
+      ? Number(liveBalance)
+      : Number(pick(ledger, ["current_balance"], openingBalance));
 
   /* =======================================================
      RENDER
@@ -371,11 +389,7 @@ const AccountLedgerViewPage = () => {
 
   return (
     <Box minH="100vh" bg="white" display="flex" flexDirection="column">
-      {/* HEADER */}
-
       <Navbar />
-
-      {/* MAIN CONTENT */}
 
       <Box
         flex="1"
@@ -552,6 +566,30 @@ const AccountLedgerViewPage = () => {
                 </Text>
               </Box>
             </HStack>
+
+            {/* CURRENT BALANCE */}
+
+            <HStack
+              gap={3}
+              flex="1"
+              minW="210px"
+              borderLeft={{ base: "none", md: `1px solid ${BORDER}` }}
+              pl={{ base: 0, md: 5 }}
+            >
+              <Circle size="44px" bg="#ECFDF3" color="#16804A" flexShrink={0}>
+                <Icon as={LuWallet} boxSize={5} />
+              </Circle>
+
+              <Box>
+                <Text fontSize="18px" fontWeight="700" color="#16804A">
+                  {formatAmount(currentBalance)}
+                </Text>
+
+                <Text fontSize="11px" color={MUTED}>
+                  Current Balance
+                </Text>
+              </Box>
+            </HStack>
           </Flex>
         </Box>
 
@@ -591,6 +629,11 @@ const AccountLedgerViewPage = () => {
                 label: "Opening Balance",
                 value: formatAmount(openingBalance),
                 color: PRIMARY_MAROON,
+              },
+              {
+                label: "Current Balance",
+                value: formatAmount(currentBalance),
+                color: "#16804A",
               },
               {
                 label: "Balance As On",
@@ -711,23 +754,24 @@ const AccountLedgerViewPage = () => {
                   </tr>
                 ) : (
                   transactions.map((txn) => {
-                    const type = String(
-                      pick(txn, ["voucher_type", "type"], "")
+                    const entryType = String(
+                      txn?.entry_type || ""
                     ).toUpperCase();
 
-                    const typeStyle = voucherTypeStyle[type] || {
-                      bg: "#F2F4F7",
-                      color: "#667085",
-                      label: type || "—",
-                    };
+                    const isDebit = entryType === "DEBIT";
 
-                    const debit = Number(pick(txn, ["debit"], 0));
+                    const amount = Number(txn?.amount || 0);
 
-                    const credit = Number(pick(txn, ["credit"], 0));
+                    const debit = isDebit ? amount : 0;
+                    const credit = isDebit ? 0 : amount;
 
-                    const balance = Number(
-                      pick(txn, ["running_balance", "balance"], 0)
-                    );
+                    const balance =
+                      txn?.running_balance !== undefined &&
+                      txn?.running_balance !== null
+                        ? Number(txn.running_balance)
+                        : null;
+
+                    const badge = entryBadgeStyle(txn);
 
                     return (
                       <tr
@@ -742,9 +786,7 @@ const AccountLedgerViewPage = () => {
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {formatDate(
-                            pick(txn, ["date", "voucher_date"], null)
-                          )}
+                          {formatDate(txn?.entry_date)}
                         </td>
 
                         <td
@@ -756,7 +798,7 @@ const AccountLedgerViewPage = () => {
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {pick(txn, ["voucher_number", "voucher_no"])}
+                          {txn?.payment_voucher || "—"}
                         </td>
 
                         <td
@@ -766,19 +808,19 @@ const AccountLedgerViewPage = () => {
                             color: "#344054",
                           }}
                         >
-                          {pick(txn, ["particulars", "narration"])}
+                          {txn?.narration || txn?.ledger_name || "—"}
                         </td>
 
                         <td style={{ padding: "10px 12px" }}>
                           <Badge
-                            bg={typeStyle.bg}
-                            color={typeStyle.color}
+                            bg={badge.bg}
+                            color={badge.color}
                             fontSize="9px"
                             px={2}
                             py={1}
                             borderRadius="full"
                           >
-                            {typeStyle.label}
+                            {badge.label}
                           </Badge>
                         </td>
 
@@ -816,7 +858,7 @@ const AccountLedgerViewPage = () => {
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {formatAmount(balance)}
+                          {balance !== null ? formatAmount(balance) : "—"}
                         </td>
 
                         <td
@@ -828,9 +870,7 @@ const AccountLedgerViewPage = () => {
                           <button
                             type="button"
                             onClick={() =>
-                              navigate(
-                                `/account-ledgers/${id}/transactions/${txn.id}`
-                              )
+                              navigate(`/account-ledgers/${id}/transactions`)
                             }
                             style={{
                               border: "none",
@@ -861,8 +901,6 @@ const AccountLedgerViewPage = () => {
           </Text>
         </Box>
       </Box>
-
-      {/* FOOTER */}
 
       <Footer />
     </Box>

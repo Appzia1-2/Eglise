@@ -1,0 +1,412 @@
+// src/pages/DayBookPage.jsx
+
+import React, { useEffect, useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { Box, Button, Flex, Heading, HStack, Icon, Text } from "@chakra-ui/react";
+import { LuArrowLeft, LuPrinter, LuFileText } from "react-icons/lu";
+
+import Navbar from "../components/Navbar";
+import Footer from "../components/Footer";
+import ReportFilterBar from "../components/ReportFilterBar";
+import ReportLedgerTable from "../components/ReportLedgerTable";
+import DayBookPrintView from "../components/DayBookPrintView";
+
+import { toaster } from "../components/ui/toaster";
+import { listLedgerEntries, getMyChurch } from "../api/registryServices";
+
+const PRIMARY_MAROON = "var(--primary-maroon)";
+const RED = "#D7193F";
+const DARK = "#182338";
+const MUTED = "#60708C";
+const BORDER = "#DCE2EA";
+
+// ------------------------------------------------------------
+// Number helper
+// ------------------------------------------------------------
+const toNumber = (v) => {
+  if (v === null || v === undefined || v === "") return 0;
+  const n = Number(String(v).replace(/[₹,\s]/g, ""));
+  return isNaN(n) ? 0 : n;
+};
+
+// ------------------------------------------------------------
+// Group flat LedgerEntry rows into one row per voucher
+// ------------------------------------------------------------
+const groupLedgerEntries = (entries) => {
+  const groups = new Map();
+
+  entries.forEach((e) => {
+    if (e.is_cancelled) return;
+
+    const voucherNo = e.receipt_voucher || e.payment_voucher || null;
+    const voucherType = e.receipt_voucher
+      ? "Receipt"
+      : e.payment_voucher
+      ? "Payment"
+      : "Journal";
+
+    const key = voucherNo
+      ? `${voucherType}|${voucherNo}|${e.entry_date}`
+      : `ORPHAN|${e.id}`;
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        date: e.entry_date,
+        voucherNo: voucherNo || "—",
+        voucherType,
+        particulars: e.narration || "",
+        account: "",
+        debit: 0,
+        credit: 0,
+        _entries: [],
+      });
+    }
+
+    const g = groups.get(key);
+    g._entries.push(e);
+
+    const amt = toNumber(e.amount);
+    if (e.entry_type === "DEBIT") g.debit += amt;
+    else if (e.entry_type === "CREDIT") g.credit += amt;
+
+    // Try to identify the cash/bank side of the voucher
+    const ledgerName = String(e.ledger_name || "").toLowerCase();
+    const groupName = String(e.account_group_name || "").toLowerCase();
+    const isCashOrBank =
+      ledgerName.includes("cash") ||
+      ledgerName.includes("bank") ||
+      groupName.includes("cash") ||
+      groupName.includes("bank");
+
+    if (isCashOrBank) g.account = e.ledger_name || "";
+
+    if (!g.particulars && e.narration) g.particulars = e.narration;
+  });
+
+  return Array.from(groups.values()).map((g) => {
+    if (!g.account) {
+      const firstLedger = g._entries.find((x) => x.ledger_name);
+      g.account = firstLedger ? firstLedger.ledger_name : "";
+    }
+    delete g._entries;
+    return g;
+  });
+};
+
+// ------------------------------------------------------------
+// Page
+// ------------------------------------------------------------
+const DayBookPage = () => {
+  const navigate = useNavigate();
+
+  const [rawEntries, setRawEntries] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  const [openingBalance, setOpeningBalance] = useState(0);
+
+  const [church, setChurch] = useState({
+    name: "",
+    address: "",
+  });
+
+  const [showPrint, setShowPrint] = useState(false);
+
+  // -------- Load church info once --------
+  useEffect(() => {
+    const fetchChurch = async () => {
+      try {
+        const res = await getMyChurch();
+        const c = res?.data ?? res ?? {};
+        setChurch({
+          name: c.name || "Church",
+          address:
+            c.full_address ||
+            c.address ||
+            [c.city, c.state, c.country].filter(Boolean).join(", ") ||
+            "",
+        });
+      } catch (err) {
+        console.error("Failed to fetch church info", err);
+      }
+    };
+    fetchChurch();
+  }, []);
+
+  // -------- Load ledger entries --------
+  const load = async () => {
+    setIsLoading(true);
+    try {
+      const params = {};
+      if (dateFrom) params.from = dateFrom;
+      if (dateTo) params.to = dateTo;
+
+      const res = await listLedgerEntries(params);
+
+      // Backend returns:
+      // { count, opening_balance, total_debit, total_credit, closing_balance, results }
+      const body = res?.data ?? {};
+      let data = body.results ?? body ?? [];
+      if (!Array.isArray(data)) data = [];
+
+      if (typeof body.opening_balance === "number") {
+        setOpeningBalance(body.opening_balance);
+      }
+
+      setRawEntries(data);
+    } catch (err) {
+      console.error(err);
+      toaster.create({
+        title: "Failed to load Day Book",
+        description: err?.response?.data?.detail || "Please try again.",
+        type: "error",
+      });
+      setRawEntries([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateFrom, dateTo]);
+
+  // -------- Derived rows (grouped + search) --------
+  const rows = useMemo(() => {
+    let grouped = groupLedgerEntries(rawEntries);
+
+    if (search) {
+      const kw = search.toLowerCase();
+      grouped = grouped.filter(
+        (r) =>
+          String(r.particulars || "").toLowerCase().includes(kw) ||
+          String(r.voucherNo || "").toLowerCase().includes(kw) ||
+          String(r.account || "").toLowerCase().includes(kw) ||
+          String(r.voucherType || "").toLowerCase().includes(kw)
+      );
+    }
+
+    grouped.sort((a, b) => {
+      const da = new Date(a.date).getTime();
+      const db = new Date(b.date).getTime();
+      return db - da;
+    });
+
+    return grouped;
+  }, [rawEntries, search]);
+
+  const reset = () => {
+    setSearch("");
+    setDateFrom("");
+    setDateTo("");
+  };
+
+  return (
+    <>
+      {/* -------- Print styles -------- */}
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          .daybook-print,
+          .daybook-print * { visibility: visible !important; }
+          .daybook-print {
+            position: absolute !important;
+            left: 0; top: 0;
+            width: 210mm;
+            min-height: 297mm;
+          }
+          @page { size: A4 portrait; margin: 0; }
+        }
+      `}</style>
+
+      <Box minH="100vh" bg="white" display="flex" flexDirection="column">
+        <Navbar />
+
+        <Box flex="1" w="100%" px={{ base: 3, md: 4 }} py={{ base: 3, md: 4 }}>
+          {/* Breadcrumbs */}
+          <HStack gap={2} mb={3} color={MUTED} fontSize="12px">
+            <Text
+              color={PRIMARY_MAROON}
+              cursor="pointer"
+              onClick={() => navigate("/reports")}
+              fontWeight="500"
+            >
+              Reports
+            </Text>
+            <Text>/</Text>
+            <Text>Day Book</Text>
+          </HStack>
+
+          {/* Header */}
+          <Flex
+            justify="space-between"
+            align={{ base: "flex-start", md: "center" }}
+            gap={3}
+            mb={5}
+            direction={{ base: "column", md: "row" }}
+          >
+            <Box>
+              <Text
+                fontSize="11px"
+                fontWeight="700"
+                color={RED}
+                mb={1}
+                letterSpacing="0.4px"
+              >
+                DAY BOOK REPORT
+              </Text>
+              <Heading
+                color={DARK}
+                fontSize={{ base: "26px", md: "30px" }}
+                mb={1}
+                fontWeight="700"
+              >
+                Day Book
+              </Heading>
+              <Text color={MUTED} fontSize="13px">
+                View all cash and bank transactions for the selected date.
+              </Text>
+            </Box>
+
+            <HStack gap={3} flexWrap="wrap">
+              <Button
+                variant="outline"
+                borderColor="#FF5A7D"
+                color={RED}
+                bg="white"
+                h="40px"
+                px={5}
+                fontSize="13px"
+                fontWeight="600"
+                borderRadius="6px"
+                onClick={() => navigate("/reports")}
+                _hover={{ bg: "#FFF0F4" }}
+              >
+                <Icon as={LuArrowLeft} mr={2} boxSize={4} />
+                Back
+              </Button>
+
+              <Button
+                variant="outline"
+                borderColor="#FF5A7D"
+                color={RED}
+                bg="white"
+                h="40px"
+                px={5}
+                fontSize="13px"
+                fontWeight="600"
+                borderRadius="6px"
+                onClick={() => setShowPrint(true)}
+                _hover={{ bg: "#FFF0F4" }}
+              >
+                <Icon as={LuPrinter} mr={2} boxSize={4} />
+                Print
+              </Button>
+
+              <Button
+                variant="outline"
+                borderColor="#FF5A7D"
+                color={RED}
+                bg="white"
+                h="40px"
+                px={5}
+                fontSize="13px"
+                fontWeight="600"
+                borderRadius="6px"
+                onClick={() => setShowPrint(true)}
+                _hover={{ bg: "#FFF0F4" }}
+              >
+                <Icon as={LuFileText} mr={2} boxSize={4} />
+                Generate PDF
+              </Button>
+            </HStack>
+          </Flex>
+
+          {/* Content card */}
+          <Box border={`1px solid ${BORDER}`} borderRadius="8px" p={4} bg="white">
+            <ReportFilterBar
+              search={search}
+              setSearch={setSearch}
+              dateFrom={dateFrom}
+              setDateFrom={setDateFrom}
+              dateTo={dateTo}
+              setDateTo={setDateTo}
+              onReset={reset}
+            />
+
+            <ReportLedgerTable rows={rows} isLoading={isLoading} />
+          </Box>
+        </Box>
+
+        <Footer />
+      </Box>
+
+      {/* -------- Hidden print preview (rendered only when needed) -------- */}
+      {showPrint && (
+        <Box
+          position="fixed"
+          inset="0"
+          bg="rgba(0,0,0,0.5)"
+          zIndex="9999"
+          overflowY="auto"
+          p={{ base: 2, md: 6 }}
+        >
+          {/* Toolbar */}
+          <Flex
+            justify="flex-end"
+            gap={3}
+            mb={3}
+            maxW="820px"
+            mx="auto"
+          >
+            <Button
+              size="sm"
+              variant="outline"
+              borderColor="white"
+              color="white"
+              bg="transparent"
+              onClick={() => setShowPrint(false)}
+              _hover={{ bg: "rgba(255,255,255,0.1)" }}
+            >
+              Close
+            </Button>
+            <Button
+              size="sm"
+              bg="white"
+              color={RED}
+              fontWeight="600"
+              onClick={() => window.print()}
+              _hover={{ bg: "#FFF0F4" }}
+            >
+              Print
+            </Button>
+          </Flex>
+
+          {/* Printable sheet */}
+          <Box
+            maxW="820px"
+            mx="auto"
+            bg="white"
+            boxShadow="0 4px 24px rgba(0,0,0,0.3)"
+            className="daybook-print"
+          >
+            <DayBookPrintView
+              rows={rows}
+              date={dateFrom || new Date().toISOString().split("T")[0]}
+              churchName={church.name}
+              churchAddress={church.address}
+              openingBalance={openingBalance}
+            />
+          </Box>
+        </Box>
+      )}
+    </>
+  );
+};
+
+export default DayBookPage;

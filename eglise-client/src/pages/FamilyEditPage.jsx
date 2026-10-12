@@ -35,11 +35,45 @@ import {
   updateFamily,
 } from "../api/registryServices";
 
+import { toaster } from "../components/ui/toaster";
+
 const PRIMARY_MAROON = "var(--primary-maroon)";
 const RED = "#D7193F";
 const DARK = "#182338";
 const MUTED = "#60708C";
 const BORDER = "#DCE2EA";
+
+
+// ============================================================
+// TOAST HELPER
+// ============================================================
+
+const showToast = ({
+  title,
+  description,
+  type = "info",
+  duration = 4000,
+}) => {
+  toaster.create({
+    title,
+    description,
+    type,
+    duration,
+    closable: true,
+  });
+};
+
+
+// ============================================================
+// FIELD LABELS (for toast messages)
+// ============================================================
+
+const FIELD_LABELS = {
+  family_name: "Family Name",
+  origin: "Origin",
+  history: "History",
+};
+
 
 const FamilyEditPage = () => {
   const navigate = useNavigate();
@@ -70,7 +104,7 @@ const FamilyEditPage = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // ==========================================================
   // LOAD FAMILY
@@ -80,14 +114,18 @@ const FamilyEditPage = () => {
     const loadFamily = async () => {
       try {
         setLoading(true);
-        setError("");
 
         const response = await getFamily(id);
 
         const data = response?.data ?? response;
 
         if (!data) {
-          setError("Family record not found.");
+          showToast({
+            title: "Family not found",
+            description: "The requested family record could not be found.",
+            type: "error",
+            duration: 6000,
+          });
           return;
         }
 
@@ -106,15 +144,14 @@ const FamilyEditPage = () => {
 
         const data = err?.response?.data;
 
-        if (data?.detail) {
-          setError(
-            Array.isArray(data.detail)
-              ? data.detail[0]
-              : data.detail
-          );
-        } else {
-          setError("Unable to load family.");
-        }
+        showToast({
+          title: "Failed to load record",
+          description:
+            data?.detail ||
+            "Unable to load family details. Please try again.",
+          type: "error",
+          duration: 6000,
+        });
       } finally {
         setLoading(false);
       }
@@ -132,32 +169,22 @@ const FamilyEditPage = () => {
   const modifiedFields = useMemo(() => {
     const fields = [];
 
-    if (
-      form.family_name !==
-      originalForm.family_name
-    ) {
+    if (form.family_name !== originalForm.family_name) {
       fields.push("Family Name");
     }
 
-    if (
-      form.origin !==
-      originalForm.origin
-    ) {
+    if (form.origin !== originalForm.origin) {
       fields.push("Origin");
     }
 
-    if (
-      form.history !==
-      originalForm.history
-    ) {
+    if (form.history !== originalForm.history) {
       fields.push("History");
     }
 
     return fields;
   }, [form, originalForm]);
 
-  const hasChanges =
-    modifiedFields.length > 0;
+  const hasChanges = modifiedFields.length > 0;
 
   // ==========================================================
   // HANDLE CHANGE
@@ -171,7 +198,9 @@ const FamilyEditPage = () => {
       [name]: value,
     }));
 
-    setError("");
+    setFieldErrors((prev) =>
+      prev[name] ? { ...prev, [name]: "" } : prev
+    );
   };
 
   // ==========================================================
@@ -183,24 +212,58 @@ const FamilyEditPage = () => {
   };
 
   // ==========================================================
+  // VALIDATE
+  // ==========================================================
+
+  const validate = () => {
+    const errors = {};
+    const missing = [];
+
+    if (!form.family_name.trim()) {
+      errors.family_name = "Family name is required.";
+      missing.push(FIELD_LABELS.family_name);
+    }
+
+    setFieldErrors(errors);
+    return { errors, missing };
+  };
+
+  // ==========================================================
   // UPDATE
   // ==========================================================
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e) {
+      e.preventDefault();
+    }
 
     if (!hasChanges) {
+      showToast({
+        title: "No changes to save",
+        description: "Please modify at least one field before updating.",
+        type: "info",
+        duration: 4000,
+      });
       return;
     }
 
-    if (!form.family_name.trim()) {
-      setError("Family name is required.");
+    const { errors, missing } = validate();
+
+    if (Object.keys(errors).length > 0) {
+      showToast({
+        title: "Please fix the form",
+        description:
+          missing.length === 1
+            ? `${missing[0]} is required.`
+            : `Please fill: ${missing.join(", ")}.`,
+        type: "warning",
+        duration: 5000,
+      });
       return;
     }
 
     try {
       setSaving(true);
-      setError("");
 
       const response = await updateFamily(id, {
         family_name: form.family_name.trim(),
@@ -208,8 +271,7 @@ const FamilyEditPage = () => {
         history: form.history.trim(),
       });
 
-      const updatedFamily =
-        response?.data ?? response;
+      const updatedFamily = response?.data ?? response;
 
       if (updatedFamily) {
         setFamily((prev) => ({
@@ -227,33 +289,62 @@ const FamilyEditPage = () => {
       setForm(updatedForm);
       setOriginalForm(updatedForm);
 
+      showToast({
+        title: "Changes saved",
+        description: "The family record was updated successfully.",
+        type: "success",
+        duration: 4000,
+      });
+
       navigate("/family-master", {
         replace: true,
       });
     } catch (err) {
-      console.error(
-        "Update family error:",
-        err
-      );
+      console.error("Update family error:", err);
 
       const data = err?.response?.data;
 
-      if (data?.family_name) {
-        setError(
-          Array.isArray(data.family_name)
-            ? data.family_name[0]
-            : data.family_name
-        );
-      } else if (data?.detail) {
-        setError(
-          Array.isArray(data.detail)
-            ? data.detail[0]
-            : data.detail
-        );
+      if (
+        data &&
+        typeof data === "object" &&
+        !Array.isArray(data)
+      ) {
+        const errors = {};
+
+        Object.entries(data).forEach(([key, value]) => {
+          if (Array.isArray(value)) errors[key] = value.join(", ");
+          else if (typeof value === "string") errors[key] = value;
+          else errors[key] = JSON.stringify(value);
+        });
+
+        setFieldErrors(errors);
+
+        const generalError =
+          data.detail || data.non_field_errors?.[0];
+
+        const fieldMessages = Object.values(errors).filter(Boolean);
+        const onlyOneFieldError =
+          fieldMessages.length === 1 && !generalError;
+
+        showToast({
+          title: "Could not save changes",
+          description:
+            generalError ||
+            (onlyOneFieldError
+              ? fieldMessages[0]
+              : `Please check: ${Object.keys(errors)
+                  .map((k) => FIELD_LABELS[k] || k)
+                  .join(", ")}`),
+          type: "error",
+          duration: 7000,
+        });
       } else {
-        setError(
-          "Unable to update family."
-        );
+        showToast({
+          title: "Could not save changes",
+          description: "Unable to update family. Please try again.",
+          type: "error",
+          duration: 7000,
+        });
       }
     } finally {
       setSaving(false);
@@ -269,14 +360,11 @@ const FamilyEditPage = () => {
       return "-";
     }
 
-    return new Date(value).toLocaleDateString(
-      "en-GB",
-      {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }
-    );
+    return new Date(value).toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
   };
 
   // ==========================================================
@@ -360,7 +448,7 @@ const FamilyEditPage = () => {
   }
 
   // ==========================================================
-  // ERROR
+  // ERROR — family not found
   // ==========================================================
 
   if (!family) {
@@ -379,8 +467,7 @@ const FamilyEditPage = () => {
             fontSize="11px"
             mb={3}
           >
-            {error ||
-              "Family record not found."}
+            Family record not found.
           </Text>
 
           <Button
@@ -391,12 +478,8 @@ const FamilyEditPage = () => {
             borderRadius="5px"
             fontSize="10px"
             fontWeight="600"
-            onClick={() =>
-              navigate("/family-master")
-            }
-            _hover={{
-              bg: "#650A18",
-            }}
+            onClick={() => navigate("/family-master")}
+            _hover={{ bg: "#650A18" }}
           >
             Back to Family Master
           </Button>
@@ -423,19 +506,10 @@ const FamilyEditPage = () => {
       <Box flex="1" w="100%">
         <Box
           w="100%"
-          px={{
-            base: 2,
-            md: 3,
-          }}
-          py={{
-            base: 2,
-            md: 3,
-          }}
+          px={{ base: 2, md: 3 }}
+          py={{ base: 2, md: 3 }}
         >
-          {/* ==================================================
-              BREADCRUMB
-          ================================================== */}
-
+          {/* BREADCRUMB */}
           <HStack
             gap={1.5}
             mb={1.5}
@@ -443,40 +517,21 @@ const FamilyEditPage = () => {
             fontSize="10px"
           >
             <Text>Masters</Text>
-
             <Text>/</Text>
-
             <Text>Family Master</Text>
-
             <Text>/</Text>
-
-            <Text>
-              {family.family_name}
-            </Text>
-
+            <Text>{family.family_name}</Text>
             <Text>/</Text>
-
-            <Text color={DARK}>
-              Edit
-            </Text>
+            <Text color={DARK}>Edit</Text>
           </HStack>
 
-          {/* ==================================================
-              PAGE TITLE
-          ================================================== */}
-
+          {/* PAGE TITLE */}
           <Flex
             justify="space-between"
-            align={{
-              base: "flex-start",
-              md: "center",
-            }}
+            align={{ base: "flex-start", md: "center" }}
             gap={2}
             mb={2}
-            direction={{
-              base: "column",
-              md: "row",
-            }}
+            direction={{ base: "column", md: "row" }}
           >
             <Box>
               <Text
@@ -490,54 +545,33 @@ const FamilyEditPage = () => {
 
               <Heading
                 color={DARK}
-                fontSize={{
-                  base: "18px",
-                  md: "22px",
-                }}
+                fontSize={{ base: "18px", md: "22px" }}
                 lineHeight="1.1"
                 mb={0.5}
               >
                 Edit Family
               </Heading>
 
-              <Text
-                color={MUTED}
-                fontSize="10px"
-              >
+              <Text color={MUTED} fontSize="10px">
                 Update family information, origin and history.
               </Text>
             </Box>
           </Flex>
 
-          {/* ==================================================
-              FAMILY SUMMARY
-          ================================================== */}
-
+          {/* FAMILY SUMMARY */}
           <Box
             border="1px solid"
             borderColor={BORDER}
             borderRadius="6px"
-            p={{
-              base: 2.5,
-              md: 3,
-            }}
+            p={{ base: 2.5, md: 3 }}
             mb={2.5}
             bg="white"
             boxShadow="0 1px 2px rgba(16, 24, 40, 0.02)"
           >
-            <Flex
-              align="center"
-              gap={2.5}
-            >
+            <Flex align="center" gap={2.5}>
               <Box
-                w={{
-                  base: "40px",
-                  md: "48px",
-                }}
-                h={{
-                  base: "40px",
-                  md: "48px",
-                }}
+                w={{ base: "40px", md: "48px" }}
+                h={{ base: "40px", md: "48px" }}
                 flexShrink={0}
                 borderRadius="50%"
                 border="1px solid #F0B8C5"
@@ -546,10 +580,7 @@ const FamilyEditPage = () => {
 
               <Box>
                 <Heading
-                  fontSize={{
-                    base: "18px",
-                    md: "20px",
-                  }}
+                  fontSize={{ base: "18px", md: "20px" }}
                   color={DARK}
                   mb={0.5}
                 >
@@ -563,18 +594,12 @@ const FamilyEditPage = () => {
                   flexWrap="wrap"
                 >
                   <Text>
-                    FM-
-                    {String(family.id).padStart(
-                      4,
-                      "0"
-                    )}
+                    FM-{String(family.id).padStart(4, "0")}
                   </Text>
 
                   <Text>•</Text>
 
-                  <Text>
-                    {family.origin || "-"}
-                  </Text>
+                  <Text>{family.origin || "-"}</Text>
 
                   <Box
                     px={1.5}
@@ -596,34 +621,20 @@ const FamilyEditPage = () => {
             </Flex>
           </Box>
 
-          {/* ==================================================
-              MAIN GRID
-          ================================================== */}
-
+          {/* MAIN GRID */}
           <Grid
-            templateColumns={{
-              base: "1fr",
-              lg: "2fr 1fr",
-            }}
+            templateColumns={{ base: "1fr", lg: "2fr 1fr" }}
             gap={2.5}
           >
-            {/* ==================================================
-                LEFT SIDE - FORM
-            ================================================== */}
-
+            {/* LEFT SIDE — FORM */}
             <Box
               border="1px solid"
               borderColor={BORDER}
               borderRadius="6px"
               bg="white"
-              p={{
-                base: 2.5,
-                md: 3,
-              }}
+              p={{ base: 2.5, md: 3 }}
               boxShadow="0 1px 2px rgba(16, 24, 40, 0.02)"
             >
-              {/* CARD HEADER */}
-
               <Box mb={2.5}>
                 <Text
                   fontSize="11px"
@@ -637,34 +648,12 @@ const FamilyEditPage = () => {
                   Family Details
                 </Text>
               </Box>
-             
-              {error && (
-                <Box
-                  mb={2.5}
-                  px={2.5}
-                  py={1.5}
-                  border="1px solid #FED7D7"
-                  bg="#FFF5F5"
-                  borderRadius="5px"
-                >
-                  <Text
-                    color="#C53030"
-                    fontSize="10px"
-                    fontWeight="500"
-                  >
-                    {error}
-                  </Text>
-                </Box>
-              )}
 
               <form onSubmit={handleSubmit}>
                 <VStack align="stretch" gap={2.5}>
                   {/* FAMILY NAME */}
-
                   <Box>
-                    <FieldLabel>
-                      Family Name
-                    </FieldLabel>
+                    <FieldLabel>Family Name</FieldLabel>
 
                     <Input
                       name="family_name"
@@ -672,15 +661,15 @@ const FamilyEditPage = () => {
                       onChange={handleChange}
                       placeholder="Enter family name"
                       {...inputStyle}
+                      borderColor={
+                        fieldErrors.family_name ? "#F3C4C4" : BORDER
+                      }
                     />
                   </Box>
 
                   {/* ORIGIN */}
-
                   <Box>
-                    <FieldLabel required={false}>
-                      Origin
-                    </FieldLabel>
+                    <FieldLabel required={false}>Origin</FieldLabel>
 
                     <Input
                       name="origin"
@@ -688,15 +677,15 @@ const FamilyEditPage = () => {
                       onChange={handleChange}
                       placeholder="Enter place of origin"
                       {...inputStyle}
+                      borderColor={
+                        fieldErrors.origin ? "#F3C4C4" : BORDER
+                      }
                     />
                   </Box>
 
                   {/* HISTORY */}
-
                   <Box>
-                    <FieldLabel required={false}>
-                      History
-                    </FieldLabel>
+                    <FieldLabel required={false}>History</FieldLabel>
 
                     <Textarea
                       name="history"
@@ -707,7 +696,9 @@ const FamilyEditPage = () => {
                       maxH="60px"
                       resize="none"
                       fontSize="11px"
-                      borderColor={BORDER}
+                      borderColor={
+                        fieldErrors.history ? "#F3C4C4" : BORDER
+                      }
                       borderRadius="5px"
                       color={DARK}
                       bg="white"
@@ -715,20 +706,14 @@ const FamilyEditPage = () => {
                         color: "#98A2B3",
                         fontSize: "10px",
                       }}
-                      _hover={{
-                        borderColor: "#BFC7D4",
-                      }}
+                      _hover={{ borderColor: "#BFC7D4" }}
                       _focus={{
                         borderColor: PRIMARY_MAROON,
                         boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                       }}
                     />
 
-                    <Text
-                      fontSize="9px"
-                      color={MUTED}
-                      mt={1}
-                    >
+                    <Text fontSize="9px" color={MUTED} mt={1}>
                       Add background, migration, heritage, or other
                       relevant family details.
                     </Text>
@@ -737,13 +722,9 @@ const FamilyEditPage = () => {
               </form>
             </Box>
 
-            {/* ==================================================
-                RIGHT SIDEBAR
-            ================================================== */}
-
+            {/* RIGHT SIDEBAR */}
             <VStack align="stretch" gap={2.5}>
               {/* RECORD INFORMATION */}
-
               <Box
                 border="1px solid"
                 borderColor={BORDER}
@@ -772,7 +753,6 @@ const FamilyEditPage = () => {
                 </HStack>
 
                 {/* CREATED */}
-
                 <HStack align="start" gap={2} mb={2.5}>
                   <Box color={MUTED}>
                     <LuCalendarDays size={12} />
@@ -794,15 +774,12 @@ const FamilyEditPage = () => {
                       fontWeight="600"
                       color={DARK}
                     >
-                      {formatDate(
-                        family.created_at
-                      )}
+                      {formatDate(family.created_at)}
                     </Text>
                   </Box>
                 </HStack>
 
                 {/* LAST UPDATED */}
-
                 <HStack align="start" gap={2}>
                   <Box color={MUTED}>
                     <LuUserRound size={12} />
@@ -824,16 +801,10 @@ const FamilyEditPage = () => {
                       fontWeight="600"
                       color={DARK}
                     >
-                      {formatDate(
-                        family.updated_at
-                      )}
+                      {formatDate(family.updated_at)}
                     </Text>
 
-                    <Text
-                      fontSize="8px"
-                      color="#7183A3"
-                      mt={0.5}
-                    >
+                    <Text fontSize="8px" color="#7183A3" mt={0.5}>
                       by Parish Admin
                     </Text>
                   </Box>
@@ -841,7 +812,6 @@ const FamilyEditPage = () => {
               </Box>
 
               {/* UNSAVED CHANGES */}
-
               {hasChanges && (
                 <Box
                   border="1px solid"
@@ -852,9 +822,7 @@ const FamilyEditPage = () => {
                 >
                   <HStack gap={2} mb={1.5}>
                     <Box color="#F97316">
-                      <LuTriangleAlert
-                        size={13}
-                      />
+                      <LuTriangleAlert size={13} />
                     </Box>
 
                     <Text
@@ -890,8 +858,7 @@ const FamilyEditPage = () => {
                         mt={1}
                         lineHeight="1.4"
                       >
-                        Please review your changes
-                        before saving.
+                        Please review your changes before saving.
                       </Text>
                     </Box>
                   </HStack>
@@ -899,7 +866,6 @@ const FamilyEditPage = () => {
               )}
 
               {/* DANGER ZONE */}
-
               <Box
                 border="1px solid"
                 borderColor={BORDER}
@@ -942,7 +908,6 @@ const FamilyEditPage = () => {
                       fontSize: "11px",
                     }}
                   />
-
                   Archive Family Record
                 </Button>
 
@@ -952,8 +917,7 @@ const FamilyEditPage = () => {
                   mt={1}
                   lineHeight="1.4"
                 >
-                  This family record will remain in
-                  history.
+                  This family record will remain in history.
                 </Text>
               </Box>
             </VStack>
@@ -961,10 +925,7 @@ const FamilyEditPage = () => {
         </Box>
       </Box>
 
-      {/* ======================================================
-          BOTTOM ACTION BAR
-      ====================================================== */}
-
+      {/* BOTTOM ACTION BAR */}
       <Box
         borderTop="1px solid"
         borderColor={BORDER}
@@ -972,10 +933,7 @@ const FamilyEditPage = () => {
       >
         <Box
           w="100%"
-          px={{
-            base: 2,
-            md: 3,
-          }}
+          px={{ base: 2, md: 3 }}
           py={2}
         >
           <Flex
@@ -995,9 +953,7 @@ const FamilyEditPage = () => {
               fontWeight="600"
               onClick={handleCancel}
               disabled={saving}
-              _hover={{
-                bg: "#FFF5F7",
-              }}
+              _hover={{ bg: "#FFF5F7" }}
             >
               Cancel
             </Button>
@@ -1014,9 +970,7 @@ const FamilyEditPage = () => {
               loading={saving}
               disabled={!hasChanges || saving}
               onClick={handleSubmit}
-              _hover={{
-                bg: "#650A18",
-              }}
+              _hover={{ bg: "#650A18" }}
               _disabled={{
                 opacity: 0.55,
                 cursor: "not-allowed",

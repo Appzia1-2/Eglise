@@ -46,6 +46,7 @@ const ROUTE_MAP = {
   Subscriptions: "/subscriptions",
   "Ledger Group": "/account-groups",
   "Account Ledger": "/account-ledgers",
+  Receipts: "/receipts",
   Payments: "/payments",
   "Qurbana Receipts": "/qurbana-receipts",
   Committee: "/committees",
@@ -54,6 +55,12 @@ const ROUTE_MAP = {
   "Member List": "/member-directory",
   "Age Wise List": "/age-wise-list",
   "Phone Directory": "/phone-directory",
+
+  // ✅ Report routes (Accounts)
+  "Day Book": "/reports/day-book",
+  "Cash Book": "/reports/cash-book",
+  "Bank Book": "/reports/bank-book",
+  "General Ledger": "/reports/general-ledger",
 };
 
 // ─── Report-only routes (separate from ENTRY routes above) ────────────────
@@ -68,9 +75,6 @@ const REPORT_ROUTES = {
 };
 
 // ─── Menu data ────────────────────────────────────────────────────────────
-// Items can be either:
-//   - a string  → looked up in ROUTE_MAP
-//   - an object → { label, route } (used for report-specific routes)
 const MENU_DATA = {
   Masters: [
     {
@@ -166,23 +170,6 @@ const MENU_DATA = {
             },
           ],
         },
-        // {
-        //   title: "Legacy Registers",
-        //   items: [
-        //     {
-        //       label: "Legacy Baptism Register",
-        //       route: REPORT_ROUTES["Legacy Baptism Register Report"],
-        //     },
-        //     {
-        //       label: "Legacy Marriage Register",
-        //       route: REPORT_ROUTES["Legacy Marriage Register Report"],
-        //     },
-        //     {
-        //       label: "Legacy Death Register",
-        //       route: REPORT_ROUTES["Legacy Death Register Report"],
-        //     },
-        //   ],
-        // },
       ],
     },
     {
@@ -211,7 +198,6 @@ const MENU_DATA = {
 };
 
 // ─── A single menu link ────────────────────────────────────────────────────
-// `item` is either a string (looked up via ROUTE_MAP) or { label, route }
 const MenuLink = ({ item, onClose, primaryMaroon }) => {
   const isObject = typeof item === "object" && item !== null;
   const label = isObject ? item.label : item;
@@ -359,7 +345,6 @@ const Navbar = () => {
         px={8}
         gap={6}
       >
-        {/* Logo */}
         <Box flexShrink={0} as={RouterLink} to="/church/dashboard/">
           <Image
             src={EgliseLogo}
@@ -371,7 +356,6 @@ const Navbar = () => {
 
         {isLoggedIn && (
           <>
-            {/* Center: Nav triggers */}
             <HStack spacing={1} display={{ base: "none", md: "flex" }}>
               {Object.keys(MENU_DATA).map((label) => {
                 const isOpen = activeMenu === label;
@@ -411,7 +395,6 @@ const Navbar = () => {
                       />
                     </HStack>
 
-                    {/* Active underline indicator */}
                     <Box
                       position="absolute"
                       bottom="0"
@@ -433,7 +416,6 @@ const Navbar = () => {
               })}
             </HStack>
 
-            {/* Right: Hamburger + logout dropdown */}
             <Box position="relative" flexShrink={0}>
               <Flex
                 align="center"

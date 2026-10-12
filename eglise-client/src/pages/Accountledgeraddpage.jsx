@@ -41,6 +41,37 @@ const border = "#DCE2EA";
 const red = "#D7193F";
 
 /* =========================================================
+   TOAST HELPER
+========================================================= */
+
+const showToast = ({
+  title,
+  description,
+  type = "info",
+  duration = 4000,
+}) => {
+  toaster.create({
+    title,
+    description,
+    type,
+    duration,
+    closable: true,
+  });
+};
+
+/* =========================================================
+   FIELD LABELS
+========================================================= */
+
+const FIELD_LABELS = {
+  ledger_name: "Ledger Name",
+  ledger_code: "Ledger Code",
+  alias: "Alias",
+  account_group: "Account Group",
+  op_balance: "Opening Balance",
+};
+
+/* =========================================================
    HELPERS
 ========================================================= */
 
@@ -71,83 +102,67 @@ const FieldLabel = ({ children, required }) => (
 );
 
 /* =========================================================
-   TEXT FIELD
+   TEXT FIELD — no inline error text
 ========================================================= */
 
 const TextField = ({ error, ...props }) => (
-  <>
-    <Input
-      height="40px"
-      fontSize="12px"
-      borderColor={error ? "red.500" : border}
-      borderRadius="6px"
-      _focus={{
-        borderColor: primaryMaroon,
-        boxShadow: `0 0 0 1px ${primaryMaroon}`,
-      }}
-      {...props}
-    />
-
-    {error && (
-      <Text fontSize="10px" color="red.500" mt={1}>
-        {error}
-      </Text>
-    )}
-  </>
+  <Input
+    height="40px"
+    fontSize="12px"
+    borderColor={error ? "red.500" : border}
+    borderRadius="6px"
+    _focus={{
+      borderColor: primaryMaroon,
+      boxShadow: `0 0 0 1px ${primaryMaroon}`,
+    }}
+    {...props}
+  />
 );
 
 /* =========================================================
-   ACCOUNT GROUP SELECT
+   ACCOUNT GROUP SELECT — no inline error text
 ========================================================= */
 
 const AccountGroupSelect = ({ value, onChange, groups, error }) => (
-  <>
-    <Box position="relative">
-      <Icon
-        as={LuNetwork}
-        boxSize={4}
-        color="gray.400"
-        position="absolute"
-        left="12px"
-        top="50%"
-        transform="translateY(-50%)"
-        zIndex={1}
-        pointerEvents="none"
-      />
+  <Box position="relative">
+    <Icon
+      as={LuNetwork}
+      boxSize={4}
+      color="gray.400"
+      position="absolute"
+      left="12px"
+      top="50%"
+      transform="translateY(-50%)"
+      zIndex={1}
+      pointerEvents="none"
+    />
 
-      <Box
-        as="select"
-        value={value}
-        onChange={onChange}
-        style={{
-          width: "100%",
-          padding: "0 12px 0 36px",
-          borderRadius: "6px",
-          border: `1px solid ${error ? "#e53e3e" : border}`,
-          fontSize: "12px",
-          height: "40px",
-          background: "white",
-          outline: "none",
-          color: value ? dark : "#a0aec0",
-          cursor: "pointer",
-        }}
-      >
-        <option value="">Select account group</option>
+    <Box
+      as="select"
+      value={value}
+      onChange={onChange}
+      style={{
+        width: "100%",
+        padding: "0 12px 0 36px",
+        borderRadius: "6px",
+        border: `1px solid ${error ? "#e53e3e" : border}`,
+        fontSize: "12px",
+        height: "40px",
+        background: "white",
+        outline: "none",
+        color: value ? dark : "#a0aec0",
+        cursor: "pointer",
+      }}
+    >
+      <option value="">Select account group</option>
 
-        {groups.map((group) => (
-          <option key={group.id} value={group.id}>
-            {group.group_name}
-          </option>
-        ))}
-      </Box>
+      {groups.map((group) => (
+        <option key={group.id} value={group.id}>
+          {group.group_name}
+        </option>
+      ))}
     </Box>
-
-    {error && (
-      <Text fontSize="10px" color="red.500" mt={1}>
-        {error}
-      </Text>
-    )}
-  </>
+  </Box>
 );
 
 /* =========================================================
@@ -172,7 +187,7 @@ const AccountLedgerAddPage = () => {
     op_balance: "",
   });
 
-  const [errors, setErrors] = useState({});
+  const [fieldErrors, setFieldErrors] = useState({});
 
   /* =======================================================
      LOAD ACCOUNT GROUPS
@@ -191,11 +206,12 @@ const AccountLedgerAddPage = () => {
       } catch (error) {
         console.error("Error fetching account groups:", error);
 
-        toaster.create({
-          title: "Unable to load account groups",
-          description: "Please refresh the page and try again.",
+        showToast({
+          title: "Failed to load data",
+          description:
+            "Unable to load account groups. Please refresh and try again.",
           type: "error",
-          duration: 4000,
+          duration: 6000,
         });
       } finally {
         setIsLoadingGroups(false);
@@ -217,12 +233,9 @@ const AccountLedgerAddPage = () => {
       [field]: value,
     }));
 
-    if (errors[field]) {
-      setErrors((previous) => ({
-        ...previous,
-        [field]: "",
-      }));
-    }
+    setFieldErrors((previous) =>
+      previous[field] ? { ...previous, [field]: "" } : previous
+    );
   };
 
   /* =======================================================
@@ -231,13 +244,16 @@ const AccountLedgerAddPage = () => {
 
   const validate = () => {
     const newErrors = {};
+    const missing = [];
 
     if (!formData.ledger_name.trim()) {
       newErrors.ledger_name = "Ledger name is required.";
+      missing.push(FIELD_LABELS.ledger_name);
     }
 
     if (!formData.account_group) {
       newErrors.account_group = "Please select an account group.";
+      missing.push(FIELD_LABELS.account_group);
     }
 
     if (
@@ -247,9 +263,13 @@ const AccountLedgerAddPage = () => {
       newErrors.op_balance = "Please enter a valid opening balance.";
     }
 
-    setErrors(newErrors);
+    setFieldErrors(newErrors);
 
-    return Object.keys(newErrors).length === 0;
+    return {
+      errors: newErrors,
+      missing,
+      valid: Object.keys(newErrors).length === 0,
+    };
   };
 
   /* =======================================================
@@ -259,19 +279,34 @@ const AccountLedgerAddPage = () => {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (!validate()) {
+    const { errors, missing, valid } = validate();
+
+    if (!valid) {
+      const explicitMessages = Object.entries(errors)
+        .filter(([key]) => !missing.includes(FIELD_LABELS[key]))
+        .map(([, msg]) => msg);
+
+      let description;
+
+      if (explicitMessages.length > 0) {
+        description = explicitMessages.join("\n");
+      } else if (missing.length === 1) {
+        description = `${missing[0]} is required.`;
+      } else {
+        description = `Please fill: ${missing.join(", ")}.`;
+      }
+
+      showToast({
+        title: "Please fix the form",
+        description,
+        type: "warning",
+        duration: 5000,
+      });
       return;
     }
 
     setIsSubmitting(true);
-
-    /*
-     * Build payload explicitly.
-     *
-     * Empty optional fields are not sent as undefined
-     * because some Django serializers handle undefined
-     * inconsistently.
-     */
+    setFieldErrors({});
 
     const payload = {
       ledger_name: formData.ledger_name.trim(),
@@ -294,39 +329,27 @@ const AccountLedgerAddPage = () => {
       payload.alias = formData.alias.trim();
     }
 
-    console.log("Creating account ledger with payload:", payload);
-
     try {
-      const response = await createAccountLedger(payload);
+      await createAccountLedger(payload);
 
-      console.log("Account ledger created:", response?.data);
-
-      toaster.create({
-        title: "Success",
+      showToast({
+        title: "Ledger created",
         description: "Account ledger created successfully.",
         type: "success",
-        duration: 3000,
+        duration: 4000,
       });
 
       navigate("/account-ledgers");
     } catch (error) {
       console.error("Error creating account ledger:", error);
 
-      /*
-       * Get the actual Django validation response.
-       */
-
       const backendData = error?.response?.data;
 
-      console.error("Backend response:", backendData);
-
-      console.error("HTTP status:", error?.response?.status);
-
-      /*
-       * Convert Django validation errors into field errors.
-       */
-
-      if (backendData && typeof backendData === "object") {
+      if (
+        backendData &&
+        typeof backendData === "object" &&
+        !Array.isArray(backendData)
+      ) {
         const backendErrors = {};
 
         Object.entries(backendData).forEach(([field, message]) => {
@@ -337,43 +360,41 @@ const AccountLedgerAddPage = () => {
           }
         });
 
-        if (Object.keys(backendErrors).length > 0) {
-          setErrors(backendErrors);
-        }
+        setFieldErrors(backendErrors);
+
+        const generalError =
+          backendData.error ||
+          backendData.detail ||
+          backendData.non_field_errors?.[0];
+
+        const fieldMessages = Object.values(backendErrors).filter(Boolean);
+        const onlyOneFieldError =
+          fieldMessages.length === 1 && !generalError;
+
+        showToast({
+          title: "Could not create ledger",
+          description:
+            generalError ||
+            (onlyOneFieldError
+              ? fieldMessages[0]
+              : Object.entries(backendErrors)
+                  .map(
+                    ([field, message]) =>
+                      `${FIELD_LABELS[field] || field}: ${message}`
+                  )
+                  .join(" | ")),
+          type: "error",
+          duration: 7000,
+        });
+      } else {
+        showToast({
+          title: "Could not create ledger",
+          description:
+            "Unable to create account ledger. Please try again.",
+          type: "error",
+          duration: 7000,
+        });
       }
-
-      /*
-       * Build readable toast message.
-       */
-
-      let description = "Failed to create account ledger.";
-
-      if (backendData?.error) {
-        description = backendData.error;
-      } else if (backendData?.detail) {
-        description = backendData.detail;
-      } else if (backendData && typeof backendData === "object") {
-        const messages = Object.entries(backendData)
-          .map(([field, message]) => {
-            const readable = Array.isArray(message)
-              ? message.join(", ")
-              : String(message);
-
-            return `${field}: ${readable}`;
-          })
-          .join(" | ");
-
-        if (messages) {
-          description = messages;
-        }
-      }
-
-      toaster.create({
-        title: "Unable to create account ledger",
-        description,
-        type: "error",
-        duration: 6000,
-      });
     } finally {
       setIsSubmitting(false);
     }
@@ -385,11 +406,7 @@ const AccountLedgerAddPage = () => {
 
   return (
     <Box minH="100vh" bg="white" display="flex" flexDirection="column">
-      {/* HEADER / NAVBAR */}
-
       <Navbar />
-
-      {/* MAIN */}
 
       <Box
         flex="1"
@@ -500,8 +517,6 @@ const AccountLedgerAddPage = () => {
                     templateColumns={{ base: "1fr", md: "1fr 1fr" }}
                     gap={4}
                   >
-                    {/* LEDGER NAME */}
-
                     <GridItem>
                       <FieldLabel required>Ledger Name</FieldLabel>
 
@@ -510,11 +525,9 @@ const AccountLedgerAddPage = () => {
                         maxLength={100}
                         value={formData.ledger_name}
                         onChange={handleChange("ledger_name")}
-                        error={errors.ledger_name}
+                        error={fieldErrors.ledger_name}
                       />
                     </GridItem>
-
-                    {/* LEDGER CODE */}
 
                     <GridItem>
                       <FieldLabel>Ledger Code</FieldLabel>
@@ -523,11 +536,9 @@ const AccountLedgerAddPage = () => {
                         placeholder="Enter ledger code (optional)"
                         value={formData.ledger_code}
                         onChange={handleChange("ledger_code")}
-                        error={errors.ledger_code}
+                        error={fieldErrors.ledger_code}
                       />
                     </GridItem>
-
-                    {/* ALIAS */}
 
                     <GridItem>
                       <FieldLabel>Alias</FieldLabel>
@@ -536,11 +547,9 @@ const AccountLedgerAddPage = () => {
                         placeholder="Enter alias (optional)"
                         value={formData.alias}
                         onChange={handleChange("alias")}
-                        error={errors.alias}
+                        error={fieldErrors.alias}
                       />
                     </GridItem>
-
-                    {/* ACCOUNT GROUP */}
 
                     <GridItem>
                       <FieldLabel required>Account Group</FieldLabel>
@@ -549,7 +558,7 @@ const AccountLedgerAddPage = () => {
                         value={formData.account_group}
                         onChange={handleChange("account_group")}
                         groups={groups}
-                        error={errors.account_group}
+                        error={fieldErrors.account_group}
                       />
 
                       {isLoadingGroups && (
@@ -560,8 +569,6 @@ const AccountLedgerAddPage = () => {
                     </GridItem>
                   </Grid>
                 </Box>
-
-                {/* DIVIDER */}
 
                 <Box borderBottom="1px solid #EEF1F5" />
 
@@ -588,14 +595,14 @@ const AccountLedgerAddPage = () => {
 
                   <Flex
                     border="1px solid"
-                    borderColor={errors.op_balance ? "red.500" : border}
+                    borderColor={
+                      fieldErrors.op_balance ? "red.500" : border
+                    }
                     borderRadius="6px"
                     overflow="hidden"
                     align="stretch"
                     height="40px"
                   >
-                    {/* RUPEE ICON */}
-
                     <Flex align="center" px={3} bg="white">
                       <Icon
                         as={LuIndianRupee}
@@ -603,8 +610,6 @@ const AccountLedgerAddPage = () => {
                         color="gray.400"
                       />
                     </Flex>
-
-                    {/* AMOUNT */}
 
                     <Input
                       type="number"
@@ -620,12 +625,6 @@ const AccountLedgerAddPage = () => {
                       flex="1"
                     />
                   </Flex>
-
-                  {errors.op_balance && (
-                    <Text fontSize="10px" color="red.500" mt={1}>
-                      {errors.op_balance}
-                    </Text>
-                  )}
 
                   <Text fontSize="10px" color={muted} mt={1}>
                     Enter zero if the ledger has no opening balance.
@@ -672,8 +671,6 @@ const AccountLedgerAddPage = () => {
           </Flex>
         </form>
       </Box>
-
-      {/* FOOTER */}
 
       <Footer />
     </Box>

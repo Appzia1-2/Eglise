@@ -1,4 +1,4 @@
-// src/App.jsx - Updated with Member View Route and Headless Route
+// src/App.jsx - Updated with Payment redesign (List + Add + Edit)
 
 import {
   BrowserRouter as Router,
@@ -48,7 +48,7 @@ import EditFamilyHeadPage from "./pages/Editfamilyheadpage";          // Full ed
 import MemberListUnderHeadPage from "./pages/MemberListUnderHeadPage"; // List members of a head
 import AddMemberPage from "./pages/AddMemberPage";                     // Create member under head
 import EditMemberPage from "./pages/EditMemberPage";                   // Edit member
-import MemberDetailPage from "./pages/MemberDetailPage";               // ✅ NEW: View member details
+import MemberDetailPage from "./pages/MemberDetailPage";               // ✅ View member details
 import FamilyHeadPrintPreviewPage from "./pages/FamilyHeadPrintPreviewPage";
  
 import HeadlessHouseMembersPage from "./pages/HeadlessHouseMembersPage";
@@ -69,8 +69,8 @@ import ChurchInfoPage from "./pages/ChurchInfoPage";
 
 import MarriagePage from "./pages/MarriagePage";
 import MarriageAddPage from "./pages/MarriageAddPage";
-import MarriageEditPage from "./pages/MarriageEditPage";  // ✅ NEW: Marriage Edit Page
-import MarriageViewPage from "./pages/MarriageViewPage";  // ✅ NEW: Marriage View Page
+import MarriageEditPage from "./pages/MarriageEditPage";  // ✅ Marriage Edit Page
+import MarriageViewPage from "./pages/MarriageViewPage";  // ✅ Marriage View Page
 
 
 
@@ -115,6 +115,9 @@ import OfferingPage from "./pages/OfferingPage";
 import OfferingAddPage from "./pages/OfferingAddPage";
 import OfferingEditPage from "./pages/OfferingEditPage";
 
+import ReceiptsPage from "./pages/ReceiptsPage";
+import ReceiptCreatePage from "./pages/ReceiptCreatePage";
+import ReceiptDetailPage from "./pages/ReceiptDetailPage";
 
 
 
@@ -130,7 +133,9 @@ import SubscriptionEditPage from "./pages/SubscriptionEditPage";
 import AccountGroupPage from "./pages/AccountGroupPage";
 import AccountGroupAddPage from "./pages/AccountGroupAddPage";
 import AccountGroupViewPage from "./pages/AccountGroupViewPage";
-import Accountledgereditpage from "./pages/Accountledgereditpage";
+import AccountGroupEditPage from "./pages/AccountGroupEditPage";
+
+
 
 
 import AccountLedgerPage from "./pages/AccountLedgerPage";
@@ -140,7 +145,14 @@ import AccountLedgerViewPage from "./pages/Accountledgerviewpage";
 // import AccountLedgerTransactionsPage from "./pages/AccountLedgerTransactionsPage";
 
 
-import PaymentPage from "./pages/PaymentPage";
+// =========================================================
+// PAYMENT ROUTES — redesigned (List + Add + Edit)
+// =========================================================
+import PaymentListPage from "./pages/PaymentListPage";
+import AddPaymentPage from "./pages/AddPaymentPage";
+import PaymentDetailPage from "./pages/PaymentDetailPage";
+// import PaymentPage from "./pages/PaymentPage"; // legacy — kept for rollback
+
 import QurbanaReceiptsPage from "./pages/QurbanaReceiptsPage";
 import CommitteePage from "./pages/CommitteePage";
 import CommitteeAddPage from "./pages/CommitteeAddPage";
@@ -178,6 +190,12 @@ import ReportListPage from "./pages/reports/ReportListPage";
 import BaptismCertificatePage from "./pages/reports/BaptismCertificatePage";
 import MarriageCertificatePage from "./pages/reports/MarriageCertificatePage";
 import DeathCertificatePage from "./pages/reports/DeathCertificatePage";
+
+
+import DayBookPage from "./pages/DayBookPage";
+import CashBookPage from "./pages/CashBookPage";
+import BankBookPage from "./pages/BankBookPage";
+import GeneralLedgerPage from "./pages/GeneralLedgerPage";
 
 import ForcePasswordChange from "./components/ForcePasswordChange";
 
@@ -458,7 +476,7 @@ function App() {
           }
         />
 
-        {/* ✅ NEW: View member details */}
+        {/* ✅ View member details */}
         <Route
           path="/family-heads/:headId/members/:memberId"
           element={
@@ -860,13 +878,13 @@ function App() {
         />
        
          <Route
-          path="/account-groups/:id/edit"
-          element={
-            <ProtectedRoute>
-              <Accountledgereditpage   />
-            </ProtectedRoute>
-          }
-        />
+  path="/account-groups/:id/edit"
+  element={
+    <ProtectedRoute>
+      <AccountGroupEditPage />
+    </ProtectedRoute>
+  }
+/>
          <Route
           path="/account-groups/:id"
           element={
@@ -917,14 +935,41 @@ function App() {
     </ProtectedRoute>
   }
 /> */}
+
+        {/* =========================================================
+            PAYMENTS — redesigned
+        ========================================================= */}
         <Route
           path="/payments"
           element={
             <ProtectedRoute>
-              <PaymentPage />
+              <PaymentListPage />
             </ProtectedRoute>
           }
         />
+
+        <Route
+          path="/payments/add"
+          element={
+            <ProtectedRoute>
+              <AddPaymentPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/payments/:id/edit"
+          element={
+            <ProtectedRoute>
+              <AddPaymentPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+  path="/payments/:id"
+  element={<ProtectedRoute><PaymentDetailPage /></ProtectedRoute>}
+/>
+
         <Route
           path="/qurbana-receipts"
           element={
@@ -1226,8 +1271,48 @@ function App() {
     </ProtectedRoute>
   }
 />
-        
-        
+
+<Route
+  path="/receipts"
+  element={
+    <ProtectedRoute>
+      <ReceiptsPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/receipts/add"
+  element={
+    <ProtectedRoute>
+      <ReceiptCreatePage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/receipts/:id"
+  element={
+    <ProtectedRoute>
+      <ReceiptDetailPage />
+    </ProtectedRoute>
+  }
+/>       
+        <Route
+  path="/reports/day-book"
+  element={<ProtectedRoute><DayBookPage /></ProtectedRoute>}
+/>
+<Route
+  path="/reports/cash-book"
+  element={<ProtectedRoute><CashBookPage /></ProtectedRoute>}
+/>
+<Route
+  path="/reports/bank-book"
+  element={<ProtectedRoute><BankBookPage /></ProtectedRoute>}
+/>
+<Route
+  path="/reports/general-ledger"
+  element={<ProtectedRoute><GeneralLedgerPage /></ProtectedRoute>}
+/>
         
 
      

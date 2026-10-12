@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 
 import {
@@ -23,11 +22,46 @@ import {
   listTombTypes,
 } from "../api/churchServices";
 
+import { toaster } from "../components/ui/toaster";
+
 const PRIMARY_MAROON = "var(--primary-maroon)";
 const RED = "#D7193F";
 const DARK = "#182338";
 const MUTED = "#60708C";
 const BORDER = "#DCE2EA";
+
+
+// ============================================================
+// TOAST HELPER
+// ============================================================
+
+const showToast = ({
+  title,
+  description,
+  type = "info",
+  duration = 4000,
+}) => {
+  toaster.create({
+    title,
+    description,
+    type,
+    duration,
+    closable: true,
+  });
+};
+
+
+// ============================================================
+// FIELD LABELS
+// ============================================================
+
+const FIELD_LABELS = {
+  tomb_type: "Tomb Type",
+  tomb_fees: "Tomb Fees",
+  indication: "Indication",
+  specification: "Specification",
+};
+
 
 const TombFeesAddPage = () => {
   const navigate = useNavigate();
@@ -47,7 +81,7 @@ const TombFeesAddPage = () => {
 
   const [loadingTombTypes, setLoadingTombTypes] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // ==========================================================
   // LOAD TOMB TYPES
@@ -55,6 +89,7 @@ const TombFeesAddPage = () => {
 
   useEffect(() => {
     fetchTombTypes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchTombTypes = async () => {
@@ -75,10 +110,14 @@ const TombFeesAddPage = () => {
     } catch (err) {
       console.error("Error loading tomb types:", err);
 
-      setError(
-        err?.response?.data?.detail ||
-          "Unable to load tomb types."
-      );
+      showToast({
+        title: "Failed to load data",
+        description:
+          err?.response?.data?.detail ||
+          "Unable to load tomb types. Please try again.",
+        type: "error",
+        duration: 6000,
+      });
     } finally {
       setLoadingTombTypes(false);
     }
@@ -96,7 +135,46 @@ const TombFeesAddPage = () => {
       [name]: value,
     }));
 
-    setError("");
+    setFieldErrors((prev) =>
+      prev[name] ? { ...prev, [name]: "" } : prev
+    );
+  };
+
+  // ==========================================================
+  // VALIDATE
+  // ==========================================================
+
+  const validate = () => {
+    const errors = {};
+    const missing = [];
+
+    if (!formData.tomb_type) {
+      errors.tomb_type = "Please select a tomb type.";
+      missing.push(FIELD_LABELS.tomb_type);
+    }
+
+    if (
+      formData.tomb_fees === "" ||
+      formData.tomb_fees === null ||
+      formData.tomb_fees === undefined
+    ) {
+      errors.tomb_fees = "Tomb fees is required.";
+      missing.push(FIELD_LABELS.tomb_fees);
+    } else {
+      const tombFees = Number(formData.tomb_fees);
+
+      if (Number.isNaN(tombFees) || tombFees < 0) {
+        errors.tomb_fees = "Tomb fees must be a valid amount.";
+      }
+    }
+
+    if (!formData.indication.trim()) {
+      errors.indication = "Indication is required.";
+      missing.push(FIELD_LABELS.indication);
+    }
+
+    setFieldErrors(errors);
+    return { errors, missing };
   };
 
   // ==========================================================
@@ -104,71 +182,102 @@ const TombFeesAddPage = () => {
   // ==========================================================
 
   const handleSubmit = async () => {
-    setError("");
+    const { errors, missing } = validate();
 
-    // Tomb Type
-    if (!formData.tomb_type) {
-      setError("Please select a tomb type.");
-      return;
-    }
+    if (Object.keys(errors).length > 0) {
+      // Prefer explicit rule errors over missing-fields list
+      const explicitMessages = Object.entries(errors)
+        .filter(([key]) => !missing.includes(FIELD_LABELS[key]))
+        .map(([, msg]) => msg);
 
-    // Tomb Fees
-    if (
-      formData.tomb_fees === "" ||
-      formData.tomb_fees === null ||
-      formData.tomb_fees === undefined
-    ) {
-      setError("Tomb fees is required.");
-      return;
-    }
+      let description;
 
-    const tombFees = Number(formData.tomb_fees);
+      if (explicitMessages.length > 0) {
+        description = explicitMessages.join("\n");
+      } else if (missing.length === 1) {
+        description = `${missing[0]} is required.`;
+      } else {
+        description = `Please fill: ${missing.join(", ")}.`;
+      }
 
-    if (Number.isNaN(tombFees) || tombFees < 0) {
-      setError("Tomb fees must be a valid amount.");
-      return;
-    }
-
-    // Indication
-    if (!formData.indication.trim()) {
-      setError("Indication is required.");
+      showToast({
+        title: "Please fix the form",
+        description,
+        type: "warning",
+        duration: 5000,
+      });
       return;
     }
 
     try {
       setSaving(true);
+      setFieldErrors({});
 
       const payload = {
         tomb_type: Number(formData.tomb_type),
-        tomb_fees: tombFees,
+        tomb_fees: Number(formData.tomb_fees),
         indication: formData.indication.trim(),
         specification: formData.specification.trim(),
       };
 
-      console.log(
-        "Creating tomb fee with payload:",
-        payload
-      );
-
       await createTombFees(payload);
+
+      showToast({
+        title: "Tomb fee created",
+        description: "The tomb fee record was created successfully.",
+        type: "success",
+        duration: 4000,
+      });
 
       navigate("/tomb-fees");
     } catch (err) {
-      console.error(
-        "Error creating tomb fee:",
-        err
-      );
+      console.error("Error creating tomb fee:", err);
 
-      const apiError =
-        err?.response?.data?.tomb_type?.[0] ||
-        err?.response?.data?.tomb_fees?.[0] ||
-        err?.response?.data?.indication?.[0] ||
-        err?.response?.data?.specification?.[0] ||
-        err?.response?.data?.detail ||
-        err?.response?.data?.non_field_errors?.[0] ||
-        "Unable to create tomb fee.";
+      const responseData = err?.response?.data;
 
-      setError(apiError);
+      if (
+        responseData &&
+        typeof responseData === "object" &&
+        !Array.isArray(responseData)
+      ) {
+        const errors = {};
+
+        Object.entries(responseData).forEach(([key, value]) => {
+          if (Array.isArray(value)) errors[key] = value.join(", ");
+          else if (typeof value === "string") errors[key] = value;
+          else errors[key] = JSON.stringify(value);
+        });
+
+        setFieldErrors(errors);
+
+        const generalError =
+          responseData.detail || responseData.non_field_errors?.[0];
+
+        const fieldMessages = Object.values(errors).filter(Boolean);
+        const onlyOneFieldError =
+          fieldMessages.length === 1 && !generalError;
+
+        showToast({
+          title: "Could not create tomb fee",
+          description:
+            generalError ||
+            (onlyOneFieldError
+              ? fieldMessages[0]
+              : `Please check: ${Object.keys(errors)
+                  .map((k) => FIELD_LABELS[k] || k)
+                  .join(", ")}`),
+          type: "error",
+          duration: 7000,
+        });
+      } else {
+        showToast({
+          title: "Could not create tomb fee",
+          description:
+            "Unable to create tomb fee. Please try again.",
+          type: "error",
+          duration: 7000,
+        });
+      }
     } finally {
       setSaving(false);
     }
@@ -194,13 +303,9 @@ const TombFeesAddPage = () => {
     color: DARK,
     bg: "white",
 
-    _placeholder: {
-      color: "#98A2B3",
-    },
+    _placeholder: { color: "#98A2B3" },
 
-    _hover: {
-      borderColor: "#BFC7D4",
-    },
+    _hover: { borderColor: "#BFC7D4" },
 
     _focus: {
       borderColor: PRIMARY_MAROON,
@@ -212,10 +317,7 @@ const TombFeesAddPage = () => {
   // LABEL
   // ==========================================================
 
-  const FieldLabel = ({
-    children,
-    required = true,
-  }) => (
+  const FieldLabel = ({ children, required = true }) => (
     <Text
       fontSize="11px"
       fontWeight="600"
@@ -225,11 +327,7 @@ const TombFeesAddPage = () => {
       {children}
 
       {required && (
-        <Text
-          as="span"
-          color={RED}
-          ml="2px"
-        >
+        <Text as="span" color={RED} ml="2px">
           *
         </Text>
       )}
@@ -247,73 +345,35 @@ const TombFeesAddPage = () => {
       display="flex"
       flexDirection="column"
     >
-      {/* ======================================================
-          NAVBAR
-      ====================================================== */}
-
       <Navbar />
 
-      {/* ======================================================
-          MAIN CONTENT
-      ====================================================== */}
-
       <Box flex="1" w="100%">
-        {/* Same full-width layout as SubscriptionPage */}
-
         <Box
           w="100%"
-          px={{
-            base: 3,
-            md: 4,
-          }}
-          py={{
-            base: 3,
-            md: 4,
-          }}
+          px={{ base: 3, md: 4 }}
+          py={{ base: 3, md: 4 }}
         >
-          {/* ==================================================
-              BREADCRUMB
-          ================================================== */}
-
+          {/* BREADCRUMB */}
           <HStack
             gap={2}
             mb={2}
             color={MUTED}
             fontSize="11px"
           >
-            <Text>
-              Masters
-            </Text>
-
+            <Text>Masters</Text>
             <Text>/</Text>
-
-            <Text>
-              Tomb Fees
-            </Text>
-
+            <Text>Tomb Fees</Text>
             <Text>/</Text>
-
-            <Text color={DARK}>
-              Add Tomb Fee
-            </Text>
+            <Text color={DARK}>Add Tomb Fee</Text>
           </HStack>
 
-          {/* ==================================================
-              PAGE HEADER
-          ================================================== */}
-
+          {/* PAGE HEADER */}
           <Flex
             justify="space-between"
-            align={{
-              base: "flex-start",
-              md: "center",
-            }}
+            align={{ base: "flex-start", md: "center" }}
             gap={3}
             mb={3}
-            direction={{
-              base: "column",
-              md: "row",
-            }}
+            direction={{ base: "column", md: "row" }}
           >
             <Box>
               <Text
@@ -327,46 +387,30 @@ const TombFeesAddPage = () => {
 
               <Heading
                 color={DARK}
-                fontSize={{
-                  base: "22px",
-                  md: "26px",
-                }}
+                fontSize={{ base: "22px", md: "26px" }}
                 lineHeight="1.1"
                 mb={1}
               >
                 Add Tomb Fee
               </Heading>
 
-              <Text
-                color={MUTED}
-                fontSize="11px"
-              >
-                Create a tomb fee record with
-                tomb type and fee details.
+              <Text color={MUTED} fontSize="11px">
+                Create a tomb fee record with tomb type and fee details.
               </Text>
             </Box>
           </Flex>
 
-          {/* ==================================================
-              FORM CARD
-          ================================================== */}
-
+          {/* FORM CARD */}
           <Box
             border="1px solid"
             borderColor={BORDER}
             borderRadius="8px"
             bg="white"
-            p={{
-              base: 4,
-              md: 5,
-            }}
+            p={{ base: 4, md: 5 }}
             width="100%"
             boxShadow="0 1px 2px rgba(16, 24, 40, 0.02)"
           >
-            {/* ==================================================
-                CARD HEADER
-            ================================================== */}
-
+            {/* CARD HEADER */}
             <Box mb={4}>
               <Text
                 fontSize="12px"
@@ -381,14 +425,8 @@ const TombFeesAddPage = () => {
               </Text>
             </Box>
 
-            {/* ==================================================
-                SECTION TITLE
-            ================================================== */}
-
-            <Flex
-              align="center"
-              mb={3}
-            >
+            {/* SECTION TITLE */}
+            <Flex align="center" mb={3}>
               <Text
                 fontSize="12px"
                 fontWeight="700"
@@ -398,27 +436,15 @@ const TombFeesAddPage = () => {
               </Text>
             </Flex>
 
-            {/* ==================================================
-                TOMB TYPE + TOMB FEES
-            ================================================== */}
-
+            {/* TOMB TYPE + TOMB FEES */}
             <Grid
-              templateColumns={{
-                base: "1fr",
-                md: "1fr 1fr",
-              }}
-              gap={{
-                base: 3,
-                md: 4,
-              }}
+              templateColumns={{ base: "1fr", md: "1fr 1fr" }}
+              gap={{ base: 3, md: 4 }}
               mb={3}
             >
               {/* TOMB TYPE */}
-
               <Box>
-                <FieldLabel>
-                  Tomb Type
-                </FieldLabel>
+                <FieldLabel>Tomb Type</FieldLabel>
 
                 <select
                   name="tomb_type"
@@ -428,7 +454,9 @@ const TombFeesAddPage = () => {
                   style={{
                     width: "100%",
                     height: "36px",
-                    border: `1px solid ${BORDER}`,
+                    border: `1px solid ${
+                      fieldErrors.tomb_type ? "#F3C4C4" : BORDER
+                    }`,
                     borderRadius: "6px",
                     padding: "0 11px",
                     fontSize: "12px",
@@ -447,10 +475,7 @@ const TombFeesAddPage = () => {
                   </option>
 
                   {tombTypes.map((tombType) => (
-                    <option
-                      key={tombType.id}
-                      value={tombType.id}
-                    >
+                    <option key={tombType.id} value={tombType.id}>
                       {tombType.name}
                     </option>
                   ))}
@@ -458,11 +483,8 @@ const TombFeesAddPage = () => {
               </Box>
 
               {/* TOMB FEES */}
-
               <Box>
-                <FieldLabel>
-                  Tomb Fees
-                </FieldLabel>
+                <FieldLabel>Tomb Fees</FieldLabel>
 
                 <Flex>
                   <Box
@@ -493,19 +515,16 @@ const TombFeesAddPage = () => {
                     placeholder="Enter tomb fees"
                     h="36px"
                     fontSize="12px"
-                    borderColor={BORDER}
+                    borderColor={
+                      fieldErrors.tomb_fees ? "#F3C4C4" : BORDER
+                    }
                     borderRadius="0 6px 6px 0"
                     borderLeft="none"
                     color={DARK}
-                    _placeholder={{
-                      color: "#98A2B3",
-                    }}
-                    _hover={{
-                      borderColor: "#BFC7D4",
-                    }}
+                    _placeholder={{ color: "#98A2B3" }}
+                    _hover={{ borderColor: "#BFC7D4" }}
                     _focus={{
-                      borderColor:
-                        PRIMARY_MAROON,
+                      borderColor: PRIMARY_MAROON,
                       boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                     }}
                   />
@@ -513,14 +532,9 @@ const TombFeesAddPage = () => {
               </Box>
             </Grid>
 
-            {/* ==================================================
-                INDICATION
-            ================================================== */}
-
+            {/* INDICATION */}
             <Box mb={3}>
-              <FieldLabel>
-                Indication
-              </FieldLabel>
+              <FieldLabel>Indication</FieldLabel>
 
               <Input
                 name="indication"
@@ -528,17 +542,15 @@ const TombFeesAddPage = () => {
                 onChange={handleChange}
                 placeholder="Enter indication"
                 {...inputStyle}
+                borderColor={
+                  fieldErrors.indication ? "#F3C4C4" : BORDER
+                }
               />
             </Box>
 
-            {/* ==================================================
-                SPECIFICATION
-            ================================================== */}
-
+            {/* SPECIFICATION */}
             <Box mb={4}>
-              <FieldLabel required={false}>
-                Specification
-              </FieldLabel>
+              <FieldLabel required={false}>Specification</FieldLabel>
 
               <Textarea
                 name="specification"
@@ -548,61 +560,29 @@ const TombFeesAddPage = () => {
                 minH="90px"
                 resize="vertical"
                 fontSize="12px"
-                borderColor={BORDER}
+                borderColor={
+                  fieldErrors.specification ? "#F3C4C4" : BORDER
+                }
                 borderRadius="6px"
                 color={DARK}
                 bg="white"
-                _placeholder={{
-                  color: "#98A2B3",
-                }}
-                _hover={{
-                  borderColor: "#BFC7D4",
-                }}
+                _placeholder={{ color: "#98A2B3" }}
+                _hover={{ borderColor: "#BFC7D4" }}
                 _focus={{
-                  borderColor:
-                    PRIMARY_MAROON,
+                  borderColor: PRIMARY_MAROON,
                   boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                 }}
               />
             </Box>
 
-            {/* ==================================================
-                ERROR
-            ================================================== */}
-
-            {error && (
-              <Box
-                mb={4}
-                px={3}
-                py={2}
-                border="1px solid #FED7D7"
-                bg="#FFF5F5"
-                borderRadius="6px"
-              >
-                <Text
-                  color="#C53030"
-                  fontSize="11px"
-                  fontWeight="500"
-                >
-                  {error}
-                </Text>
-              </Box>
-            )}
-
-            {/* ==================================================
-                DIVIDER
-            ================================================== */}
-
+            {/* DIVIDER */}
             <Box
               borderTop="1px solid"
               borderColor="#E6EAF0"
               mb={3}
             />
 
-            {/* ==================================================
-                BUTTONS
-            ================================================== */}
-
+            {/* BUTTONS */}
             <Flex
               justify="flex-end"
               align="center"
@@ -618,9 +598,8 @@ const TombFeesAddPage = () => {
                 fontSize="11px"
                 fontWeight="600"
                 onClick={handleCancel}
-                _hover={{
-                  bg: "#FFF5F7",
-                }}
+                disabled={saving}
+                _hover={{ bg: "#FFF5F7" }}
               >
                 Cancel
               </Button>
@@ -636,9 +615,7 @@ const TombFeesAddPage = () => {
                 loading={saving}
                 disabled={saving}
                 onClick={handleSubmit}
-                _hover={{
-                  bg: "#650A18",
-                }}
+                _hover={{ bg: "#650A18" }}
               >
                 Save Tomb Fee
               </Button>
@@ -647,14 +624,9 @@ const TombFeesAddPage = () => {
         </Box>
       </Box>
 
-      {/* ======================================================
-          FOOTER
-      ====================================================== */}
-
       <Footer />
     </Box>
   );
 };
 
 export default TombFeesAddPage;
-

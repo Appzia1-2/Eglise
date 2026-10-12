@@ -30,6 +30,7 @@ import {
   LuChevronLeft,
   LuChevronRight,
   LuFilter,
+  LuRefreshCw, // ✅ NEW
 } from "react-icons/lu";
 
 import Navbar from "../components/Navbar";
@@ -100,7 +101,6 @@ const formatDate = (dateString) => {
 
 /* =========================================================
    STAT CARD
-   Matches Grade Master / Tomb Fees style
 ========================================================= */
 
 const StatCard = ({ icon, title, value }) => {
@@ -158,6 +158,8 @@ const AccountLedgerPage = () => {
 
   const [isLoading, setIsLoading] = useState(true);
 
+  const [isRefreshing, setIsRefreshing] = useState(false); // ✅ NEW
+
   const [ledgers, setLedgers] = useState([]);
 
   const [groups, setGroups] = useState([]);
@@ -174,8 +176,12 @@ const AccountLedgerPage = () => {
      LOAD DATA
   ======================================================= */
 
-  const fetchData = async () => {
-    setIsLoading(true);
+  const fetchData = async (showRefresh = false) => {
+    if (showRefresh) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
 
     try {
       const [ledgersRes, groupsRes] = await Promise.all([
@@ -197,6 +203,7 @@ const AccountLedgerPage = () => {
       setGroups([]);
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -225,6 +232,12 @@ const AccountLedgerPage = () => {
           ledger.account_group_name || groupObj?.group_name || "—",
 
         is_active: ledger.status ?? ledger.is_active ?? true,
+
+        // ✅ current_balance comes from backend serializer now
+        current_balance: Number(ledger.current_balance ?? 0),
+        opening_balance: Number(
+          pick(ledger, ["op_balance", "opening_balance"], 0)
+        ),
       };
     });
   }, [ledgers, groups]);
@@ -243,8 +256,13 @@ const AccountLedgerPage = () => {
     const inactiveLedgers = totalLedgers - activeLedgers;
 
     const openingTotal = enrichedLedgers.reduce(
-      (sum, ledger) =>
-        sum + Number(pick(ledger, ["op_balance", "opening_balance"], 0)),
+      (sum, ledger) => sum + ledger.opening_balance,
+      0
+    );
+
+    // ✅ NEW: current total across all ledgers
+    const currentTotal = enrichedLedgers.reduce(
+      (sum, ledger) => sum + ledger.current_balance,
       0
     );
 
@@ -253,6 +271,7 @@ const AccountLedgerPage = () => {
       activeLedgers,
       inactiveLedgers,
       openingTotal,
+      currentTotal,
     };
   }, [enrichedLedgers]);
 
@@ -367,6 +386,7 @@ const AccountLedgerPage = () => {
 
   /* =======================================================
      TABLE COLUMNS
+     ✅ NEW: added "Current Balance"
   ======================================================= */
 
   const columns = [
@@ -375,6 +395,7 @@ const AccountLedgerPage = () => {
     "Alias",
     "Account Group",
     "Opening Balance",
+    "Current Balance", // ✅ NEW
     "Status",
     "Last Updated",
     "Actions",
@@ -443,21 +464,45 @@ const AccountLedgerPage = () => {
               </Text>
             </Box>
 
-            <Button
-              bg={PRIMARY_MAROON}
-              color="white"
-              px={5}
-              h="38px"
-              fontSize="12px"
-              borderRadius="6px"
-              flexShrink={0}
-              onClick={handleAdd}
-              _hover={{ bg: "#650A18" }}
-            >
-              <Icon as={LuPlus} mr={2} boxSize={4} />
+            <HStack gap={2} flexShrink={0}>
+              {/* ✅ NEW: refresh button */}
 
-              Add Account Ledger
-            </Button>
+              <Button
+                variant="outline"
+                borderColor={BORDER}
+                color={MUTED}
+                bg="white"
+                h="38px"
+                px={4}
+                fontSize="12px"
+                borderRadius="6px"
+                onClick={() => fetchData(true)}
+                isLoading={isRefreshing}
+                _hover={{
+                  borderColor: PRIMARY_MAROON,
+                  color: PRIMARY_MAROON,
+                  bg: "#FFF7F9",
+                }}
+              >
+                <Icon as={LuRefreshCw} mr={2} boxSize={4} />
+                Refresh
+              </Button>
+
+              <Button
+                bg={PRIMARY_MAROON}
+                color="white"
+                px={5}
+                h="38px"
+                fontSize="12px"
+                borderRadius="6px"
+                onClick={handleAdd}
+                _hover={{ bg: "#650A18" }}
+              >
+                <Icon as={LuPlus} mr={2} boxSize={4} />
+
+                Add Account Ledger
+              </Button>
+            </HStack>
           </Flex>
 
           {/* STAT CARDS */}
@@ -481,10 +526,12 @@ const AccountLedgerPage = () => {
               value={stats.inactiveLedgers}
             />
 
+            {/* ✅ CHANGED: show Current Balance total instead of Opening */}
+
             <StatCard
               icon={LuIndianRupee}
-              title="Total Opening Balance"
-              value={formatAmount(stats.openingTotal)}
+              title="Total Current Balance"
+              value={formatAmount(stats.currentTotal)}
             />
           </SimpleGrid>
 
@@ -658,7 +705,7 @@ const AccountLedgerPage = () => {
               <Box
                 as="table"
                 width="100%"
-                minW="900px"
+                minW="1050px"
                 borderCollapse="collapse"
               >
                 {/* TABLE HEADER */}
@@ -670,7 +717,9 @@ const AccountLedgerPage = () => {
                         as="th"
                         key={heading}
                         textAlign={
-                          heading === "Actions" || heading === "Opening Balance"
+                          heading === "Actions" ||
+                          heading === "Opening Balance" ||
+                          heading === "Current Balance" // ✅ NEW
                             ? "right"
                             : "left"
                         }
@@ -800,9 +849,23 @@ const AccountLedgerPage = () => {
                           whiteSpace="nowrap"
                           textAlign="right"
                         >
-                          {formatAmount(
-                            pick(ledger, ["op_balance", "opening_balance"], 0)
-                          )}
+                          {formatAmount(ledger.opening_balance)}
+                        </Box>
+
+                        {/* ✅ NEW: CURRENT BALANCE */}
+
+                        <Box
+                          as="td"
+                          px={4}
+                          py={1}
+                          fontSize="12px"
+                          fontWeight="700"
+                          color={ledger.current_balance < 0 ? RED : "#16804A"}
+                          borderBottom="1px solid #E6EAF0"
+                          whiteSpace="nowrap"
+                          textAlign="right"
+                        >
+                          {formatAmount(ledger.current_balance)}
                         </Box>
 
                         {/* STATUS */}

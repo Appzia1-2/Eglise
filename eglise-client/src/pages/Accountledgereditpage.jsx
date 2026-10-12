@@ -1,4 +1,4 @@
-// src/admin/pages/Accountledgereditpage.jsx
+// src/admin/pages/AccountLedgerEditPage.jsx
 
 import React, { useEffect, useMemo, useState } from "react";
 
@@ -55,6 +55,37 @@ const border = "#DCE2EA";
 const red = "#D7193F";
 
 /* =========================================================
+   TOAST HELPER
+========================================================= */
+
+const showToast = ({
+  title,
+  description,
+  type = "info",
+  duration = 4000,
+}) => {
+  toaster.create({
+    title,
+    description,
+    type,
+    duration,
+    closable: true,
+  });
+};
+
+/* =========================================================
+   FIELD LABELS
+========================================================= */
+
+const FIELD_LABELS = {
+  ledger_name: "Ledger Name",
+  ledger_code: "Ledger Code",
+  alias: "Alias",
+  account_group: "Account Group",
+  op_balance: "Opening Balance",
+};
+
+/* =========================================================
    HELPERS
 ========================================================= */
 
@@ -97,7 +128,7 @@ const formatAmount = (amount) =>
   })}`;
 
 /* =========================================================
-   FIELD LABEL
+   FIELD LABEL COMPONENT
 ========================================================= */
 
 const FieldLabel = ({ children, required }) => (
@@ -113,83 +144,67 @@ const FieldLabel = ({ children, required }) => (
 );
 
 /* =========================================================
-   TEXT FIELD
+   TEXT FIELD — no inline error text, just red border
 ========================================================= */
 
 const TextField = ({ error, ...props }) => (
-  <>
-    <Input
-      height="40px"
-      fontSize="12px"
-      borderColor={error ? "red.500" : border}
-      borderRadius="6px"
-      _focus={{
-        borderColor: primaryMaroon,
-        boxShadow: `0 0 0 1px ${primaryMaroon}`,
-      }}
-      {...props}
-    />
-
-    {error && (
-      <Text fontSize="10px" color="red.500" mt={1}>
-        {error}
-      </Text>
-    )}
-  </>
+  <Input
+    height="40px"
+    fontSize="12px"
+    borderColor={error ? "red.500" : border}
+    borderRadius="6px"
+    _focus={{
+      borderColor: primaryMaroon,
+      boxShadow: `0 0 0 1px ${primaryMaroon}`,
+    }}
+    {...props}
+  />
 );
 
 /* =========================================================
-   ACCOUNT GROUP SELECT
+   ACCOUNT GROUP SELECT — no inline error text
 ========================================================= */
 
 const AccountGroupSelect = ({ value, onChange, groups, error }) => (
-  <>
-    <Box position="relative">
-      <Icon
-        as={LuNetwork}
-        boxSize={4}
-        color="gray.400"
-        position="absolute"
-        left="12px"
-        top="50%"
-        transform="translateY(-50%)"
-        zIndex={1}
-        pointerEvents="none"
-      />
+  <Box position="relative">
+    <Icon
+      as={LuNetwork}
+      boxSize={4}
+      color="gray.400"
+      position="absolute"
+      left="12px"
+      top="50%"
+      transform="translateY(-50%)"
+      zIndex={1}
+      pointerEvents="none"
+    />
 
-      <Box
-        as="select"
-        value={value}
-        onChange={onChange}
-        style={{
-          width: "100%",
-          padding: "0 12px 0 36px",
-          borderRadius: "6px",
-          border: `1px solid ${error ? "#e53e3e" : border}`,
-          fontSize: "12px",
-          height: "40px",
-          background: "white",
-          outline: "none",
-          color: value ? dark : "#a0aec0",
-          cursor: "pointer",
-        }}
-      >
-        <option value="">Select account group</option>
+    <Box
+      as="select"
+      value={value}
+      onChange={onChange}
+      style={{
+        width: "100%",
+        padding: "0 12px 0 36px",
+        borderRadius: "6px",
+        border: `1px solid ${error ? "#e53e3e" : border}`,
+        fontSize: "12px",
+        height: "40px",
+        background: "white",
+        outline: "none",
+        color: value ? dark : "#a0aec0",
+        cursor: "pointer",
+      }}
+    >
+      <option value="">Select account group</option>
 
-        {groups.map((group) => (
-          <option key={group.id} value={group.id}>
-            {group.group_name}
-          </option>
-        ))}
-      </Box>
+      {groups.map((group) => (
+        <option key={group.id} value={group.id}>
+          {group.group_name}
+        </option>
+      ))}
     </Box>
-
-    {error && (
-      <Text fontSize="10px" color="red.500" mt={1}>
-        {error}
-      </Text>
-    )}
-  </>
+  </Box>
 );
 
 /* =========================================================
@@ -244,7 +259,7 @@ const AccountLedgerEditPage = () => {
 
   const [initialData, setInitialData] = useState(null);
 
-  const [errors, setErrors] = useState({});
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const isReserved = Boolean(ledger?.reserved);
 
@@ -264,7 +279,8 @@ const AccountLedgerEditPage = () => {
 
         const ledgerData = ledgerRes?.data || null;
 
-        const groupsData = groupsRes?.data?.results || groupsRes?.data || [];
+        const groupsData =
+          groupsRes?.data?.results || groupsRes?.data || [];
 
         setLedger(ledgerData);
 
@@ -292,11 +308,13 @@ const AccountLedgerEditPage = () => {
       } catch (error) {
         console.error("Error fetching account ledger:", error);
 
-        toaster.create({
-          title: "Error",
-          description: "Failed to load account ledger.",
+        showToast({
+          title: "Failed to load record",
+          description:
+            error?.response?.data?.detail ||
+            "Unable to load account ledger. Please try again.",
           type: "error",
-          duration: 4000,
+          duration: 6000,
         });
       } finally {
         setIsLoading(false);
@@ -318,12 +336,9 @@ const AccountLedgerEditPage = () => {
       [field]: value,
     }));
 
-    if (errors[field]) {
-      setErrors((prev) => ({
-        ...prev,
-        [field]: "",
-      }));
-    }
+    setFieldErrors((prev) =>
+      prev[field] ? { ...prev, [field]: "" } : prev
+    );
   };
 
   /* =========================================================
@@ -340,19 +355,24 @@ const AccountLedgerEditPage = () => {
     );
   }, [formData, initialData]);
 
+  const hasChanges = modifiedFields.length > 0;
+
   /* =========================================================
      VALIDATE
   ========================================================= */
 
   const validate = () => {
     const newErrors = {};
+    const missing = [];
 
     if (!formData.ledger_name.trim()) {
       newErrors.ledger_name = "Ledger name is required.";
+      missing.push(FIELD_LABELS.ledger_name);
     }
 
     if (!formData.account_group) {
       newErrors.account_group = "Please select an account group.";
+      missing.push(FIELD_LABELS.account_group);
     }
 
     /* ledger_code is an integer field in the model */
@@ -371,9 +391,13 @@ const AccountLedgerEditPage = () => {
       newErrors.op_balance = "Please enter a valid opening balance.";
     }
 
-    setErrors(newErrors);
+    setFieldErrors(newErrors);
 
-    return Object.keys(newErrors).length === 0;
+    return {
+      errors: newErrors,
+      missing,
+      valid: Object.keys(newErrors).length === 0,
+    };
   };
 
   /* =========================================================
@@ -383,11 +407,45 @@ const AccountLedgerEditPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!validate()) {
+    const { errors, missing, valid } = validate();
+
+    if (!valid) {
+      const explicitMessages = Object.entries(errors)
+        .filter(([key]) => !missing.includes(FIELD_LABELS[key]))
+        .map(([, msg]) => msg);
+
+      let description;
+
+      if (explicitMessages.length > 0) {
+        description = explicitMessages.join("\n");
+      } else if (missing.length === 1) {
+        description = `${missing[0]} is required.`;
+      } else {
+        description = `Please fill: ${missing.join(", ")}.`;
+      }
+
+      showToast({
+        title: "Please fix the form",
+        description,
+        type: "warning",
+        duration: 5000,
+      });
+      return;
+    }
+
+    if (!hasChanges) {
+      showToast({
+        title: "No changes to save",
+        description:
+          "Please modify at least one field before updating.",
+        type: "info",
+        duration: 4000,
+      });
       return;
     }
 
     setIsSubmitting(true);
+    setFieldErrors({});
 
     const payload = {
       ledger_name: formData.ledger_name.trim(),
@@ -408,11 +466,11 @@ const AccountLedgerEditPage = () => {
     try {
       await updateAccountLedger(id, payload);
 
-      toaster.create({
-        title: "Success",
+      showToast({
+        title: "Changes saved",
         description: "Account ledger updated successfully.",
         type: "success",
-        duration: 3000,
+        duration: 4000,
       });
 
       navigate(`/account-ledgers/${id}`);
@@ -421,9 +479,13 @@ const AccountLedgerEditPage = () => {
 
       const backendData = error?.response?.data;
 
-      const backendErrors = {};
+      if (
+        backendData &&
+        typeof backendData === "object" &&
+        !Array.isArray(backendData)
+      ) {
+        const backendErrors = {};
 
-      if (backendData && typeof backendData === "object") {
         Object.entries(backendData).forEach(([field, message]) => {
           if (Array.isArray(message)) {
             backendErrors[field] = message.join(", ");
@@ -431,30 +493,41 @@ const AccountLedgerEditPage = () => {
             backendErrors[field] = message;
           }
         });
+
+        setFieldErrors(backendErrors);
+
+        const generalError =
+          backendData.error ||
+          backendData.detail ||
+          backendData.non_field_errors?.[0];
+
+        const fieldMessages = Object.values(backendErrors).filter(Boolean);
+        const onlyOneFieldError =
+          fieldMessages.length === 1 && !generalError;
+
+        showToast({
+          title: "Could not save changes",
+          description:
+            generalError ||
+            (onlyOneFieldError
+              ? fieldMessages[0]
+              : Object.entries(backendErrors)
+                  .map(
+                    ([field, message]) =>
+                      `${FIELD_LABELS[field] || field}: ${message}`
+                  )
+                  .join(" | ")),
+          type: "error",
+          duration: 7000,
+        });
+      } else {
+        showToast({
+          title: "Could not save changes",
+          description: "Unable to update account ledger. Please try again.",
+          type: "error",
+          duration: 7000,
+        });
       }
-
-      if (Object.keys(backendErrors).length > 0) {
-        setErrors(backendErrors);
-      }
-
-      let description = "Failed to update account ledger.";
-
-      if (backendData?.error) {
-        description = backendData.error;
-      } else if (backendData?.detail) {
-        description = backendData.detail;
-      } else if (Object.keys(backendErrors).length > 0) {
-        description = Object.entries(backendErrors)
-          .map(([field, message]) => `${field}: ${message}`)
-          .join(" | ");
-      }
-
-      toaster.create({
-        title: "Unable to update account ledger",
-        description,
-        type: "error",
-        duration: 6000,
-      });
     } finally {
       setIsSubmitting(false);
     }
@@ -466,7 +539,7 @@ const AccountLedgerEditPage = () => {
 
   const handleDelete = async () => {
     if (isReserved) {
-      toaster.create({
+      showToast({
         title: "Cannot delete account ledger",
         description: "This is a reserved system ledger.",
         type: "error",
@@ -487,11 +560,11 @@ const AccountLedgerEditPage = () => {
     try {
       await deleteAccountLedger(id);
 
-      toaster.create({
-        title: "Deleted",
+      showToast({
+        title: "Record deleted",
         description: "Account ledger has been deleted.",
         type: "success",
-        duration: 3000,
+        duration: 4000,
       });
 
       navigate("/account-ledgers");
@@ -500,14 +573,14 @@ const AccountLedgerEditPage = () => {
 
       const backendData = error?.response?.data;
 
-      toaster.create({
-        title: "Unable to delete account ledger",
+      showToast({
+        title: "Could not delete record",
         description:
           backendData?.error ||
           backendData?.detail ||
           "This account ledger may have linked records.",
         type: "error",
-        duration: 5000,
+        duration: 7000,
       });
     }
   };
@@ -616,11 +689,7 @@ const AccountLedgerEditPage = () => {
 
   return (
     <Box minH="100vh" bg="white" display="flex" flexDirection="column">
-      {/* NAVBAR */}
-
       <Navbar />
-
-      {/* MAIN */}
 
       <Box flex="1" w="100%">
         <Box w="100%" px={{ base: 3, md: 4 }} py={{ base: 3, md: 4 }}>
@@ -698,8 +767,6 @@ const AccountLedgerEditPage = () => {
             mb={4}
           >
             <Flex align="center" gap={6} flexWrap="wrap">
-              {/* LEDGER INFO */}
-
               <HStack gap={3} flex="1" minW="260px">
                 <Circle
                   size="52px"
@@ -741,8 +808,6 @@ const AccountLedgerEditPage = () => {
                   </HStack>
                 </Box>
               </HStack>
-
-              {/* OPENING BALANCE */}
 
               <Box
                 borderLeft={{ base: "none", md: `1px solid ${border}` }}
@@ -813,8 +878,6 @@ const AccountLedgerEditPage = () => {
                         templateColumns={{ base: "1fr", md: "1fr 1fr" }}
                         gap={4}
                       >
-                        {/* LEDGER NAME */}
-
                         <GridItem>
                           <FieldLabel required>Ledger Name</FieldLabel>
 
@@ -823,11 +886,9 @@ const AccountLedgerEditPage = () => {
                             maxLength={100}
                             value={formData.ledger_name}
                             onChange={handleChange("ledger_name")}
-                            error={errors.ledger_name}
+                            error={fieldErrors.ledger_name}
                           />
                         </GridItem>
-
-                        {/* LEDGER CODE */}
 
                         <GridItem>
                           <FieldLabel>Ledger Code</FieldLabel>
@@ -837,11 +898,9 @@ const AccountLedgerEditPage = () => {
                             inputMode="numeric"
                             value={formData.ledger_code}
                             onChange={handleChange("ledger_code")}
-                            error={errors.ledger_code}
+                            error={fieldErrors.ledger_code}
                           />
                         </GridItem>
-
-                        {/* ALIAS */}
 
                         <GridItem>
                           <FieldLabel>Alias</FieldLabel>
@@ -850,11 +909,9 @@ const AccountLedgerEditPage = () => {
                             placeholder="Enter alias (optional)"
                             value={formData.alias}
                             onChange={handleChange("alias")}
-                            error={errors.alias}
+                            error={fieldErrors.alias}
                           />
                         </GridItem>
-
-                        {/* ACCOUNT GROUP */}
 
                         <GridItem>
                           <FieldLabel required>Account Group</FieldLabel>
@@ -863,7 +920,7 @@ const AccountLedgerEditPage = () => {
                             value={formData.account_group}
                             onChange={handleChange("account_group")}
                             groups={groups}
-                            error={errors.account_group}
+                            error={fieldErrors.account_group}
                           />
                         </GridItem>
                       </Grid>
@@ -886,7 +943,9 @@ const AccountLedgerEditPage = () => {
 
                         <Flex
                           border="1px solid"
-                          borderColor={errors.op_balance ? "red.500" : border}
+                          borderColor={
+                            fieldErrors.op_balance ? "red.500" : border
+                          }
                           borderRadius="6px"
                           overflow="hidden"
                           align="stretch"
@@ -914,12 +973,6 @@ const AccountLedgerEditPage = () => {
                             flex="1"
                           />
                         </Flex>
-
-                        {errors.op_balance && (
-                          <Text fontSize="10px" color="red.500" mt={1}>
-                            {errors.op_balance}
-                          </Text>
-                        )}
 
                         <Text fontSize="10px" color={muted} mt={1}>
                           Enter zero if the ledger has no opening balance.
@@ -1027,7 +1080,7 @@ const AccountLedgerEditPage = () => {
 
                   {/* UNSAVED CHANGES */}
 
-                  {modifiedFields.length > 0 && (
+                  {hasChanges && (
                     <SidebarCard
                       icon={LuTriangleAlert}
                       iconColor="orange.500"
@@ -1141,8 +1194,6 @@ const AccountLedgerEditPage = () => {
           </form>
         </Box>
       </Box>
-
-      {/* FOOTER */}
 
       <Footer />
     </Box>

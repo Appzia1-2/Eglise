@@ -36,6 +36,8 @@ import {
   deleteRelationship,
 } from "../api/registryServices";
 
+import { toaster } from "../components/ui/toaster";
+
 
 const PRIMARY_MAROON = "var(--primary-maroon)";
 
@@ -43,6 +45,26 @@ const RED = "#D7193F";
 const DARK = "#182338";
 const MUTED = "#60708C";
 const BORDER = "#DCE2EA";
+
+
+// ============================================================
+// TOAST HELPER
+// ============================================================
+
+const showToast = ({
+  title,
+  description,
+  type = "info",
+  duration = 4000,
+}) => {
+  toaster.create({
+    title,
+    description,
+    type,
+    duration,
+    closable: true,
+  });
+};
 
 
 const RelationshipEditPage = () => {
@@ -62,7 +84,7 @@ const RelationshipEditPage = () => {
   const [updating, setUpdating] = useState(false);
   const [archiving, setArchiving] = useState(false);
 
-  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
 
 
   // ==========================================================
@@ -71,13 +93,13 @@ const RelationshipEditPage = () => {
 
   useEffect(() => {
     fetchRelationship();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
 
   const fetchRelationship = async () => {
     try {
       setLoading(true);
-      setError("");
 
       const response = await listRelationships();
 
@@ -93,14 +115,19 @@ const RelationshipEditPage = () => {
       );
 
       if (!found) {
-        setError("Relationship not found.");
+        showToast({
+          title: "Relationship not found",
+          description:
+            "The requested relationship record could not be found.",
+          type: "error",
+          duration: 6000,
+        });
         return;
       }
 
       setRelationship(found);
 
-      const relationshipName =
-        found.name || "";
+      const relationshipName = found.name || "";
 
       setName(relationshipName);
       setOriginalName(relationshipName);
@@ -111,10 +138,14 @@ const RelationshipEditPage = () => {
         err
       );
 
-      setError(
-        "Unable to load relationship."
-      );
-
+      showToast({
+        title: "Failed to load record",
+        description:
+          err?.response?.data?.detail ||
+          "Unable to load relationship. Please try again.",
+        type: "error",
+        duration: 6000,
+      });
     } finally {
       setLoading(false);
     }
@@ -137,22 +168,43 @@ const RelationshipEditPage = () => {
     const trimmedName = name.trim();
 
     if (!trimmedName) {
-      setError(
-        "Relationship name is required."
-      );
+      setFieldErrors({
+        name: "Relationship name is required.",
+      });
+      showToast({
+        title: "Please fix the form",
+        description: "Relationship Name is required.",
+        type: "warning",
+        duration: 5000,
+      });
       return;
     }
 
     if (!hasChanges) {
+      showToast({
+        title: "No changes to save",
+        description:
+          "Please modify the relationship name before updating.",
+        type: "info",
+        duration: 4000,
+      });
       return;
     }
 
     try {
       setUpdating(true);
-      setError("");
+      setFieldErrors({});
 
       await updateRelationship(id, {
         name: trimmedName,
+      });
+
+      showToast({
+        title: "Changes saved",
+        description:
+          "The relationship record was updated successfully.",
+        type: "success",
+        duration: 4000,
       });
 
       navigate(`/relationship/${id}`);
@@ -163,13 +215,49 @@ const RelationshipEditPage = () => {
         err
       );
 
-      const apiError =
-        err?.response?.data?.name?.[0] ||
-        err?.response?.data?.detail ||
-        "Unable to update relationship.";
+      const responseData = err?.response?.data;
 
-      setError(apiError);
+      if (
+        responseData &&
+        typeof responseData === "object" &&
+        !Array.isArray(responseData)
+      ) {
+        const errors = {};
 
+        Object.entries(responseData).forEach(([key, value]) => {
+          if (Array.isArray(value)) errors[key] = value.join(", ");
+          else if (typeof value === "string") errors[key] = value;
+          else errors[key] = JSON.stringify(value);
+        });
+
+        setFieldErrors(errors);
+
+        const generalError =
+          responseData.detail || responseData.non_field_errors?.[0];
+
+        const fieldMessages = Object.values(errors).filter(Boolean);
+        const onlyOneFieldError =
+          fieldMessages.length === 1 && !generalError;
+
+        showToast({
+          title: "Could not save changes",
+          description:
+            generalError ||
+            (onlyOneFieldError
+              ? fieldMessages[0]
+              : "Unable to update relationship. Please try again."),
+          type: "error",
+          duration: 7000,
+        });
+      } else {
+        showToast({
+          title: "Could not save changes",
+          description:
+            "Unable to update relationship. Please try again.",
+          type: "error",
+          duration: 7000,
+        });
+      }
     } finally {
       setUpdating(false);
     }
@@ -191,9 +279,16 @@ const RelationshipEditPage = () => {
 
     try {
       setArchiving(true);
-      setError("");
 
       await deleteRelationship(id);
+
+      showToast({
+        title: "Record archived",
+        description:
+          "The relationship record was archived successfully.",
+        type: "success",
+        duration: 4000,
+      });
 
       navigate("/relationship");
 
@@ -203,12 +298,14 @@ const RelationshipEditPage = () => {
         err
       );
 
-      const apiError =
-        err?.response?.data?.detail ||
-        "Unable to archive relationship.";
-
-      setError(apiError);
-
+      showToast({
+        title: "Could not archive record",
+        description:
+          err?.response?.data?.detail ||
+          "Unable to archive relationship. Please try again.",
+        type: "error",
+        duration: 7000,
+      });
     } finally {
       setArchiving(false);
     }
@@ -239,14 +336,11 @@ const RelationshipEditPage = () => {
       return "-";
     }
 
-    return date.toLocaleDateString(
-      "en-GB",
-      {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }
-    );
+    return date.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
   };
 
 
@@ -283,24 +377,15 @@ const RelationshipEditPage = () => {
         display="flex"
         flexDirection="column"
       >
-
         <Navbar />
 
-        <Box
-          flex="1"
-          px={6}
-          py={5}
-        >
-          <Text
-            color={MUTED}
-            fontSize="13px"
-          >
+        <Box flex="1" px={6} py={5}>
+          <Text color={MUTED} fontSize="13px">
             Loading relationship...
           </Text>
         </Box>
 
         <Footer />
-
       </Box>
     );
   }
@@ -319,154 +404,70 @@ const RelationshipEditPage = () => {
       flexDirection="column"
       overflow="hidden"
     >
-
-      {/* ======================================================
-          NAVBAR
-      ====================================================== */}
-
       <Box flexShrink={0}>
         <Navbar />
       </Box>
 
-
-      {/* ======================================================
-          MAIN CONTENT
-      ====================================================== */}
-
-      <Box
-        flex="1"
-        minH="0"
-        overflow="hidden"
-      >
-
+      <Box flex="1" minH="0" overflow="hidden">
         <Container
           maxW="none"
           height="100%"
-          px={{
-            base: 4,
-            md: 6,
-          }}
-          py={{
-            base: 2,
-            md: 3,
-          }}
+          px={{ base: 4, md: 6 }}
+          py={{ base: 2, md: 3 }}
         >
-
-          {/* ==================================================
-              BREADCRUMB
-          ================================================== */}
-
+          {/* BREADCRUMB */}
           <HStack
             gap={2}
             mb={2}
             color={MUTED}
             fontSize="12px"
           >
-
-            <Text>
-              Masters
-            </Text>
-
-            <Text>
-              /
-            </Text>
-
-            <Text>
-              Relationship Master
-            </Text>
-
-            <Text>
-              /
-            </Text>
-
-            <Text>
-              {relationship?.name || "Relationship"}
-            </Text>
-
-            <Text>
-              /
-            </Text>
-
-            <Text>
-              Edit
-            </Text>
-
+            <Text>Masters</Text>
+            <Text>/</Text>
+            <Text>Relationship Master</Text>
+            <Text>/</Text>
+            <Text>{relationship?.name || "Relationship"}</Text>
+            <Text>/</Text>
+            <Text>Edit</Text>
           </HStack>
 
-
-          {/* ==================================================
-              PAGE HEADER
-          ================================================== */}
-
+          {/* PAGE HEADER */}
           <Box mb={3}>
-
             <Heading
               color={DARK}
-              fontSize={{
-                base: "22px",
-                md: "26px",
-              }}
+              fontSize={{ base: "22px", md: "26px" }}
               lineHeight="1.15"
               mb={1}
             >
               Edit Relationship
             </Heading>
 
-            <Text
-              color={MUTED}
-              fontSize="12px"
-            >
+            <Text color={MUTED} fontSize="12px">
               Update relationship information.
             </Text>
-
           </Box>
 
-
-          {/* ==================================================
-              TWO COLUMN LAYOUT
-          ================================================== */}
-
+          {/* TWO COLUMN LAYOUT */}
           <Grid
             templateColumns={{
               base: "1fr",
               lg: "minmax(0, 3fr) minmax(280px, 1fr)",
             }}
-            gap={{
-              base: 3,
-              lg: 4,
-            }}
+            gap={{ base: 3, lg: 4 }}
             alignItems="start"
           >
-
-            {/* =================================================
-                LEFT COLUMN
-            ================================================= */}
-
+            {/* LEFT COLUMN */}
             <Box>
-
-              {/* ===============================================
-                  RELATIONSHIP HEADER CARD
-              =============================================== */}
-
+              {/* RELATIONSHIP HEADER CARD */}
               <Box
                 border="1px solid"
                 borderColor={BORDER}
                 borderRadius="9px"
-                px={{
-                  base: 3,
-                  md: 4,
-                }}
+                px={{ base: 3, md: 4 }}
                 py={3}
                 mb={3}
               >
-
-                <Flex
-                  align="center"
-                  gap={4}
-                >
-
-                  {/* AVATAR */}
-
+                <Flex align="center" gap={4}>
                   <Flex
                     width="58px"
                     height="58px"
@@ -477,7 +478,6 @@ const RelationshipEditPage = () => {
                     align="center"
                     justify="center"
                   >
-
                     <Text
                       fontSize="21px"
                       fontWeight="600"
@@ -487,40 +487,26 @@ const RelationshipEditPage = () => {
                         .charAt(0)
                         .toUpperCase()}
                     </Text>
-
                   </Flex>
 
-
-                  {/* RELATIONSHIP INFO */}
-
                   <Box>
-
                     <Heading
                       color={DARK}
-                      fontSize={{
-                        base: "20px",
-                        md: "22px",
-                      }}
+                      fontSize={{ base: "20px", md: "22px" }}
                       lineHeight="1.2"
                       mb={1}
                     >
                       {relationship?.name || "-"}
                     </Heading>
 
-
                     <HStack
                       gap={3}
                       color={MUTED}
                       fontSize="12px"
                     >
+                      <Text>{relationshipCode}</Text>
 
-                      <Text>
-                        {relationshipCode}
-                      </Text>
-
-                      <Text>
-                        •
-                      </Text>
+                      <Text>•</Text>
 
                       <Box
                         px={2}
@@ -534,29 +520,19 @@ const RelationshipEditPage = () => {
                       >
                         Active
                       </Box>
-
                     </HStack>
-
                   </Box>
-
                 </Flex>
-
               </Box>
 
-
-              {/* ===============================================
-                  RELATIONSHIP DETAILS CARD
-              =============================================== */}
-
+              {/* RELATIONSHIP DETAILS CARD */}
               <Box
                 border="1px solid"
                 borderColor={BORDER}
                 borderRadius="9px"
                 overflow="hidden"
               >
-
                 {/* TAB HEADER */}
-
                 <Box
                   height="42px"
                   borderBottom="1px solid"
@@ -566,7 +542,6 @@ const RelationshipEditPage = () => {
                   alignItems="center"
                   justifyContent="center"
                 >
-
                   <Text
                     color={RED}
                     fontSize="13px"
@@ -574,7 +549,6 @@ const RelationshipEditPage = () => {
                   >
                     Relationship Details
                   </Text>
-
 
                   <Box
                     position="absolute"
@@ -585,21 +559,14 @@ const RelationshipEditPage = () => {
                     height="2px"
                     bg={RED}
                   />
-
                 </Box>
 
-
                 {/* FORM */}
-
                 <Box
-                  px={{
-                    base: 3,
-                    md: 4,
-                  }}
+                  px={{ base: 3, md: 4 }}
                   py={3}
                   minH="250px"
                 >
-
                   <Text
                     fontSize="14px"
                     fontWeight="700"
@@ -609,11 +576,8 @@ const RelationshipEditPage = () => {
                     Relationship Information
                   </Text>
 
-
                   {/* RELATIONSHIP NAME */}
-
                   <Box>
-
                     <Text
                       fontSize="12px"
                       fontWeight="600"
@@ -621,86 +585,47 @@ const RelationshipEditPage = () => {
                       mb={2}
                     >
                       Relationship Name{" "}
-
-                      <Text
-                        as="span"
-                        color={RED}
-                      >
+                      <Text as="span" color={RED}>
                         *
                       </Text>
-
                     </Text>
-
 
                     <Input
                       value={name}
                       onChange={(e) => {
                         setName(e.target.value);
-                        setError("");
+                        setFieldErrors((prev) =>
+                          prev.name
+                            ? { ...prev, name: "" }
+                            : prev
+                        );
                       }}
                       placeholder="Enter relationship name"
                       height="38px"
                       fontSize="12px"
                       borderColor={
-                        hasChanges
+                        fieldErrors.name
+                          ? "#F3C4C4"
+                          : hasChanges
                           ? RED
                           : BORDER
                       }
                       borderRadius="6px"
                       color={DARK}
-                      _placeholder={{
-                        color: "#8B98AB",
-                      }}
+                      _placeholder={{ color: "#8B98AB" }}
                       _focus={{
-                        borderColor:
-                          PRIMARY_MAROON,
-                        boxShadow:
-                          `0 0 0 1px ${PRIMARY_MAROON}`,
+                        borderColor: PRIMARY_MAROON,
+                        boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                       }}
                     />
-
                   </Box>
-
-
-                  {/* ERROR */}
-
-                  {error && (
-                    <Box
-                      mt={3}
-                      px={3}
-                      py={2}
-                      border="1px solid #FED7D7"
-                      bg="#FFF5F5"
-                      borderRadius="6px"
-                    >
-
-                      <Text
-                        color="#C53030"
-                        fontSize="11px"
-                      >
-                        {error}
-                      </Text>
-
-                    </Box>
-                  )}
-
                 </Box>
-
               </Box>
-
             </Box>
 
-
-            {/* =================================================
-                RIGHT COLUMN
-            ================================================= */}
-
+            {/* RIGHT COLUMN */}
             <Box>
-
-              {/* ===============================================
-                  RECORD INFORMATION
-              =============================================== */}
-
+              {/* RECORD INFORMATION */}
               <Box
                 border="1px solid"
                 borderColor={BORDER}
@@ -708,12 +633,7 @@ const RelationshipEditPage = () => {
                 p={3}
                 mb={2}
               >
-
-                <HStack
-                  gap={2}
-                  mb={3}
-                >
-
+                <HStack gap={2} mb={3}>
                   <Flex
                     width="26px"
                     height="26px"
@@ -722,12 +642,7 @@ const RelationshipEditPage = () => {
                     align="center"
                     justify="center"
                   >
-
-                    <LuFileText
-                      size={14}
-                      color={RED}
-                    />
-
+                    <LuFileText size={14} color={RED} />
                   </Flex>
 
                   <Text
@@ -737,18 +652,10 @@ const RelationshipEditPage = () => {
                   >
                     Record Information
                   </Text>
-
                 </HStack>
 
-
                 {/* CREATED */}
-
-                <HStack
-                  align="flex-start"
-                  gap={2}
-                  mb={3}
-                >
-
+                <HStack align="flex-start" gap={2} mb={3}>
                   <Flex
                     width="25px"
                     height="25px"
@@ -757,20 +664,11 @@ const RelationshipEditPage = () => {
                     align="center"
                     justify="center"
                   >
-
-                    <LuCalendarDays
-                      size={13}
-                      color={MUTED}
-                    />
-
+                    <LuCalendarDays size={13} color={MUTED} />
                   </Flex>
 
                   <Box>
-
-                    <Text
-                      color="#8290A4"
-                      fontSize="10px"
-                    >
+                    <Text color="#8290A4" fontSize="10px">
                       Created
                     </Text>
 
@@ -781,19 +679,11 @@ const RelationshipEditPage = () => {
                     >
                       {formatDate(createdDate)}
                     </Text>
-
                   </Box>
-
                 </HStack>
 
-
                 {/* UPDATED */}
-
-                <HStack
-                  align="flex-start"
-                  gap={2}
-                >
-
+                <HStack align="flex-start" gap={2}>
                   <Flex
                     width="25px"
                     height="25px"
@@ -802,20 +692,11 @@ const RelationshipEditPage = () => {
                     align="center"
                     justify="center"
                   >
-
-                    <LuUserRound
-                      size={13}
-                      color={MUTED}
-                    />
-
+                    <LuUserRound size={13} color={MUTED} />
                   </Flex>
 
                   <Box>
-
-                    <Text
-                      color="#8290A4"
-                      fontSize="10px"
-                    >
+                    <Text color="#8290A4" fontSize="10px">
                       Last updated
                     </Text>
 
@@ -826,18 +707,11 @@ const RelationshipEditPage = () => {
                     >
                       {formatDate(updatedDate)}
                     </Text>
-
                   </Box>
-
                 </HStack>
-
               </Box>
 
-
-              {/* ===============================================
-                  UNSAVED CHANGES
-              =============================================== */}
-
+              {/* UNSAVED CHANGES */}
               <Box
                 border="1px solid"
                 borderColor={BORDER}
@@ -845,12 +719,7 @@ const RelationshipEditPage = () => {
                 p={3}
                 mb={2}
               >
-
-                <HStack
-                  gap={2}
-                  mb={3}
-                >
-
+                <HStack gap={2} mb={3}>
                   <Flex
                     width="26px"
                     height="26px"
@@ -859,12 +728,10 @@ const RelationshipEditPage = () => {
                     align="center"
                     justify="center"
                   >
-
                     <LuTriangleAlert
                       size={14}
                       color="#F26B00"
                     />
-
                   </Flex>
 
                   <Text
@@ -874,15 +741,9 @@ const RelationshipEditPage = () => {
                   >
                     Unsaved Changes
                   </Text>
-
                 </HStack>
 
-
-                <HStack
-                  align="flex-start"
-                  gap={2}
-                >
-
+                <HStack align="flex-start" gap={2}>
                   <Flex
                     width="25px"
                     height="25px"
@@ -891,16 +752,10 @@ const RelationshipEditPage = () => {
                     align="center"
                     justify="center"
                   >
-
-                    <LuClock3
-                      size={13}
-                      color="#F26B00"
-                    />
-
+                    <LuClock3 size={13} color="#F26B00" />
                   </Flex>
 
                   <Box>
-
                     <Text
                       color="#F26B00"
                       fontSize="12px"
@@ -911,39 +766,23 @@ const RelationshipEditPage = () => {
                         : "No changes"}
                     </Text>
 
-                    <Text
-                      color={MUTED}
-                      fontSize="10px"
-                      mt={1}
-                    >
+                    <Text color={MUTED} fontSize="10px" mt={1}>
                       {hasChanges
                         ? "Please review your changes before saving."
                         : "Make changes to the relationship information."}
                     </Text>
-
                   </Box>
-
                 </HStack>
-
               </Box>
 
-
-              {/* ===============================================
-                  DANGER ZONE
-              =============================================== */}
-
+              {/* DANGER ZONE */}
               <Box
                 border="1px solid"
                 borderColor={BORDER}
                 borderRadius="9px"
                 p={3}
               >
-
-                <HStack
-                  gap={2}
-                  mb={3}
-                >
-
+                <HStack gap={2} mb={3}>
                   <Flex
                     width="26px"
                     height="26px"
@@ -952,12 +791,7 @@ const RelationshipEditPage = () => {
                     align="center"
                     justify="center"
                   >
-
-                    <LuArchive
-                      size={14}
-                      color={RED}
-                    />
-
+                    <LuArchive size={14} color={RED} />
                   </Flex>
 
                   <Text
@@ -967,9 +801,7 @@ const RelationshipEditPage = () => {
                   >
                     Danger Zone
                   </Text>
-
                 </HStack>
-
 
                 <Button
                   variant="ghost"
@@ -986,18 +818,12 @@ const RelationshipEditPage = () => {
                     color: "#A00D28",
                   }}
                 >
-
                   <LuArchive
                     size={14}
-                    style={{
-                      marginRight: "8px",
-                    }}
+                    style={{ marginRight: "8px" }}
                   />
-
                   Archive Relationship Record
-
                 </Button>
-
 
                 <Text
                   color="#8290A4"
@@ -1005,44 +831,25 @@ const RelationshipEditPage = () => {
                   mt={2}
                   ml={1}
                 >
-                  This relationship record will
-                  remain in history.
+                  This relationship record will remain in history.
                 </Text>
-
               </Box>
-
             </Box>
-
           </Grid>
-
         </Container>
-
       </Box>
 
-
-      {/* ======================================================
-          BOTTOM ACTION BAR
-      ====================================================== */}
-
+      {/* BOTTOM ACTION BAR */}
       <Box
         borderTop="1px solid"
         borderColor={BORDER}
         bg="white"
-        px={{
-          base: 4,
-          md: 6,
-        }}
+        px={{ base: 4, md: 6 }}
         py={2}
         flexShrink={0}
       >
-
-        <Flex
-          justify="flex-end"
-          gap={2}
-        >
-
+        <Flex justify="flex-end" gap={2}>
           {/* CANCEL */}
-
           <Button
             variant="outline"
             height="36px"
@@ -1052,16 +859,12 @@ const RelationshipEditPage = () => {
             borderRadius="6px"
             fontSize="12px"
             onClick={handleCancel}
-            _hover={{
-              bg: "#FFF5F7",
-            }}
+            _hover={{ bg: "#FFF5F7" }}
           >
             Cancel
           </Button>
 
-
           {/* UPDATE */}
-
           <Button
             height="36px"
             minW="150px"
@@ -1070,47 +873,28 @@ const RelationshipEditPage = () => {
                 ? PRIMARY_MAROON
                 : "#D9DCE1"
             }
-            color={
-              hasChanges
-                ? "white"
-                : "#8A929D"
-            }
+            color={hasChanges ? "white" : "#8A929D"}
             borderRadius="6px"
             fontSize="12px"
             disabled={!hasChanges}
             loading={updating}
             onClick={handleUpdate}
             _hover={{
-              bg: hasChanges
-                ? "#650A18"
-                : "#D9DCE1",
+              bg: hasChanges ? "#650A18" : "#D9DCE1",
             }}
           >
-
             <LuSave
               size={14}
-              style={{
-                marginRight: "7px",
-              }}
+              style={{ marginRight: "7px" }}
             />
-
             Update
-
           </Button>
-
         </Flex>
-
       </Box>
-
-
-      {/* ======================================================
-          FOOTER
-      ====================================================== */}
 
       <Box flexShrink={0}>
         <Footer />
       </Box>
-
     </Box>
   );
 };

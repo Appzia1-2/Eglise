@@ -34,12 +34,49 @@ import {
   listGrades,
 } from "../api/registryServices";
 
+import { toaster } from "../components/ui/toaster";
+
 const PRIMARY_MAROON = "var(--primary-maroon)";
 
 const RED = "#D7193F";
 const DARK = "#182338";
 const MUTED = "#60708C";
 const BORDER = "#DCE2EA";
+
+
+// ============================================================
+// TOAST HELPER
+// ============================================================
+
+const showToast = ({
+  title,
+  description,
+  type = "info",
+  duration = 4000,
+}) => {
+  toaster.create({
+    title,
+    description,
+    type,
+    duration,
+    closable: true,
+  });
+};
+
+
+// ============================================================
+// FIELD LABELS
+// ============================================================
+
+const FIELD_LABELS = {
+  grade: "Grade",
+  term: "Term",
+  start_date: "Start Date",
+  end_date: "End Date",
+  amount: "Amount",
+  cancel_reason: "Cancel Reason",
+};
+
 
 const SubscriptionEditPage = () => {
   const navigate = useNavigate();
@@ -54,8 +91,6 @@ const SubscriptionEditPage = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [error, setError] = useState("");
-
   const [subscription, setSubscription] = useState(null);
 
   const [formData, setFormData] = useState({
@@ -68,7 +103,6 @@ const SubscriptionEditPage = () => {
     cancel_reason: "",
   });
 
-  // Keep the original values so we can calculate unsaved changes.
   const [originalFormData, setOriginalFormData] = useState({
     grade: "",
     term: "",
@@ -78,6 +112,8 @@ const SubscriptionEditPage = () => {
     is_cancelled: false,
     cancel_reason: "",
   });
+
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // ==========================================================
   // DATE FOR INPUT
@@ -101,14 +137,8 @@ const SubscriptionEditPage = () => {
     }
 
     const year = parsedDate.getFullYear();
-
-    const month = String(
-      parsedDate.getMonth() + 1
-    ).padStart(2, "0");
-
-    const day = String(
-      parsedDate.getDate()
-    ).padStart(2, "0");
+    const month = String(parsedDate.getMonth() + 1).padStart(2, "0");
+    const day = String(parsedDate.getDate()).padStart(2, "0");
 
     return `${year}-${month}-${day}`;
   };
@@ -166,38 +196,25 @@ const SubscriptionEditPage = () => {
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      setError("");
 
-      const [
-        subscriptionResponse,
-        gradeResponse,
-      ] = await Promise.all([
-        getSubscription(id),
-        listGrades(),
-      ]);
-
-      // --------------------------------------------------------
-      // SUBSCRIPTION
-      // --------------------------------------------------------
+      const [subscriptionResponse, gradeResponse] =
+        await Promise.all([
+          getSubscription(id),
+          listGrades(),
+        ]);
 
       const subscriptionData =
-        subscriptionResponse?.data ??
-        subscriptionResponse;
+        subscriptionResponse?.data ?? subscriptionResponse;
 
       setSubscription(subscriptionData);
 
-      // --------------------------------------------------------
-      // GRADES
-      // --------------------------------------------------------
-
-      const gradeData =
-        gradeResponse?.data ??
-        gradeResponse;
+      const gradeData = gradeResponse?.data ?? gradeResponse;
 
       const gradeList = Array.isArray(gradeData)
         ? gradeData
@@ -205,74 +222,42 @@ const SubscriptionEditPage = () => {
 
       setGrades(gradeList);
 
-      // --------------------------------------------------------
-      // GRADE ID
-      // --------------------------------------------------------
-
       const gradeId =
         subscriptionData?.grade?.id ??
         subscriptionData?.grade ??
         "";
 
-      // --------------------------------------------------------
-      // ORIGINAL FORM DATA
-      // --------------------------------------------------------
-
       const loadedFormData = {
-        grade: gradeId
-          ? String(gradeId)
+        grade: gradeId ? String(gradeId) : "",
+        term: subscriptionData?.term ?? "",
+        start_date: subscriptionData?.start_date
+          ? formatInputDate(subscriptionData.start_date)
           : "",
-
-        term:
-          subscriptionData?.term ?? "",
-
-        start_date:
-          subscriptionData?.start_date
-            ? formatInputDate(
-                subscriptionData.start_date
-              )
-            : "",
-
-        end_date:
-          subscriptionData?.end_date
-            ? formatInputDate(
-                subscriptionData.end_date
-              )
-            : "",
-
+        end_date: subscriptionData?.end_date
+          ? formatInputDate(subscriptionData.end_date)
+          : "",
         amount:
           subscriptionData?.amount !== null &&
           subscriptionData?.amount !== undefined
             ? String(subscriptionData.amount)
             : "",
-
-        is_cancelled: Boolean(
-          subscriptionData?.is_cancelled
-        ),
-
-        cancel_reason:
-          subscriptionData?.cancel_reason ??
-          "",
+        is_cancelled: Boolean(subscriptionData?.is_cancelled),
+        cancel_reason: subscriptionData?.cancel_reason ?? "",
       };
 
       setFormData(loadedFormData);
-
-      // Important:
-      // Save a clean copy of the initial values.
-      // This is used to calculate unsaved changes.
-      setOriginalFormData({
-        ...loadedFormData,
-      });
+      setOriginalFormData({ ...loadedFormData });
     } catch (err) {
-      console.error(
-        "Error loading subscription:",
-        err
-      );
+      console.error("Error loading subscription:", err);
 
-      setError(
-        err?.response?.data?.detail ||
-          "Unable to load subscription."
-      );
+      showToast({
+        title: "Failed to load record",
+        description:
+          err?.response?.data?.detail ||
+          "Unable to load subscription. Please try again.",
+        type: "error",
+        duration: 6000,
+      });
     } finally {
       setLoading(false);
     }
@@ -283,23 +268,16 @@ const SubscriptionEditPage = () => {
   // ==========================================================
 
   const handleChange = (e) => {
-    const {
-      name,
-      value,
-      type,
-      checked,
-    } = e.target;
+    const { name, value, type, checked } = e.target;
 
     setFormData((prev) => ({
       ...prev,
-
-      [name]:
-        type === "checkbox"
-          ? checked
-          : value,
+      [name]: type === "checkbox" ? checked : value,
     }));
 
-    setError("");
+    setFieldErrors((prev) =>
+      prev[name] ? { ...prev, [name]: "" } : prev
+    );
   };
 
   // ==========================================================
@@ -309,12 +287,14 @@ const SubscriptionEditPage = () => {
   const handleCancelledToggle = () => {
     setFormData((prev) => ({
       ...prev,
-
-      is_cancelled:
-        !prev.is_cancelled,
+      is_cancelled: !prev.is_cancelled,
     }));
 
-    setError("");
+    setFieldErrors((prev) =>
+      prev.cancel_reason
+        ? { ...prev, cancel_reason: "" }
+        : prev
+    );
   };
 
   // ==========================================================
@@ -325,11 +305,8 @@ const SubscriptionEditPage = () => {
     const fields = [];
 
     const compare = (field, label) => {
-      const original =
-        originalFormData[field] ?? "";
-
-      const current =
-        formData[field] ?? "";
+      const original = originalFormData[field] ?? "";
+      const current = formData[field] ?? "";
 
       if (String(original) !== String(current)) {
         fields.push(label);
@@ -341,28 +318,14 @@ const SubscriptionEditPage = () => {
     compare("start_date", "Start Date");
     compare("end_date", "End Date");
     compare("amount", "Amount");
-    compare(
-      "is_cancelled",
-      "Status"
-    );
-
-    // Only count cancel reason when it is relevant.
-    compare(
-      "cancel_reason",
-      "Cancel Reason"
-    );
+    compare("is_cancelled", "Status");
+    compare("cancel_reason", "Cancel Reason");
 
     return fields;
-  }, [
-    formData,
-    originalFormData,
-  ]);
+  }, [formData, originalFormData]);
 
-  const unsavedChangesCount =
-    changedFields.length;
-
-  const hasUnsavedChanges =
-    unsavedChangesCount > 0;
+  const unsavedChangesCount = changedFields.length;
+  const hasUnsavedChanges = unsavedChangesCount > 0;
 
   // ==========================================================
   // GRADE NAME
@@ -371,8 +334,7 @@ const SubscriptionEditPage = () => {
   const getGradeName = () => {
     const selectedGrade = grades.find(
       (grade) =>
-        String(grade.id) ===
-        String(formData.grade)
+        String(grade.id) === String(formData.grade)
     );
 
     if (selectedGrade?.name) {
@@ -380,8 +342,7 @@ const SubscriptionEditPage = () => {
     }
 
     if (
-      typeof subscription?.grade ===
-        "object" &&
+      typeof subscription?.grade === "object" &&
       subscription?.grade?.name
     ) {
       return subscription.grade.name;
@@ -395,59 +356,63 @@ const SubscriptionEditPage = () => {
   // ==========================================================
 
   const validateForm = () => {
+    const errors = {};
+    const missing = [];
+
     if (!formData.grade) {
-      return "Please select a grade.";
+      errors.grade = "Please select a grade.";
+      missing.push(FIELD_LABELS.grade);
     }
 
     if (!formData.term.trim()) {
-      return "Term is required.";
+      errors.term = "Term is required.";
+      missing.push(FIELD_LABELS.term);
     }
 
     if (!formData.start_date) {
-      return "Start date is required.";
+      errors.start_date = "Start date is required.";
+      missing.push(FIELD_LABELS.start_date);
     }
 
     if (!formData.end_date) {
-      return "End date is required.";
+      errors.end_date = "End date is required.";
+      missing.push(FIELD_LABELS.end_date);
     }
 
     if (
+      formData.start_date &&
+      formData.end_date &&
       new Date(formData.end_date) <
-      new Date(formData.start_date)
+        new Date(formData.start_date)
     ) {
-      return "End date cannot be before start date.";
+      errors.end_date = "End date cannot be before start date.";
     }
 
     if (
       formData.amount === "" ||
       formData.amount === null
     ) {
-      return "Amount is required.";
+      errors.amount = "Amount is required.";
+      missing.push(FIELD_LABELS.amount);
+    } else {
+      const amount = Number(formData.amount);
+
+      if (Number.isNaN(amount) || amount < 0) {
+        errors.amount = "Amount must be zero or greater.";
+      }
     }
-
-    const amount = Number(
-      formData.amount
-    );
-
-    if (
-      Number.isNaN(amount) ||
-      amount < 0
-    ) {
-      return "Amount must be zero or greater.";
-    }
-
-    // --------------------------------------------------------
-    // CANCEL REASON
-    // --------------------------------------------------------
 
     if (
       formData.is_cancelled &&
       !formData.cancel_reason.trim()
     ) {
-      return "Cancel reason is required when marking as cancelled.";
+      errors.cancel_reason =
+        "Cancel reason is required when marking as cancelled.";
+      missing.push(FIELD_LABELS.cancel_reason);
     }
 
-    return "";
+    setFieldErrors(errors);
+    return { errors, missing };
   };
 
   // ==========================================================
@@ -455,152 +420,124 @@ const SubscriptionEditPage = () => {
   // ==========================================================
 
   const handleSubmit = async () => {
-    setError("");
+    const { errors, missing } = validateForm();
 
-    const validationError =
-      validateForm();
+    if (Object.keys(errors).length > 0) {
+      // Prefer explicit rule errors over missing-fields list
+      const explicitMessages = Object.entries(errors)
+        .filter(([key]) => !missing.includes(FIELD_LABELS[key]))
+        .map(([, msg]) => msg);
 
-    if (validationError) {
-      setError(validationError);
+      let description;
+
+      if (explicitMessages.length > 0) {
+        description = explicitMessages.join("\n");
+      } else if (missing.length === 1) {
+        description = `${missing[0]} is required.`;
+      } else {
+        description = `Please fill: ${missing.join(", ")}.`;
+      }
+
+      showToast({
+        title: "Please fix the form",
+        description,
+        type: "warning",
+        duration: 5000,
+      });
+      return;
+    }
+
+    if (!hasUnsavedChanges) {
+      showToast({
+        title: "No changes to save",
+        description:
+          "Please modify at least one field before updating.",
+        type: "info",
+        duration: 4000,
+      });
       return;
     }
 
     try {
       setSaving(true);
+      setFieldErrors({});
 
       const payload = {
-        grade: Number(
-          formData.grade
-        ),
-
-        term:
-          formData.term.trim(),
-
-        start_date:
-          formData.start_date,
-
-        end_date:
-          formData.end_date,
-
-        amount:
-          Number(formData.amount),
-
-        is_cancelled:
-          Boolean(
-            formData.is_cancelled
-          ),
+        grade: Number(formData.grade),
+        term: formData.term.trim(),
+        start_date: formData.start_date,
+        end_date: formData.end_date,
+        amount: Number(formData.amount),
+        is_cancelled: Boolean(formData.is_cancelled),
       };
 
-      // Send cancel_reason when cancelled.
-      // Sending it only when cancelled avoids unnecessary
-      // validation problems on active subscriptions.
       if (formData.is_cancelled) {
-        payload.cancel_reason =
-          formData.cancel_reason.trim();
+        payload.cancel_reason = formData.cancel_reason.trim();
       } else {
         payload.cancel_reason = "";
       }
 
-      console.log(
-        "Updating subscription:",
-        id
-      );
+      await updateSubscription(id, payload);
 
-      console.log(
-        "Update payload:",
-        payload
-      );
+      setOriginalFormData({ ...formData });
 
-      await updateSubscription(
-        id,
-        payload
-      );
-
-      // After successful save there are no unsaved changes.
-      setOriginalFormData({
-        ...formData,
+      showToast({
+        title: "Changes saved",
+        description:
+          "The subscription record was updated successfully.",
+        type: "success",
+        duration: 4000,
       });
 
       navigate("/subscriptions");
     } catch (err) {
-      console.error(
-        "Error updating subscription:",
-        err
-      );
+      console.error("Error updating subscription:", err);
 
-      const responseData =
-        err?.response?.data;
-
-      console.error(
-        "API error response:",
-        responseData
-      );
-
-      let apiError =
-        "Unable to update subscription.";
+      const responseData = err?.response?.data;
 
       if (
-        responseData?.cancel_reason
+        responseData &&
+        typeof responseData === "object" &&
+        !Array.isArray(responseData)
       ) {
-        apiError =
-          Array.isArray(
-            responseData.cancel_reason
-          )
-            ? responseData.cancel_reason[0]
-            : responseData.cancel_reason;
-      } else if (
-        responseData?.grade
-      ) {
-        apiError =
-          Array.isArray(
-            responseData.grade
-          )
-            ? responseData.grade[0]
-            : responseData.grade;
-      } else if (
-        responseData?.term
-      ) {
-        apiError =
-          Array.isArray(
-            responseData.term
-          )
-            ? responseData.term[0]
-            : responseData.term;
-      } else if (
-        responseData?.start_date
-      ) {
-        apiError =
-          Array.isArray(
-            responseData.start_date
-          )
-            ? responseData.start_date[0]
-            : responseData.start_date;
-      } else if (
-        responseData?.end_date
-      ) {
-        apiError =
-          Array.isArray(
-            responseData.end_date
-          )
-            ? responseData.end_date[0]
-            : responseData.end_date;
-      } else if (
-        responseData?.amount
-      ) {
-        apiError =
-          Array.isArray(
-            responseData.amount
-          )
-            ? responseData.amount[0]
-            : responseData.amount;
-      } else if (
-        responseData?.detail
-      ) {
-        apiError =
-          responseData.detail;
-      }
+        const errors = {};
 
-      setError(apiError);
+        Object.entries(responseData).forEach(([key, value]) => {
+          if (Array.isArray(value)) errors[key] = value.join(", ");
+          else if (typeof value === "string") errors[key] = value;
+          else errors[key] = JSON.stringify(value);
+        });
+
+        setFieldErrors(errors);
+
+        const generalError =
+          responseData.detail || responseData.non_field_errors?.[0];
+
+        const fieldMessages = Object.values(errors).filter(Boolean);
+        const onlyOneFieldError =
+          fieldMessages.length === 1 && !generalError;
+
+        showToast({
+          title: "Could not save changes",
+          description:
+            generalError ||
+            (onlyOneFieldError
+              ? fieldMessages[0]
+              : `Please check: ${Object.keys(errors)
+                  .map((k) => FIELD_LABELS[k] || k)
+                  .join(", ")}`),
+          type: "error",
+          duration: 7000,
+        });
+      } else {
+        showToast({
+          title: "Could not save changes",
+          description:
+            "Unable to update subscription. Please try again.",
+          type: "error",
+          duration: 7000,
+        });
+      }
     } finally {
       setSaving(false);
     }
@@ -634,20 +571,10 @@ const SubscriptionEditPage = () => {
           alignItems="center"
           justifyContent="center"
         >
-          <Flex
-            direction="column"
-            align="center"
-            gap={3}
-          >
-            <Spinner
-              size="md"
-              color={PRIMARY_MAROON}
-            />
+          <Flex direction="column" align="center" gap={3}>
+            <Spinner size="md" color={PRIMARY_MAROON} />
 
-            <Text
-              fontSize="12px"
-              color={MUTED}
-            >
+            <Text fontSize="12px" color={MUTED}>
               Loading subscription...
             </Text>
           </Flex>
@@ -662,10 +589,9 @@ const SubscriptionEditPage = () => {
   // CURRENT STATUS
   // ==========================================================
 
-  const currentStatus =
-    formData.is_cancelled
-      ? "Cancelled"
-      : "Active";
+  const currentStatus = formData.is_cancelled
+    ? "Cancelled"
+    : "Active";
 
   // ==========================================================
   // RENDER
@@ -683,20 +609,10 @@ const SubscriptionEditPage = () => {
       <Box flex="1">
         <Container
           maxW="1600px"
-          px={{
-            base: 4,
-            md: 5,
-            lg: 6,
-          }}
-          py={{
-            base: 3,
-            md: 4,
-          }}
+          px={{ base: 4, md: 5, lg: 6 }}
+          py={{ base: 3, md: 4 }}
         >
-          {/* ==================================================
-              BREADCRUMB
-          ================================================== */}
-
+          {/* BREADCRUMB */}
           <HStack
             gap={2}
             mb={2}
@@ -704,43 +620,23 @@ const SubscriptionEditPage = () => {
             fontSize="11px"
             flexWrap="wrap"
           >
-            <Text>
-              Activities
-            </Text>
-
+            <Text>Activities</Text>
             <Text>/</Text>
-
-            <Text>
-              Subscriptions
-            </Text>
-
+            <Text>Subscriptions</Text>
             <Text>/</Text>
-
             <Text>
               {subscription?.subscription_number ||
                 subscription?.code ||
-                `SUB-${String(id).padStart(
-                  6,
-                  "0"
-                )}`}{" "}
+                `SUB-${String(id).padStart(6, "0")}`}{" "}
               / Edit
             </Text>
           </HStack>
 
-          {/* ==================================================
-              HEADER
-          ================================================== */}
-
+          {/* HEADER */}
           <Flex
             justify="space-between"
-            align={{
-              base: "flex-start",
-              lg: "flex-end",
-            }}
-            direction={{
-              base: "column",
-              lg: "row",
-            }}
+            align={{ base: "flex-start", lg: "flex-end" }}
+            direction={{ base: "column", lg: "row" }}
             gap={3}
             mb={3}
           >
@@ -757,37 +653,24 @@ const SubscriptionEditPage = () => {
 
               <Heading
                 color={DARK}
-                fontSize={{
-                  base: "22px",
-                  md: "27px",
-                }}
+                fontSize={{ base: "22px", md: "27px" }}
                 lineHeight="1.1"
                 mb={1}
               >
                 Edit Subscription
               </Heading>
 
-              <Text
-                color={MUTED}
-                fontSize="11px"
-              >
-                Update grade, term, dates,
-                amount and status.
+              <Text color={MUTED} fontSize="11px">
+                Update grade, term, dates, amount and status.
               </Text>
             </Box>
 
             <HStack
               gap={2}
-              width={{
-                base: "100%",
-                lg: "auto",
-              }}
+              width={{ base: "100%", lg: "auto" }}
             >
               <Button
-                flex={{
-                  base: 1,
-                  lg: "none",
-                }}
+                flex={{ base: 1, lg: "none" }}
                 variant="outline"
                 borderColor={RED}
                 color={RED}
@@ -797,18 +680,13 @@ const SubscriptionEditPage = () => {
                 fontSize="12px"
                 fontWeight="700"
                 onClick={handleCancel}
-                _hover={{
-                  bg: "#FFF5F7",
-                }}
+                _hover={{ bg: "#FFF5F7" }}
               >
                 Cancel
               </Button>
 
               <Button
-                flex={{
-                  base: 1,
-                  lg: "none",
-                }}
+                flex={{ base: 1, lg: "none" }}
                 bg={RED}
                 color="white"
                 h="38px"
@@ -819,59 +697,19 @@ const SubscriptionEditPage = () => {
                 loading={saving}
                 disabled={saving}
                 onClick={handleSubmit}
-                _hover={{
-                  bg: "#B80035",
-                }}
+                _hover={{ bg: "#B80035" }}
               >
                 Update
               </Button>
             </HStack>
           </Flex>
 
-          {/* ==================================================
-              ERROR
-          ================================================== */}
-
-          {error && (
-            <Box
-              mb={3}
-              px={3}
-              py={2.5}
-              border="1px solid #FED7D7"
-              bg="#FFF5F5"
-              borderRadius="7px"
-            >
-              <HStack gap={2}>
-                <Icon
-                  as={LuCircleAlert}
-                  boxSize={4}
-                  color="#C53030"
-                />
-
-                <Text
-                  color="#C53030"
-                  fontSize="12px"
-                  fontWeight="600"
-                >
-                  {error}
-                </Text>
-              </HStack>
-            </Box>
-          )}
-
-          {/* ==================================================
-              COMPACT SUBSCRIPTION SUMMARY
-          ================================================== */}
-
+          {/* COMPACT SUBSCRIPTION SUMMARY */}
           <Box
             border="1px solid #F2CBD6"
             borderRadius="8px"
             bg="#FFF9FB"
-            px={{
-              base: 3,
-              md: 4,
-              lg: 5,
-            }}
+            px={{ base: 3, md: 4, lg: 5 }}
             py={3}
             mb={3}
           >
@@ -881,17 +719,10 @@ const SubscriptionEditPage = () => {
                 lg: "1fr 1px 1fr",
               }}
               alignItems="center"
-              gap={{
-                base: 3,
-                lg: 4,
-              }}
+              gap={{ base: 3, lg: 4 }}
             >
               {/* LEFT */}
-
-              <Flex
-                align="center"
-                gap={3}
-              >
+              <Flex align="center" gap={3}>
                 <Box
                   width="50px"
                   height="50px"
@@ -912,47 +743,24 @@ const SubscriptionEditPage = () => {
 
                 <Box>
                   <Text
-                    fontSize={{
-                      base: "17px",
-                      md: "20px",
-                    }}
+                    fontSize={{ base: "17px", md: "20px" }}
                     fontWeight="700"
                     color={DARK}
                     mb="2px"
                   >
-                    {getGradeName()}{" "}
-                    Subscription
+                    {getGradeName()} Subscription
                   </Text>
 
-                  <HStack
-                    gap={2}
-                    flexWrap="wrap"
-                  >
-                    <Text
-                      fontSize="11px"
-                      color={MUTED}
-                    >
+                  <HStack gap={2} flexWrap="wrap">
+                    <Text fontSize="11px" color={MUTED}>
                       {subscription?.subscription_number ||
                         subscription?.code ||
-                        `SUB-${String(
-                          id
-                        ).padStart(
-                          6,
-                          "0"
-                        )}`}
+                        `SUB-${String(id).padStart(6, "0")}`}
                     </Text>
 
-                    <Text
-                      fontSize="11px"
-                      color={MUTED}
-                    >
-                      {formatDisplayDate(
-                        formData.start_date
-                      )}{" "}
-                      –{" "}
-                      {formatDisplayDate(
-                        formData.end_date
-                      )}
+                    <Text fontSize="11px" color={MUTED}>
+                      {formatDisplayDate(formData.start_date)}{" "}
+                      – {formatDisplayDate(formData.end_date)}
                     </Text>
 
                     <Box
@@ -979,22 +787,14 @@ const SubscriptionEditPage = () => {
               </Flex>
 
               {/* DIVIDER */}
-
               <Box
-                display={{
-                  base: "none",
-                  lg: "block",
-                }}
+                display={{ base: "none", lg: "block" }}
                 height="52px"
                 borderLeft="1px solid #E2D5DA"
               />
 
               {/* RIGHT */}
-
-              <Flex
-                align="center"
-                gap={3}
-              >
+              <Flex align="center" gap={3}>
                 <Box
                   width="50px"
                   height="50px"
@@ -1016,22 +816,15 @@ const SubscriptionEditPage = () => {
 
                 <Box>
                   <Text
-                    fontSize={{
-                      base: "17px",
-                      md: "20px",
-                    }}
+                    fontSize={{ base: "17px", md: "20px" }}
                     fontWeight="700"
                     color={DARK}
                     mb="1px"
                   >
-                    {formData.term ||
-                      "Term"}
+                    {formData.term || "Term"}
                   </Text>
 
-                  <Text
-                    fontSize="11px"
-                    color={MUTED}
-                  >
+                  <Text fontSize="11px" color={MUTED}>
                     Current Term
                   </Text>
                 </Box>
@@ -1039,10 +832,7 @@ const SubscriptionEditPage = () => {
             </Grid>
           </Box>
 
-          {/* ==================================================
-              MAIN GRID
-          ================================================== */}
-
+          {/* MAIN GRID */}
           <Grid
             templateColumns={{
               base: "1fr",
@@ -1051,26 +841,14 @@ const SubscriptionEditPage = () => {
             gap={3}
             alignItems="start"
           >
-            {/* =================================================
-                LEFT FORM
-            ================================================= */}
-
+            {/* LEFT FORM */}
             <Box
               border="1px solid #DCE2EA"
               borderRadius="8px"
-              p={{
-                base: 4,
-                md: 4,
-                lg: 5,
-              }}
+              p={{ base: 4, md: 4, lg: 5 }}
               bg="white"
             >
-              {/* CARD HEADER */}
-
-              <HStack
-                gap={2}
-                mb={4}
-              >
+              <HStack gap={2} mb={4}>
                 <Box
                   width="30px"
                   height="30px"
@@ -1099,17 +877,12 @@ const SubscriptionEditPage = () => {
               </HStack>
 
               {/* GRADE + TERM */}
-
               <Grid
-                templateColumns={{
-                  base: "1fr",
-                  md: "1fr 1fr",
-                }}
+                templateColumns={{ base: "1fr", md: "1fr 1fr" }}
                 gap={3}
                 mb={3}
               >
                 {/* GRADE */}
-
                 <Box>
                   <Text
                     fontSize="11px"
@@ -1118,10 +891,7 @@ const SubscriptionEditPage = () => {
                     mb={1.5}
                   >
                     Grade{" "}
-                    <Text
-                      as="span"
-                      color={RED}
-                    >
+                    <Text as="span" color={RED}>
                       *
                     </Text>
                   </Text>
@@ -1133,7 +903,9 @@ const SubscriptionEditPage = () => {
                     style={{
                       width: "100%",
                       height: "38px",
-                      border: `1px solid ${BORDER}`,
+                      border: `1px solid ${
+                        fieldErrors.grade ? "#F3C4C4" : BORDER
+                      }`,
                       borderRadius: "6px",
                       padding: "0 10px",
                       fontSize: "12px",
@@ -1143,15 +915,10 @@ const SubscriptionEditPage = () => {
                       cursor: "pointer",
                     }}
                   >
-                    <option value="">
-                      Select grade
-                    </option>
+                    <option value="">Select grade</option>
 
                     {grades.map((grade) => (
-                      <option
-                        key={grade.id}
-                        value={grade.id}
-                      >
+                      <option key={grade.id} value={grade.id}>
                         {grade.name}
                       </option>
                     ))}
@@ -1159,7 +926,6 @@ const SubscriptionEditPage = () => {
                 </Box>
 
                 {/* TERM */}
-
                 <Box>
                   <Text
                     fontSize="11px"
@@ -1168,10 +934,7 @@ const SubscriptionEditPage = () => {
                     mb={1.5}
                   >
                     Term{" "}
-                    <Text
-                      as="span"
-                      color={RED}
-                    >
+                    <Text as="span" color={RED}>
                       *
                     </Text>
                   </Text>
@@ -1183,15 +946,14 @@ const SubscriptionEditPage = () => {
                     placeholder="Enter term"
                     h="38px"
                     fontSize="12px"
-                    borderColor={BORDER}
+                    borderColor={
+                      fieldErrors.term ? "#F3C4C4" : BORDER
+                    }
                     borderRadius="6px"
                     color={DARK}
-                    _placeholder={{
-                      color: "#98A2B3",
-                    }}
+                    _placeholder={{ color: "#98A2B3" }}
                     _focus={{
-                      borderColor:
-                        PRIMARY_MAROON,
+                      borderColor: PRIMARY_MAROON,
                       boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                     }}
                   />
@@ -1199,17 +961,12 @@ const SubscriptionEditPage = () => {
               </Grid>
 
               {/* START + END */}
-
               <Grid
-                templateColumns={{
-                  base: "1fr",
-                  md: "1fr 1fr",
-                }}
+                templateColumns={{ base: "1fr", md: "1fr 1fr" }}
                 gap={3}
                 mb={3}
               >
                 {/* START DATE */}
-
                 <Box>
                   <Text
                     fontSize="11px"
@@ -1218,10 +975,7 @@ const SubscriptionEditPage = () => {
                     mb={1.5}
                   >
                     Start Date{" "}
-                    <Text
-                      as="span"
-                      color={RED}
-                    >
+                    <Text as="span" color={RED}>
                       *
                     </Text>
                   </Text>
@@ -1230,19 +984,20 @@ const SubscriptionEditPage = () => {
                     <Input
                       name="start_date"
                       type="date"
-                      value={
-                        formData.start_date
-                      }
+                      value={formData.start_date}
                       onChange={handleChange}
                       h="38px"
                       fontSize="12px"
-                      borderColor={BORDER}
+                      borderColor={
+                        fieldErrors.start_date
+                          ? "#F3C4C4"
+                          : BORDER
+                      }
                       borderRadius="6px"
                       color={DARK}
                       pr="38px"
                       _focus={{
-                        borderColor:
-                          PRIMARY_MAROON,
+                        borderColor: PRIMARY_MAROON,
                         boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                       }}
                     />
@@ -1261,7 +1016,6 @@ const SubscriptionEditPage = () => {
                 </Box>
 
                 {/* END DATE */}
-
                 <Box>
                   <Text
                     fontSize="11px"
@@ -1270,10 +1024,7 @@ const SubscriptionEditPage = () => {
                     mb={1.5}
                   >
                     End Date{" "}
-                    <Text
-                      as="span"
-                      color={RED}
-                    >
+                    <Text as="span" color={RED}>
                       *
                     </Text>
                   </Text>
@@ -1282,19 +1033,20 @@ const SubscriptionEditPage = () => {
                     <Input
                       name="end_date"
                       type="date"
-                      value={
-                        formData.end_date
-                      }
+                      value={formData.end_date}
                       onChange={handleChange}
                       h="38px"
                       fontSize="12px"
-                      borderColor={BORDER}
+                      borderColor={
+                        fieldErrors.end_date
+                          ? "#F3C4C4"
+                          : BORDER
+                      }
                       borderRadius="6px"
                       color={DARK}
                       pr="38px"
                       _focus={{
-                        borderColor:
-                          PRIMARY_MAROON,
+                        borderColor: PRIMARY_MAROON,
                         boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                       }}
                     />
@@ -1314,7 +1066,6 @@ const SubscriptionEditPage = () => {
               </Grid>
 
               {/* AMOUNT */}
-
               <Box mb={3}>
                 <Text
                   fontSize="11px"
@@ -1323,10 +1074,7 @@ const SubscriptionEditPage = () => {
                   mb={1.5}
                 >
                   Amount{" "}
-                  <Text
-                    as="span"
-                    color={RED}
-                  >
+                  <Text as="span" color={RED}>
                     *
                   </Text>
                 </Text>
@@ -1353,23 +1101,20 @@ const SubscriptionEditPage = () => {
                     type="number"
                     min="0"
                     step="0.01"
-                    value={
-                      formData.amount
-                    }
+                    value={formData.amount}
                     onChange={handleChange}
                     placeholder="Enter amount"
                     h="38px"
                     fontSize="12px"
-                    borderColor={BORDER}
+                    borderColor={
+                      fieldErrors.amount ? "#F3C4C4" : BORDER
+                    }
                     borderRadius="0 6px 6px 0"
                     borderLeft="none"
                     color={DARK}
-                    _placeholder={{
-                      color: "#98A2B3",
-                    }}
+                    _placeholder={{ color: "#98A2B3" }}
                     _focus={{
-                      borderColor:
-                        PRIMARY_MAROON,
+                      borderColor: PRIMARY_MAROON,
                       boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                     }}
                   />
@@ -1377,7 +1122,6 @@ const SubscriptionEditPage = () => {
               </Box>
 
               {/* CANCELLED */}
-
               <Box>
                 <Text
                   fontSize="11px"
@@ -1391,19 +1135,13 @@ const SubscriptionEditPage = () => {
                 <HStack
                   gap={3}
                   cursor="pointer"
-                  onClick={
-                    handleCancelledToggle
-                  }
+                  onClick={handleCancelledToggle}
                 >
                   <Box
                     width="42px"
                     height="22px"
                     borderRadius="20px"
-                    bg={
-                      formData.is_cancelled
-                        ? RED
-                        : "#B8C3D1"
-                    }
+                    bg={formData.is_cancelled ? RED : "#B8C3D1"}
                     position="relative"
                     transition="all 0.2s"
                     flexShrink={0}
@@ -1411,11 +1149,7 @@ const SubscriptionEditPage = () => {
                     <Box
                       position="absolute"
                       top="2px"
-                      left={
-                        formData.is_cancelled
-                          ? "22px"
-                          : "2px"
-                      }
+                      left={formData.is_cancelled ? "22px" : "2px"}
                       width="18px"
                       height="18px"
                       borderRadius="50%"
@@ -1425,20 +1159,13 @@ const SubscriptionEditPage = () => {
                     />
                   </Box>
 
-                  <Text
-                    fontSize="12px"
-                    color="#344054"
-                  >
-                    Mark this subscription
-                    as canceled
+                  <Text fontSize="12px" color="#344054">
+                    Mark this subscription as canceled
                   </Text>
                 </HStack>
               </Box>
 
-              {/* =================================================
-                  CANCEL REASON
-              ================================================= */}
-
+              {/* CANCEL REASON */}
               {formData.is_cancelled && (
                 <Box
                   mt={3}
@@ -1454,76 +1181,53 @@ const SubscriptionEditPage = () => {
                     mb={1.5}
                   >
                     Cancel Reason{" "}
-                    <Text
-                      as="span"
-                      color={RED}
-                    >
+                    <Text as="span" color={RED}>
                       *
                     </Text>
                   </Text>
 
                   <Textarea
                     name="cancel_reason"
-                    value={
-                      formData.cancel_reason
-                    }
+                    value={formData.cancel_reason}
                     onChange={handleChange}
                     placeholder="Enter reason for cancelling this subscription"
                     minH="70px"
                     resize="vertical"
                     fontSize="12px"
                     borderColor={
-                      formData.cancel_reason.trim()
+                      fieldErrors.cancel_reason
+                        ? "#F3C4C4"
+                        : formData.cancel_reason.trim()
                         ? BORDER
                         : "#F2B8C3"
                     }
                     borderRadius="6px"
                     color={DARK}
                     bg="white"
-                    _placeholder={{
-                      color: "#98A2B3",
-                    }}
+                    _placeholder={{ color: "#98A2B3" }}
                     _focus={{
-                      borderColor:
-                        PRIMARY_MAROON,
+                      borderColor: PRIMARY_MAROON,
                       boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                     }}
                   />
 
-                  <Text
-                    mt={1}
-                    fontSize="10px"
-                    color={MUTED}
-                  >
-                    Please provide a reason
-                    before cancelling.
+                  <Text mt={1} fontSize="10px" color={MUTED}>
+                    Please provide a reason before cancelling.
                   </Text>
                 </Box>
               )}
             </Box>
 
-            {/* =================================================
-                RIGHT COLUMN
-            ================================================= */}
-
-            <Flex
-              direction="column"
-              gap={3}
-            >
-              {/* =================================================
-                  RECORD INFORMATION
-              ================================================= */}
-
+            {/* RIGHT COLUMN */}
+            <Flex direction="column" gap={3}>
+              {/* RECORD INFORMATION */}
               <Box
                 border="1px solid #DCE2EA"
                 borderRadius="8px"
                 p={3.5}
                 bg="white"
               >
-                <HStack
-                  gap={2}
-                  mb={3}
-                >
+                <HStack gap={2} mb={3}>
                   <Box
                     width="28px"
                     height="28px"
@@ -1549,13 +1253,7 @@ const SubscriptionEditPage = () => {
                   </Text>
                 </HStack>
 
-                {/* CREATED */}
-
-                <HStack
-                  align="flex-start"
-                  gap={2.5}
-                  mb={3}
-                >
+                <HStack align="flex-start" gap={2.5} mb={3}>
                   <Box
                     width="28px"
                     height="28px"
@@ -1574,11 +1272,7 @@ const SubscriptionEditPage = () => {
                   </Box>
 
                   <Box>
-                    <Text
-                      fontSize="10px"
-                      color={MUTED}
-                      mb="1px"
-                    >
+                    <Text fontSize="10px" color={MUTED} mb="1px">
                       Created On
                     </Text>
 
@@ -1595,12 +1289,7 @@ const SubscriptionEditPage = () => {
                   </Box>
                 </HStack>
 
-                {/* UPDATED */}
-
-                <HStack
-                  align="flex-start"
-                  gap={2.5}
-                >
+                <HStack align="flex-start" gap={2.5}>
                   <Box
                     width="28px"
                     height="28px"
@@ -1619,11 +1308,7 @@ const SubscriptionEditPage = () => {
                   </Box>
 
                   <Box>
-                    <Text
-                      fontSize="10px"
-                      color={MUTED}
-                      mb="1px"
-                    >
+                    <Text fontSize="10px" color={MUTED} mb="1px">
                       Last Updated
                     </Text>
 
@@ -1636,7 +1321,6 @@ const SubscriptionEditPage = () => {
                         subscription?.updated_at ||
                           subscription?.last_updated
                       )}
-
                       {subscription?.updated_by
                         ? ` by ${subscription.updated_by}`
                         : ""}
@@ -1645,20 +1329,14 @@ const SubscriptionEditPage = () => {
                 </HStack>
               </Box>
 
-              {/* =================================================
-                  UNSAVED CHANGES
-              ================================================= */}
-
+              {/* UNSAVED CHANGES */}
               <Box
                 border="1px solid #DCE2EA"
                 borderRadius="8px"
                 p={3.5}
                 bg="white"
               >
-                <HStack
-                  gap={2}
-                  mb={3}
-                >
+                <HStack gap={2} mb={3}>
                   <Box
                     width="28px"
                     height="28px"
@@ -1702,10 +1380,7 @@ const SubscriptionEditPage = () => {
                         : "No Unsaved Changes"}
                     </Text>
 
-                    <Text
-                      fontSize="10px"
-                      color={MUTED}
-                    >
+                    <Text fontSize="10px" color={MUTED}>
                       {unsavedChangesCount}{" "}
                       {unsavedChangesCount === 1
                         ? "field"
@@ -1716,75 +1391,57 @@ const SubscriptionEditPage = () => {
                 </HStack>
 
                 {hasUnsavedChanges ? (
-                  <>
-                    <HStack
-                      gap={2}
-                      align="flex-start"
-                      mb={2}
+                  <HStack gap={2} align="flex-start" mb={2}>
+                    <Box
+                      width="28px"
+                      height="28px"
+                      borderRadius="7px"
+                      bg="#FFF7ED"
+                      display="flex"
+                      alignItems="center"
+                      justifyContent="center"
+                      flexShrink={0}
                     >
-                      <Box
-                        width="28px"
-                        height="28px"
-                        borderRadius="7px"
-                        bg="#FFF7ED"
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                        flexShrink={0}
+                      <Icon
+                        as={LuRefreshCw}
+                        boxSize={3.5}
+                        color="#F97316"
+                      />
+                    </Box>
+
+                    <Box>
+                      <Text
+                        fontSize="12px"
+                        fontWeight="700"
+                        color="#EA580C"
                       >
-                        <Icon
-                          as={LuRefreshCw}
-                          boxSize={3.5}
-                          color="#F97316"
-                        />
-                      </Box>
+                        Review changes before updating
+                      </Text>
 
-                      <Box>
-                        <Text
-                          fontSize="12px"
-                          fontWeight="700"
-                          color="#EA580C"
-                        >
-                          Review changes before
-                          updating
-                        </Text>
-
-                        <Text
-                          fontSize="10px"
-                          color={MUTED}
-                          mt="2px"
-                        >
-                          {changedFields.join(
-                            ", "
-                          )}
-                        </Text>
-                      </Box>
-                    </HStack>
-                  </>
+                      <Text
+                        fontSize="10px"
+                        color={MUTED}
+                        mt="2px"
+                      >
+                        {changedFields.join(", ")}
+                      </Text>
+                    </Box>
+                  </HStack>
                 ) : (
-                  <Text
-                    fontSize="11px"
-                    color="#15803D"
-                  >
+                  <Text fontSize="11px" color="#15803D">
                     Everything is saved.
                   </Text>
                 )}
               </Box>
 
-              {/* =================================================
-                  DANGER ZONE
-              ================================================= */}
-
+              {/* DANGER ZONE */}
               <Box
                 border="1px solid #DCE2EA"
                 borderRadius="8px"
                 p={3.5}
                 bg="white"
               >
-                <HStack
-                  gap={2}
-                  mb={3}
-                >
+                <HStack gap={2} mb={3}>
                   <Box
                     width="28px"
                     height="28px"
@@ -1810,10 +1467,7 @@ const SubscriptionEditPage = () => {
                   </Text>
                 </HStack>
 
-                <HStack
-                  gap={2}
-                  mb={1.5}
-                >
+                <HStack gap={2} mb={1.5}>
                   <Box
                     width="28px"
                     height="28px"
@@ -1835,18 +1489,12 @@ const SubscriptionEditPage = () => {
                     fontWeight="700"
                     color={RED}
                   >
-                    Archive Subscription
-                    Record
+                    Archive Subscription Record
                   </Text>
                 </HStack>
 
-                <Text
-                  fontSize="10px"
-                  color={MUTED}
-                  ml="40px"
-                >
-                  The record will remain in
-                  history.
+                <Text fontSize="10px" color={MUTED} ml="40px">
+                  The record will remain in history.
                 </Text>
               </Box>
             </Flex>

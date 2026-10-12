@@ -36,12 +36,46 @@ import {
   deleteWard,
 } from "../api/registryServices";
 
+import { toaster } from "../components/ui/toaster";
+
 const PRIMARY_MAROON = "var(--primary-maroon)";
 
 const RED = "#D7193F";
 const DARK = "#182338";
 const MUTED = "#60708C";
 const BORDER = "#DCE2EA";
+
+
+// ============================================================
+// TOAST HELPER
+// ============================================================
+
+const showToast = ({
+  title,
+  description,
+  type = "info",
+  duration = 4000,
+}) => {
+  toaster.create({
+    title,
+    description,
+    type,
+    duration,
+    closable: true,
+  });
+};
+
+
+// ============================================================
+// FIELD LABELS
+// ============================================================
+
+const FIELD_LABELS = {
+  ward_name: "Ward Name",
+  ward_number: "Ward Number",
+  place: "Place",
+};
+
 
 const WardEditPage = () => {
   const navigate = useNavigate();
@@ -55,8 +89,7 @@ const WardEditPage = () => {
   const [originalWardName, setOriginalWardName] = useState("");
 
   const [wardNumber, setWardNumber] = useState("");
-  const [originalWardNumber, setOriginalWardNumber] =
-    useState("");
+  const [originalWardNumber, setOriginalWardNumber] = useState("");
 
   const [place, setPlace] = useState("");
   const [originalPlace, setOriginalPlace] = useState("");
@@ -67,7 +100,7 @@ const WardEditPage = () => {
   const [updating, setUpdating] = useState(false);
   const [archiving, setArchiving] = useState(false);
 
-  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // ==========================================================
   // LOAD WARD
@@ -75,35 +108,36 @@ const WardEditPage = () => {
 
   useEffect(() => {
     fetchWard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchWard = async () => {
     try {
       setLoading(true);
-      setError("");
 
       const response = await getWard(id);
 
       const data = response?.data ?? response;
 
       if (!data) {
-        setError("Ward not found.");
+        showToast({
+          title: "Ward not found",
+          description:
+            "The requested ward record could not be found.",
+          type: "error",
+          duration: 6000,
+        });
         return;
       }
 
       setWard(data);
 
-      const loadedWardName =
-        data?.ward_name || "";
-
+      const loadedWardName = data?.ward_name || "";
       const loadedWardNumber =
-        data?.ward_number !== null &&
-        data?.ward_number !== undefined
+        data?.ward_number !== null && data?.ward_number !== undefined
           ? String(data.ward_number)
           : "";
-
-      const loadedPlace =
-        data?.place || "";
+      const loadedPlace = data?.place || "";
 
       setWardName(loadedWardName);
       setOriginalWardName(loadedWardName);
@@ -114,16 +148,16 @@ const WardEditPage = () => {
       setPlace(loadedPlace);
       setOriginalPlace(loadedPlace);
     } catch (err) {
-      console.error(
-        "Error fetching ward:",
-        err
-      );
+      console.error("Error fetching ward:", err);
 
-      const apiError =
-        err?.response?.data?.detail ||
-        "Unable to load ward.";
-
-      setError(apiError);
+      showToast({
+        title: "Failed to load record",
+        description:
+          err?.response?.data?.detail ||
+          "Unable to load ward. Please try again.",
+        type: "error",
+        duration: 6000,
+      });
     } finally {
       setLoading(false);
     }
@@ -134,21 +168,15 @@ const WardEditPage = () => {
   // ==========================================================
 
   const hasWardNameChanges =
-    wardName.trim() !==
-    originalWardName.trim();
+    wardName.trim() !== originalWardName.trim();
 
   const hasWardNumberChanges =
-    String(wardNumber).trim() !==
-    String(originalWardNumber).trim();
+    String(wardNumber).trim() !== String(originalWardNumber).trim();
 
-  const hasPlaceChanges =
-    place.trim() !==
-    originalPlace.trim();
+  const hasPlaceChanges = place.trim() !== originalPlace.trim();
 
   const hasChanges =
-    hasWardNameChanges ||
-    hasWardNumberChanges ||
-    hasPlaceChanges;
+    hasWardNameChanges || hasWardNumberChanges || hasPlaceChanges;
 
   const modifiedFields = [
     hasWardNameChanges,
@@ -157,64 +185,92 @@ const WardEditPage = () => {
   ].filter(Boolean).length;
 
   // ==========================================================
+  // VALIDATE
+  // ==========================================================
+
+  const validate = () => {
+    const errors = {};
+    const missing = [];
+
+    const trimmedWardName = wardName.trim();
+    const trimmedWardNumber = String(wardNumber).trim();
+    const trimmedPlace = place.trim();
+
+    if (!trimmedWardName) {
+      errors.ward_name = "Ward name is required.";
+      missing.push(FIELD_LABELS.ward_name);
+    }
+
+    if (!trimmedWardNumber) {
+      errors.ward_number = "Ward number is required.";
+      missing.push(FIELD_LABELS.ward_number);
+    } else {
+      const number = Number(trimmedWardNumber);
+
+      if (!Number.isInteger(number) || number <= 0) {
+        errors.ward_number =
+          "Ward number must be a positive whole number.";
+      }
+    }
+
+    if (!trimmedPlace) {
+      errors.place = "Place is required.";
+      missing.push(FIELD_LABELS.place);
+    }
+
+    setFieldErrors(errors);
+    return { errors, missing };
+  };
+
+  // ==========================================================
   // UPDATE
   // ==========================================================
 
   const handleUpdate = async () => {
-    const trimmedWardName =
-      wardName.trim();
+    const { errors, missing } = validate();
 
-    const trimmedWardNumber =
-      String(wardNumber).trim();
+    if (Object.keys(errors).length > 0) {
+      const explicitMessages = Object.entries(errors)
+        .filter(([key]) => !missing.includes(FIELD_LABELS[key]))
+        .map(([, msg]) => msg);
 
-    const trimmedPlace =
-      place.trim();
+      let description;
 
-    // --------------------------------------------------------
-    // VALIDATION
-    // --------------------------------------------------------
+      if (explicitMessages.length > 0) {
+        description = explicitMessages.join("\n");
+      } else if (missing.length === 1) {
+        description = `${missing[0]} is required.`;
+      } else {
+        description = `Please fill: ${missing.join(", ")}.`;
+      }
 
-    if (!trimmedWardName) {
-      setError(
-        "Ward name is required."
-      );
-      return;
-    }
-
-    if (!trimmedWardNumber) {
-      setError(
-        "Ward number is required."
-      );
-      return;
-    }
-
-    const number =
-      Number(trimmedWardNumber);
-
-    if (
-      !Number.isInteger(number) ||
-      number <= 0
-    ) {
-      setError(
-        "Ward number must be a positive whole number."
-      );
-      return;
-    }
-
-    if (!trimmedPlace) {
-      setError(
-        "Place is required."
-      );
+      showToast({
+        title: "Please fix the form",
+        description,
+        type: "warning",
+        duration: 5000,
+      });
       return;
     }
 
     if (!hasChanges) {
+      showToast({
+        title: "No changes to save",
+        description:
+          "Please modify at least one field before updating.",
+        type: "info",
+        duration: 4000,
+      });
       return;
     }
 
+    const trimmedWardName = wardName.trim();
+    const number = Number(String(wardNumber).trim());
+    const trimmedPlace = place.trim();
+
     try {
       setUpdating(true);
-      setError("");
+      setFieldErrors({});
 
       await updateWard(id, {
         ward_name: trimmedWardName,
@@ -222,24 +278,61 @@ const WardEditPage = () => {
         place: trimmedPlace,
       });
 
+      showToast({
+        title: "Changes saved",
+        description: "The ward record was updated successfully.",
+        type: "success",
+        duration: 4000,
+      });
+
       navigate(`/ward/${id}`);
     } catch (err) {
-      console.error(
-        "Error updating ward:",
-        err
-      );
+      console.error("Error updating ward:", err);
 
-      const data =
-        err?.response?.data;
+      const responseData = err?.response?.data;
 
-      const apiError =
-        data?.ward_name?.[0] ||
-        data?.ward_number?.[0] ||
-        data?.place?.[0] ||
-        data?.detail ||
-        "Unable to update ward.";
+      if (
+        responseData &&
+        typeof responseData === "object" &&
+        !Array.isArray(responseData)
+      ) {
+        const errors = {};
 
-      setError(apiError);
+        Object.entries(responseData).forEach(([key, value]) => {
+          if (Array.isArray(value)) errors[key] = value.join(", ");
+          else if (typeof value === "string") errors[key] = value;
+          else errors[key] = JSON.stringify(value);
+        });
+
+        setFieldErrors(errors);
+
+        const generalError =
+          responseData.detail || responseData.non_field_errors?.[0];
+
+        const fieldMessages = Object.values(errors).filter(Boolean);
+        const onlyOneFieldError =
+          fieldMessages.length === 1 && !generalError;
+
+        showToast({
+          title: "Could not save changes",
+          description:
+            generalError ||
+            (onlyOneFieldError
+              ? fieldMessages[0]
+              : `Please check: ${Object.keys(errors)
+                  .map((k) => FIELD_LABELS[k] || k)
+                  .join(", ")}`),
+          type: "error",
+          duration: 7000,
+        });
+      } else {
+        showToast({
+          title: "Could not save changes",
+          description: "Unable to update ward. Please try again.",
+          type: "error",
+          duration: 7000,
+        });
+      }
     } finally {
       setUpdating(false);
     }
@@ -250,10 +343,9 @@ const WardEditPage = () => {
   // ==========================================================
 
   const handleArchive = async () => {
-    const confirmed =
-      window.confirm(
-        "Are you sure you want to archive this ward?"
-      );
+    const confirmed = window.confirm(
+      "Are you sure you want to archive this ward?"
+    );
 
     if (!confirmed) {
       return;
@@ -261,22 +353,28 @@ const WardEditPage = () => {
 
     try {
       setArchiving(true);
-      setError("");
 
       await deleteWard(id);
 
+      showToast({
+        title: "Record archived",
+        description: "The ward record was archived successfully.",
+        type: "success",
+        duration: 4000,
+      });
+
       navigate("/ward");
     } catch (err) {
-      console.error(
-        "Error archiving ward:",
-        err
-      );
+      console.error("Error archiving ward:", err);
 
-      const apiError =
-        err?.response?.data?.detail ||
-        "Unable to archive ward.";
-
-      setError(apiError);
+      showToast({
+        title: "Could not archive record",
+        description:
+          err?.response?.data?.detail ||
+          "Unable to archive ward. Please try again.",
+        type: "error",
+        duration: 7000,
+      });
     } finally {
       setArchiving(false);
     }
@@ -299,25 +397,17 @@ const WardEditPage = () => {
       return "-";
     }
 
-    const date =
-      new Date(value);
+    const date = new Date(value);
 
-    if (
-      Number.isNaN(
-        date.getTime()
-      )
-    ) {
+    if (Number.isNaN(date.getTime())) {
       return "-";
     }
 
-    return date.toLocaleDateString(
-      "en-GB",
-      {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }
-    );
+    return date.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
   };
 
   // ==========================================================
@@ -325,19 +415,12 @@ const WardEditPage = () => {
   // ==========================================================
 
   const createdDate =
-    ward?.created_at ||
-    ward?.created ||
-    ward?.created_on;
+    ward?.created_at || ward?.created || ward?.created_on;
 
   const updatedDate =
-    ward?.updated_at ||
-    ward?.updated ||
-    ward?.updated_on;
+    ward?.updated_at || ward?.updated || ward?.updated_on;
 
-  const wardCode =
-    `WD-${String(
-      ward?.id || "0001"
-    ).padStart(4, "0")}`;
+  const wardCode = `WD-${String(ward?.id || "0001").padStart(4, "0")}`;
 
   // ==========================================================
   // LOADING
@@ -354,15 +437,8 @@ const WardEditPage = () => {
       >
         <Navbar />
 
-        <Box
-          flex="1"
-          px={6}
-          py={5}
-        >
-          <Text
-            color={MUTED}
-            fontSize="13px"
-          >
+        <Box flex="1" px={6} py={5}>
+          <Text color={MUTED} fontSize="13px">
             Loading ward...
           </Text>
         </Box>
@@ -385,145 +461,70 @@ const WardEditPage = () => {
       flexDirection="column"
       overflow="hidden"
     >
-
-      {/* ======================================================
-          NAVBAR
-      ====================================================== */}
-
       <Box flexShrink={0}>
         <Navbar />
       </Box>
 
-      {/* ======================================================
-          MAIN CONTENT
-      ====================================================== */}
-
-      <Box
-        flex="1"
-        minH="0"
-        overflow="hidden"
-      >
+      <Box flex="1" minH="0" overflow="hidden">
         <Container
           maxW="none"
           height="100%"
-          px={{
-            base: 4,
-            md: 6,
-          }}
-          py={{
-            base: 2,
-            md: 3,
-          }}
+          px={{ base: 4, md: 6 }}
+          py={{ base: 2, md: 3 }}
         >
-
-          {/* ==================================================
-              BREADCRUMB
-          ================================================== */}
-
+          {/* BREADCRUMB */}
           <HStack
             gap={2}
             mb={2}
             color={MUTED}
             fontSize="12px"
           >
-            <Text>
-              Masters
-            </Text>
-
-            <Text>
-              /
-            </Text>
-
-            <Text>
-              Ward Master
-            </Text>
-
-            <Text>
-              /
-            </Text>
-
-            <Text>
-              {ward?.ward_name || "Ward"}
-            </Text>
-
-            <Text>
-              /
-            </Text>
-
-            <Text>
-              Edit
-            </Text>
+            <Text>Masters</Text>
+            <Text>/</Text>
+            <Text>Ward Master</Text>
+            <Text>/</Text>
+            <Text>{ward?.ward_name || "Ward"}</Text>
+            <Text>/</Text>
+            <Text>Edit</Text>
           </HStack>
 
-          {/* ==================================================
-              PAGE HEADER
-          ================================================== */}
-
+          {/* PAGE HEADER */}
           <Box mb={3}>
             <Heading
               color={DARK}
-              fontSize={{
-                base: "22px",
-                md: "26px",
-              }}
+              fontSize={{ base: "22px", md: "26px" }}
               lineHeight="1.15"
               mb={1}
             >
               Edit Ward
             </Heading>
 
-            <Text
-              color={MUTED}
-              fontSize="12px"
-            >
+            <Text color={MUTED} fontSize="12px">
               Update ward information.
             </Text>
           </Box>
 
-          {/* ==================================================
-              TWO COLUMN LAYOUT
-          ================================================== */}
-
+          {/* TWO COLUMN LAYOUT */}
           <Grid
             templateColumns={{
               base: "1fr",
               lg: "minmax(0, 3fr) minmax(280px, 1fr)",
             }}
-            gap={{
-              base: 3,
-              lg: 4,
-            }}
+            gap={{ base: 3, lg: 4 }}
             alignItems="start"
           >
-
-            {/* =================================================
-                LEFT COLUMN
-            ================================================= */}
-
+            {/* LEFT COLUMN */}
             <Box>
-
-              {/* ===============================================
-                  WARD HEADER CARD
-              =============================================== */}
-
+              {/* WARD HEADER CARD */}
               <Box
                 border="1px solid"
                 borderColor={BORDER}
                 borderRadius="9px"
-                px={{
-                  base: 3,
-                  md: 4,
-                }}
+                px={{ base: 3, md: 4 }}
                 py={3}
                 mb={3}
               >
-                <Flex
-                  align="center"
-                  gap={4}
-                >
-
-                  {/* AVATAR */}
-
+                <Flex align="center" gap={4}>
                   <Flex
                     width="58px"
                     height="58px"
@@ -545,15 +546,10 @@ const WardEditPage = () => {
                     </Text>
                   </Flex>
 
-                  {/* WARD INFO */}
-
                   <Box>
                     <Heading
                       color={DARK}
-                      fontSize={{
-                        base: "20px",
-                        md: "22px",
-                      }}
+                      fontSize={{ base: "20px", md: "22px" }}
                       lineHeight="1.2"
                       mb={1}
                     >
@@ -566,25 +562,11 @@ const WardEditPage = () => {
                       fontSize="12px"
                       flexWrap="wrap"
                     >
-                      <Text>
-                        {wardCode}
-                      </Text>
-
-                      <Text>
-                        •
-                      </Text>
-
-                      <Text>
-                        Ward {ward?.ward_number || "-"}
-                      </Text>
-
-                      <Text>
-                        •
-                      </Text>
-
-                      <Text>
-                        {ward?.place || "-"}
-                      </Text>
+                      <Text>{wardCode}</Text>
+                      <Text>•</Text>
+                      <Text>Ward {ward?.ward_number || "-"}</Text>
+                      <Text>•</Text>
+                      <Text>{ward?.place || "-"}</Text>
 
                       <Box
                         px={2}
@@ -600,23 +582,17 @@ const WardEditPage = () => {
                       </Box>
                     </HStack>
                   </Box>
-
                 </Flex>
               </Box>
 
-              {/* ===============================================
-                  WARD DETAILS CARD
-              =============================================== */}
-
+              {/* WARD DETAILS CARD */}
               <Box
                 border="1px solid"
                 borderColor={BORDER}
                 borderRadius="9px"
                 overflow="hidden"
               >
-
                 {/* TAB HEADER */}
-
                 <Box
                   height="42px"
                   borderBottom="1px solid"
@@ -646,12 +622,8 @@ const WardEditPage = () => {
                 </Box>
 
                 {/* FORM */}
-
                 <Box
-                  px={{
-                    base: 3,
-                    md: 4,
-                  }}
+                  px={{ base: 3, md: 4 }}
                   py={3}
                   minH="300px"
                 >
@@ -664,10 +636,7 @@ const WardEditPage = () => {
                     Ward Information
                   </Text>
 
-                  {/* =========================================
-                      WARD NAME + WARD NUMBER SAME ROW
-                  ========================================= */}
-
+                  {/* WARD NAME + WARD NUMBER */}
                   <Grid
                     templateColumns={{
                       base: "1fr",
@@ -676,9 +645,7 @@ const WardEditPage = () => {
                     gap={4}
                     mb={4}
                   >
-
                     {/* WARD NAME */}
-
                     <Box>
                       <Text
                         fontSize="12px"
@@ -687,11 +654,7 @@ const WardEditPage = () => {
                         mb={2}
                       >
                         Ward Name{" "}
-
-                        <Text
-                          as="span"
-                          color={RED}
-                        >
+                        <Text as="span" color={RED}>
                           *
                         </Text>
                       </Text>
@@ -699,35 +662,34 @@ const WardEditPage = () => {
                       <Input
                         value={wardName}
                         onChange={(e) => {
-                          setWardName(
-                            e.target.value
+                          setWardName(e.target.value);
+                          setFieldErrors((prev) =>
+                            prev.ward_name
+                              ? { ...prev, ward_name: "" }
+                              : prev
                           );
-                          setError("");
                         }}
                         placeholder="Enter ward name"
                         height="38px"
                         fontSize="12px"
                         borderColor={
-                          hasWardNameChanges
+                          fieldErrors.ward_name
+                            ? "#F3C4C4"
+                            : hasWardNameChanges
                             ? RED
                             : BORDER
                         }
                         borderRadius="6px"
                         color={DARK}
-                        _placeholder={{
-                          color: "#8B98AB",
-                        }}
+                        _placeholder={{ color: "#8B98AB" }}
                         _focus={{
-                          borderColor:
-                            PRIMARY_MAROON,
-                          boxShadow:
-                            `0 0 0 1px ${PRIMARY_MAROON}`,
+                          borderColor: PRIMARY_MAROON,
+                          boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                         }}
                       />
                     </Box>
 
                     {/* WARD NUMBER */}
-
                     <Box>
                       <Text
                         fontSize="12px"
@@ -736,11 +698,7 @@ const WardEditPage = () => {
                         mb={2}
                       >
                         Ward Number{" "}
-
-                        <Text
-                          as="span"
-                          color={RED}
-                        >
+                        <Text as="span" color={RED}>
                           *
                         </Text>
                       </Text>
@@ -749,39 +707,35 @@ const WardEditPage = () => {
                         type="number"
                         value={wardNumber}
                         onChange={(e) => {
-                          setWardNumber(
-                            e.target.value
+                          setWardNumber(e.target.value);
+                          setFieldErrors((prev) =>
+                            prev.ward_number
+                              ? { ...prev, ward_number: "" }
+                              : prev
                           );
-                          setError("");
                         }}
                         placeholder="Enter ward number"
                         height="38px"
                         fontSize="12px"
                         borderColor={
-                          hasWardNumberChanges
+                          fieldErrors.ward_number
+                            ? "#F3C4C4"
+                            : hasWardNumberChanges
                             ? RED
                             : BORDER
                         }
                         borderRadius="6px"
                         color={DARK}
-                        _placeholder={{
-                          color: "#8B98AB",
-                        }}
+                        _placeholder={{ color: "#8B98AB" }}
                         _focus={{
-                          borderColor:
-                            PRIMARY_MAROON,
-                          boxShadow:
-                            `0 0 0 1px ${PRIMARY_MAROON}`,
+                          borderColor: PRIMARY_MAROON,
+                          boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                         }}
                       />
                     </Box>
-
                   </Grid>
 
-                  {/* =========================================
-                      PLACE
-                  ========================================= */}
-
+                  {/* PLACE */}
                   <Box>
                     <Text
                       fontSize="12px"
@@ -790,11 +744,7 @@ const WardEditPage = () => {
                       mb={2}
                     >
                       Place{" "}
-
-                      <Text
-                        as="span"
-                        color={RED}
-                      >
+                      <Text as="span" color={RED}>
                         *
                       </Text>
                     </Text>
@@ -802,67 +752,39 @@ const WardEditPage = () => {
                     <Input
                       value={place}
                       onChange={(e) => {
-                        setPlace(
-                          e.target.value
+                        setPlace(e.target.value);
+                        setFieldErrors((prev) =>
+                          prev.place
+                            ? { ...prev, place: "" }
+                            : prev
                         );
-                        setError("");
                       }}
                       placeholder="Enter place"
                       height="38px"
                       fontSize="12px"
                       borderColor={
-                        hasPlaceChanges
+                        fieldErrors.place
+                          ? "#F3C4C4"
+                          : hasPlaceChanges
                           ? RED
                           : BORDER
                       }
                       borderRadius="6px"
                       color={DARK}
-                      _placeholder={{
-                        color: "#8B98AB",
-                      }}
+                      _placeholder={{ color: "#8B98AB" }}
                       _focus={{
-                        borderColor:
-                          PRIMARY_MAROON,
-                        boxShadow:
-                          `0 0 0 1px ${PRIMARY_MAROON}`,
+                        borderColor: PRIMARY_MAROON,
+                        boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                       }}
                     />
                   </Box>
-
-                  {/* ERROR */}
-
-                  {error && (
-                    <Box
-                      mt={3}
-                      px={3}
-                      py={2}
-                      border="1px solid #FED7D7"
-                      bg="#FFF5F5"
-                      borderRadius="6px"
-                    >
-                      <Text
-                        color="#C53030"
-                        fontSize="11px"
-                      >
-                        {error}
-                      </Text>
-                    </Box>
-                  )}
-
                 </Box>
               </Box>
             </Box>
 
-            {/* =================================================
-                RIGHT COLUMN
-            ================================================= */}
-
+            {/* RIGHT COLUMN */}
             <Box>
-
-              {/* ===============================================
-                  RECORD INFORMATION
-              =============================================== */}
-
+              {/* RECORD INFORMATION */}
               <Box
                 border="1px solid"
                 borderColor={BORDER}
@@ -870,10 +792,7 @@ const WardEditPage = () => {
                 p={3}
                 mb={2}
               >
-                <HStack
-                  gap={2}
-                  mb={3}
-                >
+                <HStack gap={2} mb={3}>
                   <Flex
                     width="26px"
                     height="26px"
@@ -882,10 +801,7 @@ const WardEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuFileText
-                      size={14}
-                      color={RED}
-                    />
+                    <LuFileText size={14} color={RED} />
                   </Flex>
 
                   <Text
@@ -898,12 +814,7 @@ const WardEditPage = () => {
                 </HStack>
 
                 {/* CREATED */}
-
-                <HStack
-                  align="flex-start"
-                  gap={2}
-                  mb={3}
-                >
+                <HStack align="flex-start" gap={2} mb={3}>
                   <Flex
                     width="25px"
                     height="25px"
@@ -912,17 +823,11 @@ const WardEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuCalendarDays
-                      size={13}
-                      color={MUTED}
-                    />
+                    <LuCalendarDays size={13} color={MUTED} />
                   </Flex>
 
                   <Box>
-                    <Text
-                      color="#8290A4"
-                      fontSize="10px"
-                    >
+                    <Text color="#8290A4" fontSize="10px">
                       Created
                     </Text>
 
@@ -931,19 +836,13 @@ const WardEditPage = () => {
                       fontSize="12px"
                       fontWeight="600"
                     >
-                      {formatDate(
-                        createdDate
-                      )}
+                      {formatDate(createdDate)}
                     </Text>
                   </Box>
                 </HStack>
 
                 {/* UPDATED */}
-
-                <HStack
-                  align="flex-start"
-                  gap={2}
-                >
+                <HStack align="flex-start" gap={2}>
                   <Flex
                     width="25px"
                     height="25px"
@@ -952,17 +851,11 @@ const WardEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuUserRound
-                      size={13}
-                      color={MUTED}
-                    />
+                    <LuUserRound size={13} color={MUTED} />
                   </Flex>
 
                   <Box>
-                    <Text
-                      color="#8290A4"
-                      fontSize="10px"
-                    >
+                    <Text color="#8290A4" fontSize="10px">
                       Last updated
                     </Text>
 
@@ -971,18 +864,13 @@ const WardEditPage = () => {
                       fontSize="12px"
                       fontWeight="600"
                     >
-                      {formatDate(
-                        updatedDate
-                      )}
+                      {formatDate(updatedDate)}
                     </Text>
                   </Box>
                 </HStack>
               </Box>
 
-              {/* ===============================================
-                  UNSAVED CHANGES
-              =============================================== */}
-
+              {/* UNSAVED CHANGES */}
               <Box
                 border="1px solid"
                 borderColor={BORDER}
@@ -990,10 +878,7 @@ const WardEditPage = () => {
                 p={3}
                 mb={2}
               >
-                <HStack
-                  gap={2}
-                  mb={3}
-                >
+                <HStack gap={2} mb={3}>
                   <Flex
                     width="26px"
                     height="26px"
@@ -1002,10 +887,7 @@ const WardEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuTriangleAlert
-                      size={14}
-                      color="#F26B00"
-                    />
+                    <LuTriangleAlert size={14} color="#F26B00" />
                   </Flex>
 
                   <Text
@@ -1017,10 +899,7 @@ const WardEditPage = () => {
                   </Text>
                 </HStack>
 
-                <HStack
-                  align="flex-start"
-                  gap={2}
-                >
+                <HStack align="flex-start" gap={2}>
                   <Flex
                     width="25px"
                     height="25px"
@@ -1029,10 +908,7 @@ const WardEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuClock3
-                      size={13}
-                      color="#F26B00"
-                    />
+                    <LuClock3 size={13} color="#F26B00" />
                   </Flex>
 
                   <Box>
@@ -1050,11 +926,7 @@ const WardEditPage = () => {
                         : "No changes"}
                     </Text>
 
-                    <Text
-                      color={MUTED}
-                      fontSize="10px"
-                      mt={1}
-                    >
+                    <Text color={MUTED} fontSize="10px" mt={1}>
                       {hasChanges
                         ? "Please review your changes before saving."
                         : "Make changes to the ward information."}
@@ -1063,20 +935,14 @@ const WardEditPage = () => {
                 </HStack>
               </Box>
 
-              {/* ===============================================
-                  DANGER ZONE
-              =============================================== */}
-
+              {/* DANGER ZONE */}
               <Box
                 border="1px solid"
                 borderColor={BORDER}
                 borderRadius="9px"
                 p={3}
               >
-                <HStack
-                  gap={2}
-                  mb={3}
-                >
+                <HStack gap={2} mb={3}>
                   <Flex
                     width="26px"
                     height="26px"
@@ -1085,10 +951,7 @@ const WardEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuArchive
-                      size={14}
-                      color={RED}
-                    />
+                    <LuArchive size={14} color={RED} />
                   </Flex>
 
                   <Text
@@ -1117,11 +980,8 @@ const WardEditPage = () => {
                 >
                   <LuArchive
                     size={14}
-                    style={{
-                      marginRight: "8px",
-                    }}
+                    style={{ marginRight: "8px" }}
                   />
-
                   Archive Ward Record
                 </Button>
 
@@ -1131,38 +991,25 @@ const WardEditPage = () => {
                   mt={2}
                   ml={1}
                 >
-                  This ward record will
-                  remain in history.
+                  This ward record will remain in history.
                 </Text>
               </Box>
-
             </Box>
           </Grid>
         </Container>
       </Box>
 
-      {/* ======================================================
-          BOTTOM ACTION BAR
-      ====================================================== */}
-
+      {/* BOTTOM ACTION BAR */}
       <Box
         borderTop="1px solid"
         borderColor={BORDER}
         bg="white"
-        px={{
-          base: 4,
-          md: 6,
-        }}
+        px={{ base: 4, md: 6 }}
         py={2}
         flexShrink={0}
       >
-        <Flex
-          justify="flex-end"
-          gap={2}
-        >
-
+        <Flex justify="flex-end" gap={2}>
           {/* CANCEL */}
-
           <Button
             variant="outline"
             height="36px"
@@ -1172,59 +1019,38 @@ const WardEditPage = () => {
             borderRadius="6px"
             fontSize="12px"
             onClick={handleCancel}
-            _hover={{
-              bg: "#FFF5F7",
-            }}
+            _hover={{ bg: "#FFF5F7" }}
           >
             Cancel
           </Button>
 
           {/* UPDATE */}
-
           <Button
             height="36px"
             minW="150px"
-            bg={
-              hasChanges
-                ? PRIMARY_MAROON
-                : "#D9DCE1"
-            }
-            color={
-              hasChanges
-                ? "white"
-                : "#8A929D"
-            }
+            bg={hasChanges ? PRIMARY_MAROON : "#D9DCE1"}
+            color={hasChanges ? "white" : "#8A929D"}
             borderRadius="6px"
             fontSize="12px"
             disabled={!hasChanges}
             loading={updating}
             onClick={handleUpdate}
             _hover={{
-              bg: hasChanges
-                ? "#650A18"
-                : "#D9DCE1",
+              bg: hasChanges ? "#650A18" : "#D9DCE1",
             }}
           >
             <LuSave
               size={14}
-              style={{
-                marginRight: "7px",
-              }}
+              style={{ marginRight: "7px" }}
             />
-
             Update
           </Button>
         </Flex>
       </Box>
 
-      {/* ======================================================
-          FOOTER
-      ====================================================== */}
-
       <Box flexShrink={0}>
         <Footer />
       </Box>
-
     </Box>
   );
 };

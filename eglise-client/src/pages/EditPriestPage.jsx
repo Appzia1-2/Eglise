@@ -40,6 +40,8 @@ import {
   updateVicar,
 } from "../api/registryServices";
 
+import { toaster } from "../components/ui/toaster";
+
 
 // ============================================================
 // COLORS
@@ -55,6 +57,47 @@ const COLORS = {
   lightBorder: "#E8ECF1",
   red: "#D7193F",
   green: "#16803A",
+};
+
+
+// ============================================================
+// TOAST HELPER
+// ============================================================
+
+const showToast = ({
+  title,
+  description,
+  type = "info",
+  duration = 4000,
+}) => {
+  toaster.create({
+    title,
+    description,
+    type,
+    duration,
+    closable: true,
+  });
+};
+
+
+// ============================================================
+// FIELD LABELS (for toast messages)
+// ============================================================
+
+const FIELD_LABELS = {
+  name: "Priest Name",
+  family_name: "Family Name",
+  designation: "Designation",
+  phone_number: "Phone Number",
+  date_from: "Serving From",
+  date_to: "Serving To",
+  address_line1: "Address Line 1",
+  address_line2: "Address Line 2",
+  city: "City",
+  state: "State",
+  country: "Country",
+  postal_code: "Postal Code",
+  image: "Photo",
 };
 
 
@@ -168,7 +211,7 @@ const getDesignation = (priest) => {
 
 
 // ============================================================
-// FIELD
+// FIELD (no inline error text — red border only)
 // ============================================================
 
 const Field = ({
@@ -177,6 +220,8 @@ const Field = ({
   error,
   children,
 }) => {
+  const invalid = Boolean(error);
+
   return (
     <Box width="100%">
       <Text
@@ -199,19 +244,17 @@ const Field = ({
         )}
       </Text>
 
-      {children}
-
-      {error && (
-        <Text
-          fontSize="11px"
-          color="#D92D20"
-          mt="5px"
-        >
-          {Array.isArray(error)
-            ? error[0]
-            : error}
-        </Text>
-      )}
+      {/* Clone children with red border when invalid */}
+      {React.isValidElement(children)
+        ? React.cloneElement(children, {
+            style: {
+              ...(children.props.style || {}),
+              ...(invalid
+                ? { borderColor: "#F3C4C4" }
+                : {}),
+            },
+          })
+        : children}
     </Box>
   );
 };
@@ -299,11 +342,9 @@ const EditPriestPage = () => {
       [name]: value,
     }));
 
-    setErrors((prev) => ({
-      ...prev,
-      [name]: "",
-      detail: "",
-    }));
+    setErrors((prev) =>
+      prev[name] ? { ...prev, [name]: "" } : prev
+    );
   };
 
 
@@ -328,7 +369,6 @@ const EditPriestPage = () => {
       ...prev,
       date_to: "",
       is_active: "",
-      detail: "",
     }));
   };
 
@@ -351,22 +391,26 @@ const EditPriestPage = () => {
     ];
 
     if (!allowedTypes.includes(file.type)) {
-      setErrors((prev) => ({
-        ...prev,
-        image:
-          "Only JPG and PNG images are allowed.",
-      }));
+      showToast({
+        title: "Invalid file",
+        description: "Only JPG and PNG images are allowed.",
+        type: "warning",
+        duration: 5000,
+      });
 
+      e.target.value = "";
       return;
     }
 
     if (file.size > 2 * 1024 * 1024) {
-      setErrors((prev) => ({
-        ...prev,
-        image:
-          "Image must be less than 2 MB.",
-      }));
+      showToast({
+        title: "File too large",
+        description: "Image must be less than 2 MB.",
+        type: "warning",
+        duration: 5000,
+      });
 
+      e.target.value = "";
       return;
     }
 
@@ -437,9 +481,12 @@ const EditPriestPage = () => {
         );
 
         if (!priest) {
-          setErrors({
-            detail:
-              "Priest record could not be found.",
+          showToast({
+            title: "Priest not found",
+            description:
+              "The requested priest record could not be found.",
+            type: "error",
+            duration: 6000,
           });
 
           setLoading(false);
@@ -539,9 +586,13 @@ const EditPriestPage = () => {
           error
         );
 
-        setErrors({
-          detail:
-            "Unable to load priest details.",
+        showToast({
+          title: "Failed to load record",
+          description:
+            error?.response?.data?.detail ||
+            "Unable to load priest details. Please try again.",
+          type: "error",
+          duration: 6000,
         });
       } finally {
         setLoading(false);
@@ -600,33 +651,31 @@ const EditPriestPage = () => {
 
   const validate = () => {
     const newErrors = {};
+    const missing = [];
+
+    const addError = (field, message) => {
+      newErrors[field] = message;
+      missing.push(FIELD_LABELS[field] || field);
+    };
 
     if (!form.name.trim()) {
-      newErrors.name =
-        "Vicar name is required.";
+      addError("name", "Priest name is required.");
     }
 
     if (!form.family_name.trim()) {
-      newErrors.family_name =
-        "Family name is required.";
+      addError("family_name", "Family name is required.");
     }
 
     if (!form.phone_number.trim()) {
-      newErrors.phone_number =
-        "Phone number is required.";
+      addError("phone_number", "Phone number is required.");
     }
 
     if (!form.date_from) {
-      newErrors.date_from =
-        "Serving from date is required.";
+      addError("date_from", "Serving from date is required.");
     }
 
-    if (
-      !form.is_active &&
-      !form.date_to
-    ) {
-      newErrors.date_to =
-        "Serving to date is required.";
+    if (!form.is_active && !form.date_to) {
+      addError("date_to", "Serving to date is required.");
     }
 
     if (
@@ -636,38 +685,36 @@ const EditPriestPage = () => {
     ) {
       newErrors.date_to =
         "Serving to date cannot be before serving from date.";
+      // don't push to `missing` — it's a rule error, not a missing field
     }
 
     if (!form.address_line1.trim()) {
-      newErrors.address_line1 =
-        "Address Line 1 is required.";
+      addError("address_line1", "Address Line 1 is required.");
     }
 
     if (!form.city.trim()) {
-      newErrors.city =
-        "City is required.";
+      addError("city", "City is required.");
     }
 
     if (!form.state.trim()) {
-      newErrors.state =
-        "State is required.";
+      addError("state", "State is required.");
     }
 
     if (!form.country.trim()) {
-      newErrors.country =
-        "Country is required.";
+      addError("country", "Country is required.");
     }
 
     if (!form.postal_code.trim()) {
-      newErrors.postal_code =
-        "Postal code is required.";
+      addError("postal_code", "Postal code is required.");
     }
 
     setErrors(newErrors);
 
-    return (
-      Object.keys(newErrors).length === 0
-    );
+    return {
+      errors: newErrors,
+      missing,
+      valid: Object.keys(newErrors).length === 0,
+    };
   };
 
 
@@ -678,7 +725,30 @@ const EditPriestPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!validate()) {
+    const { errors: validationErrors, missing, valid } = validate();
+
+    if (!valid) {
+      // Prefer explicit rule errors over missing-fields list
+      const explicitMessages = Object.entries(validationErrors)
+        .filter(([key]) => !missing.includes(FIELD_LABELS[key]))
+        .map(([, msg]) => msg);
+
+      let description;
+
+      if (explicitMessages.length > 0) {
+        description = explicitMessages.join("\n");
+      } else if (missing.length === 1) {
+        description = `${missing[0]} is required.`;
+      } else {
+        description = `Please fill: ${missing.join(", ")}.`;
+      }
+
+      showToast({
+        title: "Please fix the form",
+        description,
+        type: "warning",
+        duration: 5000,
+      });
       return;
     }
 
@@ -768,6 +838,14 @@ const EditPriestPage = () => {
         formData
       );
 
+      showToast({
+        title: "Changes saved",
+        description:
+          "The priest record was updated successfully.",
+        type: "success",
+        duration: 4000,
+      });
+
       navigate(
         "/priest-master",
         {
@@ -785,13 +863,52 @@ const EditPriestPage = () => {
 
       if (
         responseData &&
-        typeof responseData === "object"
+        typeof responseData === "object" &&
+        !Array.isArray(responseData)
       ) {
-        setErrors(responseData);
+        const fieldErrors = {};
+
+        Object.entries(responseData).forEach(
+          ([key, value]) => {
+            if (Array.isArray(value)) {
+              fieldErrors[key] = value.join(", ");
+            } else if (typeof value === "string") {
+              fieldErrors[key] = value;
+            } else {
+              fieldErrors[key] = JSON.stringify(value);
+            }
+          }
+        );
+
+        setErrors(fieldErrors);
+
+        const generalError =
+          responseData.detail ||
+          responseData.non_field_errors?.[0];
+
+        const fieldMessages = Object.values(fieldErrors).filter(Boolean);
+        const onlyOneFieldError =
+          fieldMessages.length === 1 && !generalError;
+
+        showToast({
+          title: "Could not save changes",
+          description:
+            generalError ||
+            (onlyOneFieldError
+              ? fieldMessages[0]
+              : `Please check: ${Object.keys(fieldErrors)
+                  .map((k) => FIELD_LABELS[k] || k)
+                  .join(", ")}`),
+          type: "error",
+          duration: 7000,
+        });
       } else {
-        setErrors({
-          detail:
+        showToast({
+          title: "Could not save changes",
+          description:
             "Unable to update vicar. Please try again.",
+          type: "error",
+          duration: 7000,
         });
       }
     } finally {
@@ -837,6 +954,14 @@ const EditPriestPage = () => {
         );
       }
 
+      showToast({
+        title: "Record archived",
+        description:
+          "The priest record was archived successfully.",
+        type: "success",
+        duration: 4000,
+      });
+
       navigate(
         "/priest-master",
         {
@@ -849,9 +974,12 @@ const EditPriestPage = () => {
         error
       );
 
-      setErrors({
-        detail:
+      showToast({
+        title: "Could not archive record",
+        description:
           "Unable to archive priest record. Please try again.",
+        type: "error",
+        duration: 7000,
       });
     } finally {
       setSaving(false);
@@ -919,10 +1047,7 @@ const EditPriestPage = () => {
           py="15px"
         >
 
-          {/* ==================================================
-              BREADCRUMB
-          ================================================== */}
-
+          {/* BREADCRUMB */}
           <HStack
             gap="9px"
             mb="5px"
@@ -931,29 +1056,16 @@ const EditPriestPage = () => {
             height="18px"
           >
             <Text>Masters</Text>
-
             <Text color="#9AA4B2">/</Text>
-
             <Text>Priest Master</Text>
-
             <Text color="#9AA4B2">/</Text>
-
-            <Text>
-              {form.name || "Priest"}
-            </Text>
-
+            <Text>{form.name || "Priest"}</Text>
             <Text color="#9AA4B2">/</Text>
-
-            <Text color="#344054">
-              Edit
-            </Text>
+            <Text color="#344054">Edit</Text>
           </HStack>
 
 
-          {/* ==================================================
-              TITLE
-          ================================================== */}
-
+          {/* TITLE */}
           <Heading
             fontSize="28px"
             lineHeight="34px"
@@ -974,10 +1086,7 @@ const EditPriestPage = () => {
           </Text>
 
 
-          {/* ==================================================
-              MAIN DESKTOP GRID
-          ================================================== */}
-
+          {/* MAIN DESKTOP GRID */}
           <Box
             display="grid"
             gridTemplateColumns={{
@@ -988,20 +1097,14 @@ const EditPriestPage = () => {
             alignItems="start"
           >
 
-            {/* =================================================
-                LEFT COLUMN
-            ================================================= */}
-
+            {/* LEFT COLUMN */}
             <VStack
               align="stretch"
               gap="14px"
               minW="0"
             >
 
-              {/* =================================================
-                  PRIEST SUMMARY
-              ================================================= */}
-
+              {/* PRIEST SUMMARY */}
               <Box
                 border="1px solid #E0E5EC"
                 borderRadius="8px"
@@ -1049,8 +1152,7 @@ const EditPriestPage = () => {
                       color={COLORS.text}
                       mb="8px"
                     >
-                      {form.name ||
-                        "Unnamed Priest"}
+                      {form.name || "Unnamed Priest"}
                     </Heading>
 
                     <HStack
@@ -1062,10 +1164,7 @@ const EditPriestPage = () => {
                         color={COLORS.secondary}
                       >
                         PR-
-                        {String(id).padStart(
-                          4,
-                          "0"
-                        )}
+                        {String(id).padStart(4, "0")}
                       </Text>
 
                       <Text
@@ -1080,8 +1179,7 @@ const EditPriestPage = () => {
                         color="#52627A"
                       >
                         {getDesignation({
-                          designation:
-                            form.designation,
+                          designation: form.designation,
                         })}
                       </Text>
 
@@ -1112,10 +1210,7 @@ const EditPriestPage = () => {
               </Box>
 
 
-              {/* =================================================
-                  DETAILS CARD
-              ================================================= */}
-
+              {/* DETAILS CARD */}
               <Box
                 border="1px solid #E0E5EC"
                 borderRadius="8px"
@@ -1124,13 +1219,11 @@ const EditPriestPage = () => {
               >
 
                 {/* TABS */}
-
                 <Flex
                   height="50px"
                   borderBottom="1px solid #E1E6ED"
                   px="16px"
                 >
-
                   <Button
                     variant="plain"
                     flex="1"
@@ -1149,17 +1242,12 @@ const EditPriestPage = () => {
                     fontSize="13px"
                     fontWeight="600"
                     bg="transparent"
-                    _hover={{
-                      bg: "transparent",
-                    }}
-                    onClick={() =>
-                      setActiveTab("details")
-                    }
+                    _hover={{ bg: "transparent" }}
+                    onClick={() => setActiveTab("details")}
                   >
                     Priest Details
                   </Button>
 
-
                   <Button
                     variant="plain"
                     flex="1"
@@ -1178,37 +1266,20 @@ const EditPriestPage = () => {
                     fontSize="13px"
                     fontWeight="600"
                     bg="transparent"
-                    _hover={{
-                      bg: "transparent",
-                    }}
-                    onClick={() =>
-                      setActiveTab("history")
-                    }
+                    _hover={{ bg: "transparent" }}
+                    onClick={() => setActiveTab("history")}
                   >
                     <HStack gap="9px">
-                      <Icon
-                        as={LuUserRound}
-                        boxSize="17px"
-                      />
-
-                      <Text>
-                        Service History
-                      </Text>
+                      <Icon as={LuUserRound} boxSize="17px" />
+                      <Text>Service History</Text>
                     </HStack>
                   </Button>
-
                 </Flex>
 
 
-                {/* =================================================
-                    PRIEST DETAILS
-                ================================================= */}
-
+                {/* PRIEST DETAILS */}
                 {activeTab === "details" && (
-                  <Box
-                    px="20px"
-                    py="19px"
-                  >
+                  <Box px="20px" py="19px">
 
                     <Heading
                       fontSize="16px"
@@ -1222,7 +1293,6 @@ const EditPriestPage = () => {
 
 
                     {/* BASIC INFORMATION */}
-
                     <Box
                       display="grid"
                       gridTemplateColumns={{
@@ -1244,8 +1314,7 @@ const EditPriestPage = () => {
                           onChange={handleChange}
                           style={inputStyle}
                           _focus={{
-                            borderColor:
-                              PRIMARY_MAROON,
+                            borderColor: PRIMARY_MAROON,
                             boxShadow: "none",
                           }}
                         />
@@ -1255,22 +1324,15 @@ const EditPriestPage = () => {
                       <Field
                         label="Family Name"
                         required
-                        error={
-                          errors.family_name
-                        }
+                        error={errors.family_name}
                       >
                         <Input
                           name="family_name"
-                          value={
-                            form.family_name
-                          }
-                          onChange={
-                            handleChange
-                          }
+                          value={form.family_name}
+                          onChange={handleChange}
                           style={inputStyle}
                           _focus={{
-                            borderColor:
-                              PRIMARY_MAROON,
+                            borderColor: PRIMARY_MAROON,
                             boxShadow: "none",
                           }}
                         />
@@ -1280,35 +1342,26 @@ const EditPriestPage = () => {
                       <Field
                         label="Designation"
                         required
-                        error={
-                          errors.designation
-                        }
+                        error={errors.designation}
                       >
-                        <Box
-                          position="relative"
-                        >
+                        <Box position="relative">
                           <select
                             name="designation"
-                            value={
-                              form.designation
-                            }
-                            onChange={
-                              handleChange
-                            }
+                            value={form.designation}
+                            onChange={handleChange}
                             style={{
                               ...inputStyle,
-                              appearance:
-                                "none",
-                              paddingRight:
-                                "36px",
-                              cursor:
-                                "pointer",
+                              appearance: "none",
+                              paddingRight: "36px",
+                              cursor: "pointer",
+                              ...(errors.designation
+                                ? { borderColor: "#F3C4C4" }
+                                : {}),
                             }}
                           >
                             <option value="MAIN">
                               Vicar
                             </option>
-
                             <option value="ASSISTANT">
                               Assistant Vicar
                             </option>
@@ -1330,22 +1383,15 @@ const EditPriestPage = () => {
                       <Field
                         label="Phone Number"
                         required
-                        error={
-                          errors.phone_number
-                        }
+                        error={errors.phone_number}
                       >
                         <Input
                           name="phone_number"
-                          value={
-                            form.phone_number
-                          }
-                          onChange={
-                            handleChange
-                          }
+                          value={form.phone_number}
+                          onChange={handleChange}
                           style={inputStyle}
                           _focus={{
-                            borderColor:
-                              PRIMARY_MAROON,
+                            borderColor: PRIMARY_MAROON,
                             boxShadow: "none",
                           }}
                         />
@@ -1355,23 +1401,16 @@ const EditPriestPage = () => {
                       <Field
                         label="Serving From"
                         required
-                        error={
-                          errors.date_from
-                        }
+                        error={errors.date_from}
                       >
                         <Input
                           type="date"
                           name="date_from"
-                          value={
-                            form.date_from
-                          }
-                          onChange={
-                            handleChange
-                          }
+                          value={form.date_from}
+                          onChange={handleChange}
                           style={inputStyle}
                           _focus={{
-                            borderColor:
-                              PRIMARY_MAROON,
+                            borderColor: PRIMARY_MAROON,
                             boxShadow: "none",
                           }}
                         />
@@ -1380,32 +1419,22 @@ const EditPriestPage = () => {
 
                       <Field
                         label="Serving To"
-                        error={
-                          errors.date_to
-                        }
+                        error={errors.date_to}
                       >
                         <Input
                           type="date"
                           name="date_to"
-                          value={
-                            form.date_to
-                          }
-                          onChange={
-                            handleChange
-                          }
-                          disabled={
-                            form.is_active
-                          }
+                          value={form.date_to}
+                          onChange={handleChange}
+                          disabled={form.is_active}
                           style={{
                             ...inputStyle,
-                            background:
-                              form.is_active
-                                ? "#F8F9FA"
-                                : "#FFFFFF",
-                            color:
-                              form.is_active
-                                ? "#98A2B3"
-                                : COLORS.text,
+                            background: form.is_active
+                              ? "#F8F9FA"
+                              : "#FFFFFF",
+                            color: form.is_active
+                              ? "#98A2B3"
+                              : COLORS.text,
                           }}
                         />
                       </Field>
@@ -1414,7 +1443,6 @@ const EditPriestPage = () => {
 
 
                     {/* CURRENTLY SERVING */}
-
                     <Flex
                       justify="flex-end"
                       align="center"
@@ -1422,7 +1450,6 @@ const EditPriestPage = () => {
                       mb="2px"
                     >
                       <HStack gap="10px">
-
                         <Text
                           fontSize="13px"
                           fontWeight="600"
@@ -1443,9 +1470,7 @@ const EditPriestPage = () => {
                           position="relative"
                           cursor="pointer"
                           transition="all .2s"
-                          onClick={
-                            handleStatusToggle
-                          }
+                          onClick={handleStatusToggle}
                         >
                           <Box
                             position="absolute"
@@ -1463,19 +1488,16 @@ const EditPriestPage = () => {
                             boxShadow="0 1px 3px rgba(0,0,0,.25)"
                           />
                         </Box>
-
                       </HStack>
                     </Flex>
 
 
                     {/* ADDRESS */}
-
                     <Box
                       mt="18px"
                       pt="18px"
                       borderTop="1px solid #E6EAF0"
                     >
-
                       <Heading
                         fontSize="16px"
                         lineHeight="20px"
@@ -1495,55 +1517,38 @@ const EditPriestPage = () => {
                         }}
                         gap="18px 24px"
                       >
-
                         <Field
                           label="Address Line 1"
                           required
-                          error={
-                            errors.address_line1
-                          }
+                          error={errors.address_line1}
                         >
                           <Input
                             name="address_line1"
-                            value={
-                              form.address_line1
-                            }
-                            onChange={
-                              handleChange
-                            }
+                            value={form.address_line1}
+                            onChange={handleChange}
                             style={inputStyle}
                             _focus={{
-                              borderColor:
-                                PRIMARY_MAROON,
+                              borderColor: PRIMARY_MAROON,
                               boxShadow: "none",
                             }}
                           />
                         </Field>
-
 
                         <Field
                           label="Address Line 2"
-                          error={
-                            errors.address_line2
-                          }
+                          error={errors.address_line2}
                         >
                           <Input
                             name="address_line2"
-                            value={
-                              form.address_line2
-                            }
-                            onChange={
-                              handleChange
-                            }
+                            value={form.address_line2}
+                            onChange={handleChange}
                             style={inputStyle}
                             _focus={{
-                              borderColor:
-                                PRIMARY_MAROON,
+                              borderColor: PRIMARY_MAROON,
                               boxShadow: "none",
                             }}
                           />
                         </Field>
-
                       </Box>
 
 
@@ -1557,7 +1562,6 @@ const EditPriestPage = () => {
                         gap="18px 24px"
                         mt="18px"
                       >
-
                         <Field
                           label="City"
                           required
@@ -1566,18 +1570,14 @@ const EditPriestPage = () => {
                           <Input
                             name="city"
                             value={form.city}
-                            onChange={
-                              handleChange
-                            }
+                            onChange={handleChange}
                             style={inputStyle}
                             _focus={{
-                              borderColor:
-                                PRIMARY_MAROON,
+                              borderColor: PRIMARY_MAROON,
                               boxShadow: "none",
                             }}
                           />
                         </Field>
-
 
                         <Field
                           label="State"
@@ -1587,72 +1587,54 @@ const EditPriestPage = () => {
                           <Input
                             name="state"
                             value={form.state}
-                            onChange={
-                              handleChange
-                            }
+                            onChange={handleChange}
                             style={inputStyle}
                             _focus={{
-                              borderColor:
-                                PRIMARY_MAROON,
+                              borderColor: PRIMARY_MAROON,
                               boxShadow: "none",
                             }}
                           />
                         </Field>
 
-
                         <Field
                           label="Country"
                           required
-                          error={
-                            errors.country
-                          }
+                          error={errors.country}
                         >
-                          <Box
-                            position="relative"
-                          >
+                          <Box position="relative">
                             <select
                               name="country"
-                              value={
-                                form.country
-                              }
-                              onChange={
-                                handleChange
-                              }
+                              value={form.country}
+                              onChange={handleChange}
                               style={{
                                 ...inputStyle,
-                                appearance:
-                                  "none",
-                                paddingRight:
-                                  "36px",
-                                cursor:
-                                  "pointer",
+                                appearance: "none",
+                                paddingRight: "36px",
+                                cursor: "pointer",
+                                ...(errors.country
+                                  ? { borderColor: "#F3C4C4" }
+                                  : {}),
                               }}
                             >
                               <option value="India">
                                 India
                               </option>
-
                               <option value="Oman">
                                 Oman
                               </option>
-
                               <option value="United Arab Emirates">
                                 United Arab Emirates
                               </option>
-
                               <option value="United States">
                                 United States
                               </option>
-
                               <option value="United Kingdom">
                                 United Kingdom
                               </option>
                             </select>
 
                             <Icon
-                              as={
-                                LuChevronDown
-                              }
+                              as={LuChevronDown}
                               position="absolute"
                               right="12px"
                               top="12px"
@@ -1663,46 +1645,31 @@ const EditPriestPage = () => {
                           </Box>
                         </Field>
 
-
                         <Field
                           label="Postal Code"
                           required
-                          error={
-                            errors.postal_code
-                          }
+                          error={errors.postal_code}
                         >
                           <Input
                             name="postal_code"
-                            value={
-                              form.postal_code
-                            }
-                            onChange={
-                              handleChange
-                            }
+                            value={form.postal_code}
+                            onChange={handleChange}
                             style={inputStyle}
                             _focus={{
-                              borderColor:
-                                PRIMARY_MAROON,
+                              borderColor: PRIMARY_MAROON,
                               boxShadow: "none",
                             }}
                           />
                         </Field>
-
                       </Box>
-
                     </Box>
-
                   </Box>
                 )}
 
 
-                {/* =================================================
-                    SERVICE HISTORY
-                ================================================= */}
-
+                {/* SERVICE HISTORY */}
                 {activeTab === "history" && (
                   <Box p="20px">
-
                     <Heading
                       fontSize="16px"
                       color={COLORS.text}
@@ -1716,11 +1683,7 @@ const EditPriestPage = () => {
                       borderRadius="8px"
                       p="18px"
                     >
-                      <HStack
-                        align="start"
-                        gap="15px"
-                      >
-
+                      <HStack align="start" gap="15px">
                         <Box
                           boxSize="42px"
                           borderRadius="full"
@@ -1732,42 +1695,32 @@ const EditPriestPage = () => {
                         >
                           <Icon
                             as={LuCalendarDays}
-                            color={
-                              PRIMARY_MAROON
-                            }
+                            color={PRIMARY_MAROON}
                             boxSize="20px"
                           />
                         </Box>
 
                         <Box>
-
                           <Text
                             fontSize="14px"
                             fontWeight="600"
                             color={COLORS.text}
                           >
                             {getDesignation({
-                              designation:
-                                form.designation,
+                              designation: form.designation,
                             })}
                           </Text>
 
                           <Text
                             fontSize="13px"
-                            color={
-                              COLORS.secondary
-                            }
+                            color={COLORS.secondary}
                             mt="4px"
                           >
-                            {formatDate(
-                              form.date_from
-                            )}{" "}
+                            {formatDate(form.date_from)}{" "}
                             -{" "}
                             {form.is_active
                               ? "Present"
-                              : formatDate(
-                                  form.date_to
-                                )}
+                              : formatDate(form.date_to)}
                           </Text>
 
                           <Badge
@@ -1791,24 +1744,17 @@ const EditPriestPage = () => {
                               ? "Currently Serving"
                               : "Previous"}
                           </Badge>
-
                         </Box>
-
                       </HStack>
                     </Box>
-
                   </Box>
                 )}
 
               </Box>
-
             </VStack>
 
 
-            {/* =================================================
-                RIGHT SIDEBAR
-            ================================================= */}
-
+            {/* RIGHT SIDEBAR */}
             <VStack
               align="stretch"
               gap="10px"
@@ -1816,10 +1762,7 @@ const EditPriestPage = () => {
               minW="0"
             >
 
-              {/* =================================================
-                  PRIEST PHOTO
-              ================================================= */}
-
+              {/* PRIEST PHOTO */}
               <Box
                 border="1px solid #E0E5EC"
                 borderRadius="8px"
@@ -1827,7 +1770,6 @@ const EditPriestPage = () => {
                 p="18px"
                 minH="220px"
               >
-
                 <Heading
                   fontSize="16px"
                   lineHeight="20px"
@@ -1839,7 +1781,6 @@ const EditPriestPage = () => {
                 </Heading>
 
                 <VStack gap="9px">
-
                   {imagePreview ? (
                     <Image
                       src={imagePreview}
@@ -1860,9 +1801,7 @@ const EditPriestPage = () => {
                       <Icon
                         as={LuUserRound}
                         boxSize="40px"
-                        color={
-                          PRIMARY_MAROON
-                        }
+                        color={PRIMARY_MAROON}
                       />
                     </Box>
                   )}
@@ -1872,39 +1811,24 @@ const EditPriestPage = () => {
                     type="file"
                     accept="image/png,image/jpeg,image/jpg"
                     display="none"
-                    onChange={
-                      handleImageChange
-                    }
+                    onChange={handleImageChange}
                   />
 
                   <Button
                     variant="outline"
                     width="175px"
                     height="31px"
-                    borderColor={
-                      PRIMARY_MAROON
-                    }
+                    borderColor={PRIMARY_MAROON}
                     borderWidth="1px"
-                    color={
-                      PRIMARY_MAROON
-                    }
+                    color={PRIMARY_MAROON}
                     borderRadius="6px"
                     fontSize="12px"
                     fontWeight="600"
                     bg="#FFFFFF"
-                    _hover={{
-                      bg: "#FFF5F7",
-                    }}
-                    onClick={() =>
-                      fileRef.current?.click()
-                    }
+                    _hover={{ bg: "#FFF5F7" }}
+                    onClick={() => fileRef.current?.click()}
                   >
-                    <Icon
-                      as={LuUpload}
-                      mr="8px"
-                      boxSize="15px"
-                    />
-
+                    <Icon as={LuUpload} mr="8px" boxSize="15px" />
                     Replace Photo
                   </Button>
 
@@ -1914,30 +1838,11 @@ const EditPriestPage = () => {
                   >
                     JPG, PNG up to 2MB
                   </Text>
-
-                  {errors.image && (
-                    <Text
-                      fontSize="11px"
-                      color="#D92D20"
-                      textAlign="center"
-                    >
-                      {Array.isArray(
-                        errors.image
-                      )
-                        ? errors.image[0]
-                        : errors.image}
-                    </Text>
-                  )}
-
                 </VStack>
-
               </Box>
 
 
-              {/* =================================================
-                  RECORD INFORMATION
-              ================================================= */}
-
+              {/* RECORD INFORMATION */}
               <Box
                 border="1px solid #E0E5EC"
                 borderRadius="8px"
@@ -1945,7 +1850,6 @@ const EditPriestPage = () => {
                 p="18px"
                 minH="140px"
               >
-
                 <Heading
                   fontSize="16px"
                   lineHeight="20px"
@@ -1956,15 +1860,8 @@ const EditPriestPage = () => {
                   Record Information
                 </Heading>
 
-                <VStack
-                  align="stretch"
-                  gap="15px"
-                >
-
-                  <HStack
-                    align="start"
-                    gap="14px"
-                  >
+                <VStack align="stretch" gap="15px">
+                  <HStack align="start" gap="14px">
                     <Icon
                       as={LuCalendarDays}
                       boxSize="21px"
@@ -1987,19 +1884,13 @@ const EditPriestPage = () => {
                         color={COLORS.text}
                       >
                         {recordInfo.created
-                          ? formatDate(
-                              recordInfo.created
-                            )
+                          ? formatDate(recordInfo.created)
                           : "-"}
                       </Text>
                     </Box>
                   </HStack>
 
-
-                  <HStack
-                    align="start"
-                    gap="14px"
-                  >
+                  <HStack align="start" gap="14px">
                     <Icon
                       as={LuUserRound}
                       boxSize="21px"
@@ -2022,38 +1913,26 @@ const EditPriestPage = () => {
                         color={COLORS.text}
                       >
                         {recordInfo.updated
-                          ? formatDate(
-                              recordInfo.updated
-                            )
+                          ? formatDate(recordInfo.updated)
                           : "-"}
                       </Text>
 
                       {recordInfo.updatedBy && (
                         <Text
                           fontSize="11px"
-                          color={
-                            COLORS.secondary
-                          }
+                          color={COLORS.secondary}
                           mt="1px"
                         >
-                          by{" "}
-                          {
-                            recordInfo.updatedBy
-                          }
+                          by {recordInfo.updatedBy}
                         </Text>
                       )}
                     </Box>
                   </HStack>
-
                 </VStack>
-
               </Box>
 
 
-              {/* =================================================
-                  UNSAVED CHANGES
-              ================================================= */}
-
+              {/* UNSAVED CHANGES */}
               {hasUnsavedChanges && (
                 <Box
                   border="1px solid #F0E1C2"
@@ -2062,12 +1941,7 @@ const EditPriestPage = () => {
                   p="16px"
                   minH="96px"
                 >
-
-                  <HStack
-                    align="start"
-                    gap="13px"
-                  >
-
+                  <HStack align="start" gap="13px">
                     <Icon
                       as={LuTriangleAlert}
                       boxSize="21px"
@@ -2077,7 +1951,6 @@ const EditPriestPage = () => {
                     />
 
                     <Box>
-
                       <Text
                         fontSize="14px"
                         fontWeight="600"
@@ -2111,22 +1984,15 @@ const EditPriestPage = () => {
                         color={COLORS.muted}
                         mt="2px"
                       >
-                        Please review your
-                        changes before saving.
+                        Please review your changes before saving.
                       </Text>
-
                     </Box>
-
                   </HStack>
-
                 </Box>
               )}
 
 
-              {/* =================================================
-                  DANGER ZONE
-              ================================================= */}
-
+              {/* DANGER ZONE */}
               <Box
                 border="1px solid #E0E5EC"
                 borderRadius="8px"
@@ -2134,7 +2000,6 @@ const EditPriestPage = () => {
                 p="17px"
                 minH="112px"
               >
-
                 <Text
                   fontSize="15px"
                   lineHeight="20px"
@@ -2156,18 +2021,11 @@ const EditPriestPage = () => {
                   borderRadius="7px"
                   fontSize="13px"
                   fontWeight="600"
-                  _hover={{
-                    bg: "#FEF2F2",
-                  }}
+                  _hover={{ bg: "#FEF2F2" }}
                   onClick={handleArchive}
                   disabled={saving}
-                  loading={saving}
                 >
-                  <Icon
-                    as={LuBan}
-                    mr="8px"
-                    boxSize="16px"
-                  />
+                  <Icon as={LuBan} mr="8px" boxSize="16px" />
                   Archive Priest Record
                 </Button>
 
@@ -2178,20 +2036,14 @@ const EditPriestPage = () => {
                 >
                   This priest will remain in service history.
                 </Text>
-
               </Box>
 
             </VStack>
-
           </Box>
-
         </Container>
 
 
-        {/* =====================================================
-            BOTTOM ACTION BAR
-        ===================================================== */}
-
+        {/* BOTTOM ACTION BAR */}
         <Box
           borderTop="1px solid #E0E5EC"
           bg="#FFFFFF"
@@ -2200,7 +2052,6 @@ const EditPriestPage = () => {
           zIndex="20"
           mt="0"
         >
-
           <Container
             maxW="none"
             px={{
@@ -2210,38 +2061,27 @@ const EditPriestPage = () => {
             }}
             py="10px"
           >
-
             <Flex
               justify="flex-end"
               align="center"
               gap="16px"
             >
-
               <Button
                 variant="outline"
                 height="41px"
                 minW="148px"
-                borderColor={
-                  PRIMARY_MAROON
-                }
+                borderColor={PRIMARY_MAROON}
                 color={PRIMARY_MAROON}
                 borderRadius="7px"
                 fontSize="13px"
                 fontWeight="600"
                 bg="#FFFFFF"
-                _hover={{
-                  bg: "#FFF5F7",
-                }}
-                onClick={() =>
-                  navigate(
-                    "/priest-master"
-                  )
-                }
+                _hover={{ bg: "#FFF5F7" }}
+                onClick={() => navigate("/priest-master")}
                 disabled={saving}
               >
                 Cancel
               </Button>
-
 
               <Button
                 height="41px"
@@ -2251,27 +2091,16 @@ const EditPriestPage = () => {
                 borderRadius="7px"
                 fontSize="13px"
                 fontWeight="600"
-                _hover={{
-                  bg: "#650A18",
-                }}
+                _hover={{ bg: "#650A18" }}
                 loading={saving}
                 onClick={handleSubmit}
               >
-                <Icon
-                  as={LuSave}
-                  mr="8px"
-                  boxSize="16px"
-                />
-
+                <Icon as={LuSave} mr="8px" boxSize="16px" />
                 Save Changes
               </Button>
-
             </Flex>
-
           </Container>
-
         </Box>
-
       </Box>
 
       <Footer />

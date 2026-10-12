@@ -118,6 +118,8 @@ export const listMembers = () => {
 // ============================================================
 // LIST MEMBERS BY FAMILY
 // ============================================================
+// ✅ FIXED: backend now supports `family` query param
+//    (see MemberListCreateAPIView.get_queryset)
 
 export const listFamilyMembers = (familyId) => {
   return apiClient.get(
@@ -276,45 +278,15 @@ export const listMembersByHead = (
 // ============================================================
 // FAMILY HEAD LIST - FOR DROPDOWN / SELECTION
 // ============================================================
+// ✅ FIXED: use the dedicated endpoint instead of client-side
+//    filtering / transformation of /members/
 
 /**
- * List all active family heads for the current church
- * Used for dropdowns when changing a member's head
- * 
- * Uses the members endpoint with filter for family heads
- * 
- * @returns {Promise} - Array of family head objects with id, name, family_name, house_name
+ * List all active family heads for the current church.
+ * Backend returns: [{ id, name, family_name, house_name }]
  */
-export const listFamilyHeads = async () => {
-  // Use the members list endpoint with filter for family heads
-  const response = await apiClient.get("/api/registry/members/", {
-    params: {
-      is_family_head: true,
-      is_active: true,
-    }
-  });
-  
-  // Transform the response to match expected format
-  const members = response.data?.results || response.data || [];
-  
-  // If members is not an array, return empty array
-  if (!Array.isArray(members)) {
-    return { data: [] };
-  }
-  
-  // Transform to expected format: { id, name, family_name, house_name }
-  const transformedData = members.map(member => ({
-    id: member.id,
-    name: member.name,
-    family_name: member.family?.family_name || member.family_name || "—",
-    house_name: member.house_name || "—"
-  }));
-  
-  return {
-    data: transformedData,
-    ...response
-  };
-};
+export const listFamilyHeads = () =>
+  apiClient.get("/api/registry/members/family-heads/");
 
 // ============================================================
 // DEATH REGISTER APIs
@@ -409,32 +381,33 @@ export const deleteBaptism = (id) =>
 // ============================================================
 // MARRIAGE PRE-ANNOUNCEMENT APIs
 // ============================================================
+// ✅ FIXED: backend has no dedicated vilich-chollu-kuri routes.
+//    Pointing them at the marriages endpoint for now. If you
+//    later add a dedicated backend view, update these URLs.
 
 export const listPreAnnouncements = () =>
-  apiClient.get(
-    "/api/registry/marriages/vilich-chollu-kuri/"
-  );
+  apiClient.get("/api/registry/marriages/");
 
 export const createPreAnnouncement = (data) =>
   apiClient.post(
-    "/api/registry/marriages/vilich-chollu-kuri/",
+    "/api/registry/marriages/",
     data
   );
 
 export const getPreAnnouncement = (id) =>
   apiClient.get(
-    `/api/registry/marriages/vilich-chollu-kuri/${id}/`
+    `/api/registry/marriages/${id}/`
   );
 
 export const updatePreAnnouncement = (id, data) =>
   apiClient.patch(
-    `/api/registry/marriages/vilich-chollu-kuri/${id}/detail/`,
+    `/api/registry/marriages/${id}/`,
     data
   );
 
 export const deletePreAnnouncement = (id) =>
   apiClient.delete(
-    `/api/registry/marriages/vilich-chollu-kuri/${id}/`
+    `/api/registry/marriages/${id}/`
   );
 
 
@@ -471,10 +444,11 @@ export const deleteMarriage = (id) =>
 // ============================================================
 // DHESHA KURI
 // ============================================================
+// ✅ FIXED: added trailing slash
 
 export const getDheshaKuri = (id) =>
   apiClient.get(
-    `/api/registry/marriages/${id}/dhesha-kuri`
+    `/api/registry/marriages/${id}/dhesha-kuri/`
   );
 
 
@@ -510,10 +484,12 @@ export const deleteDesignation = (id) =>
 // ============================================================
 // PRIEST / VICAR MASTER
 // ============================================================
+// ✅ FIXED: use the dedicated /priests/master/ endpoint that
+//    returns { current, previous, upcoming, counts }
 
 export const getPriestMaster = async () => {
   const response = await apiClient.get(
-    "/api/registry/priests/"
+    "/api/registry/priests/master/"
   );
 
   return response;
@@ -787,28 +763,40 @@ export const updateAccountLedger = (
 // ============================================================
 // ARCHIVE ACCOUNT LEDGER
 // ============================================================
+// ✅ FIXED: model field is `status`, not `is_active`
 
 export const archiveAccountLedger = (id) =>
   apiClient.patch(
     `/api/registry/account-ledgers/${id}/`,
     {
-      is_active: false,
+      status: false,
     }
   );
 
 // ============================================================
-// LEDGER TRANSACTIONS
+// LEDGER ENTRIES + BALANCE
 // ============================================================
+// ✅ FIXED: replaced the nonexistent `/transactions/` endpoint
+//    with the real ones we wired up.
 
-export const listLedgerTransactions = (
-  ledgerId,
-  params = {}
-) =>
+/**
+ * List ledger entries.
+ * Params (all optional):
+ *   ledger            -> filter by ledger id
+ *   from, to          -> YYYY-MM-DD range
+ *   include_cancelled -> "true" | "1" | "yes"
+ */
+export const listLedgerEntries = (params = {}) =>
+  apiClient.get("/api/registry/ledger-entries/", {
+    params,
+  });
+
+/**
+ * Get current balance for a single ledger.
+ */
+export const getLedgerBalance = (id) =>
   apiClient.get(
-    `/api/registry/account-ledgers/${ledgerId}/transactions/`,
-    {
-      params,
-    }
+    `/api/registry/account-ledgers/${id}/balance/`
   );
 
 // ============================================================
@@ -821,41 +809,44 @@ export const deleteAccountLedger = (id) =>
   );
 
 
+// ============================================================
+// BANK ACCOUNTS
+// ============================================================
+
+export const listBankAccounts = () =>
+  apiClient.get("/api/registry/bank-accounts/");
+
+export const createBankAccount = (data) =>
+  apiClient.post("/api/registry/bank-accounts/", data);
+
+export const updateBankAccount = (id, data) =>
+  apiClient.patch(`/api/registry/bank-accounts/${id}/`, data);
+
+export const deleteBankAccount = (id) =>
+  apiClient.delete(`/api/registry/bank-accounts/${id}/`);
+
 
 // ============================================================
 // PAYMENTS
 // ============================================================
 
-export const listPayments = () =>
-  apiClient.get(
-    "/api/registry/payments/"
-  );
-
-export const createPayment = (data) =>
-  apiClient.post(
-    "/api/registry/payments/",
-    data
-  );
+export const listPayments = (params = {}) =>
+  apiClient.get("/api/registry/payments/", { params });
 
 export const getPayment = (id) =>
-  apiClient.get(
-    `/api/registry/payments/${id}/`
-  );
+  apiClient.get(`/api/registry/payments/${id}/`);
 
-export const updatePayment = (
-  id,
-  data
-) =>
-  apiClient.patch(
-    `/api/registry/payments/${id}/`,
-    data
-  );
+export const createPayment = (data) =>
+  apiClient.post("/api/registry/payments/", data);
+
+export const updatePayment = (id, data) =>
+  apiClient.patch(`/api/registry/payments/${id}/`, data);
 
 export const deletePayment = (id) =>
-  apiClient.delete(
-    `/api/registry/payments/${id}/`
-  );
+  apiClient.delete(`/api/registry/payments/${id}/`);
 
+export const cancelPayment = (id, data) =>
+  apiClient.post(`/api/registry/payments/${id}/cancel/`, data);
 
 // ============================================================
 // QURBANA RECEIPTS
@@ -909,8 +900,10 @@ export const deleteCommittee = (id) =>
   apiClient.delete(
     `/api/registry/committees/${id}/`
   );
+
 export const getCommittee = (id) =>
   apiClient.get(`/api/registry/committees/${id}/`);
+
 // ============================================================
 // MEMBER DIRECTORY
 // ============================================================
@@ -1006,6 +999,37 @@ export const deleteTombType = (id) =>
 
 
 // ============================================================
+// TOMB FEE APIs
+// ============================================================
+// ✅ NEW: these were missing. Now symmetric with TombType.
+
+export const listTombFees = () =>
+  apiClient.get("/api/registry/tomb-fees/");
+
+export const createTombFee = (data) =>
+  apiClient.post(
+    "/api/registry/tomb-fees/",
+    data
+  );
+
+export const getTombFee = (id) =>
+  apiClient.get(
+    `/api/registry/tomb-fees/${id}/`
+  );
+
+export const updateTombFee = (id, data) =>
+  apiClient.patch(
+    `/api/registry/tomb-fees/${id}/`,
+    data
+  );
+
+export const deleteTombFee = (id) =>
+  apiClient.delete(
+    `/api/registry/tomb-fees/${id}/`
+  );
+
+
+// ============================================================
 // LEGACY BAPTISM REGISTER
 // ============================================================
 
@@ -1061,4 +1085,47 @@ export const updateLegacyDeath = (id, data) =>
 
 export const deleteLegacyDeath = (id) =>
   apiClient.delete(`/api/registry/legacy/deaths/${id}/`);
+
+
+// ============================================================
+// BACKWARD-COMPAT ALIASES
+// ============================================================
+
+/**
+ * @deprecated Use `listLedgerEntries` instead.
+ * Kept so older components don't crash on import.
+ */
+export const listLedgerTransactions = (ledgerId, params = {}) =>
+  apiClient.get("/api/registry/ledger-entries/", {
+    params: { ledger: ledgerId, ...params },
+  });
+
+
+// ============================================================
+// RECEIPTS
+// ============================================================
+
+export const listReceipts = (params = {}) =>
+  apiClient.get("/api/registry/receipts/", { params });
+
+export const getReceipt = (id) =>
+  apiClient.get(`/api/registry/receipts/${id}/`);
+
+export const createReceipt = (data) =>
+  apiClient.post("/api/registry/receipts/", data);
+
+export const updateReceipt = (id, data) =>
+  apiClient.patch(`/api/registry/receipts/${id}/`, data);
+
+export const cancelReceipt = (id, data) =>
+  apiClient.post(`/api/registry/receipts/${id}/cancel/`, data);
+
+
+// ============================================================
+// MY CHURCH
+// ============================================================
+
+export const getMyChurch = () =>
+  apiClient.get("/api/registry/my-church/");
+
 

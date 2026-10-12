@@ -72,10 +72,13 @@ from .views import (
      PaymentMasterDetailView, AccountLedgerMasterDetailView, MemberDirectoryAPIView,
     MemberAgeWiseListAPIView, MemberPhoneDirectoryAPIView,DioceseListCreateAPIView, DioceseDetailAPIView, MemberDetailView, LegacyBaptismListCreateAPIView,
     LegacyBaptismDetailAPIView,
-    LegacyMarriageListCreateAPIView,
+    LegacyMarriageListCreateAPIView,BankAccountListCreateView,BankAccountDetailView,PaymentCancelAPIView,
     LegacyMarriageDetailAPIView,
     LegacyDeathListCreateAPIView,
-    LegacyDeathDetailAPIView,
+    LegacyDeathDetailAPIView,LedgerEntryListAPIView,ReceiptListCreateAPIView,
+    ReceiptDetailAPIView,
+    ReceiptCancelAPIView,
+    LedgerBalanceAPIView,
 )
 
 urlpatterns = [
@@ -211,8 +214,14 @@ path("death-registers/<int:pk>/", DeathRegisterUpdateAPIView.as_view(), name="de
     path("account-ledgers/", AccountLedgerMasterListCreateView.as_view(), name="account-ledger-list-create"),
     path("account-ledgers/<int:pk>/", AccountLedgerMasterDetailView.as_view(), name="account-ledger-detail"),
 
-    path("payments/", PaymentMasterListCreateView.as_view(), name="payment-list-create"),
+    # Bank Accounts
+    path("bank-accounts/", BankAccountListCreateView.as_view(), name="bank-account-list"),
+    path("bank-accounts/<int:pk>/", BankAccountDetailView.as_view(), name="bank-account-detail"),
+
+# Payments (replace existing routes)
+    path("payments/", PaymentMasterListCreateView.as_view(), name="payment-list"),
     path("payments/<int:pk>/", PaymentMasterDetailView.as_view(), name="payment-detail"),
+    path("payments/<int:pk>/cancel/", PaymentCancelAPIView.as_view(), name="payment-cancel"),   
 
     path("qurbana-receipts/", QurbanaReceiptsListCreateView.as_view(), name="qurbana-list-create"),
     path("qurbana-receipts/<int:pk>/", QurbanaReceiptsDetailView.as_view(), name="qurbana-detail"),
@@ -260,5 +269,23 @@ path("death-registers/<int:pk>/", DeathRegisterUpdateAPIView.as_view(), name="de
         "legacy/deaths/<int:pk>/",
         LegacyDeathDetailAPIView.as_view(),
         name="legacy-death-detail"
+    ),
+    path("ledger-entries/", LedgerEntryListAPIView.as_view(), name="ledger-entry-list"),
+    path("account-ledgers/<int:pk>/balance/", LedgerBalanceAPIView.as_view(), name="account-ledger-balance"),
+
+    path(
+        "receipts/",
+        ReceiptListCreateAPIView.as_view(),
+        name="receipt-list-create"
+    ),
+    path(
+        "receipts/<int:pk>/",
+        ReceiptDetailAPIView.as_view(),
+        name="receipt-detail"
+    ),
+    path(
+        "receipts/<int:pk>/cancel/",
+        ReceiptCancelAPIView.as_view(),
+        name="receipt-cancel"
     ),
 ]

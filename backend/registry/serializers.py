@@ -1,13 +1,13 @@
 from datetime import date
 
 from rest_framework import serializers
-from .models import Baptism, Bill, Church, DeathRegister, Designation, DheshaKuri, Diocese, Events, Grade, Priest,  RegisterSetting, Relationship, TombFee, TombType, UpgradeRequest,  Ward, Family, Member, Offering, VisitorMaster, Subscription, AccountGroupMaster, AccountLedgerMaster, PaymentMaster,  QurbanaReceipts, CommitteeMaster, LegacyBaptism, LegacyMarriage, LegacyDeath
+from .models import Baptism, Bill, Church, DeathRegister, Designation, DheshaKuri, Diocese, Events,ReceiptMaster, ReceiptLine, LedgerEntry,  Grade,BankAccount, Priest,  RegisterSetting, Relationship, TombFee, TombType, UpgradeRequest,  Ward, Family, Member, Offering, VisitorMaster, Subscription, AccountGroupMaster, AccountLedgerMaster, PaymentMaster,  QurbanaReceipts, CommitteeMaster, LegacyBaptism, LegacyMarriage, LegacyDeath
 from .services import can_add_member, generate_folio_number, generate_register_number
 from rest_framework import serializers
 from .models import Package
 from .models import ChurchSubscription, Package
 from django.utils import timezone
-
+from django.db import models
 
 from rest_framework import serializers
 from registry.models import Diocese
@@ -5049,35 +5049,257 @@ class AccountLedgerMasterSerializer(serializers.ModelSerializer):
     account_group_name = serializers.CharField(
         source="account_group.group_name", read_only=True
     )
+    current_balance = serializers.SerializerMethodField()
+    ledger_nature_display = serializers.CharField(
+        source="get_ledger_nature_display", read_only=True
+    )
 
     class Meta:
         model = AccountLedgerMaster
-        fields = "__all__"
-        read_only_fields = ("church",)
+        fields = [
+            "id",
+            "ledger_code",
+            "ledger_name",
+            "alias",
+            "account_group",
+            "account_group_name",
+            "ledger_nature",
+            "ledger_nature_display",
+            "status",
+            "reserved",
+            "op_balance",
+            "current_balance",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ("church", "created_at", "updated_at", "current_balance")
+
+    def get_current_balance(self, obj):
+        return round(obj.get_current_balance(), 2)
 
     def validate_ledger_name(self, value):
         if not value.strip():
             raise serializers.ValidationError("Ledger name cannot be empty")
         return value
+
+class LedgerEntrySerializer(serializers.ModelSerializer):
+    ledger_name = serializers.CharField(
+        source="ledger.ledger_name", read_only=True
+    )
+    account_group_name = serializers.CharField(
+        source="ledger.account_group.group_name",
+        read_only=True,
+        allow_null=True,
+    )
+    ledger_nature = serializers.CharField(
+        source="ledger.ledger_nature",
+        read_only=True,
+        allow_null=True,
+    )
+    payment_voucher = serializers.CharField(
+        source="payment.voucher_number",
+        read_only=True,
+        allow_null=True,
+    )
+    receipt_voucher = serializers.CharField(
+        source="receipt.receipt_number",
+        read_only=True,
+        allow_null=True,
+    )
+    running_balance = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LedgerEntry
+        fields = [
+            "id",
+            "church",
+            "ledger",
+            "ledger_name",
+            "account_group_name",
+            "ledger_nature",
+            "entry_type",
+            "amount",
+            "entry_date",
+            "narration",
+            "payment",
+            "payment_voucher",
+            "receipt",
+            "receipt_voucher",
+            "is_cancelled",
+            "is_reversal",
+            "reversed_entry",
+            "running_balance",
+            "created_at",
+        ]
+        read_only_fields = (
+            "church",
+            "payment",
+            "receipt",
+            "is_cancelled",
+            "is_reversal",
+            "reversed_entry",
+            "running_balance",
+            "created_at",
+        )
+
+    def get_running_balance(self, obj):
+        ctx = self.context.get("running_balance_context")
+        if not ctx:
+            return None
+        return ctx.get(obj.id)
     
+# ============================================================
+# BANK ACCOUNT SERIALIZER
+# ============================================================
+
+class BankAccountSerializer(serializers.ModelSerializer):
+    display_name = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = BankAccount
+        fields = [
+            "id",
+            "bank_name",
+            "account_number",
+            "masked_account_number",
+            "display_name",
+            "ifsc_code",
+            "branch",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ("masked_account_number", "created_at", "updated_at")
+
+    def validate_bank_name(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Bank name cannot be empty.")
+        return value.strip()
+
+    def validate_account_number(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Account number cannot be empty.")
+        return value.strip()
+
+
+# ============================================================
+# PAYMENT SERIALIZERS
+# ============================================================
+
 class PaymentMasterSerializer(serializers.ModelSerializer):
     account_ledger_name = serializers.CharField(
-        source="account_ledger.ledger_name", read_only=True
+        source="account_ledger.ledger_name",
+        read_only=True
     )
+    bank_account_display = serializers.CharField(
+        source="bank_account.display_name",
+        read_only=True,
+        allow_null=True
+    )
+    payment_type_label = serializers.CharField(
+        source="get_payment_type_display",
+        read_only=True
+    )
+    payment_mode_label = serializers.CharField(
+        source="get_payment_mode_display",
+        read_only=True
+    )
+    cancel_reason_label = serializers.CharField(
+        source="get_cancel_reason_display",
+        read_only=True,
+        allow_null=True
+    )
+    status_label = serializers.SerializerMethodField()
 
     class Meta:
         model = PaymentMaster
-        fields = "__all__"
-        read_only_fields = ("church",)
+        fields = [
+            "id",
+            "voucher_number",
+            "ref_no",
+            "payment_date",
+            "party_name",
+            "payment_type",
+            "payment_type_label",
+            "payment_mode",
+            "payment_mode_label",
+            "bank_account",
+            "bank_account_display",
+            "account_ledger",
+            "account_ledger_name",
+            "amount",
+            "narration",
+            "is_cancelled",
+            "cancel_reason",
+            "cancel_reason_label",
+            "cancel_remarks",
+            "cancelled_at",
+            "status_label",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = (
+            "voucher_number",
+            "is_cancelled",
+            "cancel_reason",
+            "cancel_remarks",
+            "cancelled_at",
+            "created_at",
+            "updated_at",
+        )
+
+    def get_status_label(self, obj):
+        return "Cancelled" if obj.is_cancelled else "Paid"
 
     def validate_amount(self, value):
-        if value <= 0:
-            raise serializers.ValidationError("Amount must be greater than zero")
+        if value is None or value <= 0:
+            raise serializers.ValidationError("Amount must be greater than zero.")
         return value
 
     def validate_party_name(self, value):
-        if not value.strip():
-            raise serializers.ValidationError("Party name cannot be empty")
+        if not value or not value.strip():
+            raise serializers.ValidationError("Party name cannot be empty.")
+        return value.strip()
+
+    def validate(self, data):
+        payment_type = data.get(
+            "payment_type",
+            getattr(self.instance, "payment_type", "BANK")
+        )
+        bank_account = data.get(
+            "bank_account",
+            getattr(self.instance, "bank_account", None)
+        )
+
+        # if payment_type == "BANK" and not bank_account:
+        #     raise serializers.ValidationError({
+        #         "bank_account": "Bank account is required when payment type is Bank."
+        #     })
+        if payment_type == "CASH":
+            data["bank_account"] = None
+
+        if payment_type == "CASH":
+            data["bank_account"] = None
+
+        return data
+
+    def create(self, validated_data):
+        validated_data["church"] = self.context["church"]
+        return super().create(validated_data)
+
+
+class PaymentCancelSerializer(serializers.Serializer):
+    cancel_reason = serializers.ChoiceField(
+        choices=PaymentMaster.CANCEL_REASON_CHOICES
+    )
+    cancel_remarks = serializers.CharField(required=True, allow_blank=False)
+    acknowledge = serializers.BooleanField()
+
+    def validate_acknowledge(self, value):
+        if not value:
+            raise serializers.ValidationError(
+                "You must acknowledge that this record will remain in the audit history."
+            )
         return value
     
 class QurbanaReceiptsSerializer(serializers.ModelSerializer):
@@ -5577,3 +5799,331 @@ class LegacyDeathListSerializer(serializers.ModelSerializer):
             "funeral_on",
             "created_at",
         ]
+
+# ============================================================
+# RECEIPT SERIALIZERS
+# ============================================================
+
+class ReceiptLineSerializer(serializers.ModelSerializer):
+    ledger_name = serializers.CharField(
+        source="ledger.ledger_name", read_only=True
+    )
+
+    class Meta:
+        model = ReceiptLine
+        fields = [
+            "id",
+            "ledger",
+            "ledger_name",
+            "amount",
+            "position",
+        ]
+        read_only_fields = ("id", "ledger_name")
+
+
+class ReceiptMasterListSerializer(serializers.ModelSerializer):
+    member_name = serializers.CharField(
+        source="member.name", read_only=True
+    )
+    payment_details = serializers.SerializerMethodField()
+    particulars = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ReceiptMaster
+        fields = [
+            "id",
+            "receipt_number",
+            "receipt_date",
+            "member",
+            "member_name",
+            "ref_no",
+            "payment_details",
+            "particulars",
+            "grand_total",
+            "is_cancelled",
+            "created_at",
+        ]
+
+    def get_payment_details(self, obj):
+        if obj.payment_type == "BANK":
+            parts = ["Bank"]
+            if obj.transaction_type:
+                parts.append(obj.get_transaction_type_display())
+            label = " · ".join(parts)
+            if obj.bank_account:
+                display = (
+                    getattr(obj.bank_account, "display_name", None)
+                    or obj.bank_account.bank_name
+                )
+                label += f"; {display}"
+            return label
+        return "Cash"
+
+    def get_particulars(self, obj):
+        names = [line.ledger.ledger_name for line in obj.lines.all()]
+        return " + ".join(names) if names else "—"
+
+
+class ReceiptMasterSerializer(serializers.ModelSerializer):
+    lines = ReceiptLineSerializer(many=True)
+
+    member_name = serializers.CharField(
+        source="member.name", read_only=True
+    )
+    # bank_account_display = serializers.CharField(
+    #     source="bank_account.display_name",
+    #     read_only=True,
+    #     allow_null=True
+    # )
+    bank_account_display = serializers.SerializerMethodField()
+    payment_details = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ReceiptMaster
+        fields = [
+            "id",
+            "receipt_number",
+            "receipt_date",
+            "ref_no",
+            "member",
+            "member_name",
+            "payment_type",
+            "transaction_type",
+            "bank_account",
+            "bank_account_display",
+            "payment_details",
+            "narration",
+            "grand_total",
+            "is_cancelled",
+            "cancel_reason",
+            "cancel_remarks",
+            "cancelled_at",
+            "lines",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = (
+            "receipt_number",
+            "grand_total",
+            "is_cancelled",
+            "cancel_reason",
+            "cancel_remarks",
+            "cancelled_at",
+            "created_at",
+            "updated_at",
+            "member_name",
+            "bank_account_display",
+            "payment_details",
+        )
+
+    def get_payment_details(self, obj):
+        if obj.payment_type == "BANK":
+            label = "Bank"
+            if obj.transaction_type:
+                label += f" · {obj.get_transaction_type_display()}"
+            if obj.bank_account:
+                display = (
+                    getattr(obj.bank_account, "display_name", None)
+                    or obj.bank_account.bank_name
+                )
+                label += f"; {display}"
+            return label
+        return "Cash"
+
+    def get_bank_account_display(self, obj):
+        if not obj.bank_account:
+            return None
+        return (
+            getattr(obj.bank_account, "display_name", None)
+            or f"{obj.bank_account.bank_name} {obj.bank_account.masked_account_number or ''}".strip()
+        )
+
+    # ==========================================================
+    # VALIDATION
+    # ==========================================================
+
+    def validate(self, data):
+        church = self.context.get("church")
+
+        payment_type = data.get(
+            "payment_type",
+            getattr(self.instance, "payment_type", "BANK")
+        )
+        transaction_type = data.get(
+            "transaction_type",
+            getattr(self.instance, "transaction_type", None)
+        )
+        bank_account = data.get(
+            "bank_account",
+            getattr(self.instance, "bank_account", None)
+        )
+
+        # if payment_type == "BANK":
+        #     if not transaction_type:
+        #         raise serializers.ValidationError({
+        #             "transaction_type":
+        #                 "Transaction type is required for bank receipts."
+        #         })
+        #     if not bank_account:
+        #         raise serializers.ValidationError({
+        #             "bank_account":
+        #                 "Bank account is required for bank receipts."
+        #         })
+        #     if church and bank_account.church_id != church.id:
+        #         raise serializers.ValidationError({
+        #             "bank_account":
+        #                 "Bank account does not belong to this church."
+        #         })
+
+        if payment_type == "BANK":
+            if not transaction_type:
+                raise serializers.ValidationError({
+                    "transaction_type":
+                        "Transaction type is required for bank receipts."
+                })
+
+            # ✅ bank_account is now OPTIONAL
+            if bank_account and church and bank_account.church_id != church.id:
+                raise serializers.ValidationError({
+                    "bank_account":
+                        "Bank account does not belong to this church."
+                })
+
+        if payment_type == "CASH":
+            data["bank_account"] = None
+            data["transaction_type"] = None
+
+        lines = data.get("lines") or []
+
+        if not lines:
+            raise serializers.ValidationError({
+                "lines":
+                    "At least one Particulars line is required."
+            })
+
+        total = 0
+        for idx, line in enumerate(lines):
+            amount = line.get("amount")
+            ledger = line.get("ledger")
+
+            if amount is None or amount <= 0:
+                raise serializers.ValidationError({
+                    "lines":
+                        f"Line {idx + 1}: amount must be greater than zero."
+                })
+
+            if ledger is None:
+                raise serializers.ValidationError({
+                    "lines":
+                        f"Line {idx + 1}: ledger is required."
+                })
+
+            if church and ledger.church_id != church.id:
+                raise serializers.ValidationError({
+                    "lines":
+                        f"Line {idx + 1}: ledger does not belong to this church."
+                })
+
+            total += amount
+
+        data["_computed_total"] = total
+        return data
+
+    # ==========================================================
+    # CREATE
+    # ==========================================================
+
+    @transaction.atomic
+    def create(self, validated_data):
+        lines_data = validated_data.pop("lines", [])
+        validated_data.pop("_computed_total", None)
+
+        church = self.context.get("church")
+        if church:
+            validated_data["church"] = church
+
+        validated_data["grand_total"] = sum(
+            (l.get("amount") or 0) for l in lines_data
+        )
+
+        receipt = ReceiptMaster.objects.create(**validated_data)
+
+        for idx, line in enumerate(lines_data):
+            ReceiptLine.objects.create(
+                receipt=receipt,
+                ledger=line["ledger"],
+                amount=line["amount"],
+                position=idx,
+            )
+
+        total = (
+            ReceiptLine.objects
+            .filter(receipt=receipt)
+            .aggregate(s=models.Sum("amount"))["s"]
+            or 0
+        )
+        receipt.grand_total = total
+        receipt.save(update_fields=["grand_total"])
+
+        receipt.post_to_ledger()
+
+        return receipt
+
+    # ==========================================================
+    # UPDATE
+    # ==========================================================
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        lines_data = validated_data.pop("lines", None)
+        validated_data.pop("_computed_total", None)
+
+        if instance.ledger_entries.filter(
+            is_cancelled=False, is_reversal=False
+        ).exists():
+            instance.reverse_ledger_entry()
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if lines_data is not None:
+            instance.lines.all().delete()
+            for idx, line in enumerate(lines_data):
+                ReceiptLine.objects.create(
+                    receipt=instance,
+                    ledger=line["ledger"],
+                    amount=line["amount"],
+                    position=idx,
+                )
+
+            total = (
+                ReceiptLine.objects
+                .filter(receipt=instance)
+                .aggregate(s=models.Sum("amount"))["s"]
+                or 0
+            )
+            instance.grand_total = total
+            instance.save(update_fields=["grand_total"])
+
+        instance.post_to_ledger()
+
+        return instance
+
+
+class ReceiptCancelSerializer(serializers.Serializer):
+    cancel_reason = serializers.ChoiceField(
+        choices=ReceiptMaster.CANCEL_REASON_CHOICES
+    )
+    cancel_remarks = serializers.CharField(
+        required=True, allow_blank=False
+    )
+    acknowledge = serializers.BooleanField()
+
+    def validate_acknowledge(self, value):
+        if not value:
+            raise serializers.ValidationError(
+                "You must acknowledge that this record will remain "
+                "in the audit history."
+            )
+        return value

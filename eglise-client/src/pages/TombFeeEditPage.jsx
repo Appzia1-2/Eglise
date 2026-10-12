@@ -1,4 +1,3 @@
-
 // src/pages/TombFeesEditPage.jsx
 
 import React, { useEffect, useState } from "react";
@@ -41,12 +40,47 @@ import {
   listTombTypes,
 } from "../api/churchServices";
 
+import { toaster } from "../components/ui/toaster";
+
 const PRIMARY_MAROON = "var(--primary-maroon)";
 
 const RED = "#D7193F";
 const DARK = "#182338";
 const MUTED = "#60708C";
 const BORDER = "#DCE2EA";
+
+
+// ============================================================
+// TOAST HELPER
+// ============================================================
+
+const showToast = ({
+  title,
+  description,
+  type = "info",
+  duration = 4000,
+}) => {
+  toaster.create({
+    title,
+    description,
+    type,
+    duration,
+    closable: true,
+  });
+};
+
+
+// ============================================================
+// FIELD LABELS
+// ============================================================
+
+const FIELD_LABELS = {
+  tomb_type: "Tomb Type",
+  tomb_fees: "Tomb Fees",
+  indication: "Indication",
+  specification: "Specification",
+};
+
 
 const TombFeesEditPage = () => {
   const navigate = useNavigate();
@@ -77,7 +111,7 @@ const TombFeesEditPage = () => {
   const [updating, setUpdating] = useState(false);
   const [archiving, setArchiving] = useState(false);
 
-  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // ==========================================================
   // LOAD DATA
@@ -85,24 +119,20 @@ const TombFeesEditPage = () => {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      setError("");
 
-      const [feeResponse, typesResponse] =
-        await Promise.all([
-          getTombFees(id),
-          listTombTypes(),
-        ]);
+      const [feeResponse, typesResponse] = await Promise.all([
+        getTombFees(id),
+        listTombTypes(),
+      ]);
 
-      const fee =
-        feeResponse?.data ?? feeResponse;
-
-      const types =
-        typesResponse?.data ?? typesResponse;
+      const fee = feeResponse?.data ?? feeResponse;
+      const types = typesResponse?.data ?? typesResponse;
 
       setTombFee(fee);
 
@@ -121,34 +151,30 @@ const TombFeesEditPage = () => {
 
       const data = {
         tomb_type:
-          typeId !== undefined &&
-          typeId !== null
+          typeId !== undefined && typeId !== null
             ? String(typeId)
             : "",
         tomb_fees:
-          fee?.tomb_fees !== undefined &&
-          fee?.tomb_fees !== null
+          fee?.tomb_fees !== undefined && fee?.tomb_fees !== null
             ? String(fee.tomb_fees)
             : "",
-        indication:
-          fee?.indication || "",
-        specification:
-          fee?.specification || "",
+        indication: fee?.indication || "",
+        specification: fee?.specification || "",
       };
 
       setFormData(data);
       setOriginalData(data);
     } catch (err) {
-      console.error(
-        "Error loading tomb fee:",
-        err
-      );
+      console.error("Error loading tomb fee:", err);
 
-      const apiError =
-        err?.response?.data?.detail ||
-        "Unable to load tomb fee.";
-
-      setError(apiError);
+      showToast({
+        title: "Failed to load record",
+        description:
+          err?.response?.data?.detail ||
+          "Unable to load tomb fee. Please try again.",
+        type: "error",
+        duration: 6000,
+      });
     } finally {
       setLoading(false);
     }
@@ -183,7 +209,42 @@ const TombFeesEditPage = () => {
       [name]: value,
     }));
 
-    setError("");
+    setFieldErrors((prev) =>
+      prev[name] ? { ...prev, [name]: "" } : prev
+    );
+  };
+
+  // ==========================================================
+  // VALIDATE
+  // ==========================================================
+
+  const validate = () => {
+    const errors = {};
+    const missing = [];
+
+    if (!formData.tomb_type) {
+      errors.tomb_type = "Tomb type is required.";
+      missing.push(FIELD_LABELS.tomb_type);
+    }
+
+    if (!formData.tomb_fees) {
+      errors.tomb_fees = "Tomb fees are required.";
+      missing.push(FIELD_LABELS.tomb_fees);
+    } else {
+      const feeAmount = Number(formData.tomb_fees);
+
+      if (Number.isNaN(feeAmount) || feeAmount < 0) {
+        errors.tomb_fees = "Tomb fees must be a valid amount.";
+      }
+    }
+
+    if (!formData.indication.trim()) {
+      errors.indication = "Indication is required.";
+      missing.push(FIELD_LABELS.indication);
+    }
+
+    setFieldErrors(errors);
+    return { errors, missing };
   };
 
   // ==========================================================
@@ -191,73 +252,113 @@ const TombFeesEditPage = () => {
   // ==========================================================
 
   const handleUpdate = async () => {
-    setError("");
+    const { errors, missing } = validate();
 
-    if (!formData.tomb_type) {
-      setError("Tomb type is required.");
-      return;
-    }
+    if (Object.keys(errors).length > 0) {
+      // Prefer explicit rule errors over missing-fields list
+      const explicitMessages = Object.entries(errors)
+        .filter(([key]) => !missing.includes(FIELD_LABELS[key]))
+        .map(([, msg]) => msg);
 
-    if (!formData.tomb_fees) {
-      setError("Tomb fees are required.");
-      return;
-    }
+      let description;
 
-    if (!formData.indication.trim()) {
-      setError("Indication is required.");
-      return;
-    }
+      if (explicitMessages.length > 0) {
+        description = explicitMessages.join("\n");
+      } else if (missing.length === 1) {
+        description = `${missing[0]} is required.`;
+      } else {
+        description = `Please fill: ${missing.join(", ")}.`;
+      }
 
-    const feeAmount = Number(formData.tomb_fees);
-
-    if (
-      Number.isNaN(feeAmount) ||
-      feeAmount < 0
-    ) {
-      setError(
-        "Tomb fees must be a valid amount."
-      );
+      showToast({
+        title: "Please fix the form",
+        description,
+        type: "warning",
+        duration: 5000,
+      });
       return;
     }
 
     if (!hasChanges) {
+      showToast({
+        title: "No changes to save",
+        description:
+          "Please modify at least one field before updating.",
+        type: "info",
+        duration: 4000,
+      });
       return;
     }
 
     try {
       setUpdating(true);
+      setFieldErrors({});
 
       const payload = {
         tomb_type: Number(formData.tomb_type),
-        tomb_fees: feeAmount,
-        indication:
-          formData.indication.trim(),
-        specification:
-          formData.specification.trim(),
+        tomb_fees: Number(formData.tomb_fees),
+        indication: formData.indication.trim(),
+        specification: formData.specification.trim(),
       };
 
       await updateTombFees(id, payload);
 
-      // Redirect to Tomb Fees list after update
+      showToast({
+        title: "Changes saved",
+        description: "The tomb fee record was updated successfully.",
+        type: "success",
+        duration: 4000,
+      });
+
       navigate("/tomb-fees");
     } catch (err) {
-      console.error(
-        "Error updating tomb fee:",
-        err
-      );
+      console.error("Error updating tomb fee:", err);
 
-      const apiData =
-        err?.response?.data;
+      const responseData = err?.response?.data;
 
-      const apiError =
-        apiData?.tomb_type?.[0] ||
-        apiData?.tomb_fees?.[0] ||
-        apiData?.indication?.[0] ||
-        apiData?.specification?.[0] ||
-        apiData?.detail ||
-        "Unable to update tomb fee.";
+      if (
+        responseData &&
+        typeof responseData === "object" &&
+        !Array.isArray(responseData)
+      ) {
+        const errors = {};
 
-      setError(apiError);
+        Object.entries(responseData).forEach(([key, value]) => {
+          if (Array.isArray(value)) errors[key] = value.join(", ");
+          else if (typeof value === "string") errors[key] = value;
+          else errors[key] = JSON.stringify(value);
+        });
+
+        setFieldErrors(errors);
+
+        const generalError =
+          responseData.detail || responseData.non_field_errors?.[0];
+
+        const fieldMessages = Object.values(errors).filter(Boolean);
+        const onlyOneFieldError =
+          fieldMessages.length === 1 && !generalError;
+
+        showToast({
+          title: "Could not save changes",
+          description:
+            generalError ||
+            (onlyOneFieldError
+              ? fieldMessages[0]
+              : `Please check: ${Object.keys(errors)
+                  .map((k) => FIELD_LABELS[k] || k)
+                  .join(", ")}`),
+          type: "error",
+          duration: 7000,
+        });
+      } else {
+        showToast({
+          title: "Could not save changes",
+          description:
+            "Unable to update tomb fee. Please try again.",
+          type: "error",
+          duration: 7000,
+        });
+      }
     } finally {
       setUpdating(false);
     }
@@ -278,22 +379,28 @@ const TombFeesEditPage = () => {
 
     try {
       setArchiving(true);
-      setError("");
 
       await deleteTombFees(id);
 
+      showToast({
+        title: "Record removed",
+        description: "The tomb fee record was removed successfully.",
+        type: "success",
+        duration: 4000,
+      });
+
       navigate("/tomb-fees");
     } catch (err) {
-      console.error(
-        "Error removing tomb fee:",
-        err
-      );
+      console.error("Error removing tomb fee:", err);
 
-      const apiError =
-        err?.response?.data?.detail ||
-        "Unable to remove tomb fee.";
-
-      setError(apiError);
+      showToast({
+        title: "Could not remove record",
+        description:
+          err?.response?.data?.detail ||
+          "Unable to remove tomb fee. Please try again.",
+        type: "error",
+        duration: 7000,
+      });
     } finally {
       setArchiving(false);
     }
@@ -322,14 +429,11 @@ const TombFeesEditPage = () => {
       return "-";
     }
 
-    return date.toLocaleDateString(
-      "en-GB",
-      {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }
-    );
+    return date.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
   };
 
   // ==========================================================
@@ -350,17 +454,14 @@ const TombFeesEditPage = () => {
     tombFee?.id || "0001"
   ).padStart(4, "0")}`;
 
-  const selectedTombType =
-    tombTypes.find(
-      (type) =>
-        String(type.id) ===
-        String(formData.tomb_type)
-    );
+  const selectedTombType = tombTypes.find(
+    (type) =>
+      String(type.id) === String(formData.tomb_type)
+  );
 
   const tombTypeName =
     selectedTombType?.name ||
-    (typeof tombFee?.tomb_type ===
-    "object"
+    (typeof tombFee?.tomb_type === "object"
       ? tombFee?.tomb_type?.name
       : "Tomb Fee");
 
@@ -378,15 +479,8 @@ const TombFeesEditPage = () => {
       >
         <Navbar />
 
-        <Box
-          flex="1"
-          px={6}
-          py={5}
-        >
-          <Text
-            color={MUTED}
-            fontSize="13px"
-          >
+        <Box flex="1" px={6} py={5}>
+          <Text color={MUTED} fontSize="13px">
             Loading tomb fee...
           </Text>
         </Box>
@@ -409,33 +503,18 @@ const TombFeesEditPage = () => {
       flexDirection="column"
       overflow="hidden"
     >
-      {/* NAVBAR */}
-
       <Box flexShrink={0}>
         <Navbar />
       </Box>
 
-      {/* MAIN CONTENT */}
-
-      <Box
-        flex="1"
-        minH="0"
-        overflow="hidden"
-      >
+      <Box flex="1" minH="0" overflow="hidden">
         <Container
           maxW="none"
           height="100%"
-          px={{
-            base: 4,
-            md: 6,
-          }}
-          py={{
-            base: 2,
-            md: 3,
-          }}
+          px={{ base: 4, md: 6 }}
+          py={{ base: 2, md: 3 }}
         >
           {/* BREADCRUMB */}
-
           <HStack
             gap={2}
             mb={2}
@@ -443,89 +522,52 @@ const TombFeesEditPage = () => {
             fontSize="12px"
             flexWrap="wrap"
           >
-            <Text>
-              Masters
-            </Text>
-
+            <Text>Masters</Text>
             <Text>/</Text>
-
-            <Text>
-              Tomb Fees
-            </Text>
-
+            <Text>Tomb Fees</Text>
             <Text>/</Text>
-
-            <Text>
-              {tombTypeName || "Tomb Fee"}
-            </Text>
-
+            <Text>{tombTypeName || "Tomb Fee"}</Text>
             <Text>/</Text>
-
-            <Text>
-              Edit
-            </Text>
+            <Text>Edit</Text>
           </HStack>
 
           {/* PAGE HEADER */}
-
           <Box mb={3}>
             <Heading
               color={DARK}
-              fontSize={{
-                base: "22px",
-                md: "26px",
-              }}
+              fontSize={{ base: "22px", md: "26px" }}
               lineHeight="1.15"
               mb={1}
             >
               Edit Tomb Fee
             </Heading>
 
-            <Text
-              color={MUTED}
-              fontSize="12px"
-            >
+            <Text color={MUTED} fontSize="12px">
               Update tomb fee information.
             </Text>
           </Box>
 
           {/* TWO COLUMN LAYOUT */}
-
           <Grid
             templateColumns={{
               base: "1fr",
               lg: "minmax(0, 3fr) minmax(280px, 1fr)",
             }}
-            gap={{
-              base: 3,
-              lg: 4,
-            }}
+            gap={{ base: 3, lg: 4 }}
             alignItems="start"
           >
-            {/* ==================================================
-                LEFT COLUMN
-            ================================================== */}
-
+            {/* LEFT COLUMN */}
             <Box>
               {/* HEADER CARD */}
-
               <Box
                 border="1px solid"
                 borderColor={BORDER}
                 borderRadius="9px"
-                px={{
-                  base: 3,
-                  md: 4,
-                }}
+                px={{ base: 3, md: 4 }}
                 py={3}
                 mb={3}
               >
-                <Flex
-                  align="center"
-                  gap={4}
-                >
-                  {/* AVATAR */}
-
+                <Flex align="center" gap={4}>
                   <Flex
                     width="58px"
                     height="58px"
@@ -545,20 +587,14 @@ const TombFeesEditPage = () => {
                     </Text>
                   </Flex>
 
-                  {/* TOMB FEE INFO */}
-
                   <Box>
                     <Heading
                       color={DARK}
-                      fontSize={{
-                        base: "20px",
-                        md: "22px",
-                      }}
+                      fontSize={{ base: "20px", md: "22px" }}
                       lineHeight="1.2"
                       mb={1}
                     >
-                      {tombTypeName ||
-                        "Tomb Fee"}
+                      {tombTypeName || "Tomb Fee"}
                     </Heading>
 
                     <HStack
@@ -567,10 +603,7 @@ const TombFeesEditPage = () => {
                       fontSize="12px"
                       flexWrap="wrap"
                     >
-                      <Text>
-                        {tombFeeCode}
-                      </Text>
-
+                      <Text>{tombFeeCode}</Text>
                       <Text>•</Text>
 
                       <Box
@@ -591,7 +624,6 @@ const TombFeesEditPage = () => {
               </Box>
 
               {/* DETAILS CARD */}
-
               <Box
                 border="1px solid"
                 borderColor={BORDER}
@@ -599,7 +631,6 @@ const TombFeesEditPage = () => {
                 overflow="hidden"
               >
                 {/* TAB HEADER */}
-
                 <Box
                   height="42px"
                   borderBottom="1px solid"
@@ -629,12 +660,8 @@ const TombFeesEditPage = () => {
                 </Box>
 
                 {/* FORM */}
-
                 <Box
-                  px={{
-                    base: 3,
-                    md: 4,
-                  }}
+                  px={{ base: 3, md: 4 }}
                   py={3}
                 >
                   <Text
@@ -646,13 +673,9 @@ const TombFeesEditPage = () => {
                     Tomb Fee Information
                   </Text>
 
-                  {/* TOMB TYPE */}
-
+                  {/* TOMB TYPE + FEES */}
                   <Grid
-                    templateColumns={{
-                      base: "1fr",
-                      md: "1fr 1fr",
-                    }}
+                    templateColumns={{ base: "1fr", md: "1fr 1fr" }}
                     gap={4}
                     mb={3}
                   >
@@ -664,66 +687,45 @@ const TombFeesEditPage = () => {
                         mb={2}
                       >
                         Tomb Type{" "}
-                        <Text
-                          as="span"
-                          color={RED}
-                        >
+                        <Text as="span" color={RED}>
                           *
                         </Text>
                       </Text>
 
                       <select
                         name="tomb_type"
-                        value={
-                          formData.tomb_type
-                        }
-                        onChange={
-                          handleChange
-                        }
+                        value={formData.tomb_type}
+                        onChange={handleChange}
                         style={{
                           width: "100%",
                           height: "38px",
                           border: `1px solid ${
-                            hasChanges
+                            fieldErrors.tomb_type
+                              ? "#F3C4C4"
+                              : hasChanges
                               ? RED
                               : BORDER
                           }`,
-                          borderRadius:
-                            "6px",
-                          padding:
-                            "0 11px",
-                          fontSize:
-                            "12px",
-                          background:
-                            "white",
+                          borderRadius: "6px",
+                          padding: "0 11px",
+                          fontSize: "12px",
+                          background: "white",
                           color: DARK,
-                          outline:
-                            "none",
-                          cursor:
-                            "pointer",
+                          outline: "none",
+                          cursor: "pointer",
                         }}
                       >
-                        <option value="">
-                          Select tomb type
-                        </option>
+                        <option value="">Select tomb type</option>
 
-                        {tombTypes.map(
-                          (type) => (
-                            <option
-                              key={type.id}
-                              value={
-                                type.id
-                              }
-                            >
-                              {type.name}
-                            </option>
-                          )
-                        )}
+                        {tombTypes.map((type) => (
+                          <option key={type.id} value={type.id}>
+                            {type.name}
+                          </option>
+                        ))}
                       </select>
                     </Box>
 
                     {/* FEES */}
-
                     <Box>
                       <Text
                         fontSize="12px"
@@ -732,10 +734,7 @@ const TombFeesEditPage = () => {
                         mb={2}
                       >
                         Tomb Fees{" "}
-                        <Text
-                          as="span"
-                          color={RED}
-                        >
+                        <Text as="span" color={RED}>
                           *
                         </Text>
                       </Text>
@@ -745,29 +744,23 @@ const TombFeesEditPage = () => {
                         type="number"
                         min="0"
                         step="0.001"
-                        value={
-                          formData.tomb_fees
-                        }
-                        onChange={
-                          handleChange
-                        }
+                        value={formData.tomb_fees}
+                        onChange={handleChange}
                         placeholder="Enter tomb fees"
                         height="38px"
                         fontSize="12px"
                         borderColor={
-                          hasChanges
+                          fieldErrors.tomb_fees
+                            ? "#F3C4C4"
+                            : hasChanges
                             ? RED
                             : BORDER
                         }
                         borderRadius="6px"
                         color={DARK}
-                        _placeholder={{
-                          color:
-                            "#8B98AB",
-                        }}
+                        _placeholder={{ color: "#8B98AB" }}
                         _focus={{
-                          borderColor:
-                            PRIMARY_MAROON,
+                          borderColor: PRIMARY_MAROON,
                           boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                         }}
                       />
@@ -775,7 +768,6 @@ const TombFeesEditPage = () => {
                   </Grid>
 
                   {/* INDICATION */}
-
                   <Box mb={3}>
                     <Text
                       fontSize="12px"
@@ -784,46 +776,36 @@ const TombFeesEditPage = () => {
                       mb={2}
                     >
                       Indication{" "}
-                      <Text
-                        as="span"
-                        color={RED}
-                      >
+                      <Text as="span" color={RED}>
                         *
                       </Text>
                     </Text>
 
                     <Input
                       name="indication"
-                      value={
-                        formData.indication
-                      }
-                      onChange={
-                        handleChange
-                      }
+                      value={formData.indication}
+                      onChange={handleChange}
                       placeholder="Enter indication"
                       height="38px"
                       fontSize="12px"
                       borderColor={
-                        hasChanges
+                        fieldErrors.indication
+                          ? "#F3C4C4"
+                          : hasChanges
                           ? RED
                           : BORDER
                       }
                       borderRadius="6px"
                       color={DARK}
-                      _placeholder={{
-                        color:
-                          "#8B98AB",
-                      }}
+                      _placeholder={{ color: "#8B98AB" }}
                       _focus={{
-                        borderColor:
-                          PRIMARY_MAROON,
+                        borderColor: PRIMARY_MAROON,
                         boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                       }}
                     />
                   </Box>
 
                   {/* SPECIFICATION */}
-
                   <Box>
                     <Text
                       fontSize="12px"
@@ -836,65 +818,35 @@ const TombFeesEditPage = () => {
 
                     <Textarea
                       name="specification"
-                      value={
-                        formData.specification
-                      }
-                      onChange={
-                        handleChange
-                      }
+                      value={formData.specification}
+                      onChange={handleChange}
                       placeholder="Enter specification"
                       minH="90px"
                       resize="vertical"
                       fontSize="12px"
                       borderColor={
-                        hasChanges
+                        fieldErrors.specification
+                          ? "#F3C4C4"
+                          : hasChanges
                           ? RED
                           : BORDER
                       }
                       borderRadius="6px"
                       color={DARK}
-                      _placeholder={{
-                        color:
-                          "#8B98AB",
-                      }}
+                      _placeholder={{ color: "#8B98AB" }}
                       _focus={{
-                        borderColor:
-                          PRIMARY_MAROON,
+                        borderColor: PRIMARY_MAROON,
                         boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                       }}
                     />
                   </Box>
-
-                  {/* ERROR */}
-
-                  {error && (
-                    <Box
-                      mt={3}
-                      px={3}
-                      py={2}
-                      border="1px solid #FED7D7"
-                      bg="#FFF5F5"
-                      borderRadius="6px"
-                    >
-                      <Text
-                        color="#C53030"
-                        fontSize="11px"
-                      >
-                        {error}
-                      </Text>
-                    </Box>
-                  )}
                 </Box>
               </Box>
             </Box>
 
-            {/* ==================================================
-                RIGHT COLUMN
-            ================================================== */}
-
+            {/* RIGHT COLUMN */}
             <Box>
               {/* RECORD INFORMATION */}
-
               <Box
                 border="1px solid"
                 borderColor={BORDER}
@@ -902,10 +854,7 @@ const TombFeesEditPage = () => {
                 p={3}
                 mb={2}
               >
-                <HStack
-                  gap={2}
-                  mb={3}
-                >
+                <HStack gap={2} mb={3}>
                   <Flex
                     width="26px"
                     height="26px"
@@ -914,10 +863,7 @@ const TombFeesEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuFileText
-                      size={14}
-                      color={RED}
-                    />
+                    <LuFileText size={14} color={RED} />
                   </Flex>
 
                   <Text
@@ -929,13 +875,7 @@ const TombFeesEditPage = () => {
                   </Text>
                 </HStack>
 
-                {/* CREATED */}
-
-                <HStack
-                  align="flex-start"
-                  gap={2}
-                  mb={3}
-                >
+                <HStack align="flex-start" gap={2} mb={3}>
                   <Flex
                     width="25px"
                     height="25px"
@@ -944,17 +884,11 @@ const TombFeesEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuCalendarDays
-                      size={13}
-                      color={MUTED}
-                    />
+                    <LuCalendarDays size={13} color={MUTED} />
                   </Flex>
 
                   <Box>
-                    <Text
-                      color="#8290A4"
-                      fontSize="10px"
-                    >
+                    <Text color="#8290A4" fontSize="10px">
                       Created
                     </Text>
 
@@ -963,19 +897,12 @@ const TombFeesEditPage = () => {
                       fontSize="12px"
                       fontWeight="600"
                     >
-                      {formatDate(
-                        createdDate
-                      )}
+                      {formatDate(createdDate)}
                     </Text>
                   </Box>
                 </HStack>
 
-                {/* UPDATED */}
-
-                <HStack
-                  align="flex-start"
-                  gap={2}
-                >
+                <HStack align="flex-start" gap={2}>
                   <Flex
                     width="25px"
                     height="25px"
@@ -984,17 +911,11 @@ const TombFeesEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuUserRound
-                      size={13}
-                      color={MUTED}
-                    />
+                    <LuUserRound size={13} color={MUTED} />
                   </Flex>
 
                   <Box>
-                    <Text
-                      color="#8290A4"
-                      fontSize="10px"
-                    >
+                    <Text color="#8290A4" fontSize="10px">
                       Last updated
                     </Text>
 
@@ -1003,16 +924,13 @@ const TombFeesEditPage = () => {
                       fontSize="12px"
                       fontWeight="600"
                     >
-                      {formatDate(
-                        updatedDate
-                      )}
+                      {formatDate(updatedDate)}
                     </Text>
                   </Box>
                 </HStack>
               </Box>
 
               {/* UNSAVED CHANGES */}
-
               <Box
                 border="1px solid"
                 borderColor={BORDER}
@@ -1020,10 +938,7 @@ const TombFeesEditPage = () => {
                 p={3}
                 mb={2}
               >
-                <HStack
-                  gap={2}
-                  mb={3}
-                >
+                <HStack gap={2} mb={3}>
                   <Flex
                     width="26px"
                     height="26px"
@@ -1032,10 +947,7 @@ const TombFeesEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuTriangleAlert
-                      size={14}
-                      color="#F26B00"
-                    />
+                    <LuTriangleAlert size={14} color="#F26B00" />
                   </Flex>
 
                   <Text
@@ -1047,10 +959,7 @@ const TombFeesEditPage = () => {
                   </Text>
                 </HStack>
 
-                <HStack
-                  align="flex-start"
-                  gap={2}
-                >
+                <HStack align="flex-start" gap={2}>
                   <Flex
                     width="25px"
                     height="25px"
@@ -1059,10 +968,7 @@ const TombFeesEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuClock3
-                      size={13}
-                      color="#F26B00"
-                    />
+                    <LuClock3 size={13} color="#F26B00" />
                   </Flex>
 
                   <Box>
@@ -1073,19 +979,12 @@ const TombFeesEditPage = () => {
                     >
                       {hasChanges
                         ? `${changedFields.length} field${
-                            changedFields.length >
-                            1
-                              ? "s"
-                              : ""
+                            changedFields.length > 1 ? "s" : ""
                           } modified`
                         : "No changes"}
                     </Text>
 
-                    <Text
-                      color={MUTED}
-                      fontSize="10px"
-                      mt={1}
-                    >
+                    <Text color={MUTED} fontSize="10px" mt={1}>
                       {hasChanges
                         ? "Please review your changes before saving."
                         : "Make changes to the tomb fee information."}
@@ -1095,17 +994,13 @@ const TombFeesEditPage = () => {
               </Box>
 
               {/* DANGER ZONE */}
-
               <Box
                 border="1px solid"
                 borderColor={BORDER}
                 borderRadius="9px"
                 p={3}
               >
-                <HStack
-                  gap={2}
-                  mb={3}
-                >
+                <HStack gap={2} mb={3}>
                   <Flex
                     width="26px"
                     height="26px"
@@ -1114,10 +1009,7 @@ const TombFeesEditPage = () => {
                     align="center"
                     justify="center"
                   >
-                    <LuArchive
-                      size={14}
-                      color={RED}
-                    />
+                    <LuArchive size={14} color={RED} />
                   </Flex>
 
                   <Text
@@ -1137,9 +1029,7 @@ const TombFeesEditPage = () => {
                   fontSize="12px"
                   fontWeight="600"
                   justifyContent="flex-start"
-                  onClick={
-                    handleArchive
-                  }
+                  onClick={handleArchive}
                   loading={archiving}
                   _hover={{
                     bg: "transparent",
@@ -1148,12 +1038,8 @@ const TombFeesEditPage = () => {
                 >
                   <LuArchive
                     size={14}
-                    style={{
-                      marginRight:
-                        "8px",
-                    }}
+                    style={{ marginRight: "8px" }}
                   />
-
                   Remove Tomb Fee Record
                 </Button>
 
@@ -1163,9 +1049,7 @@ const TombFeesEditPage = () => {
                   mt={2}
                   ml={1}
                 >
-                  This tomb fee record
-                  will be removed from
-                  the master list.
+                  This tomb fee record will be removed from the master list.
                 </Text>
               </Box>
             </Box>
@@ -1174,24 +1058,16 @@ const TombFeesEditPage = () => {
       </Box>
 
       {/* BOTTOM ACTION BAR */}
-
       <Box
         borderTop="1px solid"
         borderColor={BORDER}
         bg="white"
-        px={{
-          base: 4,
-          md: 6,
-        }}
+        px={{ base: 4, md: 6 }}
         py={2}
         flexShrink={0}
       >
-        <Flex
-          justify="flex-end"
-          gap={2}
-        >
+        <Flex justify="flex-end" gap={2}>
           {/* CANCEL */}
-
           <Button
             variant="outline"
             height="36px"
@@ -1201,52 +1077,34 @@ const TombFeesEditPage = () => {
             borderRadius="6px"
             fontSize="12px"
             onClick={handleCancel}
-            _hover={{
-              bg: "#FFF5F7",
-            }}
+            _hover={{ bg: "#FFF5F7" }}
           >
             Cancel
           </Button>
 
           {/* UPDATE */}
-
           <Button
             height="36px"
             minW="150px"
-            bg={
-              hasChanges
-                ? PRIMARY_MAROON
-                : "#D9DCE1"
-            }
-            color={
-              hasChanges
-                ? "white"
-                : "#8A929D"
-            }
+            bg={hasChanges ? PRIMARY_MAROON : "#D9DCE1"}
+            color={hasChanges ? "white" : "#8A929D"}
             borderRadius="6px"
             fontSize="12px"
             disabled={!hasChanges}
             loading={updating}
             onClick={handleUpdate}
             _hover={{
-              bg: hasChanges
-                ? "#650A18"
-                : "#D9DCE1",
+              bg: hasChanges ? "#650A18" : "#D9DCE1",
             }}
           >
             <LuSave
               size={14}
-              style={{
-                marginRight: "7px",
-              }}
+              style={{ marginRight: "7px" }}
             />
-
             Update
           </Button>
         </Flex>
       </Box>
-
-      {/* FOOTER */}
 
       <Box flexShrink={0}>
         <Footer />

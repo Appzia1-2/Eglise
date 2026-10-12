@@ -44,6 +44,36 @@ const border = "#DCE2EA";
 const red = "#D7193F";
 
 /* =========================================================
+   TOAST HELPER
+========================================================= */
+
+const showToast = ({
+  title,
+  description,
+  type = "info",
+  duration = 4000,
+}) => {
+  toaster.create({
+    title,
+    description,
+    type,
+    duration,
+    closable: true,
+  });
+};
+
+/* =========================================================
+   FIELD LABELS
+========================================================= */
+
+const FIELD_LABELS = {
+  group_name: "Group Name",
+  group_code: "Group Code",
+  alias: "Alias",
+  under_group: "Under Group",
+};
+
+/* =========================================================
    FIELD LABEL
 ========================================================= */
 
@@ -69,37 +99,25 @@ const FieldLabel = ({ children, required }) => (
 );
 
 /* =========================================================
-   TEXT FIELD
+   TEXT FIELD — no inline error text
 ========================================================= */
 
 const TextField = ({ error, ...props }) => (
-  <>
-    <Input
-      height="40px"
-      fontSize="12px"
-      borderColor={error ? "red.500" : border}
-      borderRadius="6px"
-      _focus={{
-        borderColor: primaryMaroon,
-        boxShadow: `0 0 0 1px ${primaryMaroon}`,
-      }}
-      {...props}
-    />
-
-    {error && (
-      <Text
-        fontSize="10px"
-        color="red.500"
-        mt={1}
-      >
-        {error}
-      </Text>
-    )}
-  </>
+  <Input
+    height="40px"
+    fontSize="12px"
+    borderColor={error ? "red.500" : border}
+    borderRadius="6px"
+    _focus={{
+      borderColor: primaryMaroon,
+      boxShadow: `0 0 0 1px ${primaryMaroon}`,
+    }}
+    {...props}
+  />
 );
 
 /* =========================================================
-   ACCOUNT GROUP SELECT
+   ACCOUNT GROUP SELECT — no inline error text
 ========================================================= */
 
 const AccountGroupSelect = ({
@@ -108,64 +126,52 @@ const AccountGroupSelect = ({
   groups,
   error,
 }) => (
-  <>
-    <Box position="relative">
-      <Icon
-        as={LuNetwork}
-        boxSize={4}
-        color="gray.400"
-        position="absolute"
-        left="12px"
-        top="50%"
-        transform="translateY(-50%)"
-        zIndex={1}
-        pointerEvents="none"
-      />
+  <Box position="relative">
+    <Icon
+      as={LuNetwork}
+      boxSize={4}
+      color="gray.400"
+      position="absolute"
+      left="12px"
+      top="50%"
+      transform="translateY(-50%)"
+      zIndex={1}
+      pointerEvents="none"
+    />
 
-      <Box
-        as="select"
-        value={value}
-        onChange={onChange}
-        style={{
-          width: "100%",
-          padding: "0 12px 0 36px",
-          borderRadius: "6px",
-          border: `1px solid ${
-            error ? "#e53e3e" : border
-          }`,
-          fontSize: "12px",
-          height: "40px",
-          background: "white",
-          outline: "none",
-          color: value ? dark : "#a0aec0",
-          cursor: "pointer",
-        }}
-      >
-        <option value="">
-          Select parent group
+    <Box
+      as="select"
+      value={value}
+      onChange={onChange}
+      style={{
+        width: "100%",
+        padding: "0 12px 0 36px",
+        borderRadius: "6px",
+        border: `1px solid ${
+          error ? "#e53e3e" : border
+        }`,
+        fontSize: "12px",
+        height: "40px",
+        background: "white",
+        outline: "none",
+        color: value ? dark : "#a0aec0",
+        cursor: "pointer",
+      }}
+    >
+      <option value="">
+        Select parent group
+      </option>
+
+      {groups.map((group) => (
+        <option
+          key={group.id}
+          value={group.id}
+        >
+          {group.group_name}
         </option>
-
-        {groups.map((group) => (
-          <option
-            key={group.id}
-            value={group.id}
-          >
-            {group.group_name}
-          </option>
-        ))}
-      </Box>
+      ))}
     </Box>
-
-    {error && (
-      <Text
-        fontSize="10px"
-        color="red.500"
-        mt={1}
-      >
-        {error}
-      </Text>
-    )}
-  </>
+  </Box>
 );
 
 /* =========================================================
@@ -190,7 +196,7 @@ const AccountGroupAddPage = () => {
     under_group: "",
   });
 
-  const [errors, setErrors] = useState({});
+  const [fieldErrors, setFieldErrors] = useState({});
 
   /* =======================================================
      LOAD ACCOUNT GROUPS
@@ -217,13 +223,13 @@ const AccountGroupAddPage = () => {
           error
         );
 
-        toaster.create({
-          title:
-            "Unable to load account groups",
+        showToast({
+          title: "Failed to load data",
           description:
-            "Please refresh the page and try again.",
+            error?.response?.data?.detail ||
+            "Unable to load account groups. Please refresh and try again.",
           type: "error",
-          duration: 4000,
+          duration: 6000,
         });
       } finally {
         setIsLoadingGroups(false);
@@ -247,12 +253,11 @@ const AccountGroupAddPage = () => {
         [field]: value,
       }));
 
-      if (errors[field]) {
-        setErrors((previous) => ({
-          ...previous,
-          [field]: "",
-        }));
-      }
+      setFieldErrors((previous) =>
+        previous[field]
+          ? { ...previous, [field]: "" }
+          : previous
+      );
     };
 
   /* =======================================================
@@ -261,17 +266,22 @@ const AccountGroupAddPage = () => {
 
   const validate = () => {
     const newErrors = {};
+    const missing = [];
 
     if (!formData.group_name.trim()) {
       newErrors.group_name =
         "Group name is required.";
+      missing.push(FIELD_LABELS.group_name);
     }
 
-    setErrors(newErrors);
+    setFieldErrors(newErrors);
 
-    return (
-      Object.keys(newErrors).length === 0
-    );
+    return {
+      errors: newErrors,
+      missing,
+      valid:
+        Object.keys(newErrors).length === 0,
+    };
   };
 
   /* =======================================================
@@ -281,11 +291,23 @@ const AccountGroupAddPage = () => {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (!validate()) {
+    const { errors, missing, valid } = validate();
+
+    if (!valid) {
+      showToast({
+        title: "Please fix the form",
+        description:
+          missing.length === 1
+            ? `${missing[0]} is required.`
+            : `Please fill: ${missing.join(", ")}.`,
+        type: "warning",
+        duration: 5000,
+      });
       return;
     }
 
     setIsSubmitting(true);
+    setFieldErrors({});
 
     const payload = {
       group_name:
@@ -310,26 +332,15 @@ const AccountGroupAddPage = () => {
       );
     }
 
-    console.log(
-      "Creating account group with payload:",
-      payload
-    );
-
     try {
-      const response =
-        await createAccountGroup(payload);
+      await createAccountGroup(payload);
 
-      console.log(
-        "Account group created:",
-        response?.data
-      );
-
-      toaster.create({
-        title: "Success",
+      showToast({
+        title: "Account group created",
         description:
-          "Account group created successfully.",
+          "The account group was created successfully.",
         type: "success",
-        duration: 3000,
+        duration: 4000,
       });
 
       navigate("/account-groups");
@@ -342,101 +353,71 @@ const AccountGroupAddPage = () => {
       const backendData =
         error?.response?.data;
 
-      console.error(
-        "Backend response:",
-        backendData
-      );
-
-      console.error(
-        "HTTP status:",
-        error?.response?.status
-      );
-
-      /* =================================================
-         CONVERT DJANGO ERRORS
-      ================================================= */
-
       if (
         backendData &&
-        typeof backendData === "object"
+        typeof backendData === "object" &&
+        !Array.isArray(backendData)
       ) {
         const backendErrors = {};
 
         Object.entries(
           backendData
-        ).forEach(
-          ([field, message]) => {
-            if (Array.isArray(message)) {
-              backendErrors[field] =
-                message.join(", ");
-            } else if (
-              typeof message ===
-              "string"
-            ) {
-              backendErrors[field] =
-                message;
-            }
+        ).forEach(([field, message]) => {
+          if (Array.isArray(message)) {
+            backendErrors[field] =
+              message.join(", ");
+          } else if (
+            typeof message === "string"
+          ) {
+            backendErrors[field] =
+              message;
           }
-        );
+        });
 
-        if (
-          Object.keys(
-            backendErrors
-          ).length > 0
-        ) {
-          setErrors(backendErrors);
-        }
-      }
+        setFieldErrors(backendErrors);
 
-      /* =================================================
-         TOAST MESSAGE
-      ================================================= */
+        const generalError =
+          backendData.error ||
+          backendData.detail ||
+          backendData.non_field_errors?.[0];
 
-      let description =
-        "Failed to create account group.";
+        const fieldMessages =
+          Object.values(backendErrors).filter(
+            Boolean
+          );
 
-      if (backendData?.error) {
-        description =
-          backendData.error;
-      } else if (backendData?.detail) {
-        description =
-          backendData.detail;
-      } else if (
-        backendData &&
-        typeof backendData === "object"
-      ) {
-        const messages =
-          Object.entries(
-            backendData
-          )
-            .map(
-              ([field, message]) => {
-                const readable =
-                  Array.isArray(
-                    message
+        const onlyOneFieldError =
+          fieldMessages.length === 1 &&
+          !generalError;
+
+        showToast({
+          title:
+            "Could not create account group",
+          description:
+            generalError ||
+            (onlyOneFieldError
+              ? fieldMessages[0]
+              : Object.entries(backendErrors)
+                  .map(
+                    ([field, message]) =>
+                      `${
+                        FIELD_LABELS[field] || field
+                      }: ${message}`
                   )
-                    ? message.join(
-                        ", "
-                      )
-                    : String(message);
-
-                return `${field}: ${readable}`;
-              }
-            )
-            .join(" | ");
-
-        if (messages) {
-          description = messages;
-        }
+                  .join(" | ")),
+          type: "error",
+          duration: 7000,
+        });
+      } else {
+        showToast({
+          title:
+            "Could not create account group",
+          description:
+            "Unable to create account group. Please try again.",
+          type: "error",
+          duration: 7000,
+        });
       }
-
-      toaster.create({
-        title:
-          "Unable to create account group",
-        description,
-        type: "error",
-        duration: 6000,
-      });
     } finally {
       setIsSubmitting(false);
     }
@@ -453,31 +434,15 @@ const AccountGroupAddPage = () => {
       display="flex"
       flexDirection="column"
     >
-      {/* =================================================
-          HEADER / NAVBAR
-      ================================================= */}
-
       <Navbar />
-
-      {/* =================================================
-          MAIN
-      ================================================= */}
 
       <Box
         flex="1"
         w="100%"
-        px={{
-          base: 3,
-          md: 4,
-        }}
-        py={{
-          base: 3,
-          md: 4,
-        }}
+        px={{ base: 3, md: 4 }}
+        py={{ base: 3, md: 4 }}
       >
-        {/* =================================================
-            BREADCRUMB
-        ================================================= */}
+        {/* BREADCRUMB */}
 
         <HStack
           gap={2}
@@ -489,9 +454,7 @@ const AccountGroupAddPage = () => {
             color={primaryMaroon}
             cursor="pointer"
             onClick={() =>
-              navigate(
-                "/admin/masters"
-              )
+              navigate("/admin/masters")
             }
           >
             Masters
@@ -503,9 +466,7 @@ const AccountGroupAddPage = () => {
             color={primaryMaroon}
             cursor="pointer"
             onClick={() =>
-              navigate(
-                "/account-groups"
-              )
+              navigate("/account-groups")
             }
           >
             Account Groups
@@ -513,14 +474,10 @@ const AccountGroupAddPage = () => {
 
           <Text>/</Text>
 
-          <Text>
-            Add Account Group
-          </Text>
+          <Text>Add Account Group</Text>
         </HStack>
 
-        {/* =================================================
-            PAGE HEADER
-        ================================================= */}
+        {/* PAGE HEADER */}
 
         <Flex
           justify="space-between"
@@ -564,15 +521,13 @@ const AccountGroupAddPage = () => {
               fontSize="11px"
               mt={1}
             >
-              Create an account group
-              and define its hierarchy.
+              Create an account group and
+              define its hierarchy.
             </Text>
           </Box>
         </Flex>
 
-        {/* =================================================
-            FORM
-        ================================================= */}
+        {/* FORM */}
 
         <form onSubmit={handleSubmit}>
           <Box
@@ -582,15 +537,10 @@ const AccountGroupAddPage = () => {
             overflow="hidden"
             width="100%"
           >
-            {/* =================================================
-                SECTION HEADER
-            ================================================= */}
+            {/* SECTION HEADER */}
 
             <Box
-              px={{
-                base: 4,
-                md: 5,
-              }}
+              px={{ base: 4, md: 5 }}
               pt={4}
               pb={3}
             >
@@ -615,20 +565,15 @@ const AccountGroupAddPage = () => {
               borderBottom={`1px solid ${border}`}
             />
 
-            {/* =================================================
-                GROUP INFORMATION
-            ================================================= */}
+            {/* GROUP INFORMATION */}
 
             <Box
-              px={{
-                base: 4,
-                md: 5,
-              }}
+              px={{ base: 4, md: 5 }}
               py={5}
             >
               <VStack
                 align="stretch"
-                spacing={5}
+                gap={5}
               >
                 <Box>
                   <Text
@@ -656,14 +601,12 @@ const AccountGroupAddPage = () => {
 
                       <TextField
                         placeholder="Enter group name"
-                        value={
-                          formData.group_name
-                        }
+                        value={formData.group_name}
                         onChange={handleChange(
                           "group_name"
                         )}
                         error={
-                          errors.group_name
+                          fieldErrors.group_name
                         }
                       />
                     </GridItem>
@@ -677,14 +620,12 @@ const AccountGroupAddPage = () => {
 
                       <TextField
                         placeholder="Enter group code (optional)"
-                        value={
-                          formData.group_code
-                        }
+                        value={formData.group_code}
                         onChange={handleChange(
                           "group_code"
                         )}
                         error={
-                          errors.group_code
+                          fieldErrors.group_code
                         }
                       />
                     </GridItem>
@@ -698,15 +639,11 @@ const AccountGroupAddPage = () => {
 
                       <TextField
                         placeholder="Enter alias (optional)"
-                        value={
-                          formData.alias
-                        }
+                        value={formData.alias}
                         onChange={handleChange(
                           "alias"
                         )}
-                        error={
-                          errors.alias
-                        }
+                        error={fieldErrors.alias}
                       />
                     </GridItem>
 
@@ -718,15 +655,13 @@ const AccountGroupAddPage = () => {
                       </FieldLabel>
 
                       <AccountGroupSelect
-                        value={
-                          formData.under_group
-                        }
+                        value={formData.under_group}
                         onChange={handleChange(
                           "under_group"
                         )}
                         groups={groups}
                         error={
-                          errors.under_group
+                          fieldErrors.under_group
                         }
                       />
 
@@ -736,38 +671,27 @@ const AccountGroupAddPage = () => {
                           color={muted}
                           mt={1}
                         >
-                          Loading account
-                          groups...
+                          Loading account groups...
                         </Text>
                       )}
                     </GridItem>
                   </Grid>
                 </Box>
 
-                {/* =================================================
-                    DIVIDER
-                ================================================= */}
+                <Box borderBottom="1px solid #EEF1F5" />
 
-                <Box
-                  borderBottom="1px solid #EEF1F5"
-                />
-
-                {/* =================================================
-                    GROUP HIERARCHY
-                ================================================= */}
+                {/* GROUP HIERARCHY */}
 
                 <Box>
                   <HStack
-                    spacing={2}
+                    gap={2}
                     mb={3}
                     align="center"
                   >
                     <Icon
                       as={LuFolderTree}
                       boxSize={4}
-                      color={
-                        primaryMaroon
-                      }
+                      color={primaryMaroon}
                     />
 
                     <Text
@@ -781,7 +705,7 @@ const AccountGroupAddPage = () => {
 
                   <Box
                     bg="#FAFBFC"
-                    border={`1px solid #EEF1F5`}
+                    border="1px solid #EEF1F5"
                     borderRadius="6px"
                     px={4}
                     py={3}
@@ -791,12 +715,11 @@ const AccountGroupAddPage = () => {
                       color={muted}
                       lineHeight="1.6"
                     >
-                      Select an existing
-                      account group under
-                      which this group should
-                      be created. Leave it
-                      empty to create a
-                      top-level account group.
+                      Select an existing account
+                      group under which this group
+                      should be created. Leave it
+                      empty to create a top-level
+                      account group.
                     </Text>
                   </Box>
                 </Box>
@@ -804,21 +727,13 @@ const AccountGroupAddPage = () => {
             </Box>
           </Box>
 
-          {/* =================================================
-              BUTTONS
-          ================================================= */}
+          {/* BUTTONS */}
 
-          <Flex
-            justify="flex-end"
-            gap={2}
-            mt={4}
-          >
+          <Flex justify="flex-end" gap={2} mt={4}>
             <Button
               type="button"
               variant="outline"
-              borderColor={
-                primaryMaroon
-              }
+              borderColor={primaryMaroon}
               color={primaryMaroon}
               bg="white"
               borderRadius="6px"
@@ -826,13 +741,9 @@ const AccountGroupAddPage = () => {
               fontSize="11px"
               px={6}
               onClick={() =>
-                navigate(
-                  "/account-groups"
-                )
+                navigate("/account-groups")
               }
-              isDisabled={
-                isSubmitting
-              }
+              disabled={isSubmitting}
               _hover={{
                 bg: "rgba(174,32,80,0.05)",
               }}
@@ -850,19 +761,13 @@ const AccountGroupAddPage = () => {
               px={7}
               loading={isSubmitting}
               loadingText="Saving..."
-              _hover={{
-                bg: "#8a1a3e",
-              }}
+              _hover={{ bg: "#8a1a3e" }}
             >
               Save Account Group
             </Button>
           </Flex>
         </form>
       </Box>
-
-      {/* =================================================
-          FOOTER
-      ================================================= */}
 
       <Footer />
     </Box>
