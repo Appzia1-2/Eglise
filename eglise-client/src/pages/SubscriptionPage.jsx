@@ -1,3 +1,5 @@
+// src/pages/SubscriptionPage.jsx
+
 import React, { useEffect, useMemo, useState } from "react";
 
 import {
@@ -19,7 +21,6 @@ import {
   LuChevronRight,
   LuCircleCheck,
   LuCircleX,
-  LuEye,
   LuFilter,
   LuPencil,
   LuPlus,
@@ -34,10 +35,10 @@ import Footer from "../components/Footer";
 import {
   listSubscriptions,
   listGrades,
+  listAccountLedgers,
 } from "../api/registryServices";
 
 const PRIMARY_MAROON = "var(--primary-maroon)";
-
 const RED = "#D7193F";
 const DARK = "#182338";
 const MUTED = "#60708C";
@@ -46,12 +47,9 @@ const BORDER = "#DCE2EA";
 const SubscriptionPage = () => {
   const navigate = useNavigate();
 
-  // ==========================================================
-  // STATE
-  // ==========================================================
-
   const [subscriptions, setSubscriptions] = useState([]);
   const [grades, setGrades] = useState([]);
+  const [ledgers, setLedgers] = useState([]);
 
   const [loading, setLoading] = useState(true);
 
@@ -63,78 +61,73 @@ const SubscriptionPage = () => {
   const pageSize = 5;
 
   // ==========================================================
-  // LOAD SUBSCRIPTIONS
+  // LOAD
   // ==========================================================
-
   const loadSubscriptions = async () => {
     try {
       setLoading(true);
 
-      const [subscriptionResponse, gradeResponse] =
-        await Promise.all([
-          listSubscriptions(),
-          listGrades(),
-        ]);
+      const [subRes, gradeRes, ledgerRes] = await Promise.all([
+        listSubscriptions(),
+        listGrades(),
+        listAccountLedgers(),
+      ]);
 
-      const subscriptionData =
-        subscriptionResponse?.data ??
-        subscriptionResponse;
+      const subData = subRes?.data ?? subRes;
+      const gradeData = gradeRes?.data ?? gradeRes;
+      const ledgerData = ledgerRes?.data ?? ledgerRes;
 
-      const gradeData =
-        gradeResponse?.data ??
-        gradeResponse;
-
-      const subscriptionList = Array.isArray(
-        subscriptionData
-      )
-        ? subscriptionData
-        : subscriptionData?.results || [];
+      const subList = Array.isArray(subData)
+        ? subData
+        : subData?.results || [];
 
       const gradeList = Array.isArray(gradeData)
         ? gradeData
         : gradeData?.results || [];
 
+      const ledgerList = Array.isArray(ledgerData)
+        ? ledgerData
+        : ledgerData?.results || [];
+
       setGrades(gradeList);
+      setLedgers(ledgerList);
 
-      // --------------------------------------------------------
-      // Enrich subscriptions with grade name
-      // --------------------------------------------------------
+      const mapped = subList.map((sub) => {
+        const gradeId = sub?.grade?.id ?? sub?.grade;
+        const ledgerId = sub?.ledger?.id ?? sub?.ledger;
 
-      const mappedSubscriptions =
-        subscriptionList.map((subscription) => {
-          const gradeId =
-            subscription?.grade?.id ??
-            subscription?.grade;
+        const gradeObj = gradeList.find(
+          (g) => String(g.id) === String(gradeId)
+        );
+        const ledgerObj = ledgerList.find(
+          (l) => String(l.id) === String(ledgerId)
+        );
 
-          const gradeObject = gradeList.find(
-            (grade) =>
-              String(grade.id) === String(gradeId)
-          );
+        return {
+          ...sub,
 
-          return {
-            ...subscription,
+          grade_name:
+            sub?.grade?.name || gradeObj?.name || "—",
 
-            grade_name:
-              subscription?.grade?.name ||
-              gradeObject?.name ||
-              "—",
+          ledger_name:
+            sub?.ledger?.ledger_name ||
+            ledgerObj?.ledger_name ||
+            "—",
 
-            status_label:
-              subscription?.is_cancelled
-                ? "Cancelled"
-                : "Active",
-          };
-        });
+          billing_cycle: sub?.billing_cycle || "MONTHLY",
 
-      setSubscriptions(mappedSubscriptions);
+          status_label: sub?.is_cancelled
+            ? "Cancelled"
+            : "Active",
+        };
+      });
+
+      setSubscriptions(mapped);
     } catch (error) {
-      console.error(
-        "Error loading subscriptions:",
-        error
-      );
-
+      console.error("Error loading subscriptions:", error);
       setSubscriptions([]);
       setGrades([]);
+      setLedgers([]);
     } finally {
       setLoading(false);
     }
@@ -147,84 +140,52 @@ const SubscriptionPage = () => {
   // ==========================================================
   // SEARCH + FILTER
   // ==========================================================
-
   const filteredSubscriptions = useMemo(() => {
     let result = [...subscriptions];
 
-    const searchText =
-      search.trim().toLowerCase();
-
-    // --------------------------------------------------------
-    // SEARCH
-    // --------------------------------------------------------
+    const searchText = search.trim().toLowerCase();
 
     if (searchText) {
-      result = result.filter((subscription) => {
-        const gradeName =
-          subscription.grade_name
-            ?.toLowerCase() || "";
-
-        const term =
-          subscription.term
-            ?.toLowerCase() || "";
+      result = result.filter((sub) => {
+        const gradeName = sub.grade_name?.toLowerCase() || "";
+        const term = sub.term?.toLowerCase() || "";
+        const ledgerName = sub.ledger_name?.toLowerCase() || "";
+        const cycle = sub.billing_cycle?.toLowerCase() || "";
 
         return (
           gradeName.includes(searchText) ||
-          term.includes(searchText)
+          term.includes(searchText) ||
+          ledgerName.includes(searchText) ||
+          cycle.includes(searchText)
         );
       });
     }
 
-    // --------------------------------------------------------
-    // FILTER
-    // --------------------------------------------------------
-
     if (filter === "ACTIVE") {
-      result = result.filter(
-        (subscription) =>
-          !subscription.is_cancelled
-      );
+      result = result.filter((s) => !s.is_cancelled);
     }
 
     if (filter === "CANCELLED") {
-      result = result.filter(
-        (subscription) =>
-          subscription.is_cancelled
-      );
+      result = result.filter((s) => s.is_cancelled);
     }
 
     return result;
-  }, [
-    subscriptions,
-    search,
-    filter,
-  ]);
+  }, [subscriptions, search, filter]);
 
   // ==========================================================
   // PAGINATION
   // ==========================================================
-
   const totalPages = Math.max(
     1,
-    Math.ceil(
-      filteredSubscriptions.length /
-        pageSize
-    )
+    Math.ceil(filteredSubscriptions.length / pageSize)
   );
 
-  const safePage = Math.min(
-    currentPage,
-    totalPages
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * pageSize;
+  const paginatedSubscriptions = filteredSubscriptions.slice(
+    startIndex,
+    startIndex + pageSize
   );
-
-  const startIndex =
-    (safePage - 1) * pageSize;
-
-  const paginatedSubscriptions =
-    filteredSubscriptions.slice(
-      startIndex,
-      startIndex + pageSize
-    );
 
   useEffect(() => {
     setCurrentPage(1);
@@ -233,78 +194,40 @@ const SubscriptionPage = () => {
   // ==========================================================
   // STATS
   // ==========================================================
+  const totalSubscriptions = subscriptions.length;
 
-  const totalSubscriptions =
-    subscriptions.length;
+  const activeSubscriptions = subscriptions.filter(
+    (s) => !s.is_cancelled
+  ).length;
 
-  const activeSubscriptions =
-    subscriptions.filter(
-      (subscription) =>
-        !subscription.is_cancelled
-    ).length;
-
-  const cancelledSubscriptions =
-    subscriptions.filter(
-      (subscription) =>
-        subscription.is_cancelled
-    ).length;
+  const cancelledSubscriptions = subscriptions.filter(
+    (s) => s.is_cancelled
+  ).length;
 
   // ==========================================================
-  // DATE FORMAT
+  // FORMATTERS
   // ==========================================================
-
   const formatDate = (date) => {
-    if (!date) {
-      return "-";
-    }
-
-    const parsedDate = new Date(date);
-
-    if (
-      Number.isNaN(
-        parsedDate.getTime()
-      )
-    ) {
-      return "-";
-    }
-
-    return parsedDate.toLocaleDateString(
-      "en-GB",
-      {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }
-    );
+    if (!date) return "-";
+    const parsed = new Date(date);
+    if (Number.isNaN(parsed.getTime())) return "-";
+    return parsed.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
   };
 
-  // ==========================================================
-  // AMOUNT FORMAT
-  // ==========================================================
-
   const formatAmount = (amount) => {
-    if (
-      amount === null ||
-      amount === undefined ||
-      amount === ""
-    ) {
-      return "-";
-    }
-
-    const numericAmount =
-      Number(amount);
-
-    if (Number.isNaN(numericAmount)) {
-      return amount;
-    }
-
-    return numericAmount.toFixed(2);
+    if (amount === null || amount === undefined || amount === "") return "-";
+    const numeric = Number(amount);
+    if (Number.isNaN(numeric)) return amount;
+    return numeric.toFixed(2);
   };
 
   // ==========================================================
   // TABLE HEIGHT
   // ==========================================================
-
   const tableRowHeight = 42;
   const tableHeaderHeight = 42;
 
@@ -312,58 +235,27 @@ const SubscriptionPage = () => {
     ? 90
     : Math.max(
         90,
-        tableHeaderHeight +
-          paginatedSubscriptions.length *
-            tableRowHeight
+        tableHeaderHeight + paginatedSubscriptions.length * tableRowHeight
       );
 
   // ==========================================================
   // PAGINATION NUMBERS
   // ==========================================================
-
   const renderPages = () => {
     const pages = [];
 
     if (totalPages <= 5) {
-      for (
-        let i = 1;
-        i <= totalPages;
-        i++
-      ) {
-        pages.push(i);
-      }
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
     } else {
       pages.push(1);
+      if (safePage > 3) pages.push("...");
 
-      if (safePage > 3) {
-        pages.push("...");
-      }
+      const start = Math.max(2, safePage - 1);
+      const end = Math.min(totalPages - 1, safePage + 1);
 
-      const start = Math.max(
-        2,
-        safePage - 1
-      );
+      for (let i = start; i <= end; i++) pages.push(i);
 
-      const end = Math.min(
-        totalPages - 1,
-        safePage + 1
-      );
-
-      for (
-        let i = start;
-        i <= end;
-        i++
-      ) {
-        pages.push(i);
-      }
-
-      if (
-        safePage <
-        totalPages - 2
-      ) {
-        pages.push("...");
-      }
-
+      if (safePage < totalPages - 2) pages.push("...");
       pages.push(totalPages);
     }
 
@@ -373,177 +265,75 @@ const SubscriptionPage = () => {
   // ==========================================================
   // STAT CARD
   // ==========================================================
-
-  const StatCard = ({
-    icon,
-    title,
-    value,
-  }) => {
-    return (
-      <Box
-        border="1px solid #DCE2EA"
-        borderRadius="8px"
-        h="78px"
-        px={4}
-        bg="white"
-        display="flex"
-        alignItems="center"
-      >
-        <Flex
-          align="center"
-          width="100%"
+  const StatCard = ({ icon, title, value }) => (
+    <Box
+      border="1px solid #DCE2EA"
+      borderRadius="8px"
+      h="78px"
+      px={4}
+      bg="white"
+      display="flex"
+      alignItems="center"
+    >
+      <Flex align="center" width="100%" height="100%">
+        <Box
+          width="65px"
           height="100%"
+          borderRight="1px solid #DCE2EA"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          flexShrink={0}
         >
-          <Box
-            width="65px"
-            height="100%"
-            borderRight="1px solid #DCE2EA"
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-            flexShrink={0}
-          >
-            <Icon
-              as={icon}
-              boxSize={8}
-              color={RED}
-              strokeWidth={1.6}
-            />
-          </Box>
-
-          <Box pl={4}>
-            <Text
-              fontSize="12px"
-              color={DARK}
-              mb={1}
-              fontWeight="600"
-            >
-              {title}
-            </Text>
-
-            <Text
-              fontSize="24px"
-              fontWeight="700"
-              color={DARK}
-              lineHeight="1"
-            >
-              {value}
-            </Text>
-          </Box>
-        </Flex>
-      </Box>
-    );
-  };
+          <Icon as={icon} boxSize={8} color={RED} strokeWidth={1.6} />
+        </Box>
+        <Box pl={4}>
+          <Text fontSize="12px" color={DARK} mb={1} fontWeight="600">
+            {title}
+          </Text>
+          <Text fontSize="24px" fontWeight="700" color={DARK} lineHeight="1">
+            {value}
+          </Text>
+        </Box>
+      </Flex>
+    </Box>
+  );
 
   // ==========================================================
   // RENDER
   // ==========================================================
-
   return (
-    <Box
-      minH="100vh"
-      bg="white"
-      display="flex"
-      flexDirection="column"
-    >
-      {/* ======================================================
-          NAVBAR
-      ====================================================== */}
-
+    <Box minH="100vh" bg="white" display="flex" flexDirection="column">
       <Navbar />
 
-      {/* ======================================================
-          MAIN CONTENT
-      ====================================================== */}
-
       <Box flex="1" w="100%">
-        {/* ====================================================
-            CHANGED:
-            Removed Container maxW="1200px"
-            so content can use full available width.
-        ==================================================== */}
-
-        <Box
-          w="100%"
-          px={{
-            base: 3,
-            md: 4,
-          }}
-          py={{
-            base: 3,
-            md: 4,
-          }}
-        >
-          {/* ==================================================
-              BREADCRUMB
-          ================================================== */}
-
-          <HStack
-            gap={2}
-            mb={2}
-            color={MUTED}
-            fontSize="11px"
-          >
-            <Text>
-              Masters
-            </Text>
-
+        <Box w="100%" px={{ base: 3, md: 4 }} py={{ base: 3, md: 4 }}>
+          {/* BREADCRUMB */}
+          <HStack gap={2} mb={2} color={MUTED} fontSize="11px">
+            <Text>Masters</Text>
             <Text>/</Text>
-
-            <Text>
-              Subscription Master
-            </Text>
+            <Text>Subscription Master</Text>
           </HStack>
 
-          {/* ==================================================
-              HEADER
-          ================================================== */}
-
+          {/* HEADER */}
           <Flex
             justify="space-between"
-            align={{
-              base: "flex-start",
-              md: "center",
-            }}
+            align={{ base: "flex-start", md: "center" }}
             gap={3}
             mb={3}
-            direction={{
-              base: "column",
-              md: "row",
-            }}
+            direction={{ base: "column", md: "row" }}
           >
             <Box>
-              <Text
-                fontSize="10px"
-                fontWeight="700"
-                color={RED}
-                mb={1}
-              >
+              <Text fontSize="10px" fontWeight="700" color={RED} mb={1}>
                 SUBSCRIPTION MASTER
               </Text>
-
-              <Heading
-                color={DARK}
-                fontSize={{
-                  base: "22px",
-                  md: "26px",
-                }}
-                lineHeight="1.1"
-                mb={1}
-              >
+              <Heading color={DARK} fontSize={{ base: "22px", md: "26px" }} lineHeight="1.1" mb={1}>
                 Subscription Master
               </Heading>
-
-              <Text
-                color={MUTED}
-                fontSize="11px"
-              >
-                Manage church subscriptions,
-                grades, terms and billing
-                information.
+              <Text color={MUTED} fontSize="11px">
+                Manage church subscriptions, grades, terms and billing information.
               </Text>
             </Box>
-
             <Button
               bg={PRIMARY_MAROON}
               color="white"
@@ -552,66 +342,34 @@ const SubscriptionPage = () => {
               fontSize="12px"
               borderRadius="6px"
               flexShrink={0}
-              onClick={() =>
-                navigate(
-                  "/subscription/add"
-                )
-              }
-              _hover={{
-                bg: "#650A18",
-              }}
+              onClick={() => navigate("/subscription/add")}
+              _hover={{ bg: "#650A18" }}
             >
-              <Icon
-                as={LuPlus}
-                mr={2}
-                boxSize={4}
-              />
-
+              <Icon as={LuPlus} mr={2} boxSize={4} />
               Add Subscription
             </Button>
           </Flex>
 
-          {/* ==================================================
-              STAT CARDS
-          ================================================== */}
-
-          <SimpleGrid
-            columns={{
-              base: 1,
-              md: 3,
-            }}
-            gap={3}
-            mb={3}
-          >
+          {/* STAT CARDS */}
+          <SimpleGrid columns={{ base: 1, md: 3 }} gap={3} mb={3}>
             <StatCard
               icon={LuBadgeDollarSign}
               title="Total Subscriptions"
-              value={
-                totalSubscriptions
-              }
+              value={totalSubscriptions}
             />
-
             <StatCard
               icon={LuCircleCheck}
               title="Active Subscriptions"
-              value={
-                activeSubscriptions
-              }
+              value={activeSubscriptions}
             />
-
             <StatCard
               icon={LuCircleX}
               title="Cancelled Subscriptions"
-              value={
-                cancelledSubscriptions
-              }
+              value={cancelledSubscriptions}
             />
           </SimpleGrid>
 
-          {/* ==================================================
-              TABLE CARD
-          ================================================== */}
-
+          {/* TABLE CARD */}
           <Box
             border="1px solid #DCE2EA"
             borderRadius="8px"
@@ -619,26 +377,15 @@ const SubscriptionPage = () => {
             bg="white"
             w="100%"
           >
-            {/* ==================================================
-                SEARCH / FILTER
-            ================================================== */}
-
+            {/* SEARCH / FILTER */}
             <Flex
               gap={3}
               mb={3}
-              direction={{
-                base: "column",
-                md: "row",
-              }}
+              direction={{ base: "column", md: "row" }}
             >
-              {/* SEARCH */}
-
               <Box
                 position="relative"
-                maxW={{
-                  base: "100%",
-                  md: "380px",
-                }}
+                maxW={{ base: "100%", md: "380px" }}
                 flex="1"
               >
                 <Icon
@@ -651,76 +398,47 @@ const SubscriptionPage = () => {
                   zIndex={1}
                   boxSize={4}
                 />
-
                 <Input
                   value={search}
-                  onChange={(e) =>
-                    setSearch(
-                      e.target.value
-                    )
-                  }
-                  placeholder="Search grade or term"
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search grade, term, ledger or cycle"
                   pl="38px"
                   h="38px"
                   borderColor={BORDER}
                   borderRadius="6px"
                   fontSize="12px"
                   _focus={{
-                    borderColor:
-                      PRIMARY_MAROON,
-                    boxShadow:
-                      `0 0 0 1px ${PRIMARY_MAROON}`,
+                    borderColor: PRIMARY_MAROON,
+                    boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                   }}
                 />
               </Box>
 
-              {/* FILTER */}
-
               <Box
                 position="relative"
-                width={{
-                  base: "100%",
-                  md: "210px",
-                }}
+                width={{ base: "100%", md: "210px" }}
               >
                 <select
                   value={filter}
-                  onChange={(e) =>
-                    setFilter(
-                      e.target.value
-                    )
-                  }
+                  onChange={(e) => setFilter(e.target.value)}
                   style={{
                     width: "100%",
                     height: "38px",
-                    border:
-                      "1px solid #DCE2EA",
+                    border: "1px solid #DCE2EA",
                     borderRadius: "6px",
-                    padding:
-                      "0 35px 0 11px",
+                    padding: "0 35px 0 11px",
                     fontSize: "12px",
-                    background:
-                      "white",
+                    background: "white",
                     color: DARK,
                     outline: "none",
                     cursor: "pointer",
-                    appearance:
-                      "none",
+                    appearance: "none",
                   }}
                 >
-                  <option value="ALL">
-                    All Records
-                  </option>
-
-                  <option value="ACTIVE">
-                    Active
-                  </option>
-
-                  <option value="CANCELLED">
-                    Cancelled
-                  </option>
+                  <option value="ALL">All Records</option>
+                  <option value="ACTIVE">Active</option>
+                  <option value="CANCELLED">Cancelled</option>
                 </select>
-
                 <Icon
                   as={LuChevronDown}
                   position="absolute"
@@ -732,8 +450,6 @@ const SubscriptionPage = () => {
                   boxSize={4}
                 />
               </Box>
-
-              {/* RESET */}
 
               <Button
                 variant="outline"
@@ -748,20 +464,12 @@ const SubscriptionPage = () => {
                   setFilter("ALL");
                 }}
               >
-                <Icon
-                  as={LuFilter}
-                  mr={2}
-                  boxSize={4}
-                />
-
+                <Icon as={LuFilter} mr={2} boxSize={4} />
                 Filter
               </Button>
             </Flex>
 
-            {/* ==================================================
-                TABLE
-            ================================================== */}
-
+            {/* TABLE */}
             <Box
               height={`${tableHeight}px`}
               overflowX="auto"
@@ -774,57 +482,50 @@ const SubscriptionPage = () => {
               <Box
                 as="table"
                 width="100%"
-                minW="1000px"
+                minW="1200px"
                 height="100%"
                 borderCollapse="collapse"
               >
-                {/* TABLE HEADER */}
-
+                {/* HEADER */}
                 <Box as="thead">
-                  <Box
-                    as="tr"
-                    height={`${tableHeaderHeight}px`}
-                  >
+                  <Box as="tr" height={`${tableHeaderHeight}px`}>
                     {[
                       "Grade",
                       "Term",
+                      "Billing Cycle",
+                      "Ledger",
                       "Start Date",
                       "End Date",
                       "Amount",
                       "Status",
                       "Actions",
-                    ].map(
-                      (heading) => (
-                        <Box
-                          as="th"
-                          key={heading}
-                          textAlign="left"
-                          px={4}
-                          py={2}
-                          fontSize="11px"
-                          fontWeight="700"
-                          color={DARK}
-                          borderBottom="1px solid #E6EAF0"
-                          whiteSpace="nowrap"
-                          bg="white"
-                        >
-                          {heading}
-                        </Box>
-                      )
-                    )}
+                    ].map((heading) => (
+                      <Box
+                        as="th"
+                        key={heading}
+                        textAlign="left"
+                        px={4}
+                        py={2}
+                        fontSize="11px"
+                        fontWeight="700"
+                        color={DARK}
+                        borderBottom="1px solid #E6EAF0"
+                        whiteSpace="nowrap"
+                        bg="white"
+                      >
+                        {heading}
+                      </Box>
+                    ))}
                   </Box>
                 </Box>
 
-                {/* TABLE BODY */}
-
+                {/* BODY */}
                 <Box as="tbody">
-                  {/* LOADING */}
-
                   {loading ? (
                     <Box as="tr">
                       <Box
                         as="td"
-                        colSpan={7}
+                        colSpan={9}
                         textAlign="center"
                         height="48px"
                         color={MUTED}
@@ -833,14 +534,11 @@ const SubscriptionPage = () => {
                         Loading subscriptions...
                       </Box>
                     </Box>
-                  ) : paginatedSubscriptions.length ===
-                    0 ? (
-                    /* EMPTY */
-
+                  ) : paginatedSubscriptions.length === 0 ? (
                     <Box as="tr">
                       <Box
                         as="td"
-                        colSpan={7}
+                        colSpan={9}
                         textAlign="center"
                         height="48px"
                         color={MUTED}
@@ -850,349 +548,253 @@ const SubscriptionPage = () => {
                       </Box>
                     </Box>
                   ) : (
-                    paginatedSubscriptions.map(
-                      (subscription) => (
+                    paginatedSubscriptions.map((subscription) => (
+                      <Box
+                        as="tr"
+                        key={subscription.id}
+                        height={`${tableRowHeight}px`}
+                        _hover={{ bg: "#FFFBFC" }}
+                      >
+                        {/* GRADE */}
                         <Box
-                          as="tr"
-                          key={
-                            subscription.id
-                          }
-                          height={`${tableRowHeight}px`}
-                          _hover={{
-                            bg: "#FFFBFC",
-                          }}
+                          as="td"
+                          px={4}
+                          py={1}
+                          fontSize="12px"
+                          fontWeight="600"
+                          color={DARK}
+                          borderBottom="1px solid #E6EAF0"
+                          whiteSpace="nowrap"
                         >
-                          {/* GRADE */}
+                          {subscription.grade_name}
+                        </Box>
 
+                        {/* TERM */}
+                        <Box
+                          as="td"
+                          px={4}
+                          py={1}
+                          fontSize="12px"
+                          color="#344054"
+                          borderBottom="1px solid #E6EAF0"
+                          whiteSpace="nowrap"
+                        >
+                          {subscription.term || "-"}
+                        </Box>
+
+                        {/* BILLING CYCLE */}
+                        <Box
+                          as="td"
+                          px={4}
+                          py={1}
+                          borderBottom="1px solid #E6EAF0"
+                          whiteSpace="nowrap"
+                        >
                           <Box
-                            as="td"
-                            px={4}
-                            py={1}
-                            fontSize="12px"
+                            display="inline-flex"
+                            alignItems="center"
+                            px={2}
+                            py="3px"
+                            borderRadius="5px"
+                            fontSize="10px"
                             fontWeight="600"
-                            color={DARK}
-                            borderBottom="1px solid #E6EAF0"
-                            whiteSpace="nowrap"
+                            bg="#EEF2FF"
+                            color="#3730A3"
+                            border="1px solid #C7D2FE"
                           >
-                            {
-                              subscription.grade_name
-                            }
-                          </Box>
-
-                          {/* TERM */}
-
-                          <Box
-                            as="td"
-                            px={4}
-                            py={1}
-                            fontSize="12px"
-                            color="#344054"
-                            borderBottom="1px solid #E6EAF0"
-                            whiteSpace="nowrap"
-                          >
-                            {subscription.term ||
-                              "-"}
-                          </Box>
-
-                          {/* START DATE */}
-
-                          <Box
-                            as="td"
-                            px={4}
-                            py={1}
-                            fontSize="12px"
-                            color="#344054"
-                            borderBottom="1px solid #E6EAF0"
-                            whiteSpace="nowrap"
-                          >
-                            {formatDate(
-                              subscription.start_date
-                            )}
-                          </Box>
-
-                          {/* END DATE */}
-
-                          <Box
-                            as="td"
-                            px={4}
-                            py={1}
-                            fontSize="12px"
-                            color="#344054"
-                            borderBottom="1px solid #E6EAF0"
-                            whiteSpace="nowrap"
-                          >
-                            {formatDate(
-                              subscription.end_date
-                            )}
-                          </Box>
-
-                          {/* AMOUNT */}
-
-                          <Box
-                            as="td"
-                            px={4}
-                            py={1}
-                            fontSize="12px"
-                            fontWeight="600"
-                            color={DARK}
-                            borderBottom="1px solid #E6EAF0"
-                            whiteSpace="nowrap"
-                          >
-                            {formatAmount(
-                              subscription.amount
-                            )}
-                          </Box>
-
-                          {/* STATUS */}
-
-                          <Box
-                            as="td"
-                            px={4}
-                            py={1}
-                            borderBottom="1px solid #E6EAF0"
-                          >
-                            <Box
-                              display="inline-flex"
-                              alignItems="center"
-                              px={2}
-                              py="3px"
-                              borderRadius="5px"
-                              fontSize="10px"
-                              fontWeight="600"
-                              bg={
-                                subscription.is_cancelled
-                                  ? "#FFF0F0"
-                                  : "#EAF8EA"
-                              }
-                              border="1px solid"
-                              borderColor={
-                                subscription.is_cancelled
-                                  ? "#F2B8C3"
-                                  : "#B7DFB7"
-                              }
-                              color={
-                                subscription.is_cancelled
-                                  ? "#B5122F"
-                                  : "#238B2D"
-                              }
-                            >
-                              {subscription.is_cancelled
-                                ? "Cancelled"
-                                : "Active"}
-                            </Box>
-                          </Box>
-
-                          {/* ACTIONS */}
-
-                          <Box
-                            as="td"
-                            px={4}
-                            py={1}
-                            borderBottom="1px solid #E6EAF0"
-                          >
-                            <HStack gap={2}>
-                              {/* VIEW */}
-
-                              {/* <Button
-                                variant="ghost"
-                                size="sm"
-                                h="30px"
-                                color={RED}
-                                px={2}
-                                fontSize="11px"
-                                onClick={() =>
-                                  navigate(
-                                    `/subscription/${subscription.id}`
-                                  )
-                                }
-                                _hover={{
-                                  bg: "#FFF0F4",
-                                }}
-                              >
-                                <Icon
-                                  as={
-                                    LuEye
-                                  }
-                                  mr={1}
-                                  boxSize={3.5}
-                                />
-
-                                View
-                              </Button>
-
-                              <Box
-                                h="20px"
-                                borderLeft="1px solid #DCE2EA"
-                              /> */}
-
-                              {/* EDIT */}
-
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                h="30px"
-                                color={RED}
-                                px={2}
-                                fontSize="11px"
-                                onClick={() =>
-                                  navigate(
-                                    `/subscriptions/${subscription.id}/edit`
-                                  )
-                                }
-                                _hover={{
-                                  bg: "#FFF0F4",
-                                }}
-                              >
-                                <Icon
-                                  as={
-                                    LuPencil
-                                  }
-                                  mr={1}
-                                  boxSize={3.5}
-                                />
-
-                                Edit
-                              </Button>
-                            </HStack>
+                            {subscription.billing_cycle === "YEARLY"
+                              ? "Yearly"
+                              : "Monthly"}
                           </Box>
                         </Box>
-                      )
-                    )
+
+                        {/* LEDGER */}
+                        <Box
+                          as="td"
+                          px={4}
+                          py={1}
+                          fontSize="12px"
+                          color="#344054"
+                          borderBottom="1px solid #E6EAF0"
+                          whiteSpace="nowrap"
+                        >
+                          {subscription.ledger_name}
+                        </Box>
+
+                        {/* START DATE */}
+                        <Box
+                          as="td"
+                          px={4}
+                          py={1}
+                          fontSize="12px"
+                          color="#344054"
+                          borderBottom="1px solid #E6EAF0"
+                          whiteSpace="nowrap"
+                        >
+                          {formatDate(subscription.start_date)}
+                        </Box>
+
+                        {/* END DATE */}
+                        <Box
+                          as="td"
+                          px={4}
+                          py={1}
+                          fontSize="12px"
+                          color="#344054"
+                          borderBottom="1px solid #E6EAF0"
+                          whiteSpace="nowrap"
+                        >
+                          {formatDate(subscription.end_date)}
+                        </Box>
+
+                        {/* AMOUNT */}
+                        <Box
+                          as="td"
+                          px={4}
+                          py={1}
+                          fontSize="12px"
+                          fontWeight="600"
+                          color={DARK}
+                          borderBottom="1px solid #E6EAF0"
+                          whiteSpace="nowrap"
+                        >
+                          {formatAmount(subscription.amount)}
+                        </Box>
+
+                        {/* STATUS */}
+                        <Box
+                          as="td"
+                          px={4}
+                          py={1}
+                          borderBottom="1px solid #E6EAF0"
+                        >
+                          <Box
+                            display="inline-flex"
+                            alignItems="center"
+                            px={2}
+                            py="3px"
+                            borderRadius="5px"
+                            fontSize="10px"
+                            fontWeight="600"
+                            bg={
+                              subscription.is_cancelled
+                                ? "#FFF0F0"
+                                : "#EAF8EA"
+                            }
+                            border="1px solid"
+                            borderColor={
+                              subscription.is_cancelled
+                                ? "#F2B8C3"
+                                : "#B7DFB7"
+                            }
+                            color={
+                              subscription.is_cancelled
+                                ? "#B5122F"
+                                : "#238B2D"
+                            }
+                          >
+                            {subscription.is_cancelled
+                              ? "Cancelled"
+                              : "Active"}
+                          </Box>
+                        </Box>
+
+                        {/* ACTIONS */}
+                        <Box
+                          as="td"
+                          px={4}
+                          py={1}
+                          borderBottom="1px solid #E6EAF0"
+                        >
+                          <HStack gap={2}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              h="30px"
+                              color={RED}
+                              px={2}
+                              fontSize="11px"
+                              onClick={() =>
+                                navigate(
+                                  `/subscriptions/${subscription.id}/edit`
+                                )
+                              }
+                              _hover={{ bg: "#FFF0F4" }}
+                            >
+                              <Icon as={LuPencil} mr={1} boxSize={3.5} />
+                              Edit
+                            </Button>
+                          </HStack>
+                        </Box>
+                      </Box>
+                    ))
                   )}
                 </Box>
               </Box>
             </Box>
 
-            {/* ==================================================
-                PAGINATION
-            ================================================== */}
-
+            {/* PAGINATION */}
             <Flex
               justify="space-between"
               align="center"
               mt={3}
               gap={3}
-              direction={{
-                base: "column",
-                md: "row",
-              }}
+              direction={{ base: "column", md: "row" }}
             >
-              {/* COUNT */}
-
-              <Text
-                fontSize="11px"
-                color={MUTED}
-              >
-                {filteredSubscriptions.length ===
-                0
+              <Text fontSize="11px" color={MUTED}>
+                {filteredSubscriptions.length === 0
                   ? "Showing 0 subscriptions"
-                  : `Showing ${
-                      startIndex + 1
-                    }–${Math.min(
-                      startIndex +
-                        paginatedSubscriptions.length,
+                  : `Showing ${startIndex + 1}–${Math.min(
+                      startIndex + paginatedSubscriptions.length,
                       filteredSubscriptions.length
-                    )} of ${
-                      filteredSubscriptions.length
-                    } subscriptions`}
+                    )} of ${filteredSubscriptions.length} subscriptions`}
               </Text>
 
-              {/* PAGINATION */}
-
               <HStack gap={1}>
-                {/* PREVIOUS */}
-
                 <Button
                   size="xs"
                   h="30px"
                   variant="outline"
                   borderColor={BORDER}
                   color={MUTED}
-                  disabled={
-                    safePage === 1
-                  }
+                  disabled={safePage === 1}
                   onClick={() =>
-                    setCurrentPage(
-                      Math.max(
-                        1,
-                        safePage - 1
-                      )
-                    )
+                    setCurrentPage(Math.max(1, safePage - 1))
                   }
                 >
-                  <Icon
-                    as={LuChevronLeft}
-                    boxSize={3.5}
-                  />
-
+                  <Icon as={LuChevronLeft} boxSize={3.5} />
                   Previous
                 </Button>
 
-                {/* PAGE NUMBERS */}
-
-                {renderPages().map(
-                  (
-                    page,
-                    index
-                  ) =>
-                    page === "..." ? (
-                      <Text
-                        key={`dots-${index}`}
-                        px={1.5}
-                        fontSize="11px"
-                        color={MUTED}
-                      >
-                        ...
-                      </Text>
-                    ) : (
-                      <Button
-                        key={page}
-                        size="xs"
-                        h="30px"
-                        minW="30px"
-                        variant={
-                          page ===
-                          safePage
-                            ? "solid"
-                            : "outline"
-                        }
-                        bg={
-                          page ===
-                          safePage
-                            ? PRIMARY_MAROON
-                            : "white"
-                        }
-                        color={
-                          page ===
-                          safePage
-                            ? "white"
-                            : "#344054"
-                        }
-                        borderColor={
-                          page ===
-                          safePage
-                            ? PRIMARY_MAROON
-                            : BORDER
-                        }
-                        onClick={() =>
-                          setCurrentPage(
-                            page
-                          )
-                        }
-                        _hover={{
-                          bg:
-                            page ===
-                            safePage
-                              ? "#650A18"
-                              : "#FFF0F4",
-                        }}
-                      >
-                        {page}
-                      </Button>
-                    )
+                {renderPages().map((page, index) =>
+                  page === "..." ? (
+                    <Text
+                      key={`dots-${index}`}
+                      px={1.5}
+                      fontSize="11px"
+                      color={MUTED}
+                    >
+                      ...
+                    </Text>
+                  ) : (
+                    <Button
+                      key={page}
+                      size="xs"
+                      h="30px"
+                      minW="30px"
+                      variant={page === safePage ? "solid" : "outline"}
+                      bg={page === safePage ? PRIMARY_MAROON : "white"}
+                      color={page === safePage ? "white" : "#344054"}
+                      borderColor={page === safePage ? PRIMARY_MAROON : BORDER}
+                      onClick={() => setCurrentPage(page)}
+                      _hover={{
+                        bg: page === safePage ? "#650A18" : "#FFF0F4",
+                      }}
+                    >
+                      {page}
+                    </Button>
+                  )
                 )}
-
-                {/* NEXT */}
 
                 <Button
                   size="xs"
@@ -1200,38 +802,19 @@ const SubscriptionPage = () => {
                   variant="outline"
                   borderColor="#FF5A7D"
                   color={RED}
-                  disabled={
-                    safePage ===
-                    totalPages
-                  }
+                  disabled={safePage === totalPages}
                   onClick={() =>
-                    setCurrentPage(
-                      Math.min(
-                        totalPages,
-                        safePage + 1
-                      )
-                    )
+                    setCurrentPage(Math.min(totalPages, safePage + 1))
                   }
                 >
                   Next
-
-                  <Icon
-                    as={
-                      LuChevronRight
-                    }
-                    ml={1}
-                    boxSize={3.5}
-                  />
+                  <Icon as={LuChevronRight} ml={1} boxSize={3.5} />
                 </Button>
               </HStack>
             </Flex>
           </Box>
         </Box>
       </Box>
-
-      {/* ======================================================
-          FOOTER
-      ====================================================== */}
 
       <Footer />
     </Box>

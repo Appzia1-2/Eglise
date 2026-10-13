@@ -1128,4 +1128,22 @@ export const cancelReceipt = (id, data) =>
 export const getMyChurch = () =>
   apiClient.get("/api/registry/my-church/");
 
+// ============================================================
+// REPORTS
+// ============================================================
 
+export const getMemberLedgerReport = (params = {}) =>
+  apiClient.get("/api/registry/reports/member-ledger/", { params });
+
+export const getIncomeExpenditureReport = (params = {}) =>
+  apiClient.get("/api/registry/reports/income-expenditure/", { params });
+
+export const getDonationRegisterReport = (params = {}) =>
+  apiClient.get("/api/registry/reports/donation-register/", { params });
+
+
+export const getSubscriptionDueReport = (params = {}) =>
+  apiClient.get("/api/registry/reports/subscription-due/", { params });
+
+export const getSubscriptionPaidReport = (params = {}) =>
+  apiClient.get("/api/registry/reports/subscription-paid/", { params });

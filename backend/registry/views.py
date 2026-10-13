@@ -6,6 +6,7 @@ from rest_framework.generics import (
     RetrieveUpdateDestroyAPIView,
     UpdateAPIView,
 )
+from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from accounts.permissions import IsChurchAuthenticated,IsChurchUser, IsMemberUser
 from accounts.utils import create_family_head_user
@@ -355,31 +356,51 @@ class FamilyDetailAPIView(
 # registry/views.py - Update FamilyHeadCreateAPIView
 
 from rest_framework.parsers import MultiPartParser, FormParser
+from django.db import transaction
+
 
 class FamilyHeadCreateAPIView(APIView):
     permission_classes = [
         IsAuthenticated,
         IsChurchUser,
     ]
-    parser_classes = [MultiPartParser, FormParser]  # Add this
+    parser_classes = [MultiPartParser, FormParser]
 
     @transaction.atomic
     def post(self, request):
-        # Log incoming data for debugging
-        print("=== REQUEST DATA ===")
-        print("POST data:", request.data.dict() if hasattr(request.data, 'dict') else request.data)
-        print("FILES:", request.FILES)
-        
+        church = request.user.church
+
+        # -----------------------------------------------------
+        # LOCK the subscription row so two parallel creates
+        # cannot both pass the capacity check.
+        # -----------------------------------------------------
+        from .models import ChurchSubscription
+
+        ChurchSubscription.objects.select_for_update().filter(
+            church=church
+        ).first()
+
+        # -----------------------------------------------------
+        # SUBSCRIPTION CAPACITY CHECK
+        # -----------------------------------------------------
+        from .services import can_add_member
+
+        allowed, message, info = can_add_member(church)
+        if not allowed:
+            return Response(
+                {"detail": message},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         serializer = FamilyHeadCreateSerializer(
             data=request.data,
             context={
-                "church": request.user.church,
-                "request": request
-            }
+                "church": church,
+                "request": request,
+            },
         )
 
         serializer.is_valid(raise_exception=True)
-
         head = serializer.save()
 
         return Response(
@@ -389,8 +410,9 @@ class FamilyHeadCreateAPIView(APIView):
                 "family_id": head.family_id,
                 "register_number": head.register_number,
                 "folio_number": head.folio_number,
+                "capacity": info,
             },
-            status=status.HTTP_201_CREATED
+            status=status.HTTP_201_CREATED,
         )
 
 
@@ -1962,85 +1984,49 @@ class InactiveMembersAPIView(ListAPIView):
 #Death Register
 class DeathRegisterFinalizeView(APIView):
     """
-    Finalize a death registration (previously PENDING status)
-    Now simplified since we create directly
+    Finalize a death registration.
+    Kept as an alias — prefer DeathRegisterCreateAPIView.
     """
     permission_classes = [IsAuthenticated, IsChurchUser]
- 
+
     def post(self, request):
         serializer = DeathRegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
- 
+
         member = serializer.validated_data.get("member")
- 
-        # Get member from data if not in validated_data
+
         if not member:
             member_id = request.data.get("member")
             if member_id:
                 try:
-                    member = Member.objects.get(id=member_id, church=request.user.church)
+                    member = Member.objects.get(
+                        id=member_id,
+                        church=request.user.church,
+                    )
                 except Member.DoesNotExist:
                     return Response(
                         {"error": "Member not found."},
-                        status=status.HTTP_404_NOT_FOUND
+                        status=status.HTTP_404_NOT_FOUND,
                     )
             else:
                 return Response(
                     {"error": "Member is required."},
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
- 
-        # Check if member already has a death record
-        if DeathRegister.objects.filter(member=member).exists():
-            return Response(
-                {"error": "Death record already exists for this member."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
- 
+
         with transaction.atomic():
-            # Get validated data
-            died_on = serializer.validated_data.get("died_on")
-            funeral_on = serializer.validated_data.get("funeral_on")
-            tomb_fee = serializer.validated_data.get("tomb_fee")
-            
-            # Parse dates if they come as strings
-            if not died_on and request.data.get("died_on"):
-                died_on = parse_date(request.data.get("died_on"))
-            if not funeral_on and request.data.get("funeral_on"):
-                funeral_on = parse_date(request.data.get("funeral_on"))
- 
-            # Create death record
-            death = DeathRegister.objects.create(
-                church=request.user.church,
-                member=member,
-                died_on=died_on,
-                funeral_on=funeral_on,
-                tomb_fee=tomb_fee,  # NEW: Use tomb_fee instead of tomb_type/tomb_charge
-                tomb_idn=serializer.validated_data.get("tomb_idn", ""),
-                reason_of_death=serializer.validated_data.get("reason_of_death"),
-                remarks=serializer.validated_data.get("remarks", ""),
-            )
- 
-            # Mark member as deceased
-            member.expired = True
-            member.is_active = False
-            member.inactive_reason = "DECEASED"
-            member.inactive_date = date.today()
-            member.save()
- 
-            # Deactivate user if family head
-            if member.is_family_head and hasattr(member, 'user'):
-                member.user.is_active = False
-                member.user.save()
- 
-            # Update spouse status
-            if member.spouse:
-                member.spouse.marital_status = "WIDOWED"
-                member.spouse.save(update_fields=["marital_status"])
- 
+            # Check inside the transaction to avoid race conditions
+            if DeathRegister.objects.filter(member=member).exists():
+                return Response(
+                    {"error": "Death record already exists for this member."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            death = serializer.save()
+
         return Response(
             DeathRegisterSerializer(death).data,
-            status=status.HTTP_201_CREATED
+            status=status.HTTP_201_CREATED,
         )
  
     
@@ -2054,38 +2040,38 @@ class PromoteFamilyHeadAPIView(APIView):
         try:
             member = Member.objects.get(
                 pk=pk,
-                church=request.user.church
+                church=request.user.church,
             )
         except Member.DoesNotExist:
             return Response(
                 {"error": "Member not found."},
-                status=status.HTTP_404_NOT_FOUND
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         if member.expired:
             return Response(
                 {"error": "Cannot promote expired member as head."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if member.is_family_head:
             return Response(
                 {"error": "Member is already head."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if not member.email:
             return Response(
                 {"error": "Member must have an email to become family head."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # 🔥 Match on the SAME household (family + house_name + sequence)
+        # 🔥 Match on the SAME household
         existing_head = Member.objects.filter(
             family=member.family,
             house_name=member.house_name,
             house_sequence=member.house_sequence,
-            is_family_head=True
+            is_family_head=True,
         ).first()
 
         if existing_head and not existing_head.expired:
@@ -2097,11 +2083,29 @@ class PromoteFamilyHeadAPIView(APIView):
                         f"reassign them before promoting a new head."
                     )
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # -----------------------------------------------------
+        # SUBSCRIPTION CAPACITY CHECK
+        # -----------------------------------------------------
+        from .services import can_add_member
+
+        allowed, message, _info = can_add_member(request.user.church)
+        if not allowed:
+            return Response(
+                {"error": message},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
             with transaction.atomic():
+
+                # Re-lock inside the transaction
+                from .models import ChurchSubscription
+                ChurchSubscription.objects.select_for_update().filter(
+                    church=request.user.church
+                ).first()
 
                 if existing_head:
                     existing_head.is_family_head = False
@@ -2126,7 +2130,7 @@ class PromoteFamilyHeadAPIView(APIView):
                     "is_family_head",
                     "relationship",
                     "register_number",
-                    "folio_number"
+                    "folio_number",
                 ])
 
                 if hasattr(member, "user"):
@@ -2134,6 +2138,7 @@ class PromoteFamilyHeadAPIView(APIView):
                     member.user.save(update_fields=["is_active"])
                 else:
                     create_family_head_user(member)
+
         except IntegrityError:
             return Response(
                 {
@@ -2143,7 +2148,7 @@ class PromoteFamilyHeadAPIView(APIView):
                         f"member before promoting them."
                     )
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         return Response(
@@ -2151,9 +2156,9 @@ class PromoteFamilyHeadAPIView(APIView):
                 "message": "Family head assigned successfully.",
                 "member_id": member.id,
                 "register_number": member.register_number,
-                "folio_number": member.folio_number
+                "folio_number": member.folio_number,
             },
-            status=status.HTTP_200_OK
+            status=status.HTTP_200_OK,
         )
 
 
@@ -2162,17 +2167,24 @@ class TransferAndPromoteHeadAPIView(APIView):
 
     def post(self, request, pk):
         try:
-            member = Member.objects.get(pk=pk, church=request.user.church)
+            member = Member.objects.get(
+                pk=pk, church=request.user.church
+            )
         except Member.DoesNotExist:
             return Response(
                 {"error": "Member not found."},
-                status=status.HTTP_404_NOT_FOUND
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         if member.is_family_head:
             return Response(
-                {"error": "A family head cannot be transferred. Promote a replacement or mark them deceased first."},
-                status=status.HTTP_400_BAD_REQUEST
+                {
+                    "error": (
+                        "A family head cannot be transferred. Promote a "
+                        "replacement or mark them deceased first."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         new_family_id = request.data.get("family")
@@ -2181,27 +2193,41 @@ class TransferAndPromoteHeadAPIView(APIView):
         if not new_family_id or not new_house_name:
             return Response(
                 {"error": "family and house_name are required to transfer."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
-            new_family = Family.objects.get(pk=new_family_id, church=request.user.church)
+            new_family = Family.objects.get(
+                pk=new_family_id, church=request.user.church
+            )
         except Family.DoesNotExist:
             return Response(
                 {"error": "Target family not found."},
-                status=status.HTTP_404_NOT_FOUND
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         if member.expired:
             return Response(
                 {"error": "Cannot transfer or promote an expired member."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if not member.email:
             return Response(
                 {"error": "Member must have an email to become family head."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # -----------------------------------------------------
+        # SUBSCRIPTION CAPACITY CHECK
+        # -----------------------------------------------------
+        from .services import can_add_member
+
+        allowed, message, _info = can_add_member(request.user.church)
+        if not allowed:
+            return Response(
+                {"error": message},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         cleaned_house_name = new_house_name.strip()
@@ -2209,13 +2235,22 @@ class TransferAndPromoteHeadAPIView(APIView):
         try:
             with transaction.atomic():
 
-                # 🔥 Always start a NEW household under this name — never join
-                # an existing one, even if the name matches. Auto-assign the
-                # next available sequence number for (family, house_name).
-                last_sequence = Member.objects.filter(
-                    family=new_family,
-                    house_name__iexact=cleaned_house_name,
-                ).order_by("-house_sequence").values_list("house_sequence", flat=True).first()
+                # Re-lock the subscription inside the transaction
+                from .models import ChurchSubscription
+                ChurchSubscription.objects.select_for_update().filter(
+                    church=request.user.church
+                ).first()
+
+                # Auto-assign next house_sequence for (family, house_name)
+                last_sequence = (
+                    Member.objects.filter(
+                        family=new_family,
+                        house_name__iexact=cleaned_house_name,
+                    )
+                    .order_by("-house_sequence")
+                    .values_list("house_sequence", flat=True)
+                    .first()
+                )
 
                 next_sequence = (last_sequence or 0) + 1
 
@@ -2225,7 +2260,9 @@ class TransferAndPromoteHeadAPIView(APIView):
                 member.relationship = None
 
                 if not member.register_number:
-                    member.register_number = generate_register_number(member.church, "HEAD")
+                    member.register_number = generate_register_number(
+                        member.church, "HEAD"
+                    )
                 if not member.folio_number:
                     member.folio_number = generate_folio_number(member.church)
 
@@ -2237,6 +2274,7 @@ class TransferAndPromoteHeadAPIView(APIView):
                     member.user.save(update_fields=["is_active"])
                 else:
                     create_family_head_user(member)
+
         except IntegrityError:
             return Response(
                 {
@@ -2246,17 +2284,19 @@ class TransferAndPromoteHeadAPIView(APIView):
                         f"member before promoting them."
                     )
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         return Response(
             {
-                "message": "Member transferred and promoted to head successfully.",
+                "message": (
+                    "Member transferred and promoted to head successfully."
+                ),
                 "member_id": member.id,
                 "register_number": member.register_number,
-                "folio_number": member.folio_number
+                "folio_number": member.folio_number,
             },
-            status=status.HTTP_200_OK
+            status=status.HTTP_200_OK,
         )
 
 class ChangeMemberHeadAPIView(APIView):
@@ -2933,19 +2973,19 @@ from django.utils.dateparse import parse_date
 class DeathRegisterCreateAPIView(APIView):
     """Create a new death registration"""
     permission_classes = [IsAuthenticated, IsChurchUser]
- 
+
     def post(self, request):
         member_id = request.data.get("member")
- 
+
         if not member_id:
             return Response(
                 {"error": "member is required."},
                 status=status.HTTP_400_BAD_REQUEST
             )
- 
+
         try:
             member = Member.objects.get(
-                pk=member_id, 
+                pk=member_id,
                 church=request.user.church
             )
         except Member.DoesNotExist:
@@ -2953,31 +2993,42 @@ class DeathRegisterCreateAPIView(APIView):
                 {"error": "Member not found."},
                 status=status.HTTP_404_NOT_FOUND
             )
- 
+
         # Check if already deceased
         if member.expired:
             return Response(
                 {"error": "Member is already marked as deceased."},
                 status=status.HTTP_400_BAD_REQUEST
             )
- 
+
         # Check if death record already exists
         if DeathRegister.objects.filter(member=member).exists():
             return Response(
                 {"error": "Death record already exists for this member."},
                 status=status.HTTP_400_BAD_REQUEST
             )
- 
-        # Validate required fields - UPDATED to use tomb_fee instead of tomb_type/tomb_charge
-        required_fields = ['died_on', 'funeral_on', 'tomb_fee', 'reason_of_death']
-        missing_fields = [field for field in required_fields if not request.data.get(field)]
-        
+
+        # Validate required fields
+        required_fields = [
+            "died_on",
+            "funeral_on",
+            "tomb_fee",
+            "reason_of_death",
+        ]
+        missing_fields = [
+            field for field in required_fields
+            if not request.data.get(field)
+        ]
+
         if missing_fields:
             return Response(
-                {field: "This field is required." for field in missing_fields},
+                {
+                    field: "This field is required."
+                    for field in missing_fields
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
- 
+
         # Validate tomb_fee exists and belongs to church
         try:
             tomb_fee = TombFee.objects.get(
@@ -2989,43 +3040,47 @@ class DeathRegisterCreateAPIView(APIView):
                 {"error": "Selected tomb fee does not belong to this church."},
                 status=status.HTTP_400_BAD_REQUEST
             )
- 
+
         with transaction.atomic():
             # Parse dates
             died_on = parse_date(request.data.get("died_on"))
             funeral_on = parse_date(request.data.get("funeral_on"))
- 
+
             if not died_on or not funeral_on:
                 return Response(
                     {"error": "Invalid date format. Use YYYY-MM-DD."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
- 
-            # =========================================================
-            # VALIDATE DATES
-                # =========================================================
 
             today = date.today()
 
             # ---------------------------------------------------------
             # DATE OF DEATH
-            # Death date must be TODAY
+            # Cannot be in the future.
+            # Backdating is allowed because records are often entered
+            # days or weeks after the actual death.
             # ---------------------------------------------------------
 
-            if died_on != today:
+            if died_on > today:
                 return Response(
-                    {
-                        "error": (
-                            "Date of death must be today."
-                        )
-                    },
+                    {"error": "Date of death cannot be in the future."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-# ---------------------------------------------------------
-# FUNERAL DATE
-# Funeral cannot be before death
-# ---------------------------------------------------------
+            # ---------------------------------------------------------
+            # FUNERAL DATE
+            # Cannot be in the future.
+            # ---------------------------------------------------------
+
+            if funeral_on > today:
+                return Response(
+                    {"error": "Funeral date cannot be in the future."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # ---------------------------------------------------------
+            # FUNERAL CANNOT BE BEFORE DEATH
+            # ---------------------------------------------------------
 
             if funeral_on < died_on:
                 return Response(
@@ -3038,10 +3093,9 @@ class DeathRegisterCreateAPIView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-# ---------------------------------------------------------
-# FUNERAL DATE
-# Maximum 4 days after death
-# ---------------------------------------------------------
+            # ---------------------------------------------------------
+            # FUNERAL MAX 4 DAYS AFTER DEATH
+            # ---------------------------------------------------------
 
             max_funeral_date = died_on + timedelta(days=4)
 
@@ -3055,36 +3109,36 @@ class DeathRegisterCreateAPIView(APIView):
                     },
                     status=status.HTTP_400_BAD_REQUEST
                 )
- 
+
             # Create death record with tomb_fee
             death = DeathRegister.objects.create(
                 church=request.user.church,
                 member=member,
                 died_on=died_on,
                 funeral_on=funeral_on,
-                tomb_fee=tomb_fee,  # NEW: Use tomb_fee FK instead of tomb_type_id and tomb_charge
+                tomb_fee=tomb_fee,
                 tomb_idn=request.data.get("tomb_idn", ""),
                 reason_of_death=request.data.get("reason_of_death"),
                 remarks=request.data.get("remarks", ""),
             )
- 
+
             # Mark member as deceased
             member.expired = True
             member.is_active = False
             member.inactive_reason = "DECEASED"
             member.inactive_date = date.today()
             member.save()
- 
+
             # Deactivate user if family head
-            if member.is_family_head and hasattr(member, 'user'):
+            if member.is_family_head and hasattr(member, "user"):
                 member.user.is_active = False
                 member.user.save()
- 
+
             # Update spouse status
             if member.spouse:
                 member.spouse.marital_status = "WIDOWED"
                 member.spouse.save()
- 
+
         serializer = DeathRegisterSerializer(death)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
  
@@ -3556,7 +3610,7 @@ class LedgerEntryListAPIView(ListAPIView):
     List ledger entries with optional filters:
 
       ?ledger=<id>
-      ?book=cash | bank      -> filter by account_group.group_name
+      ?book=cash | bank      -> filter by ledger name/group
       ?from=YYYY-MM-DD
       ?to=YYYY-MM-DD
       ?include_cancelled=true
@@ -3585,15 +3639,19 @@ class LedgerEntryListAPIView(ListAPIView):
 
         # ---------- book filter (cash / bank) ----------
         book = (self.request.query_params.get("book") or "").lower().strip()
+
         if book == "cash":
             qs = qs.filter(
-                Q(ledger__account_group__group_name__icontains="cash")
-                | Q(ledger__ledger_name__icontains="cash")
+                Q(ledger__ledger_name__icontains="cash")
+                | Q(ledger__account_group__group_name__icontains="cash")
             )
+
         elif book == "bank":
             qs = qs.filter(
-                Q(ledger__account_group__group_name__icontains="bank")
-                | Q(ledger__ledger_name__icontains="bank")
+                Q(ledger__ledger_name__icontains="bank")
+                | Q(ledger__ledger_name__icontains="savings")
+                | Q(ledger__ledger_name__icontains="deposit")
+                | Q(ledger__account_group__group_name__icontains="bank")
             )
 
         # ---------- date range ----------
@@ -3605,10 +3663,13 @@ class LedgerEntryListAPIView(ListAPIView):
         if date_to:
             qs = qs.filter(entry_date__lte=date_to)
 
-        # ---------- cancelled ----------
+        # ---------- cancelled / reversals ----------
         include_cancelled = self.request.query_params.get("include_cancelled")
         if include_cancelled not in ("true", "1", "yes"):
-            qs = qs.filter(is_cancelled=False)
+            # Exclude both cancelled originals AND reversal entries.
+            # Reversals neutralise a cancelled entry; if we included them,
+            # a cancelled receipt would still shift the balance.
+            qs = qs.filter(is_cancelled=False, is_reversal=False)
 
         # Chronological order (oldest first) — required for running balance
         return qs.order_by("entry_date", "id")
@@ -3688,10 +3749,6 @@ class LedgerEntryListAPIView(ListAPIView):
             result[entry.id] = round(balances[entry.ledger_id], 2)
 
         return result
-
-    def _build_running_balance_context(self):
-        # Placeholder; the real map is injected in list()
-        return {}
 
 
 class LedgerBalanceAPIView(APIView):
@@ -4339,3 +4396,736 @@ class ReceiptCancelAPIView(APIView):
             },
             status=status.HTTP_200_OK
         )
+
+
+# ============================================================
+# REPORTS — MEMBER LEDGER
+# ============================================================
+
+class MemberLedgerReportAPIView(APIView):
+    """
+    GET /api/registry/reports/member-ledger/?member=<id>&from=&to=
+
+    Returns every ReceiptLine for the given member, in date order,
+    with opening balance and running debit/credit columns.
+    """
+    permission_classes = [IsAuthenticated, IsChurchUser]
+
+    def get(self, request):
+        from decimal import Decimal
+        from django.db.models import Sum
+
+        church = request.user.church
+
+        member_id = request.query_params.get("member")
+        date_from = request.query_params.get("from")
+        date_to = request.query_params.get("to")
+
+        if not member_id:
+            return Response(
+                {"detail": "member is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            member = Member.objects.get(id=member_id, church=church)
+        except Member.DoesNotExist:
+            return Response(
+                {"detail": "Member not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # ----- Opening balance: all DEBIT ledger entries for this member
+        #       BEFORE date_from, minus their reversals.
+        opening_qs = ReceiptLine.objects.filter(
+            receipt__church=church,
+            receipt__member=member,
+            receipt__is_cancelled=False,
+            
+        )
+        if date_from:
+            opening_qs = opening_qs.filter(receipt__receipt_date__lt=date_from)
+
+        opening_debit = opening_qs.aggregate(s=Sum("amount"))["s"] or Decimal("0")
+
+        # ----- Rows in range
+        rows_qs = (
+            ReceiptLine.objects
+            .filter(
+                receipt__church=church,
+                receipt__member=member,
+                receipt__is_cancelled=False,
+            )
+            .select_related("receipt", "receipt__bank_account", "ledger")
+            .order_by("receipt__receipt_date", "receipt_id", "id")
+        )
+        if date_from:
+            rows_qs = rows_qs.filter(receipt__receipt_date__gte=date_from)
+        if date_to:
+            rows_qs = rows_qs.filter(receipt__receipt_date__lte=date_to)
+
+        rows = []
+        total_credit = Decimal("0")
+        total_debit = Decimal("0")
+
+        for line in rows_qs:
+            rcp = line.receipt
+
+            # nature = (line.ledger.ledger_nature or "INCOME").upper()
+            # is_debit_side = nature in ("INCOME", "ASSET")
+            is_debit_side = True 
+            amount = line.amount or Decimal("0")
+
+            if is_debit_side:
+                debit = amount
+                credit = Decimal("0")
+                total_debit += amount
+            else:
+                debit = Decimal("0")
+                credit = amount
+                total_credit += amount
+
+            # Cash / Bank label
+            if rcp.payment_type == "CASH":
+                cash_bank = "Cash Account"
+            elif rcp.bank_account:
+                cash_bank = (
+                    getattr(rcp.bank_account, "display_name", None)
+                    or rcp.bank_account.bank_name
+                )
+            else:
+                cash_bank = "Bank Account"
+
+            rows.append({
+                "id": line.id,
+                "date": rcp.receipt_date.isoformat() if rcp.receipt_date else None,
+                "voucher": rcp.receipt_number or "",
+                "ledger_name": line.ledger.ledger_name,
+                "cash_bank": cash_bank,
+                "credit": float(credit),
+                "debit": float(debit),
+            })
+
+        closing = opening_debit + total_debit - total_credit
+
+        return Response({
+            "member": {
+                "id": member.id,
+                "name": member.name,
+                "family_name": member.family.family_name if member.family else "",
+            },
+            "from": date_from,
+            "to": date_to,
+            "opening_balance": float(opening_debit),
+            "rows": rows,
+            "totals": {
+                "credit": float(total_credit),
+                "debit": float(total_debit),
+                "closing": float(closing),
+            },
+        })
+
+
+# ============================================================
+# REPORTS — INCOME & EXPENDITURE
+# ============================================================
+
+class IncomeExpenditureReportAPIView(APIView):
+    """
+    GET /api/registry/reports/income-expenditure/?from=&to=&mode=Summary|Detailed
+
+    Returns a nested tree:
+
+      Summary:  root → child group → grandchild group (with amounts)
+      Detailed: root → child group → grandchild group → ledgers (with amounts)
+
+    Roots:
+      Income      : II. Revenue Receipts, III. Inter Church / Unit Accounts
+      Expenditure : V. Inter Church / Unit Payments, VI. Revenue Payments
+    """
+    permission_classes = [IsAuthenticated, IsChurchUser]
+
+    INCOME_ROOTS = ["II. Revenue Receipts", "III. Inter Church / Unit Accounts"]
+    EXPENSE_ROOTS = ["V. Inter Church / Unit Payments", "VI. Revenue Payments"]
+
+    def get(self, request):
+        church = request.user.church
+        date_from = request.query_params.get("from")
+        date_to = request.query_params.get("to")
+        mode = (request.query_params.get("mode") or "Summary").lower()
+        is_detailed = mode == "detailed"
+
+        income = self._build_tree(
+            church, self.INCOME_ROOTS, date_from, date_to, is_detailed
+        )
+        expenditure = self._build_tree(
+            church, self.EXPENSE_ROOTS, date_from, date_to, is_detailed
+        )
+
+        total_income = sum(g["amount"] for g in income)
+        total_expenditure = sum(g["amount"] for g in expenditure)
+        net = total_income - total_expenditure
+
+        return Response({
+            "from": date_from,
+            "to": date_to,
+            "mode": "Detailed" if is_detailed else "Summary",
+            "income": income,
+            "expenditure": expenditure,
+            "total_income": total_income,
+            "total_expenditure": total_expenditure,
+            "net_surplus": net,
+            "is_surplus": net >= 0,
+        })
+
+    # ============================================================
+    # TREE BUILDER
+    # ============================================================
+
+    def _build_tree(self, church, root_names, date_from, date_to, is_detailed):
+        """Build the full nested tree for the given root group names."""
+        roots = AccountGroupMaster.objects.filter(
+            church=church,
+            group_name__in=root_names,
+        ).order_by("group_name")
+
+        result = []
+
+        for root in roots:
+            root_total = self._sum_group(church, root, date_from, date_to)
+
+            result.append({
+                "group_name": root.group_name,
+                "amount": root_total,
+                "children": self._build_children(
+                    church, root, date_from, date_to, is_detailed
+                ),
+            })
+
+        return result
+
+    def _build_children(self, church, parent_group, date_from, date_to, is_detailed):
+        """Recursively build children nodes for a parent group."""
+        children = AccountGroupMaster.objects.filter(
+            church=church,
+            under_group=parent_group,
+        ).order_by("group_name")
+
+        nodes = []
+
+        for child in children:
+            child_total = self._sum_group(church, child, date_from, date_to)
+
+            node = {
+                "group_name": child.group_name,
+                "amount": child_total,
+                "children": self._build_children(
+                    church, child, date_from, date_to, is_detailed
+                ),
+            }
+
+            # In Detailed mode, leaf groups also show their ledgers
+            if is_detailed and not node["children"]:
+                node["ledgers"] = self._ledger_breakdown(
+                    church, child, date_from, date_to
+                )
+
+            nodes.append(node)
+
+        return nodes
+
+    # ============================================================
+    # AMOUNT ROLLUP
+    # ============================================================
+
+    def _sum_group(self, church, group, date_from, date_to):
+        """
+        Sum all LedgerEntry amounts for ledgers that live in this group
+        OR any of its descendant groups.
+        """
+        from django.db.models import Sum, Q
+
+        # Collect this group + all descendants
+        group_ids = [group.id]
+        queue = [group]
+
+        while queue:
+            current = queue.pop()
+            subs = AccountGroupMaster.objects.filter(
+                church=church, under_group=current
+            ).values_list("id", flat=True)
+            for sid in subs:
+                group_ids.append(sid)
+                queue.append(AccountGroupMaster.objects.get(id=sid))
+
+        qs = LedgerEntry.objects.filter(
+            church=church,
+            ledger__account_group_id__in=group_ids,
+            is_cancelled=False,
+            is_reversal=False,
+        )
+        if date_from:
+            qs = qs.filter(entry_date__gte=date_from)
+        if date_to:
+            qs = qs.filter(entry_date__lte=date_to)
+
+        agg = qs.aggregate(
+            debits=Sum("amount", filter=Q(entry_type="DEBIT")),
+            credits=Sum("amount", filter=Q(entry_type="CREDIT")),
+        )
+        debits = float(agg["debits"] or 0)
+        credits = float(agg["credits"] or 0)
+
+        return round(abs(debits - credits), 2)
+
+    def _ledger_breakdown(self, church, group, date_from, date_to):
+        """Return per-ledger amounts for a leaf group."""
+        from django.db.models import Sum, Q
+
+        ledgers = AccountLedgerMaster.objects.filter(
+            church=church,
+            account_group=group,
+            status=True,
+        ).order_by("ledger_name")
+
+        out = []
+        for led in ledgers:
+            qs = LedgerEntry.objects.filter(
+                church=church,
+                ledger=led,
+                is_cancelled=False,
+                is_reversal=False,
+            )
+            if date_from:
+                qs = qs.filter(entry_date__gte=date_from)
+            if date_to:
+                qs = qs.filter(entry_date__lte=date_to)
+
+            agg = qs.aggregate(
+                debits=Sum("amount", filter=Q(entry_type="DEBIT")),
+                credits=Sum("amount", filter=Q(entry_type="CREDIT")),
+            )
+            debits = float(agg["debits"] or 0)
+            credits = float(agg["credits"] or 0)
+            amt = round(abs(debits - credits), 2)
+
+            if amt > 0:
+                out.append({
+                    "ledger_name": led.ledger_name,
+                    "amount": amt,
+                })
+
+        return out
+
+
+# ============================================================
+# REPORTS — DONATION REGISTER
+# ============================================================
+
+class DonationRegisterReportAPIView(APIView):
+    """
+    GET /api/registry/reports/donation-register/?from=&to=&member_id=&ledger_id=&mode=&sort=
+
+    Returns every ReceiptLine whose ledger belongs to the
+    "B. Donations" group (or its descendants).
+    """
+    permission_classes = [IsAuthenticated, IsChurchUser]
+
+    DONATION_GROUP_NAMES = ["B. Donations", "DONATIONS & OFFERINGS", "DONATIONS"]
+
+    def get(self, request):
+        church = request.user.church
+
+        date_from = request.query_params.get("from")
+        date_to = request.query_params.get("to")
+        member_id = request.query_params.get("member_id")
+        ledger_id = request.query_params.get("ledger_id")
+        mode = request.query_params.get("mode")
+        sort = request.query_params.get("sort") or "Newest First"
+
+        # ------ find donation group IDs (recursively) ------
+        donation_root_ids = list(
+            AccountGroupMaster.objects.filter(
+                church=church,
+                group_name__in=self.DONATION_GROUP_NAMES,
+            ).values_list("id", flat=True)
+        )
+
+        if not donation_root_ids:
+            return Response({
+                "from": date_from,
+                "to": date_to,
+                "rows": [],
+                "total": 0,
+            })
+
+        all_group_ids = list(donation_root_ids)
+        queue = list(donation_root_ids)
+
+        while queue:
+            gid = queue.pop()
+            subs = AccountGroupMaster.objects.filter(
+                church=church, under_group_id=gid
+            ).values_list("id", flat=True)
+            for s in subs:
+                all_group_ids.append(s)
+                queue.append(s)
+
+        # ------ query ReceiptLines ------
+        qs = (
+            ReceiptLine.objects
+            .filter(
+                receipt__church=church,
+                receipt__is_cancelled=False,
+                ledger__account_group_id__in=all_group_ids,
+            )
+            .select_related(
+                "receipt",
+                "receipt__member",
+                "receipt__member__family",
+                "receipt__bank_account",
+                "ledger",
+            )
+        )
+
+        if date_from:
+            qs = qs.filter(receipt__receipt_date__gte=date_from)
+        if date_to:
+            qs = qs.filter(receipt__receipt_date__lte=date_to)
+        if member_id:
+            qs = qs.filter(receipt__member_id=member_id)
+        if ledger_id:
+            qs = qs.filter(ledger_id=ledger_id)
+        if mode:
+            qs = qs.filter(receipt__transaction_type=mode)
+
+        # sort
+        if sort == "Oldest First":
+            qs = qs.order_by("receipt__receipt_date", "id")
+        elif sort == "Amount (High to Low)":
+            qs = qs.order_by("-amount")
+        elif sort == "Amount (Low to High)":
+            qs = qs.order_by("amount")
+        else:  # Newest First
+            qs = qs.order_by("-receipt__receipt_date", "-id")
+
+        rows = []
+        total = 0.0
+
+        for line in qs:
+            rcp = line.receipt
+
+            # payment mode label
+            if rcp.payment_type == "CASH":
+                payment_mode = "Cash"
+            else:
+                payment_mode = (
+                    rcp.get_transaction_type_display()
+                    if rcp.transaction_type
+                    else "Bank Transfer"
+                )
+
+            amount = float(line.amount or 0)
+            total += amount
+
+            rows.append({
+                "id": line.id,
+                "date": rcp.receipt_date.isoformat() if rcp.receipt_date else None,
+                "receipt_number": rcp.receipt_number or "",
+                "donor_name": rcp.member.name if rcp.member else "Anonymous",
+                "family_name": (
+                    rcp.member.family.family_name
+                    if rcp.member and rcp.member.family
+                    else "—"
+                ),
+                "donation_type": line.ledger.ledger_name,
+                "payment_mode": payment_mode,
+                "reference_number": rcp.ref_no or "—",
+                "amount": amount,
+            })
+
+        return Response({
+            "from": date_from,
+            "to": date_to,
+            "rows": rows,
+            "total": total,
+        })
+
+
+# ============================================================
+# SUBSCRIPTION HELPERS
+# ============================================================
+
+def _month_range(date_from_str, date_to_str):
+    """Return (month_start, month_end) as date objects."""
+    from datetime import date as _date
+
+    def parse(s, default):
+        if not s:
+            return default
+        try:
+            y, m, d = map(int, s.split("-"))
+            return _date(y, m, d)
+        except Exception:
+            return default
+
+    today = _date.today()
+    month_start = parse(date_from_str, today.replace(day=1))
+    month_end = parse(date_to_str, today)
+
+    return month_start, month_end
+
+
+def _subscriptions_by_grade(church):
+    """Return {grade_id: [Subscription, ...]} for the church."""
+    subs = Subscription.objects.filter(
+        church=church, is_cancelled=False
+    ).select_related("grade", "ledger")
+
+    out = {}
+    for s in subs:
+        out.setdefault(s.grade_id, []).append(s)
+    return out
+
+
+def _get_paid_amount(church, member, ledger, month_start, month_end):
+    """Sum of all receipt line amounts for this member + ledger in range."""
+    from django.db.models import Sum
+
+    qs = ReceiptLine.objects.filter(
+        receipt__church=church,
+        receipt__member=member,
+        receipt__is_cancelled=False,
+        ledger=ledger,
+        receipt__receipt_date__gte=month_start,
+        receipt__receipt_date__lte=month_end,
+    )
+    return qs.aggregate(t=Sum("amount"))["t"] or 0
+
+
+# ============================================================
+# REPORTS — SUBSCRIPTION DUE LIST
+# ============================================================
+
+class SubscriptionDueListAPIView(APIView):
+    """
+    Ward-grouped list of members whose subscription is not fully paid
+    for the requested month.
+
+    Matching rule: member's grade → subscription(s) for that grade →
+    look for receipt lines on the same ledger in the same month.
+    """
+    permission_classes = [IsAuthenticated, IsChurchUser]
+
+    def get(self, request):
+        from decimal import Decimal
+
+        church = request.user.church
+        date_from = request.query_params.get("from")
+        date_to = request.query_params.get("to")
+        ward_id = request.query_params.get("ward_id")
+        member_id = request.query_params.get("member_id")
+
+        month_start, month_end = _month_range(date_from, date_to)
+        subs_by_grade = _subscriptions_by_grade(church)
+
+        members = Member.objects.filter(
+            church=church, is_active=True, expired=False
+        ).select_related("ward", "family", "grade")
+
+        if ward_id:
+            members = members.filter(ward_id=ward_id)
+        if member_id:
+            members = members.filter(id=member_id)
+
+        wards_map = {}
+
+        for member in members:
+            subs = subs_by_grade.get(member.grade_id, [])
+            if not subs:
+                continue
+
+            monthly_due = Decimal("0")
+            charity_due = Decimal("0")
+            diocese_due = Decimal("0")
+
+            for s in subs:
+                # Skip subscriptions with no ledger
+                if not s.ledger:
+                    continue
+
+                expected = Decimal(str(s.amount or 0))
+                paid = Decimal(str(
+                    _get_paid_amount(church, member, s.ledger, month_start, month_end)
+                ))
+                remaining = max(Decimal("0"), expected - paid)
+
+                lname = (s.ledger.ledger_name or "").lower()
+                if "charity" in lname:
+                    charity_due += remaining
+                elif "diocese" in lname:
+                    diocese_due += remaining
+                else:
+                    monthly_due += remaining
+
+            total_due = monthly_due + charity_due + diocese_due
+            if total_due <= 0:
+                continue
+
+            ward_name = member.ward.ward_name if member.ward else "Unassigned"
+            family_name = member.family.family_name if member.family else ""
+
+            bucket = wards_map.setdefault(ward_name, {
+                "ward": ward_name, "members": [], "_total": Decimal("0"),
+            })
+
+            bucket["members"].append({
+                "member_id": member.id,
+                "name": member.name,
+                "family_name": family_name,
+                "monthly_subscription": float(monthly_due),
+                "charity_fund": float(charity_due),
+                "diocese_fund": float(diocese_due),
+                "total_due": float(total_due),
+            })
+            bucket["_total"] += total_due
+
+        wards = []
+        grand_total = Decimal("0")
+        for wname in sorted(wards_map.keys()):
+            b = wards_map[wname]
+            wards.append({
+                "ward": b["ward"],
+                "member_count": len(b["members"]),
+                "ward_total": float(b["_total"]),
+                "members": b["members"],
+            })
+            grand_total += b["_total"]
+
+        return Response({
+            "from": month_start.isoformat(),
+            "to": month_end.isoformat(),
+            "wards": wards,
+            "grand_total": float(grand_total),
+        })
+
+
+# ============================================================
+# REPORTS — SUBSCRIPTION PAID LIST
+# ============================================================
+
+class SubscriptionPaidListAPIView(APIView):
+    """
+    Ward-grouped list of members who paid something for their
+    subscriptions during the requested month.
+    """
+    permission_classes = [IsAuthenticated, IsChurchUser]
+
+    def get(self, request):
+        from decimal import Decimal
+        from django.db.models import Sum
+
+        church = request.user.church
+        date_from = request.query_params.get("from")
+        date_to = request.query_params.get("to")
+        ward_id = request.query_params.get("ward_id")
+        member_id = request.query_params.get("member_id")
+
+        month_start, month_end = _month_range(date_from, date_to)
+
+        # All receipt lines in this month for this church
+        lines = ReceiptLine.objects.filter(
+            receipt__church=church,
+            receipt__is_cancelled=False,
+            receipt__receipt_date__gte=month_start,
+            receipt__receipt_date__lte=month_end,
+        ).select_related(
+            "receipt", "receipt__member", "receipt__member__ward",
+            "receipt__member__family", "ledger",
+        )
+
+        if ward_id:
+            lines = lines.filter(receipt__member__ward_id=ward_id)
+        if member_id:
+            lines = lines.filter(receipt__member_id=member_id)
+
+        wards_map = {}
+
+        for line in lines:
+            member = line.receipt.member
+            if not member:
+                continue
+
+            lname = (line.ledger.ledger_name or "").lower()
+
+            # Only count lines that point to subscription-ish ledgers
+            if not (
+                "subscription" in lname
+                or "charity" in lname
+                or "diocese" in lname
+            ):
+                continue
+
+            ward_name = member.ward.ward_name if member.ward else "Unassigned"
+            family_name = member.family.family_name if member.family else ""
+
+            # Find or create member bucket inside ward
+            bucket = wards_map.setdefault(ward_name, {
+                "ward": ward_name, "by_member": {}, "_total": Decimal("0"),
+            })
+
+            mkey = member.id
+            if mkey not in bucket["by_member"]:
+                bucket["by_member"][mkey] = {
+                    "member_id": member.id,
+                    "name": member.name,
+                    "family_name": family_name,
+                    "monthly_subscription": Decimal("0"),
+                    "charity_fund": Decimal("0"),
+                    "diocese_fund": Decimal("0"),
+                    "total_paid": Decimal("0"),
+                }
+
+            m = bucket["by_member"][mkey]
+            amt = Decimal(str(line.amount or 0))
+
+            if "charity" in lname:
+                m["charity_fund"] += amt
+            elif "diocese" in lname:
+                m["diocese_fund"] += amt
+            else:
+                m["monthly_subscription"] += amt
+
+            m["total_paid"] += amt
+            bucket["_total"] += amt
+
+        # Serialize
+        wards = []
+        grand_total = Decimal("0")
+        for wname in sorted(wards_map.keys()):
+            b = wards_map[wname]
+            members = []
+            for m in b["by_member"].values():
+                members.append({
+                    "member_id": m["member_id"],
+                    "name": m["name"],
+                    "family_name": m["family_name"],
+                    "monthly_subscription": float(m["monthly_subscription"]),
+                    "charity_fund": float(m["charity_fund"]),
+                    "diocese_fund": float(m["diocese_fund"]),
+                    "total_paid": float(m["total_paid"]),
+                })
+            wards.append({
+                "ward": b["ward"],
+                "member_count": len(members),
+                "ward_total": float(b["_total"]),
+                "members": members,
+            })
+            grand_total += b["_total"]
+
+        return Response({
+            "from": month_start.isoformat(),
+            "to": month_end.isoformat(),
+            "wards": wards,
+            "grand_total": float(grand_total),
+        })

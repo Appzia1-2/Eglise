@@ -2,7 +2,15 @@
 
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Box, Button, Flex, Heading, HStack, Icon, Text } from "@chakra-ui/react";
+import {
+  Box,
+  Button,
+  Flex,
+  Heading,
+  HStack,
+  Icon,
+  Text,
+} from "@chakra-ui/react";
 import { LuArrowLeft, LuPrinter, LuFileText } from "react-icons/lu";
 
 import Navbar from "../components/Navbar";
@@ -31,6 +39,15 @@ const toNumber = (v) => {
 
 // ------------------------------------------------------------
 // Group flat LedgerEntry rows into one row per voucher
+//
+// Each voucher (Receipt / Payment / Journal) usually posts
+// TWO LedgerEntry rows:
+//   1. The counter-side (income / expense / liability ledger)
+//   2. The Cash / Bank ledger (once counter-entry bug is fixed)
+//
+// If only one row exists today, we still show it as a row
+// with the counter-side in the "Account Ledger" column and
+// "—" in "Cash / Bank" column.
 // ------------------------------------------------------------
 const groupLedgerEntries = (entries) => {
   const groups = new Map();
@@ -55,10 +72,20 @@ const groupLedgerEntries = (entries) => {
         date: e.entry_date,
         voucherNo: voucherNo || "—",
         voucherType,
-        particulars: e.narration || "",
-        account: "",
+
+        // Column 3 on screen: "Account Ledger"
+        // → the non-cash side (income / expense ledger)
+        particulars: "",
+
+        // Column 5 on screen: "Cash / Bank Account"
+        // → the cash or bank ledger
+        cashBankAccount: "",
+
+        narration: e.narration || "",
+
         debit: 0,
         credit: 0,
+
         _entries: [],
       });
     }
@@ -70,24 +97,41 @@ const groupLedgerEntries = (entries) => {
     if (e.entry_type === "DEBIT") g.debit += amt;
     else if (e.entry_type === "CREDIT") g.credit += amt;
 
-    // Try to identify the cash/bank side of the voucher
+    // Classify this entry as Cash/Bank vs counter-side
     const ledgerName = String(e.ledger_name || "").toLowerCase();
     const groupName = String(e.account_group_name || "").toLowerCase();
+
     const isCashOrBank =
       ledgerName.includes("cash") ||
       ledgerName.includes("bank") ||
       groupName.includes("cash") ||
       groupName.includes("bank");
 
-    if (isCashOrBank) g.account = e.ledger_name || "";
+    if (isCashOrBank) {
+      // Cash or Bank ledger — goes in the Cash / Bank column
+      if (!g.cashBankAccount) {
+        g.cashBankAccount = e.ledger_name || "";
+      }
+    } else {
+      // Income / expense / liability — goes in the Account Ledger column
+      if (!g.particulars) {
+        g.particulars = e.ledger_name || "";
+      }
+    }
 
-    if (!g.particulars && e.narration) g.particulars = e.narration;
+    if (!g.narration && e.narration) {
+      g.narration = e.narration;
+    }
   });
 
+  // Final fallbacks — make sure something is always shown
   return Array.from(groups.values()).map((g) => {
-    if (!g.account) {
+    if (!g.particulars) {
       const firstLedger = g._entries.find((x) => x.ledger_name);
-      g.account = firstLedger ? firstLedger.ledger_name : "";
+      g.particulars = firstLedger ? firstLedger.ledger_name : "—";
+    }
+    if (!g.cashBankAccount) {
+      g.cashBankAccount = "—";
     }
     delete g._entries;
     return g;
@@ -147,8 +191,6 @@ const DayBookPage = () => {
 
       const res = await listLedgerEntries(params);
 
-      // Backend returns:
-      // { count, opening_balance, total_debit, total_credit, closing_balance, results }
       const body = res?.data ?? {};
       let data = body.results ?? body ?? [];
       if (!Array.isArray(data)) data = [];
@@ -186,8 +228,9 @@ const DayBookPage = () => {
         (r) =>
           String(r.particulars || "").toLowerCase().includes(kw) ||
           String(r.voucherNo || "").toLowerCase().includes(kw) ||
-          String(r.account || "").toLowerCase().includes(kw) ||
-          String(r.voucherType || "").toLowerCase().includes(kw)
+          String(r.cashBankAccount || "").toLowerCase().includes(kw) ||
+          String(r.voucherType || "").toLowerCase().includes(kw) ||
+          String(r.narration || "").toLowerCase().includes(kw)
       );
     }
 
@@ -346,7 +389,7 @@ const DayBookPage = () => {
         <Footer />
       </Box>
 
-      {/* -------- Hidden print preview (rendered only when needed) -------- */}
+      {/* -------- Print preview -------- */}
       {showPrint && (
         <Box
           position="fixed"
@@ -356,14 +399,7 @@ const DayBookPage = () => {
           overflowY="auto"
           p={{ base: 2, md: 6 }}
         >
-          {/* Toolbar */}
-          <Flex
-            justify="flex-end"
-            gap={3}
-            mb={3}
-            maxW="820px"
-            mx="auto"
-          >
+          <Flex justify="flex-end" gap={3} mb={3} maxW="820px" mx="auto">
             <Button
               size="sm"
               variant="outline"
@@ -387,7 +423,6 @@ const DayBookPage = () => {
             </Button>
           </Flex>
 
-          {/* Printable sheet */}
           <Box
             maxW="820px"
             mx="auto"

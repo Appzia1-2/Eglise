@@ -17,6 +17,9 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import apiClient from "../api/apiClient";
 
+// ✅ NEW: print modal
+import LegacyDeathPrintModal from "./LegacyDeathPrintModal";
+
 const RED = "#B40000";
 const RED_DARK = "#970000";
 const NAVY = "#14245B";
@@ -90,6 +93,9 @@ const LegacyDeathViewPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // ✅ NEW: print modal state
+  const [isPrintOpen, setIsPrintOpen] = useState(false);
+
   useEffect(() => {
     const load = async () => {
       setLoading(true); setError("");
@@ -107,6 +113,9 @@ const LegacyDeathViewPage = () => {
     };
     load();
   }, [id]);
+
+  // ✅ NEW: opens the print modal
+  const handlePrint = () => setIsPrintOpen(true);
 
   if (loading) {
     return (
@@ -184,20 +193,25 @@ const LegacyDeathViewPage = () => {
                       _hover={{ bg: "#FFF8F8" }}>
                 <LuArrowLeft size={17} /><Text ml="6px">Back</Text>
               </Button>
+
+              {/* ✅ PRINT */}
               <Button h="40px" px="18px" bg="white" color={RED}
                       border="1px solid" borderColor={RED}
                       borderRadius="5px" fontSize="11px" fontWeight="500"
-                      onClick={() => window.print()}
+                      onClick={handlePrint}
                       _hover={{ bg: "#FFF8F8" }}>
                 <LuPrinter size={17} /><Text ml="6px">Print</Text>
               </Button>
+
+              {/* ✅ GENERATE PDF */}
               <Button h="40px" px="18px" bg="white" color={RED}
                       border="1px solid" borderColor={RED}
                       borderRadius="5px" fontSize="11px" fontWeight="500"
-                      onClick={() => window.print()}
+                      onClick={handlePrint}
                       _hover={{ bg: "#FFF8F8" }}>
                 <LuFileDown size={17} /><Text ml="6px">Generate PDF</Text>
               </Button>
+
               <Button h="40px" px="18px" bg={RED} color="white"
                       borderRadius="5px" fontSize="11px" fontWeight="500"
                       onClick={() => navigate(`/legacy/death/${id}/edit`)}
@@ -397,6 +411,13 @@ const LegacyDeathViewPage = () => {
           </Grid>
         </Box>
       </Box>
+
+      {/* ✅ NEW: PRINT MODAL */}
+      <LegacyDeathPrintModal
+        isOpen={isPrintOpen}
+        onClose={() => setIsPrintOpen(false)}
+        record={record}
+      />
 
       <Footer />
     </Box>

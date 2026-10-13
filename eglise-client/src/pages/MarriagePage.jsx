@@ -496,9 +496,8 @@ const MarriagePage = () => {
   ========================================================== */
 
   const handleView = (marriage) => {
-    setViewMarriage(marriage);
-    setIsViewOpen(true);
-  };
+  navigate(`/marriage/${marriage.id}`);
+};
 
   /* ==========================================================
      DELETE

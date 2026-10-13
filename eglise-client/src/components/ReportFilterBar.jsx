@@ -58,11 +58,23 @@ const ReportFilterBar = ({
   dateTo,
   setDateTo,
   onReset,
+  extraFilter,           // ✅ NEW: any JSX node to render inside the bar
+  showVoucherTypeFilter = false,
+  showTransactionFilter = false,
+  showSortFilter = false,
 }) => {
   return (
     <Box mb={4}>
       <Flex wrap="wrap" gap={3} align="center">
-        <Box position="relative" flex="1" minW="200px">
+        {/* ✅ EXTRA FILTER (e.g. Ledger dropdown) */}
+        {extraFilter && (
+          <Box minW="220px" flex="1">
+            {extraFilter}
+          </Box>
+        )}
+
+        {/* DATE FROM */}
+        <Box position="relative" flex="1" minW="180px">
           <Box
             as="input"
             type="date"
@@ -93,36 +105,75 @@ const ReportFilterBar = ({
           </Box>
         </Box>
 
-        <SelectBox
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="All Voucher Types"
-          options={[
-            { value: "receipt", label: "Receipt" },
-            { value: "payment", label: "Payment" },
-            { value: "journal", label: "Journal" },
-          ]}
-        />
+        {/* DATE TO */}
+        <Box position="relative" flex="1" minW="180px">
+          <Box
+            as="input"
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            width="100%"
+            height="44px"
+            px={4}
+            pr={12}
+            fontSize="13px"
+            color={DARK}
+            fontWeight="500"
+            bg="white"
+            border={`1px solid ${BORDER}`}
+            borderRadius="6px"
+            outline="none"
+            _focus={{ borderColor: RED, boxShadow: `0 0 0 1px ${RED}` }}
+          />
+          <Box
+            position="absolute"
+            right="12px"
+            top="50%"
+            transform="translateY(-50%)"
+            pointerEvents="none"
+            color={RED}
+          >
+            <LuCalendar size={16} />
+          </Box>
+        </Box>
 
-        <SelectBox
-          value=""
-          onChange={() => {}}
-          placeholder="All Transactions"
-          options={[
-            { value: "cash", label: "Cash" },
-            { value: "bank", label: "Bank" },
-          ]}
-        />
+        {/* OPTIONAL DROPDOWNS — only render if requested */}
+        {showVoucherTypeFilter && (
+          <SelectBox
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="All Voucher Types"
+            options={[
+              { value: "receipt", label: "Receipt" },
+              { value: "payment", label: "Payment" },
+              { value: "journal", label: "Journal" },
+            ]}
+          />
+        )}
 
-        <SelectBox
-          value=""
-          onChange={() => {}}
-          placeholder="Sort By"
-          options={[
-            { value: "date_asc", label: "Date (Ascending)" },
-            { value: "date_desc", label: "Date (Descending)" },
-          ]}
-        />
+        {showTransactionFilter && (
+          <SelectBox
+            value=""
+            onChange={() => {}}
+            placeholder="All Transactions"
+            options={[
+              { value: "cash", label: "Cash" },
+              { value: "bank", label: "Bank" },
+            ]}
+          />
+        )}
+
+        {showSortFilter && (
+          <SelectBox
+            value=""
+            onChange={() => {}}
+            placeholder="Sort By"
+            options={[
+              { value: "date_asc", label: "Date (Ascending)" },
+              { value: "date_desc", label: "Date (Descending)" },
+            ]}
+          />
+        )}
 
         <Button
           bg="white"

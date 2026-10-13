@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Box,
@@ -7,11 +7,14 @@ import {
   Flex,
   Heading,
   HStack,
+  Icon,
   Input,
   SimpleGrid,
   Text,
   Textarea,
 } from "@chakra-ui/react";
+
+import { LuSearch, LuX, LuChevronDown } from "react-icons/lu";
 
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -44,7 +47,186 @@ const TRANSACTION_TYPES = [
   { value: "CASH", label: "Cash" },
 ];
 
+// ✅ Only these natures are shown for a PAYMENT
+const PAYMENT_LEDGER_NATURES = ["EXPENSE", "LIABILITY"];
+
 const today = () => new Date().toISOString().split("T")[0];
+
+/* -------------------------------------------------------
+   Searchable Ledger Select Component
+------------------------------------------------------- */
+const SearchableLedgerSelect = ({
+  value,
+  onChange,
+  options,
+  placeholder,
+  hasError,
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef(null);
+
+  const selectedOption = options.find((o) => o.value === String(value));
+  const selectedLabel = selectedOption ? selectedOption.label : "";
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((o) => o.label.toLowerCase().includes(q));
+  }, [options, query]);
+
+  // Close on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+        setQuery("");
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleSelect = (opt) => {
+    onChange(opt.value);
+    setIsOpen(false);
+    setQuery("");
+  };
+
+  const handleClear = (e) => {
+    e.stopPropagation();
+    onChange("");
+    setQuery("");
+  };
+
+  return (
+    <Box ref={containerRef} position="relative" w="100%">
+      {isOpen ? (
+        <Box position="relative">
+          <Icon
+            as={LuSearch}
+            position="absolute"
+            left="12px"
+            top="50%"
+            transform="translateY(-50%)"
+            color={SECONDARY_TEXT}
+            boxSize={3.5}
+            pointerEvents="none"
+            zIndex={1}
+          />
+          <Input
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search ledger..."
+            pl="34px"
+            pr="34px"
+            h="40px"
+            fontSize="12px"
+            borderColor={PRIMARY_RED}
+            borderRadius="6px"
+            _focus={{
+              borderColor: PRIMARY_RED,
+              boxShadow: `0 0 0 1px ${PRIMARY_RED}`,
+            }}
+          />
+          <Icon
+            as={LuX}
+            position="absolute"
+            right="12px"
+            top="50%"
+            transform="translateY(-50%)"
+            color={SECONDARY_TEXT}
+            boxSize={3.5}
+            cursor="pointer"
+            onClick={() => {
+              setIsOpen(false);
+              setQuery("");
+            }}
+            zIndex={1}
+          />
+        </Box>
+      ) : (
+        <Box
+          onClick={() => setIsOpen(true)}
+          h="40px"
+          border={`1px solid ${hasError ? "#F56565" : BORDER_COLOR}`}
+          borderRadius="6px"
+          px="11px"
+          display="flex"
+          alignItems="center"
+          justifyContent="space-between"
+          cursor="pointer"
+          bg="white"
+          _hover={{ borderColor: PRIMARY_RED }}
+        >
+          <Text
+            fontSize="12px"
+            color={selectedLabel ? TEXT_COLOR : SECONDARY_TEXT}
+            noOfLines={1}
+          >
+            {selectedLabel || placeholder || "Select ledger"}
+          </Text>
+          <HStack gap={1} flexShrink={0}>
+            {selectedLabel && (
+              <Icon
+                as={LuX}
+                boxSize={3}
+                color={SECONDARY_TEXT}
+                onClick={handleClear}
+                _hover={{ color: PRIMARY_RED }}
+              />
+            )}
+            <Icon as={LuChevronDown} boxSize={3.5} color={SECONDARY_TEXT} />
+          </HStack>
+        </Box>
+      )}
+
+      {isOpen && (
+        <Box
+          position="absolute"
+          top="calc(100% + 4px)"
+          left={0}
+          right={0}
+          bg="white"
+          border={`1px solid ${BORDER_COLOR}`}
+          borderRadius="6px"
+          boxShadow="0 4px 12px rgba(0,0,0,0.1)"
+          maxH="220px"
+          overflowY="auto"
+          zIndex={20}
+        >
+          {filtered.length === 0 ? (
+            <Box px={3} py={2}>
+              <Text fontSize="11px" color={SECONDARY_TEXT}>
+                No ledgers found
+              </Text>
+            </Box>
+          ) : (
+            filtered.map((o) => {
+              const isSelected = o.value === String(value);
+              return (
+                <Box
+                  key={o.value}
+                  px={3}
+                  py={2}
+                  fontSize="12px"
+                  color={TEXT_COLOR}
+                  cursor="pointer"
+                  bg={isSelected ? "#FDF2F5" : "white"}
+                  _hover={{ bg: "#F7F9FB" }}
+                  onClick={() => handleSelect(o)}
+                >
+                  {o.label}
+                </Box>
+              );
+            })
+          )}
+        </Box>
+      )}
+    </Box>
+  );
+};
 
 const AddPaymentPage = () => {
   const navigate = useNavigate();
@@ -86,7 +268,23 @@ const AddPaymentPage = () => {
           listBankAccounts(),
         ]);
 
-        setLedgers(lRes?.data?.results ?? lRes?.data ?? []);
+        const all = lRes?.data?.results ?? lRes?.data ?? [];
+
+        // ✅ Filter + sort ledgers for a PAYMENT
+        const filtered = (Array.isArray(all) ? all : [])
+          .filter((l) =>
+            PAYMENT_LEDGER_NATURES.includes(
+              String(l.ledger_nature || "").toUpperCase()
+            )
+          )
+          .sort((a, b) => {
+            const ga = (a.account_group_name || "").toLowerCase();
+            const gb = (b.account_group_name || "").toLowerCase();
+            if (ga !== gb) return ga.localeCompare(gb);
+            return (a.ledger_name || "").localeCompare(b.ledger_name || "");
+          });
+
+        setLedgers(filtered);
         setBanks(bRes?.data?.results ?? bRes?.data ?? []);
 
         if (isEdit) {
@@ -119,7 +317,6 @@ const AddPaymentPage = () => {
   // =========================================================
   // MEMOS
   // =========================================================
-  // Bank dropdown is only enabled for BANK type — but it is optional.
   const showBankField = formData.payment_type === "BANK";
 
   const bankOptions = useMemo(
@@ -128,16 +325,21 @@ const AddPaymentPage = () => {
         .filter((b) => b.is_active !== false)
         .map((b) => ({
           value: String(b.id),
-          label: b.display_name || `${b.bank_name} ${b.masked_account_number || ""}`,
+          label:
+            b.display_name ||
+            `${b.bank_name} ${b.masked_account_number || ""}`,
         })),
     [banks]
   );
 
+  // ✅ Show "Ledger Name (Group Name)" to disambiguate duplicates
   const ledgerOptions = useMemo(
     () =>
       ledgers.map((l) => ({
         value: String(l.id),
-        label: l.ledger_name,
+        label: l.account_group_name
+          ? `${l.ledger_name} (${l.account_group_name})`
+          : l.ledger_name,
       })),
     [ledgers]
   );
@@ -152,6 +354,13 @@ const AddPaymentPage = () => {
     setPageError("");
   };
 
+  // ✅ Direct value setter (for searchable dropdown)
+  const handleLedgerChange = (value) => {
+    setFormData((p) => ({ ...p, account_ledger: value }));
+    setFieldErrors((p) => ({ ...p, account_ledger: undefined }));
+    setPageError("");
+  };
+
   const handlePaymentTypeChange = (e) => {
     const v = e.target.value;
     setFormData((p) => ({
@@ -160,7 +369,11 @@ const AddPaymentPage = () => {
       payment_mode: v === "CASH" ? "CASH" : "BANK_TRANSFER",
       bank_account: v === "CASH" ? "" : p.bank_account,
     }));
-    setFieldErrors((p) => ({ ...p, payment_type: undefined, bank_account: undefined }));
+    setFieldErrors((p) => ({
+      ...p,
+      payment_type: undefined,
+      bank_account: undefined,
+    }));
   };
 
   // =========================================================
@@ -172,7 +385,6 @@ const AddPaymentPage = () => {
     if (!formData.party_name.trim()) e.party_name = "Party name is required.";
     if (!formData.payment_type) e.payment_type = "Payment type is required.";
     if (!formData.payment_mode) e.payment_mode = "Transaction type is required.";
-    // ✅ bank_account is now OPTIONAL — no validation
     if (!formData.account_ledger) e.account_ledger = "Account ledger is required.";
     if (!formData.amount || Number(formData.amount) <= 0)
       e.amount = "Amount must be greater than zero.";
@@ -191,7 +403,6 @@ const AddPaymentPage = () => {
     try {
       setSaving(true);
 
-      // ✅ bank_account is optional — send null if empty
       const bankAccountPayload =
         showBankField && formData.bank_account
           ? Number(formData.bank_account)
@@ -264,7 +475,9 @@ const AddPaymentPage = () => {
           <Text color="#A2ACBB">/</Text>
           <Text color={BLUE}>Payments</Text>
           <Text color="#A2ACBB">/</Text>
-          <Text color={SECONDARY_TEXT}>{isEdit ? "Edit Payment" : "Add Payment"}</Text>
+          <Text color={SECONDARY_TEXT}>
+            {isEdit ? "Edit Payment" : "Add Payment"}
+          </Text>
         </HStack>
 
         {/* HEADER */}
@@ -337,7 +550,7 @@ const AddPaymentPage = () => {
                 />
               </FormField>
 
-              {/* VOUCHER NUMBER (read-only) */}
+              {/* VOUCHER NUMBER */}
               <FormField label="Voucher Number" required>
                 <HStack gap={2}>
                   <Input
@@ -464,7 +677,7 @@ const AddPaymentPage = () => {
                 </SelectWrapper>
               </FormField>
 
-              {/* BANK ACCOUNT — OPTIONAL */}
+              {/* BANK ACCOUNT */}
               <FormField label="Bank Account" error={fieldErrors.bank_account}>
                 <SelectWrapper error={fieldErrors.bank_account}>
                   <Box
@@ -501,40 +714,19 @@ const AddPaymentPage = () => {
                 </SelectWrapper>
               </FormField>
 
-              {/* ACCOUNT LEDGER */}
+              {/* ACCOUNT LEDGER — Searchable */}
               <FormField
                 label="Account Ledger"
                 required
                 error={fieldErrors.account_ledger}
               >
-                <SelectWrapper error={fieldErrors.account_ledger}>
-                  <Box
-                    as="select"
-                    name="account_ledger"
-                    value={formData.account_ledger}
-                    onChange={handleChange}
-                    width="100%"
-                    height="40px"
-                    fontSize="12px"
-                    color={formData.account_ledger ? TEXT_COLOR : SECONDARY_TEXT}
-                    border={`1px solid ${
-                      fieldErrors.account_ledger ? "#F56565" : BORDER_COLOR
-                    }`}
-                    borderRadius="6px"
-                    bg="white"
-                    appearance="none"
-                    px="11px"
-                    outline="none"
-                    cursor="pointer"
-                  >
-                    <option value="">Select Account Ledger</option>
-                    {ledgerOptions.map((l) => (
-                      <option key={l.value} value={l.value}>
-                        {l.label}
-                      </option>
-                    ))}
-                  </Box>
-                </SelectWrapper>
+                <SearchableLedgerSelect
+                  value={formData.account_ledger}
+                  onChange={handleLedgerChange}
+                  options={ledgerOptions}
+                  placeholder="Select Account Ledger"
+                  hasError={Boolean(fieldErrors.account_ledger)}
+                />
               </FormField>
 
               {/* AMOUNT */}

@@ -1,3 +1,5 @@
+// src/pages/SubscriptionEditPage.jsx
+
 import React, { useEffect, useMemo, useState } from "react";
 
 import {
@@ -32,17 +34,25 @@ import {
   getSubscription,
   updateSubscription,
   listGrades,
+  listAccountLedgers,
 } from "../api/registryServices";
 
 import { toaster } from "../components/ui/toaster";
 
 const PRIMARY_MAROON = "var(--primary-maroon)";
-
 const RED = "#D7193F";
 const DARK = "#182338";
 const MUTED = "#60708C";
 const BORDER = "#DCE2EA";
 
+// ============================================================
+// BILLING CYCLES
+// ============================================================
+
+const BILLING_CYCLES = [
+  { value: "MONTHLY", label: "Monthly" },
+  { value: "YEARLY", label: "Yearly" },
+];
 
 // ============================================================
 // TOAST HELPER
@@ -54,15 +64,8 @@ const showToast = ({
   type = "info",
   duration = 4000,
 }) => {
-  toaster.create({
-    title,
-    description,
-    type,
-    duration,
-    closable: true,
-  });
+  toaster.create({ title, description, type, duration, closable: true });
 };
-
 
 // ============================================================
 // FIELD LABELS
@@ -74,21 +77,20 @@ const FIELD_LABELS = {
   start_date: "Start Date",
   end_date: "End Date",
   amount: "Amount",
+  billing_cycle: "Billing Cycle",
+  ledger: "Ledger",
   cancel_reason: "Cancel Reason",
 };
-
 
 const SubscriptionEditPage = () => {
   const navigate = useNavigate();
   const { id } = useParams();
 
-  // ==========================================================
-  // STATE
-  // ==========================================================
-
   const [grades, setGrades] = useState([]);
+  const [ledgers, setLedgers] = useState([]);
 
   const [loading, setLoading] = useState(true);
+  const [loadingLedgers, setLoadingLedgers] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const [subscription, setSubscription] = useState(null);
@@ -99,6 +101,8 @@ const SubscriptionEditPage = () => {
     start_date: "",
     end_date: "",
     amount: "",
+    billing_cycle: "MONTHLY",
+    ledger: "",
     is_cancelled: false,
     cancel_reason: "",
   });
@@ -109,91 +113,39 @@ const SubscriptionEditPage = () => {
     start_date: "",
     end_date: "",
     amount: "",
+    billing_cycle: "MONTHLY",
+    ledger: "",
     is_cancelled: false,
     cancel_reason: "",
   });
 
   const [fieldErrors, setFieldErrors] = useState({});
 
-  // ==========================================================
-  // DATE FOR INPUT
-  // ==========================================================
-
+  // ---------- helpers ----------
   const formatInputDate = (date) => {
-    if (!date) {
-      return "";
-    }
-
+    if (!date) return "";
     const value = String(date);
-
-    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      return value;
-    }
-
-    const parsedDate = new Date(value);
-
-    if (Number.isNaN(parsedDate.getTime())) {
-      return "";
-    }
-
-    const year = parsedDate.getFullYear();
-    const month = String(parsedDate.getMonth() + 1).padStart(2, "0");
-    const day = String(parsedDate.getDate()).padStart(2, "0");
-
-    return `${year}-${month}-${day}`;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "";
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, "0");
+    const d = String(parsed.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
   };
 
-  // ==========================================================
-  // DISPLAY DATE
-  // ==========================================================
-
   const formatDisplayDate = (date) => {
-    if (!date) {
-      return "-";
-    }
-
-    const parsedDate = new Date(date);
-
-    if (Number.isNaN(parsedDate.getTime())) {
-      return "-";
-    }
-
-    return parsedDate.toLocaleDateString("en-GB", {
+    if (!date) return "-";
+    const parsed = new Date(date);
+    if (Number.isNaN(parsed.getTime())) return "-";
+    return parsed.toLocaleDateString("en-GB", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
     });
   };
 
-  // ==========================================================
-  // AMOUNT DISPLAY
-  // ==========================================================
-
-  const formatAmount = (amount) => {
-    if (
-      amount === null ||
-      amount === undefined ||
-      amount === ""
-    ) {
-      return "0.00";
-    }
-
-    const numericAmount = Number(amount);
-
-    if (Number.isNaN(numericAmount)) {
-      return String(amount);
-    }
-
-    return numericAmount.toLocaleString("en-IN", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  };
-
-  // ==========================================================
-  // LOAD DATA
-  // ==========================================================
-
+  // ---------- load ----------
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -203,53 +155,70 @@ const SubscriptionEditPage = () => {
     try {
       setLoading(true);
 
-      const [subscriptionResponse, gradeResponse] =
-        await Promise.all([
-          getSubscription(id),
-          listGrades(),
-        ]);
+      const [subRes, gradeRes, ledgerRes] = await Promise.all([
+        getSubscription(id),
+        listGrades(),
+        listAccountLedgers(),
+      ]);
 
-      const subscriptionData =
-        subscriptionResponse?.data ?? subscriptionResponse;
+      const sub = subRes?.data ?? subRes;
+      setSubscription(sub);
 
-      setSubscription(subscriptionData);
-
-      const gradeData = gradeResponse?.data ?? gradeResponse;
-
+      const gradeData = gradeRes?.data ?? gradeRes;
       const gradeList = Array.isArray(gradeData)
         ? gradeData
         : gradeData?.results || [];
-
       setGrades(gradeList);
 
-      const gradeId =
-        subscriptionData?.grade?.id ??
-        subscriptionData?.grade ??
-        "";
+      // ---- ledgers ----
+      setLoadingLedgers(true);
+      const ledgerData = ledgerRes?.data ?? ledgerRes;
+      let ledgerList = Array.isArray(ledgerData)
+        ? ledgerData
+        : ledgerData?.results || [];
 
-      const loadedFormData = {
+      // Filter to subscription ledgers
+      const subLedgers = ledgerList.filter((l) => {
+        const name = (l.ledger_name || "").toLowerCase();
+        const group = (l.account_group_name || "").toLowerCase();
+        return name.includes("subscription") || group.includes("subscription");
+      });
+
+      if (subLedgers.length === 0) {
+        ledgerList = ledgerList.filter(
+          (l) => (l.ledger_nature || "").toUpperCase() === "INCOME"
+        );
+      } else {
+        ledgerList = subLedgers;
+      }
+      setLedgers(ledgerList);
+      setLoadingLedgers(false);
+
+      // ---- form ----
+      const gradeId =
+        sub?.grade?.id ?? sub?.grade ?? "";
+      const ledgerId =
+        sub?.ledger?.id ?? sub?.ledger ?? "";
+
+      const loaded = {
         grade: gradeId ? String(gradeId) : "",
-        term: subscriptionData?.term ?? "",
-        start_date: subscriptionData?.start_date
-          ? formatInputDate(subscriptionData.start_date)
-          : "",
-        end_date: subscriptionData?.end_date
-          ? formatInputDate(subscriptionData.end_date)
-          : "",
+        term: sub?.term ?? "",
+        start_date: sub?.start_date ? formatInputDate(sub.start_date) : "",
+        end_date: sub?.end_date ? formatInputDate(sub.end_date) : "",
         amount:
-          subscriptionData?.amount !== null &&
-          subscriptionData?.amount !== undefined
-            ? String(subscriptionData.amount)
+          sub?.amount !== null && sub?.amount !== undefined
+            ? String(sub.amount)
             : "",
-        is_cancelled: Boolean(subscriptionData?.is_cancelled),
-        cancel_reason: subscriptionData?.cancel_reason ?? "",
+        billing_cycle: sub?.billing_cycle ?? "MONTHLY",
+        ledger: ledgerId ? String(ledgerId) : "",
+        is_cancelled: Boolean(sub?.is_cancelled),
+        cancel_reason: sub?.cancel_reason ?? "",
       };
 
-      setFormData(loadedFormData);
-      setOriginalFormData({ ...loadedFormData });
+      setFormData(loaded);
+      setOriginalFormData({ ...loaded });
     } catch (err) {
       console.error("Error loading subscription:", err);
-
       showToast({
         title: "Failed to load record",
         description:
@@ -263,98 +232,63 @@ const SubscriptionEditPage = () => {
     }
   };
 
-  // ==========================================================
-  // FORM CHANGE
-  // ==========================================================
-
+  // ---------- change ----------
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-
     setFormData((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
     }));
-
     setFieldErrors((prev) =>
       prev[name] ? { ...prev, [name]: "" } : prev
     );
   };
-
-  // ==========================================================
-  // CANCELLED TOGGLE
-  // ==========================================================
 
   const handleCancelledToggle = () => {
     setFormData((prev) => ({
       ...prev,
       is_cancelled: !prev.is_cancelled,
     }));
-
     setFieldErrors((prev) =>
-      prev.cancel_reason
-        ? { ...prev, cancel_reason: "" }
-        : prev
+      prev.cancel_reason ? { ...prev, cancel_reason: "" } : prev
     );
   };
 
-  // ==========================================================
-  // UNSAVED CHANGES
-  // ==========================================================
-
+  // ---------- unsaved ----------
   const changedFields = useMemo(() => {
     const fields = [];
-
     const compare = (field, label) => {
-      const original = originalFormData[field] ?? "";
-      const current = formData[field] ?? "";
-
-      if (String(original) !== String(current)) {
-        fields.push(label);
-      }
+      const a = originalFormData[field] ?? "";
+      const b = formData[field] ?? "";
+      if (String(a) !== String(b)) fields.push(label);
     };
-
     compare("grade", "Grade");
     compare("term", "Term");
     compare("start_date", "Start Date");
     compare("end_date", "End Date");
     compare("amount", "Amount");
+    compare("billing_cycle", "Billing Cycle");
+    compare("ledger", "Ledger");
     compare("is_cancelled", "Status");
     compare("cancel_reason", "Cancel Reason");
-
     return fields;
   }, [formData, originalFormData]);
 
   const unsavedChangesCount = changedFields.length;
   const hasUnsavedChanges = unsavedChangesCount > 0;
 
-  // ==========================================================
-  // GRADE NAME
-  // ==========================================================
-
   const getGradeName = () => {
-    const selectedGrade = grades.find(
-      (grade) =>
-        String(grade.id) === String(formData.grade)
+    const g = grades.find(
+      (grade) => String(grade.id) === String(formData.grade)
     );
-
-    if (selectedGrade?.name) {
-      return selectedGrade.name;
-    }
-
-    if (
-      typeof subscription?.grade === "object" &&
-      subscription?.grade?.name
-    ) {
+    if (g?.name) return g.name;
+    if (typeof subscription?.grade === "object" && subscription?.grade?.name) {
       return subscription.grade.name;
     }
-
     return "Grade";
   };
 
-  // ==========================================================
-  // VALIDATION
-  // ==========================================================
-
+  // ---------- validate ----------
   const validateForm = () => {
     const errors = {};
     const missing = [];
@@ -363,49 +297,43 @@ const SubscriptionEditPage = () => {
       errors.grade = "Please select a grade.";
       missing.push(FIELD_LABELS.grade);
     }
-
     if (!formData.term.trim()) {
       errors.term = "Term is required.";
       missing.push(FIELD_LABELS.term);
     }
-
     if (!formData.start_date) {
       errors.start_date = "Start date is required.";
       missing.push(FIELD_LABELS.start_date);
     }
-
     if (!formData.end_date) {
       errors.end_date = "End date is required.";
       missing.push(FIELD_LABELS.end_date);
     }
-
     if (
       formData.start_date &&
       formData.end_date &&
-      new Date(formData.end_date) <
-        new Date(formData.start_date)
+      new Date(formData.end_date) < new Date(formData.start_date)
     ) {
       errors.end_date = "End date cannot be before start date.";
     }
-
-    if (
-      formData.amount === "" ||
-      formData.amount === null
-    ) {
+    if (formData.amount === "" || formData.amount === null) {
       errors.amount = "Amount is required.";
       missing.push(FIELD_LABELS.amount);
     } else {
       const amount = Number(formData.amount);
-
       if (Number.isNaN(amount) || amount < 0) {
         errors.amount = "Amount must be zero or greater.";
       }
     }
-
-    if (
-      formData.is_cancelled &&
-      !formData.cancel_reason.trim()
-    ) {
+    if (!formData.billing_cycle) {
+      errors.billing_cycle = "Billing cycle is required.";
+      missing.push(FIELD_LABELS.billing_cycle);
+    }
+    if (!formData.ledger) {
+      errors.ledger = "Ledger is required.";
+      missing.push(FIELD_LABELS.ledger);
+    }
+    if (formData.is_cancelled && !formData.cancel_reason.trim()) {
       errors.cancel_reason =
         "Cancel reason is required when marking as cancelled.";
       missing.push(FIELD_LABELS.cancel_reason);
@@ -415,21 +343,16 @@ const SubscriptionEditPage = () => {
     return { errors, missing };
   };
 
-  // ==========================================================
-  // UPDATE
-  // ==========================================================
-
+  // ---------- submit ----------
   const handleSubmit = async () => {
     const { errors, missing } = validateForm();
 
     if (Object.keys(errors).length > 0) {
-      // Prefer explicit rule errors over missing-fields list
       const explicitMessages = Object.entries(errors)
         .filter(([key]) => !missing.includes(FIELD_LABELS[key]))
         .map(([, msg]) => msg);
 
       let description;
-
       if (explicitMessages.length > 0) {
         description = explicitMessages.join("\n");
       } else if (missing.length === 1) {
@@ -450,8 +373,7 @@ const SubscriptionEditPage = () => {
     if (!hasUnsavedChanges) {
       showToast({
         title: "No changes to save",
-        description:
-          "Please modify at least one field before updating.",
+        description: "Please modify at least one field before updating.",
         type: "info",
         duration: 4000,
       });
@@ -468,6 +390,8 @@ const SubscriptionEditPage = () => {
         start_date: formData.start_date,
         end_date: formData.end_date,
         amount: Number(formData.amount),
+        billing_cycle: formData.billing_cycle,
+        ledger: Number(formData.ledger),
         is_cancelled: Boolean(formData.is_cancelled),
       };
 
@@ -483,8 +407,7 @@ const SubscriptionEditPage = () => {
 
       showToast({
         title: "Changes saved",
-        description:
-          "The subscription record was updated successfully.",
+        description: "The subscription record was updated successfully.",
         type: "success",
         duration: 4000,
       });
@@ -501,7 +424,6 @@ const SubscriptionEditPage = () => {
         !Array.isArray(responseData)
       ) {
         const errors = {};
-
         Object.entries(responseData).forEach(([key, value]) => {
           if (Array.isArray(value)) errors[key] = value.join(", ");
           else if (typeof value === "string") errors[key] = value;
@@ -512,16 +434,14 @@ const SubscriptionEditPage = () => {
 
         const generalError =
           responseData.detail || responseData.non_field_errors?.[0];
-
         const fieldMessages = Object.values(errors).filter(Boolean);
-        const onlyOneFieldError =
-          fieldMessages.length === 1 && !generalError;
+        const onlyOne = fieldMessages.length === 1 && !generalError;
 
         showToast({
           title: "Could not save changes",
           description:
             generalError ||
-            (onlyOneFieldError
+            (onlyOne
               ? fieldMessages[0]
               : `Please check: ${Object.keys(errors)
                   .map((k) => FIELD_LABELS[k] || k)
@@ -532,8 +452,7 @@ const SubscriptionEditPage = () => {
       } else {
         showToast({
           title: "Could not save changes",
-          description:
-            "Unable to update subscription. Please try again.",
+          description: "Unable to update subscription. Please try again.",
           type: "error",
           duration: 7000,
         });
@@ -543,83 +462,41 @@ const SubscriptionEditPage = () => {
     }
   };
 
-  // ==========================================================
-  // CANCEL
-  // ==========================================================
+  const handleCancel = () => navigate("/subscriptions");
 
-  const handleCancel = () => {
-    navigate("/subscriptions");
-  };
-
-  // ==========================================================
-  // LOADING
-  // ==========================================================
-
+  // ---------- loading ----------
   if (loading) {
     return (
-      <Box
-        minH="100vh"
-        bg="white"
-        display="flex"
-        flexDirection="column"
-      >
+      <Box minH="100vh" bg="white" display="flex" flexDirection="column">
         <Navbar />
-
-        <Box
-          flex="1"
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-        >
+        <Box flex="1" display="flex" alignItems="center" justifyContent="center">
           <Flex direction="column" align="center" gap={3}>
             <Spinner size="md" color={PRIMARY_MAROON} />
-
-            <Text fontSize="12px" color={MUTED}>
-              Loading subscription...
-            </Text>
+            <Text fontSize="12px" color={MUTED}>Loading subscription...</Text>
           </Flex>
         </Box>
-
         <Footer />
       </Box>
     );
   }
 
-  // ==========================================================
-  // CURRENT STATUS
-  // ==========================================================
+  const currentStatus = formData.is_cancelled ? "Cancelled" : "Active";
+  const selectedLedger = ledgers.find((l) => String(l.id) === String(formData.ledger));
+  const selectedCycle = BILLING_CYCLES.find(
+    (b) => b.value === formData.billing_cycle
+  );
 
-  const currentStatus = formData.is_cancelled
-    ? "Cancelled"
-    : "Active";
-
-  // ==========================================================
+  // ============================================================
   // RENDER
-  // ==========================================================
-
+  // ============================================================
   return (
-    <Box
-      minH="100vh"
-      bg="white"
-      display="flex"
-      flexDirection="column"
-    >
+    <Box minH="100vh" bg="white" display="flex" flexDirection="column">
       <Navbar />
 
       <Box flex="1">
-        <Container
-          maxW="1600px"
-          px={{ base: 4, md: 5, lg: 6 }}
-          py={{ base: 3, md: 4 }}
-        >
+        <Container maxW="1600px" px={{ base: 4, md: 5, lg: 6 }} py={{ base: 3, md: 4 }}>
           {/* BREADCRUMB */}
-          <HStack
-            gap={2}
-            mb={2}
-            color={MUTED}
-            fontSize="11px"
-            flexWrap="wrap"
-          >
+          <HStack gap={2} mb={2} color={MUTED} fontSize="11px" flexWrap="wrap">
             <Text>Activities</Text>
             <Text>/</Text>
             <Text>Subscriptions</Text>
@@ -641,34 +518,18 @@ const SubscriptionEditPage = () => {
             mb={3}
           >
             <Box>
-              <Text
-                fontSize="10px"
-                fontWeight="700"
-                color={RED}
-                mb={1}
-                letterSpacing="0.3px"
-              >
+              <Text fontSize="10px" fontWeight="700" color={RED} mb={1} letterSpacing="0.3px">
                 SUBSCRIPTIONS
               </Text>
-
-              <Heading
-                color={DARK}
-                fontSize={{ base: "22px", md: "27px" }}
-                lineHeight="1.1"
-                mb={1}
-              >
+              <Heading color={DARK} fontSize={{ base: "22px", md: "27px" }} lineHeight="1.1" mb={1}>
                 Edit Subscription
               </Heading>
-
               <Text color={MUTED} fontSize="11px">
-                Update grade, term, dates, amount and status.
+                Update grade, term, dates, billing cycle, ledger, amount and status.
               </Text>
             </Box>
 
-            <HStack
-              gap={2}
-              width={{ base: "100%", lg: "auto" }}
-            >
+            <HStack gap={2} width={{ base: "100%", lg: "auto" }}>
               <Button
                 flex={{ base: 1, lg: "none" }}
                 variant="outline"
@@ -684,7 +545,6 @@ const SubscriptionEditPage = () => {
               >
                 Cancel
               </Button>
-
               <Button
                 flex={{ base: 1, lg: "none" }}
                 bg={RED}
@@ -704,7 +564,7 @@ const SubscriptionEditPage = () => {
             </HStack>
           </Flex>
 
-          {/* COMPACT SUBSCRIPTION SUMMARY */}
+          {/* COMPACT SUMMARY */}
           <Box
             border="1px solid #F2CBD6"
             borderRadius="8px"
@@ -714,14 +574,10 @@ const SubscriptionEditPage = () => {
             mb={3}
           >
             <Grid
-              templateColumns={{
-                base: "1fr",
-                lg: "1fr 1px 1fr",
-              }}
+              templateColumns={{ base: "1fr", lg: "1fr 1px 1fr" }}
               alignItems="center"
               gap={{ base: 3, lg: 4 }}
             >
-              {/* LEFT */}
               <Flex align="center" gap={3}>
                 <Box
                   width="50px"
@@ -733,50 +589,27 @@ const SubscriptionEditPage = () => {
                   justifyContent="center"
                   flexShrink={0}
                 >
-                  <Icon
-                    as={LuCalendarDays}
-                    boxSize={6}
-                    color={RED}
-                    strokeWidth={1.6}
-                  />
+                  <Icon as={LuCalendarDays} boxSize={6} color={RED} strokeWidth={1.6} />
                 </Box>
-
                 <Box>
-                  <Text
-                    fontSize={{ base: "17px", md: "20px" }}
-                    fontWeight="700"
-                    color={DARK}
-                    mb="2px"
-                  >
+                  <Text fontSize={{ base: "17px", md: "20px" }} fontWeight="700" color={DARK} mb="2px">
                     {getGradeName()} Subscription
                   </Text>
-
                   <HStack gap={2} flexWrap="wrap">
                     <Text fontSize="11px" color={MUTED}>
                       {subscription?.subscription_number ||
                         subscription?.code ||
                         `SUB-${String(id).padStart(6, "0")}`}
                     </Text>
-
                     <Text fontSize="11px" color={MUTED}>
-                      {formatDisplayDate(formData.start_date)}{" "}
-                      – {formatDisplayDate(formData.end_date)}
+                      {formatDisplayDate(formData.start_date)} – {formatDisplayDate(formData.end_date)}
                     </Text>
-
                     <Box
                       px={2.5}
                       py="3px"
                       borderRadius="15px"
-                      bg={
-                        formData.is_cancelled
-                          ? "#FFF0F0"
-                          : "#EAF8EA"
-                      }
-                      color={
-                        formData.is_cancelled
-                          ? "#B5122F"
-                          : "#238B2D"
-                      }
+                      bg={formData.is_cancelled ? "#FFF0F0" : "#EAF8EA"}
+                      color={formData.is_cancelled ? "#B5122F" : "#238B2D"}
                       fontSize="9px"
                       fontWeight="700"
                     >
@@ -786,14 +619,8 @@ const SubscriptionEditPage = () => {
                 </Box>
               </Flex>
 
-              {/* DIVIDER */}
-              <Box
-                display={{ base: "none", lg: "block" }}
-                height="52px"
-                borderLeft="1px solid #E2D5DA"
-              />
+              <Box display={{ base: "none", lg: "block" }} height="52px" borderLeft="1px solid #E2D5DA" />
 
-              {/* RIGHT */}
               <Flex align="center" gap={3}>
                 <Box
                   width="50px"
@@ -805,27 +632,16 @@ const SubscriptionEditPage = () => {
                   justifyContent="center"
                   flexShrink={0}
                 >
-                  <Text
-                    fontSize="18px"
-                    fontWeight="800"
-                    color={RED}
-                  >
-                    T
+                  <Text fontSize="18px" fontWeight="800" color={RED}>
+                    {formData.billing_cycle === "MONTHLY" ? "M" : "Y"}
                   </Text>
                 </Box>
-
                 <Box>
-                  <Text
-                    fontSize={{ base: "17px", md: "20px" }}
-                    fontWeight="700"
-                    color={DARK}
-                    mb="1px"
-                  >
-                    {formData.term || "Term"}
+                  <Text fontSize={{ base: "17px", md: "20px" }} fontWeight="700" color={DARK} mb="1px">
+                    {selectedCycle?.label || formData.billing_cycle}
                   </Text>
-
                   <Text fontSize="11px" color={MUTED}>
-                    Current Term
+                    {selectedLedger?.ledger_name || "No ledger selected"}
                   </Text>
                 </Box>
               </Flex>
@@ -834,68 +650,27 @@ const SubscriptionEditPage = () => {
 
           {/* MAIN GRID */}
           <Grid
-            templateColumns={{
-              base: "1fr",
-              lg: "minmax(0, 2.1fr) minmax(300px, 1fr)",
-            }}
+            templateColumns={{ base: "1fr", lg: "minmax(0, 2.1fr) minmax(300px, 1fr)" }}
             gap={3}
             alignItems="start"
           >
             {/* LEFT FORM */}
-            <Box
-              border="1px solid #DCE2EA"
-              borderRadius="8px"
-              p={{ base: 4, md: 4, lg: 5 }}
-              bg="white"
-            >
+            <Box border="1px solid #DCE2EA" borderRadius="8px" p={{ base: 4, md: 5 }} bg="white">
               <HStack gap={2} mb={4}>
-                <Box
-                  width="30px"
-                  height="30px"
-                  borderRadius="7px"
-                  bg="#FFF0F4"
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  flexShrink={0}
-                >
-                  <Box
-                    width="10px"
-                    height="10px"
-                    borderRadius="3px"
-                    bg="#FFE0E8"
-                  />
+                <Box width="30px" height="30px" borderRadius="7px" bg="#FFF0F4" display="flex" alignItems="center" justifyContent="center" flexShrink={0}>
+                  <Box width="10px" height="10px" borderRadius="3px" bg="#FFE0E8" />
                 </Box>
-
-                <Text
-                  fontSize="15px"
-                  fontWeight="700"
-                  color={DARK}
-                >
+                <Text fontSize="15px" fontWeight="700" color={DARK}>
                   Subscription Information
                 </Text>
               </HStack>
 
               {/* GRADE + TERM */}
-              <Grid
-                templateColumns={{ base: "1fr", md: "1fr 1fr" }}
-                gap={3}
-                mb={3}
-              >
-                {/* GRADE */}
+              <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={3} mb={3}>
                 <Box>
-                  <Text
-                    fontSize="11px"
-                    fontWeight="700"
-                    color={DARK}
-                    mb={1.5}
-                  >
-                    Grade{" "}
-                    <Text as="span" color={RED}>
-                      *
-                    </Text>
+                  <Text fontSize="11px" fontWeight="700" color={DARK} mb={1.5}>
+                    Grade <Text as="span" color={RED}>*</Text>
                   </Text>
-
                   <select
                     name="grade"
                     value={formData.grade}
@@ -903,9 +678,7 @@ const SubscriptionEditPage = () => {
                     style={{
                       width: "100%",
                       height: "38px",
-                      border: `1px solid ${
-                        fieldErrors.grade ? "#F3C4C4" : BORDER
-                      }`,
+                      border: `1px solid ${fieldErrors.grade ? "#F3C4C4" : BORDER}`,
                       borderRadius: "6px",
                       padding: "0 10px",
                       fontSize: "12px",
@@ -916,7 +689,6 @@ const SubscriptionEditPage = () => {
                     }}
                   >
                     <option value="">Select grade</option>
-
                     {grades.map((grade) => (
                       <option key={grade.id} value={grade.id}>
                         {grade.name}
@@ -925,20 +697,10 @@ const SubscriptionEditPage = () => {
                   </select>
                 </Box>
 
-                {/* TERM */}
                 <Box>
-                  <Text
-                    fontSize="11px"
-                    fontWeight="700"
-                    color={DARK}
-                    mb={1.5}
-                  >
-                    Term{" "}
-                    <Text as="span" color={RED}>
-                      *
-                    </Text>
+                  <Text fontSize="11px" fontWeight="700" color={DARK} mb={1.5}>
+                    Term <Text as="span" color={RED}>*</Text>
                   </Text>
-
                   <Input
                     name="term"
                     value={formData.term}
@@ -946,9 +708,7 @@ const SubscriptionEditPage = () => {
                     placeholder="Enter term"
                     h="38px"
                     fontSize="12px"
-                    borderColor={
-                      fieldErrors.term ? "#F3C4C4" : BORDER
-                    }
+                    borderColor={fieldErrors.term ? "#F3C4C4" : BORDER}
                     borderRadius="6px"
                     color={DARK}
                     _placeholder={{ color: "#98A2B3" }}
@@ -960,26 +720,77 @@ const SubscriptionEditPage = () => {
                 </Box>
               </Grid>
 
-              {/* START + END */}
-              <Grid
-                templateColumns={{ base: "1fr", md: "1fr 1fr" }}
-                gap={3}
-                mb={3}
-              >
-                {/* START DATE */}
+              {/* BILLING CYCLE + LEDGER */}
+              <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={3} mb={3}>
                 <Box>
-                  <Text
-                    fontSize="11px"
-                    fontWeight="700"
-                    color={DARK}
-                    mb={1.5}
-                  >
-                    Start Date{" "}
-                    <Text as="span" color={RED}>
-                      *
-                    </Text>
+                  <Text fontSize="11px" fontWeight="700" color={DARK} mb={1.5}>
+                    Billing Cycle <Text as="span" color={RED}>*</Text>
                   </Text>
+                  <select
+                    name="billing_cycle"
+                    value={formData.billing_cycle}
+                    onChange={handleChange}
+                    style={{
+                      width: "100%",
+                      height: "38px",
+                      border: `1px solid ${fieldErrors.billing_cycle ? "#F3C4C4" : BORDER}`,
+                      borderRadius: "6px",
+                      padding: "0 10px",
+                      fontSize: "12px",
+                      background: "white",
+                      color: DARK,
+                      outline: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {BILLING_CYCLES.map((b) => (
+                      <option key={b.value} value={b.value}>
+                        {b.label}
+                      </option>
+                    ))}
+                  </select>
+                </Box>
 
+                <Box>
+                  <Text fontSize="11px" fontWeight="700" color={DARK} mb={1.5}>
+                    Ledger <Text as="span" color={RED}>*</Text>
+                  </Text>
+                  <select
+                    name="ledger"
+                    value={formData.ledger}
+                    onChange={handleChange}
+                    disabled={loadingLedgers}
+                    style={{
+                      width: "100%",
+                      height: "38px",
+                      border: `1px solid ${fieldErrors.ledger ? "#F3C4C4" : BORDER}`,
+                      borderRadius: "6px",
+                      padding: "0 10px",
+                      fontSize: "12px",
+                      background: loadingLedgers ? "#F7F9FB" : "white",
+                      color: DARK,
+                      outline: "none",
+                      cursor: loadingLedgers ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    <option value="">
+                      {loadingLedgers ? "Loading ledgers..." : "Select ledger"}
+                    </option>
+                    {ledgers.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.ledger_name}
+                      </option>
+                    ))}
+                  </select>
+                </Box>
+              </Grid>
+
+              {/* START + END */}
+              <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={3} mb={3}>
+                <Box>
+                  <Text fontSize="11px" fontWeight="700" color={DARK} mb={1.5}>
+                    Start Date <Text as="span" color={RED}>*</Text>
+                  </Text>
                   <Box position="relative">
                     <Input
                       name="start_date"
@@ -988,11 +799,7 @@ const SubscriptionEditPage = () => {
                       onChange={handleChange}
                       h="38px"
                       fontSize="12px"
-                      borderColor={
-                        fieldErrors.start_date
-                          ? "#F3C4C4"
-                          : BORDER
-                      }
+                      borderColor={fieldErrors.start_date ? "#F3C4C4" : BORDER}
                       borderRadius="6px"
                       color={DARK}
                       pr="38px"
@@ -1001,34 +808,14 @@ const SubscriptionEditPage = () => {
                         boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                       }}
                     />
-
-                    <Icon
-                      as={LuCalendarDays}
-                      position="absolute"
-                      right="10px"
-                      top="50%"
-                      transform="translateY(-50%)"
-                      color="#98A2B3"
-                      boxSize={3.5}
-                      pointerEvents="none"
-                    />
+                    <Icon as={LuCalendarDays} position="absolute" right="10px" top="50%" transform="translateY(-50%)" color="#98A2B3" boxSize={3.5} pointerEvents="none" />
                   </Box>
                 </Box>
 
-                {/* END DATE */}
                 <Box>
-                  <Text
-                    fontSize="11px"
-                    fontWeight="700"
-                    color={DARK}
-                    mb={1.5}
-                  >
-                    End Date{" "}
-                    <Text as="span" color={RED}>
-                      *
-                    </Text>
+                  <Text fontSize="11px" fontWeight="700" color={DARK} mb={1.5}>
+                    End Date <Text as="span" color={RED}>*</Text>
                   </Text>
-
                   <Box position="relative">
                     <Input
                       name="end_date"
@@ -1037,11 +824,7 @@ const SubscriptionEditPage = () => {
                       onChange={handleChange}
                       h="38px"
                       fontSize="12px"
-                      borderColor={
-                        fieldErrors.end_date
-                          ? "#F3C4C4"
-                          : BORDER
-                      }
+                      borderColor={fieldErrors.end_date ? "#F3C4C4" : BORDER}
                       borderRadius="6px"
                       color={DARK}
                       pr="38px"
@@ -1050,35 +833,16 @@ const SubscriptionEditPage = () => {
                         boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                       }}
                     />
-
-                    <Icon
-                      as={LuCalendarDays}
-                      position="absolute"
-                      right="10px"
-                      top="50%"
-                      transform="translateY(-50%)"
-                      color="#98A2B3"
-                      boxSize={3.5}
-                      pointerEvents="none"
-                    />
+                    <Icon as={LuCalendarDays} position="absolute" right="10px" top="50%" transform="translateY(-50%)" color="#98A2B3" boxSize={3.5} pointerEvents="none" />
                   </Box>
                 </Box>
               </Grid>
 
               {/* AMOUNT */}
               <Box mb={3}>
-                <Text
-                  fontSize="11px"
-                  fontWeight="700"
-                  color={DARK}
-                  mb={1.5}
-                >
-                  Amount{" "}
-                  <Text as="span" color={RED}>
-                    *
-                  </Text>
+                <Text fontSize="11px" fontWeight="700" color={DARK} mb={1.5}>
+                  Amount <Text as="span" color={RED}>*</Text>
                 </Text>
-
                 <Flex>
                   <Box
                     width="42px"
@@ -1095,7 +859,6 @@ const SubscriptionEditPage = () => {
                   >
                     ₹
                   </Box>
-
                   <Input
                     name="amount"
                     type="number"
@@ -1106,9 +869,7 @@ const SubscriptionEditPage = () => {
                     placeholder="Enter amount"
                     h="38px"
                     fontSize="12px"
-                    borderColor={
-                      fieldErrors.amount ? "#F3C4C4" : BORDER
-                    }
+                    borderColor={fieldErrors.amount ? "#F3C4C4" : BORDER}
                     borderRadius="0 6px 6px 0"
                     borderLeft="none"
                     color={DARK}
@@ -1123,20 +884,10 @@ const SubscriptionEditPage = () => {
 
               {/* CANCELLED */}
               <Box>
-                <Text
-                  fontSize="11px"
-                  fontWeight="700"
-                  color={DARK}
-                  mb={2}
-                >
+                <Text fontSize="11px" fontWeight="700" color={DARK} mb={2}>
                   Canceled
                 </Text>
-
-                <HStack
-                  gap={3}
-                  cursor="pointer"
-                  onClick={handleCancelledToggle}
-                >
+                <HStack gap={3} cursor="pointer" onClick={handleCancelledToggle}>
                   <Box
                     width="42px"
                     height="22px"
@@ -1158,7 +909,6 @@ const SubscriptionEditPage = () => {
                       boxShadow="0 1px 3px rgba(0,0,0,0.2)"
                     />
                   </Box>
-
                   <Text fontSize="12px" color="#344054">
                     Mark this subscription as canceled
                   </Text>
@@ -1167,25 +917,10 @@ const SubscriptionEditPage = () => {
 
               {/* CANCEL REASON */}
               {formData.is_cancelled && (
-                <Box
-                  mt={3}
-                  p={3}
-                  border="1px solid #F2CBD6"
-                  borderRadius="7px"
-                  bg="#FFF9FB"
-                >
-                  <Text
-                    fontSize="11px"
-                    fontWeight="700"
-                    color={DARK}
-                    mb={1.5}
-                  >
-                    Cancel Reason{" "}
-                    <Text as="span" color={RED}>
-                      *
-                    </Text>
+                <Box mt={3} p={3} border="1px solid #F2CBD6" borderRadius="7px" bg="#FFF9FB">
+                  <Text fontSize="11px" fontWeight="700" color={DARK} mb={1.5}>
+                    Cancel Reason <Text as="span" color={RED}>*</Text>
                   </Text>
-
                   <Textarea
                     name="cancel_reason"
                     value={formData.cancel_reason}
@@ -1210,7 +945,6 @@ const SubscriptionEditPage = () => {
                       boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                     }}
                   />
-
                   <Text mt={1} fontSize="10px" color={MUTED}>
                     Please provide a reason before cancelling.
                   </Text>
@@ -1220,279 +954,93 @@ const SubscriptionEditPage = () => {
 
             {/* RIGHT COLUMN */}
             <Flex direction="column" gap={3}>
-              {/* RECORD INFORMATION */}
-              <Box
-                border="1px solid #DCE2EA"
-                borderRadius="8px"
-                p={3.5}
-                bg="white"
-              >
+              {/* RECORD INFO */}
+              <Box border="1px solid #DCE2EA" borderRadius="8px" p={3.5} bg="white">
                 <HStack gap={2} mb={3}>
-                  <Box
-                    width="28px"
-                    height="28px"
-                    borderRadius="7px"
-                    bg="#FFF0F4"
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                  >
-                    <Icon
-                      as={LuCircleCheck}
-                      boxSize={3.5}
-                      color={RED}
-                    />
+                  <Box width="28px" height="28px" borderRadius="7px" bg="#FFF0F4" display="flex" alignItems="center" justifyContent="center">
+                    <Icon as={LuCircleCheck} boxSize={3.5} color={RED} />
                   </Box>
-
-                  <Text
-                    fontSize="14px"
-                    fontWeight="700"
-                    color={DARK}
-                  >
+                  <Text fontSize="14px" fontWeight="700" color={DARK}>
                     Record Information
                   </Text>
                 </HStack>
-
                 <HStack align="flex-start" gap={2.5} mb={3}>
-                  <Box
-                    width="28px"
-                    height="28px"
-                    borderRadius="7px"
-                    bg="#FFF7FA"
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    flexShrink={0}
-                  >
-                    <Icon
-                      as={LuCalendarDays}
-                      boxSize={3.5}
-                      color={RED}
-                    />
+                  <Box width="28px" height="28px" borderRadius="7px" bg="#FFF7FA" display="flex" alignItems="center" justifyContent="center" flexShrink={0}>
+                    <Icon as={LuCalendarDays} boxSize={3.5} color={RED} />
                   </Box>
-
                   <Box>
-                    <Text fontSize="10px" color={MUTED} mb="1px">
-                      Created On
-                    </Text>
-
-                    <Text
-                      fontSize="12px"
-                      fontWeight="700"
-                      color={DARK}
-                    >
-                      {formatDisplayDate(
-                        subscription?.created_at ||
-                          subscription?.created_on
-                      )}
+                    <Text fontSize="10px" color={MUTED} mb="1px">Created On</Text>
+                    <Text fontSize="12px" fontWeight="700" color={DARK}>
+                      {formatDisplayDate(subscription?.created_at || subscription?.created_on)}
                     </Text>
                   </Box>
                 </HStack>
-
                 <HStack align="flex-start" gap={2.5}>
-                  <Box
-                    width="28px"
-                    height="28px"
-                    borderRadius="7px"
-                    bg="#FFF7FA"
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    flexShrink={0}
-                  >
-                    <Icon
-                      as={LuCircleCheck}
-                      boxSize={3.5}
-                      color={RED}
-                    />
+                  <Box width="28px" height="28px" borderRadius="7px" bg="#FFF7FA" display="flex" alignItems="center" justifyContent="center" flexShrink={0}>
+                    <Icon as={LuCircleCheck} boxSize={3.5} color={RED} />
                   </Box>
-
                   <Box>
-                    <Text fontSize="10px" color={MUTED} mb="1px">
-                      Last Updated
-                    </Text>
-
-                    <Text
-                      fontSize="12px"
-                      fontWeight="700"
-                      color={DARK}
-                    >
-                      {formatDisplayDate(
-                        subscription?.updated_at ||
-                          subscription?.last_updated
-                      )}
-                      {subscription?.updated_by
-                        ? ` by ${subscription.updated_by}`
-                        : ""}
+                    <Text fontSize="10px" color={MUTED} mb="1px">Last Updated</Text>
+                    <Text fontSize="12px" fontWeight="700" color={DARK}>
+                      {formatDisplayDate(subscription?.updated_at || subscription?.last_updated)}
+                      {subscription?.updated_by ? ` by ${subscription.updated_by}` : ""}
                     </Text>
                   </Box>
                 </HStack>
               </Box>
 
               {/* UNSAVED CHANGES */}
-              <Box
-                border="1px solid #DCE2EA"
-                borderRadius="8px"
-                p={3.5}
-                bg="white"
-              >
+              <Box border="1px solid #DCE2EA" borderRadius="8px" p={3.5} bg="white">
                 <HStack gap={2} mb={3}>
-                  <Box
-                    width="28px"
-                    height="28px"
-                    borderRadius="7px"
-                    bg={
-                      hasUnsavedChanges
-                        ? "#FFF7ED"
-                        : "#F0FDF4"
-                    }
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                  >
-                    <Icon
-                      as={
-                        hasUnsavedChanges
-                          ? LuCircleAlert
-                          : LuCircleCheck
-                      }
-                      boxSize={3.5}
-                      color={
-                        hasUnsavedChanges
-                          ? "#F97316"
-                          : "#16A34A"
-                      }
-                    />
+                  <Box width="28px" height="28px" borderRadius="7px" bg={hasUnsavedChanges ? "#FFF7ED" : "#F0FDF4"} display="flex" alignItems="center" justifyContent="center">
+                    <Icon as={hasUnsavedChanges ? LuCircleAlert : LuCircleCheck} boxSize={3.5} color={hasUnsavedChanges ? "#F97316" : "#16A34A"} />
                   </Box>
-
                   <Box>
-                    <Text
-                      fontSize="14px"
-                      fontWeight="700"
-                      color={
-                        hasUnsavedChanges
-                          ? "#EA580C"
-                          : "#15803D"
-                      }
-                    >
-                      {hasUnsavedChanges
-                        ? "Unsaved Changes"
-                        : "No Unsaved Changes"}
+                    <Text fontSize="14px" fontWeight="700" color={hasUnsavedChanges ? "#EA580C" : "#15803D"}>
+                      {hasUnsavedChanges ? "Unsaved Changes" : "No Unsaved Changes"}
                     </Text>
-
                     <Text fontSize="10px" color={MUTED}>
-                      {unsavedChangesCount}{" "}
-                      {unsavedChangesCount === 1
-                        ? "field"
-                        : "fields"}{" "}
-                      changed
+                      {unsavedChangesCount} {unsavedChangesCount === 1 ? "field" : "fields"} changed
                     </Text>
                   </Box>
                 </HStack>
-
                 {hasUnsavedChanges ? (
                   <HStack gap={2} align="flex-start" mb={2}>
-                    <Box
-                      width="28px"
-                      height="28px"
-                      borderRadius="7px"
-                      bg="#FFF7ED"
-                      display="flex"
-                      alignItems="center"
-                      justifyContent="center"
-                      flexShrink={0}
-                    >
-                      <Icon
-                        as={LuRefreshCw}
-                        boxSize={3.5}
-                        color="#F97316"
-                      />
+                    <Box width="28px" height="28px" borderRadius="7px" bg="#FFF7ED" display="flex" alignItems="center" justifyContent="center" flexShrink={0}>
+                      <Icon as={LuRefreshCw} boxSize={3.5} color="#F97316" />
                     </Box>
-
                     <Box>
-                      <Text
-                        fontSize="12px"
-                        fontWeight="700"
-                        color="#EA580C"
-                      >
+                      <Text fontSize="12px" fontWeight="700" color="#EA580C">
                         Review changes before updating
                       </Text>
-
-                      <Text
-                        fontSize="10px"
-                        color={MUTED}
-                        mt="2px"
-                      >
+                      <Text fontSize="10px" color={MUTED} mt="2px">
                         {changedFields.join(", ")}
                       </Text>
                     </Box>
                   </HStack>
                 ) : (
-                  <Text fontSize="11px" color="#15803D">
-                    Everything is saved.
-                  </Text>
+                  <Text fontSize="11px" color="#15803D">Everything is saved.</Text>
                 )}
               </Box>
 
               {/* DANGER ZONE */}
-              <Box
-                border="1px solid #DCE2EA"
-                borderRadius="8px"
-                p={3.5}
-                bg="white"
-              >
+              <Box border="1px solid #DCE2EA" borderRadius="8px" p={3.5} bg="white">
                 <HStack gap={2} mb={3}>
-                  <Box
-                    width="28px"
-                    height="28px"
-                    borderRadius="7px"
-                    bg="#FFF0F2"
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                  >
-                    <Icon
-                      as={LuCircleX}
-                      boxSize={3.5}
-                      color="#B5122F"
-                    />
+                  <Box width="28px" height="28px" borderRadius="7px" bg="#FFF0F2" display="flex" alignItems="center" justifyContent="center">
+                    <Icon as={LuCircleX} boxSize={3.5} color="#B5122F" />
                   </Box>
-
-                  <Text
-                    fontSize="14px"
-                    fontWeight="700"
-                    color="#A81224"
-                  >
+                  <Text fontSize="14px" fontWeight="700" color="#A81224">
                     Danger Zone
                   </Text>
                 </HStack>
-
                 <HStack gap={2} mb={1.5}>
-                  <Box
-                    width="28px"
-                    height="28px"
-                    borderRadius="7px"
-                    bg="#FFF0F2"
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                  >
-                    <Icon
-                      as={LuCircleX}
-                      boxSize={3.5}
-                      color={RED}
-                    />
+                  <Box width="28px" height="28px" borderRadius="7px" bg="#FFF0F2" display="flex" alignItems="center" justifyContent="center">
+                    <Icon as={LuCircleX} boxSize={3.5} color={RED} />
                   </Box>
-
-                  <Text
-                    fontSize="12px"
-                    fontWeight="700"
-                    color={RED}
-                  >
+                  <Text fontSize="12px" fontWeight="700" color={RED}>
                     Archive Subscription Record
                   </Text>
                 </HStack>
-
                 <Text fontSize="10px" color={MUTED} ml="40px">
                   The record will remain in history.
                 </Text>

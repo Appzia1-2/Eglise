@@ -41,6 +41,9 @@ import Footer from "../components/Footer";
 
 import { getBaptism } from "../api/registryServices";
 
+// ✅ NEW: import the print modal
+import BaptismRegisterPrintModal from "./BaptismRegisterPrintModal";
+
 // ============================================================
 // COLORS
 // ============================================================
@@ -241,21 +244,18 @@ const SectionCard = ({
 };
 
 // ============================================================
-// STATUS BADGE - FIXED
+// STATUS BADGE
 // ============================================================
 
 const StatusBadge = ({ status }) => {
-  // Check multiple possible status formats
-  const isActive = 
-    status === "ACTIVE" || 
-    status === "Active" || 
-    status === true || 
+  const isActive =
+    status === "ACTIVE" ||
+    status === "Active" ||
+    status === true ||
     status === "true" ||
     status === 1 ||
     status === "1" ||
     status?.toUpperCase?.() === "ACTIVE";
-
-  console.log("StatusBadge received:", status, "isActive:", isActive);
 
   return (
     <Badge
@@ -295,6 +295,9 @@ const BaptismViewPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // ✅ NEW: state for print modal
+  const [isPrintOpen, setIsPrintOpen] = useState(false);
+
   // ==========================================================
   // LOAD DATA
   // ==========================================================
@@ -330,8 +333,9 @@ const BaptismViewPage = () => {
     navigate(`/baptism/${id}/edit`);
   };
 
+  // ✅ UPDATED: open print modal instead of window.print()
   const handlePrint = () => {
-    window.print();
+    setIsPrintOpen(true);
   };
 
   // ==========================================================
@@ -402,17 +406,14 @@ const BaptismViewPage = () => {
 
   const isParish = baptism.baptism_category === "PARISH";
   const categoryLabel = isParish ? "Parish Member" : "Other Parish Member";
-  
-  // FIXED: Check multiple possible status fields
-  const status = 
-    baptism.status || 
-    baptism.is_active || 
+
+  const status =
+    baptism.status ||
+    baptism.is_active ||
     baptism.active ||
     (baptism.member?.is_active) ||
     (baptism.member?.status) ||
-    "ACTIVE"; // Default to ACTIVE if not specified
-
-  console.log("Baptism status:", status);
+    "ACTIVE";
 
   // ==========================================================
   // VALUES
@@ -655,40 +656,38 @@ const BaptismViewPage = () => {
               {/* PROFILE */}
 
               <VStack
-  gap="7px"
-  align="flex-start"
->
-  <Heading
-    color={NAVY}
-    fontSize="28px"
-    lineHeight="1.1"
-    fontWeight="700"
-    textAlign="left"
-  >
-    {displayValue(baptism.name)}
-  </Heading>
+                gap="7px"
+                align="flex-start"
+              >
+                <Heading
+                  color={NAVY}
+                  fontSize="28px"
+                  lineHeight="1.1"
+                  fontWeight="700"
+                  textAlign="left"
+                >
+                  {displayValue(baptism.name)}
+                </Heading>
 
-  {/* BAPTISM NAME */}
-  <Flex
-    align="center"
-    justify="flex-start"
-    gap="8px"
-    color="#62708B"
-    fontSize="13px"
-    flexWrap="wrap"
-    textAlign="left"
-  >
-    <Text>Baptism Name</Text>
-    <Text fontWeight="500" color={NAVY}>
-      {displayValue(baptism.baptismal_name)}
-    </Text>
-  </Flex>
+                {/* BAPTISM NAME */}
+                <Flex
+                  align="center"
+                  justify="flex-start"
+                  gap="8px"
+                  color="#62708B"
+                  fontSize="13px"
+                  flexWrap="wrap"
+                  textAlign="left"
+                >
+                  <Text>Baptism Name</Text>
+                  <Text fontWeight="500" color={NAVY}>
+                    {displayValue(baptism.baptismal_name)}
+                  </Text>
+                </Flex>
 
-  {/* ACTIVE STATUS */}
-  <StatusBadge status={status} />
-
-  
-</VStack>
+                {/* ACTIVE STATUS */}
+                <StatusBadge status={status} />
+              </VStack>
 
               {/* DIVIDER */}
 
@@ -919,7 +918,6 @@ const BaptismViewPage = () => {
                         value={formatDate(baptism.dob)}
                         width="92px"
                       />
-                      
                     </VStack>
                   </Box>
 
@@ -928,11 +926,10 @@ const BaptismViewPage = () => {
                     mt={{ base: "10px", md: "0" }}
                   >
                     <InfoRow
-                        label="Place of Birth"
-                        value={baptism.place_of_birth}
-                        width="92px"
-                      />
-                    {/* Placeholder for layout alignment */}
+                      label="Place of Birth"
+                      value={baptism.place_of_birth}
+                      width="92px"
+                    />
                   </Box>
                 </Grid>
               </SectionCard>
@@ -1334,6 +1331,13 @@ const BaptismViewPage = () => {
           </Grid>
         </Box>
       </Box>
+
+      {/* ✅ NEW: PRINT MODAL */}
+      <BaptismRegisterPrintModal
+        isOpen={isPrintOpen}
+        onClose={() => setIsPrintOpen(false)}
+        baptism={baptism}
+      />
 
       <Footer />
     </Box>

@@ -2439,12 +2439,12 @@ class FamilyHeadCreateSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         church = self.context["church"]
-        
+
         family = data.get("family")
         ward = data.get("ward")
         email = data.get("email")
         house_name = data.get("house_name")
-        
+
         # -----------------------------------------
         # FAMILY REQUIRED
         # -----------------------------------------
@@ -2452,7 +2452,7 @@ class FamilyHeadCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 "family": "Family is required."
             })
-        
+
         # -----------------------------------------
         # FAMILY MUST BELONG TO CHURCH
         # -----------------------------------------
@@ -2460,7 +2460,7 @@ class FamilyHeadCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 "family": "Invalid family selected."
             })
-        
+
         # -----------------------------------------
         # HOUSE NAME
         # -----------------------------------------
@@ -2468,7 +2468,7 @@ class FamilyHeadCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 "house_name": "House name is required."
             })
-        
+
         # -----------------------------------------
         # WARD
         # -----------------------------------------
@@ -2476,15 +2476,12 @@ class FamilyHeadCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 "ward": "Ward is required for family head."
             })
-        
-        # -----------------------------------------
-        # WARD MUST BELONG TO CHURCH
-        # -----------------------------------------
+
         if ward.church_id != church.id:
             raise serializers.ValidationError({
                 "ward": "Invalid ward selected."
             })
-        
+
         # -----------------------------------------
         # EMAIL
         # -----------------------------------------
@@ -2492,15 +2489,12 @@ class FamilyHeadCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 "email": "Email is required for family head login."
             })
-        
-        # -----------------------------------------
-        # EMAIL UNIQUENESS
-        # -----------------------------------------
+
         if Member.objects.filter(email=email).exists():
             raise serializers.ValidationError({
                 "email": "A member with this email already exists."
             })
-        
+
         # -----------------------------------------
         # GRADE VALIDATION (if provided)
         # -----------------------------------------
@@ -2509,7 +2503,7 @@ class FamilyHeadCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 "grade": "Invalid grade selected."
             })
-        
+
         # -----------------------------------------
         # ONLY ONE ACTIVE HEAD
         # -----------------------------------------
@@ -2520,30 +2514,42 @@ class FamilyHeadCreateSerializer(serializers.ModelSerializer):
             is_active=True,
             expired=False,
         ).first()
-        
+
         if existing_head:
             raise serializers.ValidationError({
-                "house_name": f"This house already has an active head: {existing_head.name}."
+                "house_name": (
+                    f"This house already has an active head: "
+                    f"{existing_head.name}."
+                )
             })
-        
+
+        # -----------------------------------------
+        # SUBSCRIPTION CAPACITY — heads only
+        # -----------------------------------------
+        from .services import can_add_member
+
+        allowed, message, _info = can_add_member(church)
+        if not allowed:
+            raise serializers.ValidationError({"detail": message})
+
         return data
 
     def create(self, validated_data):
         church = self.context["church"]
-        
+
         with transaction.atomic():
             register_no = generate_register_number(church, "HEAD")
             folio_no = generate_folio_number(church)
-            
+
             validated_data["church"] = church
             validated_data["is_family_head"] = True
             validated_data["is_active"] = True
             validated_data["expired"] = False
             validated_data["register_number"] = register_no
             validated_data["folio_number"] = folio_no
-            
+
             head = Member.objects.create(**validated_data)
-            
+
         return head
     
 # ============================================================
@@ -4018,14 +4024,45 @@ class InactiveMemberSerializer(serializers.ModelSerializer):
         ]
         
 #Death Register
+# registry/serializers.py
+
+from datetime import date, timedelta
+
+from rest_framework import serializers
+
+from .models import DeathRegister, TombFee, Priest
+
+
+class TombFeeSerializer(serializers.ModelSerializer):
+    """
+    Minimal serializer for TombFee — adjust fields to match your model.
+    """
+    tomb_type_name = serializers.CharField(
+        source="tomb_type.name",
+        read_only=True,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = TombFee
+        fields = [
+            "id",
+            "tomb_type",
+            "tomb_type_name",
+            "tomb_fees",
+            "church",
+        ]
+
+
 class DeathRegisterSerializer(serializers.ModelSerializer):
     """
     Main serializer for DeathRegister.
 
     Date rules:
-    - Date of death must be today.
+    - Date of death cannot be in the future (backdating is allowed).
+    - Funeral date cannot be in the future.
     - Funeral date cannot be before date of death.
-    - Funeral date can be today or up to 4 days after death.
+    - Funeral date can be at most 4 days after date of death.
     """
 
     # ---------------------------------------------------------
@@ -4037,10 +4074,7 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
         read_only=True
     )
 
-    family_name = serializers.CharField(
-        source="member.family.family_name",
-        read_only=True
-    )
+    family_name = serializers.SerializerMethodField()
 
     house_name = serializers.CharField(
         source="member.house_name",
@@ -4158,19 +4192,9 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
     # Backward compatibility / display fields
     # ---------------------------------------------------------
 
-    tomb_type_name = serializers.CharField(
-        source="tomb_fee.tomb_type.name",
-        read_only=True,
-        allow_null=True
-    )
+    tomb_type_name = serializers.SerializerMethodField()
 
-    tomb_charge = serializers.DecimalField(
-        source="tomb_fee.tomb_fees",
-        max_digits=15,
-        decimal_places=3,
-        read_only=True,
-        allow_null=True
-    )
+    tomb_charge = serializers.SerializerMethodField()
 
     # ---------------------------------------------------------
     # Available tomb fees
@@ -4268,13 +4292,29 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
         )
 
     # =========================================================
+    # DISPLAY FIELD HELPERS
+    # =========================================================
+
+    def get_family_name(self, obj):
+        if obj.member and obj.member.family:
+            return obj.member.family.family_name
+        return None
+
+    def get_tomb_type_name(self, obj):
+        if obj.tomb_fee and obj.tomb_fee.tomb_type:
+            return obj.tomb_fee.tomb_type.name
+        return None
+
+    def get_tomb_charge(self, obj):
+        if obj.tomb_fee:
+            return obj.tomb_fee.tomb_fees
+        return None
+
+    # =========================================================
     # VICAR INFORMATION
     # =========================================================
 
     def get_vicar_name(self, obj):
-        """
-        Get the current active MAIN vicar for the church.
-        """
         if not obj.church:
             return None
 
@@ -4290,9 +4330,6 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
             return None
 
     def get_vicar_designation(self, obj):
-        """
-        Get the vicar's designation label.
-        """
         if not obj.church:
             return None
 
@@ -4314,20 +4351,13 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
     # =========================================================
 
     def get_available_tomb_fees(self, obj):
-        """
-        Return available TombFees for the selected TombType.
-        """
-
         if obj.tomb_fee:
             fees = TombFee.objects.filter(
                 church=obj.church,
                 tomb_type=obj.tomb_fee.tomb_type
             )
 
-            return TombFeeSerializer(
-                fees,
-                many=True
-            ).data
+            return TombFeeSerializer(fees, many=True).data
 
         return []
 
@@ -4336,11 +4366,8 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
     # =========================================================
 
     def validate(self, data):
-        """
-        Validate death registration data.
-        """
-
         instance = self.instance
+        is_update = instance is not None
 
         # -----------------------------------------------------
         # MEMBER
@@ -4348,11 +4375,7 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
 
         member = (
             data.get("member")
-            or (
-                instance.member
-                if instance
-                else None
-            )
+            or (instance.member if instance else None)
         )
 
         if not member:
@@ -4361,59 +4384,55 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
             })
 
         # -----------------------------------------------------
-        # CHECK IF MEMBER IS ALREADY DECEASED
+        # ALREADY DECEASED (only on create, not on update)
         # -----------------------------------------------------
 
-        if member.expired:
+        if member.expired and not is_update:
             raise serializers.ValidationError({
-                "member": (
-                    "Member is already marked as deceased."
-                )
+                "member": "Member is already marked as deceased."
             })
 
         # -----------------------------------------------------
         # DATES
         # -----------------------------------------------------
 
-        died_on = data.get("died_on")
+        died_on = data.get("died_on") or (
+            instance.died_on if instance else None
+        )
 
-        funeral_on = data.get("funeral_on")
+        funeral_on = data.get("funeral_on") or (
+            instance.funeral_on if instance else None
+        )
 
         today = date.today()
 
         # -----------------------------------------------------
         # DATE OF DEATH
-        #
-        # Death must be TODAY.
-        #
-        # Example if today = 31 Aug:
-        #
-        # 30 Aug ❌
-        # 31 Aug ✅
-        # 01 Sep ❌
+        # Cannot be in the future.
+        # Backdating is allowed because records are often
+        # entered days or weeks after the actual death.
         # -----------------------------------------------------
 
-        if died_on and died_on != today:
+        if died_on and died_on > today:
             raise serializers.ValidationError({
-                "died_on": (
-                    "Date of death must be today."
-                )
+                "died_on": "Date of death cannot be in the future."
             })
 
         # -----------------------------------------------------
-        # FUNERAL DATE CANNOT BE BEFORE DEATH
-        #
-        # Example:
-        #
-        # Death   = 31 Aug
-        # Funeral = 30 Aug ❌
+        # FUNERAL DATE
+        # Cannot be in the future.
         # -----------------------------------------------------
 
-        if (
-            died_on
-            and funeral_on
-            and funeral_on < died_on
-        ):
+        if funeral_on and funeral_on > today:
+            raise serializers.ValidationError({
+                "funeral_on": "Funeral date cannot be in the future."
+            })
+
+        # -----------------------------------------------------
+        # FUNERAL CANNOT BE BEFORE DEATH
+        # -----------------------------------------------------
+
+        if died_on and funeral_on and funeral_on < died_on:
             raise serializers.ValidationError({
                 "funeral_on": (
                     "Funeral date cannot be before "
@@ -4422,25 +4441,11 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
             })
 
         # -----------------------------------------------------
-        # FUNERAL DATE MAXIMUM 4 DAYS AFTER DEATH
-        #
-        # Example:
-        #
-        # Death   = 31 Aug
-        #
-        # Funeral = 31 Aug ✅
-        # Funeral = 01 Sep ✅
-        # Funeral = 02 Sep ✅
-        # Funeral = 03 Sep ✅
-        # Funeral = 04 Sep ✅
-        # Funeral = 05 Sep ❌
+        # FUNERAL MAX 4 DAYS AFTER DEATH
         # -----------------------------------------------------
 
         if died_on and funeral_on:
-
-            max_funeral_date = (
-                died_on + timedelta(days=4)
-            )
+            max_funeral_date = died_on + timedelta(days=4)
 
             if funeral_on > max_funeral_date:
                 raise serializers.ValidationError({
@@ -4454,31 +4459,26 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
         # TOMB FEE
         # -----------------------------------------------------
 
-        tomb_fee = data.get("tomb_fee")
+        tomb_fee = data.get("tomb_fee") or (
+            instance.tomb_fee if instance else None
+        )
 
-        reason_of_death = data.get(
-            "reason_of_death"
+        reason_of_death = data.get("reason_of_death") or (
+            instance.reason_of_death if instance else None
         )
 
         if not tomb_fee:
             raise serializers.ValidationError({
-                "tomb_fee": (
-                    "Tomb fee selection is required."
-                )
+                "tomb_fee": "Tomb fee selection is required."
             })
 
         # -----------------------------------------------------
         # REASON OF DEATH
         # -----------------------------------------------------
 
-        if (
-            not reason_of_death
-            or not reason_of_death.strip()
-        ):
+        if not reason_of_death or not str(reason_of_death).strip():
             raise serializers.ValidationError({
-                "reason_of_death": (
-                    "Reason of death is required."
-                )
+                "reason_of_death": "Reason of death is required."
             })
 
         # -----------------------------------------------------
@@ -4487,38 +4487,28 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
 
         church = (
             data.get("church")
-            or (
-                instance.church
-                if instance
-                else None
-            )
+            or (instance.church if instance else None)
         )
 
         # -----------------------------------------------------
         # VALIDATE TOMB FEE BELONGS TO CHURCH
         # -----------------------------------------------------
 
-        if tomb_fee and church:
-
-            if tomb_fee.church_id != church.id:
-                raise serializers.ValidationError({
-                    "tomb_fee": (
-                        "Selected tomb fee does not "
-                        "belong to this church."
-                    )
-                })
+        if tomb_fee and church and tomb_fee.church_id != church.id:
+            raise serializers.ValidationError({
+                "tomb_fee": (
+                    "Selected tomb fee does not "
+                    "belong to this church."
+                )
+            })
 
         # -----------------------------------------------------
         # VALIDATE MEMBER BELONGS TO CHURCH
         # -----------------------------------------------------
 
-        if member.church_id != (
-            church.id if church else None
-        ):
+        if church and member.church_id != church.id:
             raise serializers.ValidationError({
-                "member": (
-                    "Member does not belong to this church."
-                )
+                "member": "Member does not belong to this church."
             })
 
         return data
@@ -4528,11 +4518,6 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
     # =========================================================
 
     def create(self, validated_data):
-        """
-        Create death register and automatically
-        mark member as deceased.
-        """
-
         member = validated_data.get("member")
 
         # -----------------------------------------------------
@@ -4540,13 +4525,9 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
         # -----------------------------------------------------
 
         member.expired = True
-
         member.is_active = False
-
         member.inactive_reason = "DECEASED"
-
         member.inactive_date = date.today()
-
         member.save()
 
         # -----------------------------------------------------
@@ -4554,25 +4535,19 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
         # -----------------------------------------------------
 
         if member.spouse:
-
             member.spouse.marital_status = "WIDOWED"
-
             member.spouse.save()
 
         # -----------------------------------------------------
         # CREATE DEATH REGISTER
         # -----------------------------------------------------
 
-        death = DeathRegister.objects.create(
-            **validated_data
-        )
+        death = DeathRegister.objects.create(**validated_data)
 
         return death
- 
- 
-class DeathRegisterListSerializer(
-    serializers.ModelSerializer
-):
+
+
+class DeathRegisterListSerializer(serializers.ModelSerializer):
     """
     Simplified serializer for list view.
     """
@@ -4582,29 +4557,16 @@ class DeathRegisterListSerializer(
         read_only=True
     )
 
-    family_name = serializers.CharField(
-        source="member.family.family_name",
-        read_only=True
-    )
+    family_name = serializers.SerializerMethodField()
 
     house_name = serializers.CharField(
         source="member.house_name",
         read_only=True
     )
 
-    tomb_type_name = serializers.CharField(
-        source="tomb_fee.tomb_type.name",
-        read_only=True,
-        allow_null=True
-    )
+    tomb_type_name = serializers.SerializerMethodField()
 
-    tomb_charge = serializers.DecimalField(
-        source="tomb_fee.tomb_fees",
-        max_digits=15,
-        decimal_places=3,
-        read_only=True,
-        allow_null=True
-    )
+    tomb_charge = serializers.SerializerMethodField()
 
     class Meta:
         model = DeathRegister
@@ -4623,23 +4585,45 @@ class DeathRegisterListSerializer(
             "created_at",
         ]
 
- 
- 
+    def get_family_name(self, obj):
+        if obj.member and obj.member.family:
+            return obj.member.family.family_name
+        return None
+
+    def get_tomb_type_name(self, obj):
+        if obj.tomb_fee and obj.tomb_fee.tomb_type:
+            return obj.tomb_fee.tomb_type.name
+        return None
+
+    def get_tomb_charge(self, obj):
+        if obj.tomb_fee:
+            return obj.tomb_fee.tomb_fees
+        return None
+
+
 class DeathRegisterDetailSerializer(serializers.ModelSerializer):
     """Detailed serializer for single death record view."""
-    
+
     # ✅ Return nested member object instead of just ID
     member = serializers.SerializerMethodField()
-    
-    # These direct fields are already available
-    member_name = serializers.CharField(source="member.name", read_only=True)
-    family_name = serializers.CharField(source="member.family.family_name", read_only=True)
-    house_name = serializers.CharField(source="member.house_name", read_only=True)
-    
-    tomb_fee_details = TombFeeSerializer(source="tomb_fee", read_only=True)
-    tomb_type_name = serializers.CharField(source="tomb_fee.tomb_type.name", read_only=True, allow_null=True)
-    tomb_charge = serializers.DecimalField(source="tomb_fee.tomb_fees", max_digits=15, decimal_places=3, read_only=True, allow_null=True)
-    
+
+    member_name = serializers.CharField(
+        source="member.name",
+        read_only=True
+    )
+    family_name = serializers.SerializerMethodField()
+    house_name = serializers.CharField(
+        source="member.house_name",
+        read_only=True
+    )
+
+    tomb_fee_details = TombFeeSerializer(
+        source="tomb_fee",
+        read_only=True
+    )
+    tomb_type_name = serializers.SerializerMethodField()
+    tomb_charge = serializers.SerializerMethodField()
+
     days_since_death = serializers.SerializerMethodField()
     days_since_funeral = serializers.SerializerMethodField()
 
@@ -4649,7 +4633,7 @@ class DeathRegisterDetailSerializer(serializers.ModelSerializer):
             "id",
             "reg_no",
             "church",
-            "member",           # ✅ Now returns nested object
+            "member",
             "member_name",
             "family_name",
             "house_name",
@@ -4668,31 +4652,46 @@ class DeathRegisterDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_member(self, obj):
-        """Return full member details as nested object"""
-        if obj.member:
-            return {
-                "id": obj.member.id,
-                "name": obj.member.name,
-                "gender": obj.member.gender,
-                "email": obj.member.email,
-                "mobile_no": obj.member.mobile_no,
-                "dob": obj.member.dob,
-                "age": obj.member.age,
-                "house_name": obj.member.house_name,
-                "house_sequence": obj.member.house_sequence,
-                "is_family_head": obj.member.is_family_head,
-                "is_active": obj.member.is_active,
-                "expired": obj.member.expired,
-                "marital_status": obj.member.marital_status,
-                "family": {
-                    "id": obj.member.family.id,
-                    "family_name": obj.member.family.family_name,
-                } if obj.member.family else None,
-                "ward": {
-                    "id": obj.member.ward.id,
-                    "ward_name": obj.member.ward.ward_name,
-                } if obj.member.ward else None,
-            }
+        if not obj.member:
+            return None
+
+        return {
+            "id": obj.member.id,
+            "name": obj.member.name,
+            "gender": obj.member.gender,
+            "email": obj.member.email,
+            "mobile_no": obj.member.mobile_no,
+            "dob": obj.member.dob,
+            "age": obj.member.age,
+            "house_name": obj.member.house_name,
+            "house_sequence": obj.member.house_sequence,
+            "is_family_head": obj.member.is_family_head,
+            "is_active": obj.member.is_active,
+            "expired": obj.member.expired,
+            "marital_status": obj.member.marital_status,
+            "family": {
+                "id": obj.member.family.id,
+                "family_name": obj.member.family.family_name,
+            } if obj.member.family else None,
+            "ward": {
+                "id": obj.member.ward.id,
+                "ward_name": obj.member.ward.ward_name,
+            } if obj.member.ward else None,
+        }
+
+    def get_family_name(self, obj):
+        if obj.member and obj.member.family:
+            return obj.member.family.family_name
+        return None
+
+    def get_tomb_type_name(self, obj):
+        if obj.tomb_fee and obj.tomb_fee.tomb_type:
+            return obj.tomb_fee.tomb_type.name
+        return None
+
+    def get_tomb_charge(self, obj):
+        if obj.tomb_fee:
+            return obj.tomb_fee.tomb_fees
         return None
 
     def get_days_since_death(self, obj):
@@ -4966,11 +4965,17 @@ class VisitorMasterSerializer(serializers.ModelSerializer):
         return value
     
 class SubscriptionSerializer(serializers.ModelSerializer):
+    ledger_name = serializers.CharField(
+        source="ledger.ledger_name", read_only=True, allow_null=True
+    )
+    grade_name = serializers.CharField(
+        source="grade.name", read_only=True
+    )
 
     class Meta:
         model = Subscription
         fields = "__all__"
-        read_only_fields = ("church",)
+        read_only_fields = ("church", "grade_name", "ledger_name")
 
     def validate_amount(self, value):
         if value <= 0:
@@ -4978,20 +4983,42 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, data):
-        start_date = data.get("start_date", getattr(self.instance, "start_date", None))
-        end_date = data.get("end_date", getattr(self.instance, "end_date", None))
+        start_date = data.get(
+            "start_date",
+            getattr(self.instance, "start_date", None)
+        )
+        end_date = data.get(
+            "end_date",
+            getattr(self.instance, "end_date", None)
+        )
 
         if start_date and end_date and end_date < start_date:
             raise serializers.ValidationError(
                 {"end_date": "End date cannot be before start date."}
             )
 
-        is_cancelled = data.get("is_cancelled", getattr(self.instance, "is_cancelled", False))
-        cancel_reason = data.get("cancel_reason", getattr(self.instance, "cancel_reason", ""))
+        is_cancelled = data.get(
+            "is_cancelled",
+            getattr(self.instance, "is_cancelled", False)
+        )
+        cancel_reason = data.get(
+            "cancel_reason",
+            getattr(self.instance, "cancel_reason", "")
+        )
         if is_cancelled and not cancel_reason:
             raise serializers.ValidationError(
                 {"cancel_reason": "Cancel reason is required when marking as cancelled."}
             )
+
+        # Validate ledger if provided
+        ledger = data.get("ledger")
+        if ledger:
+            request = self.context.get("request")
+            church = request.user.church if request else None
+            if church and ledger.church_id != church.id:
+                raise serializers.ValidationError(
+                    {"ledger": "Ledger does not belong to this church."}
+                )
 
         return data
     
@@ -5808,6 +5835,7 @@ class ReceiptLineSerializer(serializers.ModelSerializer):
     ledger_name = serializers.CharField(
         source="ledger.ledger_name", read_only=True
     )
+    subscription_label = serializers.SerializerMethodField()
 
     class Meta:
         model = ReceiptLine
@@ -5815,11 +5843,17 @@ class ReceiptLineSerializer(serializers.ModelSerializer):
             "id",
             "ledger",
             "ledger_name",
+            "subscription",
+            "subscription_label",
             "amount",
             "position",
         ]
-        read_only_fields = ("id", "ledger_name")
+        read_only_fields = ("id", "ledger_name", "subscription_label")
 
+    def get_subscription_label(self, obj):
+        if not obj.subscription:
+            return None
+        return f"{obj.subscription.grade.name} — {obj.subscription.term}"
 
 class ReceiptMasterListSerializer(serializers.ModelSerializer):
     member_name = serializers.CharField(

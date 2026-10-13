@@ -61,6 +61,13 @@ const ROUTE_MAP = {
   "Cash Book": "/reports/cash-book",
   "Bank Book": "/reports/bank-book",
   "General Ledger": "/reports/general-ledger",
+
+  // ✅ Report routes (Accounts) — new report pages
+  "Member Ledger": "/reports/member-ledger",
+  "Income Expenditure": "/reports/income-expenditure",
+  "Subscription Due List": "/reports/subscription-due",
+  "Donations Register": "/reports/donation-register",
+  "Subscription Paid List": "/reports/subscription-paid",
 };
 
 // ─── Report-only routes (separate from ENTRY routes above) ────────────────
@@ -183,7 +190,7 @@ const MENU_DATA = {
         "Income Expenditure",
         "Subscription Due List",
         "Donations Register",
-        "Subscription Receipts",
+        "Subscription Paid List",
       ],
     },
     {

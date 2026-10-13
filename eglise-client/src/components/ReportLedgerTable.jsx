@@ -9,6 +9,7 @@ const MUTED = "#60708C";
 const RED = "#D7193F";
 const BORDER = "#E6EAF0";
 const HEADER_BG = "#F7F9FB";
+const HIGHLIGHT_BG = "#F4F7FB";
 
 const toNumber = (v) => {
   if (v === null || v === undefined || v === "") return 0;
@@ -35,18 +36,30 @@ const formatDate = (s) => {
   });
 };
 
-const ReportLedgerTable = ({ rows, isLoading }) => {
+const ReportLedgerTable = ({
+  rows = [],
+  isLoading,
+  openingBalance,
+  totalDebit,
+  totalCredit,
+  closingBalance,
+  showTotals = false,
+}) => {
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
-  const totalDebit = useMemo(
+  const computedTotalDebit = useMemo(
     () => rows.reduce((s, r) => s + toNumber(r.debit), 0),
     [rows]
   );
-  const totalCredit = useMemo(
+  const computedTotalCredit = useMemo(
     () => rows.reduce((s, r) => s + toNumber(r.credit), 0),
     [rows]
   );
+
+  const finalDebit = totalDebit !== undefined ? totalDebit : computedTotalDebit;
+  const finalCredit =
+    totalCredit !== undefined ? totalCredit : computedTotalCredit;
 
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const startIdx = (page - 1) * pageSize;
@@ -54,12 +67,12 @@ const ReportLedgerTable = ({ rows, isLoading }) => {
 
   const columns = [
     { key: "date", label: "Date", align: "left" },
-    { key: "voucherNo", label: "Voucher No.", align: "left" },
-    { key: "voucherType", label: "Voucher Type", align: "left" },
-    { key: "particulars", label: "Particulars", align: "left" },
-    { key: "account", label: "Cash / Bank Account", align: "left" },
-    { key: "debit", label: "Debit (₹)", align: "right" },
+    { key: "voucherNo", label: "Voucher Number", align: "center" },
+    { key: "account", label: "Account Ledger", align: "left" },
+    { key: "voucherType", label: "Voucher Type", align: "center" },
+    { key: "cashBank", label: "Cash / Bank Account", align: "left" },
     { key: "credit", label: "Credit (₹)", align: "right" },
+    { key: "debit", label: "Debit (₹)", align: "right" },
   ];
 
   return (
@@ -71,7 +84,7 @@ const ReportLedgerTable = ({ rows, isLoading }) => {
         width="100%"
         bg="white"
       >
-        <Box as="table" width="100%" minW="1050px" borderCollapse="collapse">
+        <Box as="table" width="100%" minW="1080px" borderCollapse="collapse">
           <Box as="thead">
             <Box as="tr" height="46px" bg={HEADER_BG}>
               {columns.map((c) => (
@@ -96,61 +109,270 @@ const ReportLedgerTable = ({ rows, isLoading }) => {
           <Box as="tbody">
             {isLoading ? (
               <Box as="tr">
-                <Box as="td" colSpan={7} textAlign="center" height="80px" color={MUTED} fontSize="13px">
+                <Box
+                  as="td"
+                  colSpan={7}
+                  textAlign="center"
+                  height="80px"
+                  color={MUTED}
+                  fontSize="13px"
+                >
                   Loading entries...
                 </Box>
               </Box>
-            ) : pageRows.length === 0 ? (
-              <Box as="tr">
-                <Box as="td" colSpan={7} textAlign="center" height="80px" color={MUTED} fontSize="13px">
-                  No entries found for the selected filters.
-                </Box>
-              </Box>
             ) : (
-              pageRows.map((r, idx) => (
-                <Box as="tr" key={r.key || idx} height="48px" _hover={{ bg: "#FAFBFD" }}>
-                  <Box as="td" px={4} py={2} fontSize="13px" color={BLUE} fontWeight="500" borderBottom={`1px solid ${BORDER}`} whiteSpace="nowrap">
-                    {formatDate(r.date)}
+              <>
+                {/* Opening Balance row */}
+                {openingBalance !== undefined && (
+                  <Box as="tr" bg={HIGHLIGHT_BG}>
+                    <Box
+                      as="td"
+                      colSpan={5}
+                      px={4}
+                      py="10px"
+                      textAlign="center"
+                      fontSize="13px"
+                      fontWeight="700"
+                      color={BLUE}
+                      borderBottom={`1px solid ${BORDER}`}
+                    >
+                      Opening Balance
+                    </Box>
+                    <Box
+                      as="td"
+                      px={4}
+                      py="10px"
+                      textAlign="right"
+                      fontSize="13px"
+                      fontWeight="700"
+                      color={BLUE}
+                      borderBottom={`1px solid ${BORDER}`}
+                    >
+                      —
+                    </Box>
+                    <Box
+                      as="td"
+                      px={4}
+                      py="10px"
+                      textAlign="right"
+                      fontSize="13px"
+                      fontWeight="700"
+                      color={BLUE}
+                      borderBottom={`1px solid ${BORDER}`}
+                    >
+                      {formatAmount(openingBalance)}
+                    </Box>
                   </Box>
-                  <Box as="td" px={4} py={2} fontSize="13px" color={BLUE} fontWeight="500" borderBottom={`1px solid ${BORDER}`} whiteSpace="nowrap">
-                    {r.voucherNo || "—"}
-                  </Box>
-                  <Box as="td" px={4} py={2} fontSize="13px" color={BLUE} fontWeight="500" borderBottom={`1px solid ${BORDER}`} whiteSpace="nowrap">
-                    {r.voucherType || "—"}
-                  </Box>
-                  <Box as="td" px={4} py={2} fontSize="13px" color={BLUE} fontWeight="500" borderBottom={`1px solid ${BORDER}`}>
-                    {r.particulars || "—"}
-                  </Box>
-                  <Box as="td" px={4} py={2} fontSize="13px" color={BLUE} fontWeight="500" borderBottom={`1px solid ${BORDER}`} whiteSpace="nowrap">
-                    {r.account || "—"}
-                  </Box>
-                  <Box as="td" px={4} py={2} fontSize="13px" color={BLUE} fontWeight="500" textAlign="right" borderBottom={`1px solid ${BORDER}`} whiteSpace="nowrap">
-                    {r.debit ? formatAmount(r.debit) : "—"}
-                  </Box>
-                  <Box as="td" px={4} py={2} fontSize="13px" color={BLUE} fontWeight="500" textAlign="right" borderBottom={`1px solid ${BORDER}`} whiteSpace="nowrap">
-                    {r.credit ? formatAmount(r.credit) : "—"}
-                  </Box>
-                </Box>
-              ))
-            )}
+                )}
 
-            {!isLoading && rows.length > 0 && (
-              <Box as="tr" height="50px" bg="white">
-                <Box as="td" colSpan={5} px={4} py={2} textAlign="right" fontSize="13px" fontWeight="700" color={DARK} borderBottom={`1px solid ${BORDER}`}>
-                  Total
-                </Box>
-                <Box as="td" px={4} py={2} textAlign="right" fontSize="13px" fontWeight="700" color={DARK} borderBottom={`1px solid ${BORDER}`} whiteSpace="nowrap">
-                  {formatAmount(totalDebit)}
-                </Box>
-                <Box as="td" px={4} py={2} textAlign="right" fontSize="13px" fontWeight="700" color={DARK} borderBottom={`1px solid ${BORDER}`} whiteSpace="nowrap">
-                  {formatAmount(totalCredit)}
-                </Box>
-              </Box>
+                {/* Data rows */}
+                {pageRows.length === 0 && openingBalance === undefined ? (
+                  <Box as="tr">
+                    <Box
+                      as="td"
+                      colSpan={7}
+                      textAlign="center"
+                      height="80px"
+                      color={MUTED}
+                      fontSize="13px"
+                    >
+                      No entries found for the selected filters.
+                    </Box>
+                  </Box>
+                ) : (
+                  pageRows.map((r, idx) => (
+                    <Box
+                      as="tr"
+                      key={r.key || idx}
+                      height="48px"
+                      _hover={{ bg: "#FAFBFD" }}
+                    >
+                      <Box
+                        as="td"
+                        px={4}
+                        py={2}
+                        fontSize="13px"
+                        color={BLUE}
+                        fontWeight="500"
+                        borderBottom={`1px solid ${BORDER}`}
+                        whiteSpace="nowrap"
+                      >
+                        {formatDate(r.date)}
+                      </Box>
+                      <Box
+                        as="td"
+                        px={4}
+                        py={2}
+                        fontSize="13px"
+                        color={BLUE}
+                        fontWeight="500"
+                        textAlign="center"
+                        borderBottom={`1px solid ${BORDER}`}
+                        whiteSpace="nowrap"
+                      >
+                        {r.voucherNo || "—"}
+                      </Box>
+                      <Box
+                        as="td"
+                        px={4}
+                        py={2}
+                        fontSize="13px"
+                        color={BLUE}
+                        fontWeight="500"
+                        borderBottom={`1px solid ${BORDER}`}
+                      >
+                        {r.particulars || r.account || "—"}
+                      </Box>
+                      <Box
+                        as="td"
+                        px={4}
+                        py={2}
+                        fontSize="13px"
+                        color={BLUE}
+                        fontWeight="500"
+                        textAlign="center"
+                        borderBottom={`1px solid ${BORDER}`}
+                        whiteSpace="nowrap"
+                      >
+                        {r.voucherType || "—"}
+                      </Box>
+                      <Box
+                        as="td"
+                        px={4}
+                        py={2}
+                        fontSize="13px"
+                        color={BLUE}
+                        fontWeight="500"
+                        borderBottom={`1px solid ${BORDER}`}
+                        whiteSpace="nowrap"
+                      >
+                        {r.cashBankAccount || r.cashBank || "—"}
+                      </Box>
+                      <Box
+                        as="td"
+                        px={4}
+                        py={2}
+                        fontSize="13px"
+                        color={BLUE}
+                        fontWeight="500"
+                        textAlign="right"
+                        borderBottom={`1px solid ${BORDER}`}
+                        whiteSpace="nowrap"
+                      >
+                        {Number(r.credit) ? formatAmount(r.credit) : "—"}
+                      </Box>
+                      <Box
+                        as="td"
+                        px={4}
+                        py={2}
+                        fontSize="13px"
+                        color={BLUE}
+                        fontWeight="500"
+                        textAlign="right"
+                        borderBottom={`1px solid ${BORDER}`}
+                        whiteSpace="nowrap"
+                      >
+                        {Number(r.debit) ? formatAmount(r.debit) : "—"}
+                      </Box>
+                    </Box>
+                  ))
+                )}
+
+                {/* Total row */}
+                {showTotals && rows.length > 0 && (
+                  <Box as="tr" bg={HIGHLIGHT_BG}>
+                    <Box
+                      as="td"
+                      colSpan={5}
+                      px={4}
+                      py="10px"
+                      textAlign="center"
+                      fontSize="13px"
+                      fontWeight="700"
+                      color={BLUE}
+                      borderBottom={`1px solid ${BORDER}`}
+                    >
+                      Total
+                    </Box>
+                    <Box
+                      as="td"
+                      px={4}
+                      py="10px"
+                      textAlign="right"
+                      fontSize="13px"
+                      fontWeight="700"
+                      color={BLUE}
+                      borderBottom={`1px solid ${BORDER}`}
+                      whiteSpace="nowrap"
+                    >
+                      {formatAmount(finalCredit)}
+                    </Box>
+                    <Box
+                      as="td"
+                      px={4}
+                      py="10px"
+                      textAlign="right"
+                      fontSize="13px"
+                      fontWeight="700"
+                      color={BLUE}
+                      borderBottom={`1px solid ${BORDER}`}
+                      whiteSpace="nowrap"
+                    >
+                      {formatAmount(finalDebit)}
+                    </Box>
+                  </Box>
+                )}
+
+                {/* Closing Balance row */}
+                {closingBalance !== undefined && rows.length > 0 && (
+                  <Box as="tr" bg={HIGHLIGHT_BG}>
+                    <Box
+                      as="td"
+                      colSpan={5}
+                      px={4}
+                      py="10px"
+                      textAlign="center"
+                      fontSize="13px"
+                      fontWeight="700"
+                      color={BLUE}
+                      borderBottom={`1px solid ${BORDER}`}
+                    >
+                      Closing Balance
+                    </Box>
+                    <Box
+                      as="td"
+                      px={4}
+                      py="10px"
+                      textAlign="right"
+                      fontSize="13px"
+                      fontWeight="700"
+                      color={BLUE}
+                      borderBottom={`1px solid ${BORDER}`}
+                    >
+                      —
+                    </Box>
+                    <Box
+                      as="td"
+                      px={4}
+                      py="10px"
+                      textAlign="right"
+                      fontSize="13px"
+                      fontWeight="700"
+                      color={BLUE}
+                      borderBottom={`1px solid ${BORDER}`}
+                      whiteSpace="nowrap"
+                    >
+                      {formatAmount(closingBalance)}
+                    </Box>
+                  </Box>
+                )}
+              </>
             )}
           </Box>
         </Box>
       </Box>
 
+      {/* Pagination */}
       <Flex
         justify="space-between"
         align="center"

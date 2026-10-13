@@ -47,6 +47,9 @@ import {
   listFamilies,
 } from "../api/registryServices";
 
+// ✅ NEW
+import { getChurchDashboard } from "../api/churchServices";
+
 const PAGE_SIZE = 6;
 
 /* ============================================================
@@ -139,6 +142,43 @@ const FamilyHeadDashboard = () => {
   const [filterStatus, setFilterStatus] = useState("");
 
   const [page, setPage] = useState(1);
+
+  // ✅ NEW: subscription capacity info
+  const [membersInfo, setMembersInfo] = useState(null);
+
+  /* ==========================================================
+     LOAD SUBSCRIPTION CAPACITY
+  ========================================================== */
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadCapacity = async () => {
+      try {
+        const res = await getChurchDashboard();
+        if (cancelled) return;
+
+        const m = res?.data?.members || {};
+        setMembersInfo({
+          current: Number(m.current_count ?? 0),
+          limit: Number(m.allowed_limit ?? 0),
+          remaining: Number(m.remaining ?? 0),
+        });
+      } catch (err) {
+        // Non-fatal — the dashboard just won't show the badge
+        console.warn("Could not load subscription info:", err);
+      }
+    };
+
+    loadCapacity();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const limitReached =
+    membersInfo != null && membersInfo.remaining <= 0;
 
   /* ==========================================================
      LOAD DATA
@@ -646,6 +686,18 @@ const FamilyHeadDashboard = () => {
   };
 
   /* ==========================================================
+     ADD FAMILY HEAD — blocked when limit reached
+  ========================================================== */
+
+  const handleAddFamilyHead = () => {
+    if (limitReached) {
+      return;
+    }
+
+    navigate("/family-heads/create");
+  };
+
+  /* ==========================================================
      RENDER
   ========================================================== */
 
@@ -760,6 +812,27 @@ const FamilyHeadDashboard = () => {
               membership and dependent
               information.
             </Text>
+
+            {/* ✅ NEW: capacity indicator */}
+            {membersInfo && membersInfo.limit > 0 && (
+              <Text
+                color={
+                  limitReached
+                    ? "var(--danger)"
+                    : "var(--light-gray)"
+                }
+                fontSize="12px"
+                mt="6px"
+                fontWeight={limitReached ? "600" : "400"}
+              >
+                {membersInfo.current} of {membersInfo.limit} family heads used
+                {limitReached
+                  ? " — upgrade your package to add more."
+                  : ` • ${membersInfo.remaining} slot${
+                      membersInfo.remaining === 1 ? "" : "s"
+                    } remaining`}
+              </Text>
+            )}
           </Box>
 
           {/* HEADER ACTIONS */}
@@ -824,6 +897,7 @@ const FamilyHeadDashboard = () => {
               )}
             </Button>
 
+            {/* ✅ NEW: disabled when limit reached */}
             <Button
               flex={{
                 base: 1,
@@ -840,14 +914,23 @@ const FamilyHeadDashboard = () => {
               fontSize="12px"
               borderRadius="6px"
               fontWeight="500"
-              onClick={() =>
-                navigate(
-                  "/family-heads/create"
-                )
+              onClick={handleAddFamilyHead}
+              disabled={limitReached}
+              title={
+                limitReached
+                  ? "Member limit reached — upgrade your package to add more family heads."
+                  : ""
               }
               _hover={{
                 bg: "var(--primary-maroon)",
                 opacity: 0.9,
+              }}
+              _disabled={{
+                opacity: 0.5,
+                cursor: "not-allowed",
+                _hover: {
+                  opacity: 0.5,
+                },
               }}
             >
               <LuPlus size={17} />
@@ -858,6 +941,66 @@ const FamilyHeadDashboard = () => {
             </Button>
           </HStack>
         </Flex>
+
+        {/* ✅ NEW: LIMIT REACHED BANNER */}
+
+        {limitReached && (
+          <Box
+            mb="16px"
+            p="12px 16px"
+            border="1px solid"
+            borderColor="var(--warning-color)"
+            bg="var(--warning-bg)"
+            borderRadius="6px"
+            display="flex"
+            alignItems="center"
+            gap="10px"
+          >
+            <LuCircleAlert
+              size={18}
+              color="var(--warning-color)"
+            />
+
+            <Box flex="1">
+              <Text
+                fontSize="12.5px"
+                fontWeight="600"
+                color="var(--dark-text)"
+              >
+                Family head limit reached
+              </Text>
+
+              <Text
+                fontSize="11.5px"
+                color="var(--dark-text)"
+                mt="2px"
+              >
+                Your current package allows {membersInfo?.limit} family heads
+                and all slots are in use. Upgrade your package to register
+                more.
+              </Text>
+            </Box>
+
+            <Button
+              size="sm"
+              h="30px"
+              px="14px"
+              bg="var(--warning-color)"
+              color="var(--white)"
+              fontSize="11px"
+              borderRadius="5px"
+              fontWeight="600"
+              onClick={() => navigate("/subscription")}
+              _hover={{
+                bg: "var(--warning-color)",
+                opacity: 0.9,
+              }}
+              flexShrink={0}
+            >
+              Upgrade Plan
+            </Button>
+          </Box>
+        )}
 
         {/* FILTER BAR */}
 
@@ -1411,8 +1554,6 @@ const FamilyHeadDashboard = () => {
                             gap="8px"
                             minW="0"
                           >
-                            {/* DETAILS ICON BLACK */}
-
                             <Box
                               color="var(--dark-text)"
                               flexShrink={0}
@@ -1421,8 +1562,6 @@ const FamilyHeadDashboard = () => {
                                 size={14}
                               />
                             </Box>
-
-                            {/* DETAILS TEXT BLACK */}
 
                             <Text
                               fontSize="10.5px"
@@ -1525,7 +1664,6 @@ const FamilyHeadDashboard = () => {
 
                   {/* =================================================
                       ACTION BAR BELOW DIVIDER
-                      ONLY THESE ICONS ARE MAROON
                   ================================================== */}
 
                   <Box
@@ -1654,8 +1792,6 @@ const FamilyHeadDashboard = () => {
             gap="4px"
             flexShrink={0}
           >
-            {/* PREVIOUS */}
-
             <Button
               variant="outline"
               h="32px"
@@ -1688,8 +1824,6 @@ const FamilyHeadDashboard = () => {
                 Previous
               </Text>
             </Button>
-
-            {/* PAGE NUMBERS */}
 
             {getPageNumbers().map(
               (
@@ -1758,8 +1892,6 @@ const FamilyHeadDashboard = () => {
                 );
               }
             )}
-
-            {/* NEXT */}
 
             <Button
               variant="outline"

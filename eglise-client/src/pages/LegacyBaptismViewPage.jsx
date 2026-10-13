@@ -18,6 +18,9 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import apiClient from "../api/apiClient";
 
+// ✅ NEW: print modal
+import LegacyBaptismPrintModal from "./LegacyBaptismPrintModal";
+
 /* ---------- COLORS ---------- */
 const RED = "#B40000";
 const RED_DARK = "#970000";
@@ -98,6 +101,9 @@ const LegacyBaptismViewPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // ✅ NEW: print modal state
+  const [isPrintOpen, setIsPrintOpen] = useState(false);
+
   useEffect(() => {
     const load = async () => {
       setLoading(true); setError("");
@@ -115,6 +121,9 @@ const LegacyBaptismViewPage = () => {
     };
     load();
   }, [id]);
+
+  // ✅ NEW: single handler for Print & Generate PDF
+  const handlePrint = () => setIsPrintOpen(true);
 
   if (loading) {
     return (
@@ -201,22 +210,27 @@ const LegacyBaptismViewPage = () => {
                 <LuArrowLeft size={17} />
                 <Text ml="6px">Back</Text>
               </Button>
+
+              {/* ✅ PRINT → opens modal */}
               <Button h="40px" px="18px" bg="white" color={RED}
                       border="1px solid" borderColor={RED}
                       borderRadius="5px" fontSize="11px" fontWeight="500"
-                      onClick={() => window.print()}
+                      onClick={handlePrint}
                       _hover={{ bg: "#FFF8F8" }}>
                 <LuPrinter size={17} />
                 <Text ml="6px">Print</Text>
               </Button>
+
+              {/* ✅ GENERATE PDF → opens modal */}
               <Button h="40px" px="18px" bg="white" color={RED}
                       border="1px solid" borderColor={RED}
                       borderRadius="5px" fontSize="11px" fontWeight="500"
-                      onClick={() => window.print()}
+                      onClick={handlePrint}
                       _hover={{ bg: "#FFF8F8" }}>
                 <LuFileDown size={17} />
                 <Text ml="6px">Generate PDF</Text>
               </Button>
+
               <Button h="40px" px="18px" bg={RED} color="white"
                       borderRadius="5px" fontSize="11px" fontWeight="500"
                       onClick={() => navigate(`/legacy/baptism/${id}/edit`)}
@@ -413,6 +427,13 @@ const LegacyBaptismViewPage = () => {
           </Grid>
         </Box>
       </Box>
+
+      {/* ✅ NEW: PRINT MODAL */}
+      <LegacyBaptismPrintModal
+        isOpen={isPrintOpen}
+        onClose={() => setIsPrintOpen(false)}
+        record={record}
+      />
 
       <Footer />
     </Box>

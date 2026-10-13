@@ -1,3 +1,5 @@
+// src/pages/MarriageViewPage.jsx
+
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -37,6 +39,9 @@ import {
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { getMarriage } from "../api/registryServices";
+
+// ✅ NEW: import the print modal
+import MarriageRegisterPrintModal from "./MarriageRegisterPrintModal";
 
 /* ============================================================
    COLORS
@@ -165,6 +170,9 @@ const MarriageViewPage = () => {
   const [marriage, setMarriage] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // ✅ NEW: state for print modal
+  const [isPrintOpen, setIsPrintOpen] = useState(false);
+
   /* ==========================================================
      FETCH DATA
   ========================================================== */
@@ -185,6 +193,15 @@ const MarriageViewPage = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  /* ==========================================================
+     HANDLERS
+  ========================================================== */
+
+  // ✅ NEW: open print modal instead of window.print()
+  const handlePrint = () => {
+    setIsPrintOpen(true);
   };
 
   /* ==========================================================
@@ -315,6 +332,7 @@ const MarriageViewPage = () => {
                 <Text ml="6px">Back</Text>
               </Button>
 
+              {/* ✅ UPDATED: opens print modal */}
               <Button
                 h="40px"
                 px="18px"
@@ -325,10 +343,10 @@ const MarriageViewPage = () => {
                 borderRadius="5px"
                 fontSize="11px"
                 fontWeight="500"
-                onClick={() => window.print()}
+                onClick={handlePrint}
                 _hover={{ bg: "#FFF8F8" }}
               >
-                <LuFileDown size={17} />
+                <LuPrinter size={17} />
                 <Text ml="6px">Print</Text>
               </Button>
 
@@ -761,6 +779,13 @@ const MarriageViewPage = () => {
           </Grid>
         </Box>
       </Box>
+
+      {/* ✅ NEW: PRINT MODAL */}
+      <MarriageRegisterPrintModal
+        isOpen={isPrintOpen}
+        onClose={() => setIsPrintOpen(false)}
+        marriage={marriage}
+      />
 
       <Footer />
     </Box>

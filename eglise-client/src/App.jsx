@@ -196,6 +196,11 @@ import DayBookPage from "./pages/DayBookPage";
 import CashBookPage from "./pages/CashBookPage";
 import BankBookPage from "./pages/BankBookPage";
 import GeneralLedgerPage from "./pages/GeneralLedgerPage";
+import MemberLedgerPage from "./pages/reports/MemberLedgerPage";
+import IncomeExpenditurePage from "./pages/reports/IncomeExpenditurePage";
+import SubscriptionDueListPage from "./pages/reports/SubscriptionDueListPage";
+import SubscriptionPaidListPage from "./pages/reports/SubscriptionPaidListPage";
+import DonationRegisterPage from "./pages/reports/DonationRegisterPage";
 
 import ForcePasswordChange from "./components/ForcePasswordChange";
 
@@ -1313,8 +1318,46 @@ function App() {
   path="/reports/general-ledger"
   element={<ProtectedRoute><GeneralLedgerPage /></ProtectedRoute>}
 />
-        
-
+<Route
+  path="/reports/member-ledger"
+  element={
+    <ProtectedRoute>
+      <MemberLedgerPage />
+    </ProtectedRoute>
+  }
+/>        
+<Route
+  path="/reports/income-expenditure"
+  element={
+    <ProtectedRoute>
+      <IncomeExpenditurePage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/reports/subscription-due"
+  element={
+    <ProtectedRoute>
+      <SubscriptionDueListPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/reports/subscription-paid"
+  element={
+    <ProtectedRoute>
+      <SubscriptionPaidListPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/reports/donation-register"
+  element={
+    <ProtectedRoute>
+      <DonationRegisterPage />
+    </ProtectedRoute>
+  }
+/>
      
       </Routes>
       

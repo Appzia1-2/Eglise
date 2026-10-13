@@ -1,6 +1,6 @@
 // src/admin/pages/ReceiptCreatePage.jsx
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -10,7 +10,6 @@ import {
   Heading,
   HStack,
   Icon,
-  IconButton,
   Input,
   Text,
   Textarea,
@@ -22,6 +21,8 @@ import {
   LuChevronDown,
   LuPlus,
   LuMinus,
+  LuSearch,
+  LuX,
 } from "react-icons/lu";
 
 import Navbar from "../components/Navbar";
@@ -44,9 +45,197 @@ const DARK = "#182338";
 const MUTED = "#60708C";
 const BORDER = "#DCE2EA";
 
+// ✅ Only these natures are shown for a RECEIPT
+const RECEIPT_LEDGER_NATURES = ["INCOME", "ASSET"];
+
 const today = () => new Date().toISOString().slice(0, 10);
 
 const emptyLine = () => ({ ledger: "", amount: "" });
+
+/* -------------------------------------------------------
+   Searchable Ledger Select Component
+------------------------------------------------------- */
+const SearchableLedgerSelect = ({ value, onChange, ledgers, placeholder }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef(null);
+  const inputRef = useRef(null);
+
+  // Find selected ledger label
+  const selectedLedger = ledgers.find((l) => String(l.id) === String(value));
+  const selectedLabel = selectedLedger
+    ? selectedLedger.account_group_name
+      ? `${selectedLedger.ledger_name} (${selectedLedger.account_group_name})`
+      : selectedLedger.ledger_name
+    : "";
+
+  // Filtered list
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return ledgers;
+    return ledgers.filter((l) => {
+      const label = l.account_group_name
+        ? `${l.ledger_name} (${l.account_group_name})`
+        : l.ledger_name || "";
+      return label.toLowerCase().includes(q);
+    });
+  }, [ledgers, query]);
+
+  // Close on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+        setQuery("");
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleSelect = (ledger) => {
+    onChange(String(ledger.id));
+    setIsOpen(false);
+    setQuery("");
+  };
+
+  const handleClear = (e) => {
+    e.stopPropagation();
+    onChange("");
+    setQuery("");
+  };
+
+  return (
+    <Box ref={containerRef} position="relative" w="100%">
+      {/* Trigger / Search Input */}
+      {isOpen ? (
+        <Box position="relative">
+          <Icon
+            as={LuSearch}
+            position="absolute"
+            left="12px"
+            top="50%"
+            transform="translateY(-50%)"
+            color={MUTED}
+            boxSize={4}
+            pointerEvents="none"
+            zIndex={1}
+          />
+          <Input
+            ref={inputRef}
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search ledger..."
+            pl="36px"
+            pr="36px"
+            h="44px"
+            borderColor={RED}
+            borderRadius="6px"
+            fontSize="13px"
+            _focus={{ borderColor: RED, boxShadow: "none" }}
+          />
+          <Icon
+            as={LuX}
+            position="absolute"
+            right="12px"
+            top="50%"
+            transform="translateY(-50%)"
+            color={MUTED}
+            boxSize={4}
+            cursor="pointer"
+            onClick={() => {
+              setIsOpen(false);
+              setQuery("");
+            }}
+            zIndex={1}
+          />
+        </Box>
+      ) : (
+        <Box
+          onClick={() => setIsOpen(true)}
+          h="44px"
+          border={`1px solid ${BORDER}`}
+          borderRadius="6px"
+          px="12px"
+          display="flex"
+          alignItems="center"
+          justifyContent="space-between"
+          cursor="pointer"
+          bg="white"
+          _hover={{ borderColor: MUTED }}
+        >
+          <Text
+            fontSize="13px"
+            color={selectedLabel ? DARK : MUTED}
+            noOfLines={1}
+          >
+            {selectedLabel || placeholder || "Select ledger"}
+          </Text>
+          <HStack gap={1}>
+            {selectedLabel && (
+              <Icon
+                as={LuX}
+                boxSize={3.5}
+                color={MUTED}
+                onClick={handleClear}
+                _hover={{ color: RED }}
+              />
+            )}
+            <Icon as={LuChevronDown} boxSize={4} color={MUTED} />
+          </HStack>
+        </Box>
+      )}
+
+      {/* Dropdown */}
+      {isOpen && (
+        <Box
+          position="absolute"
+          top="calc(100% + 4px)"
+          left={0}
+          right={0}
+          bg="white"
+          border={`1px solid ${BORDER}`}
+          borderRadius="6px"
+          boxShadow="0 4px 12px rgba(0,0,0,0.1)"
+          maxH="220px"
+          overflowY="auto"
+          zIndex={20}
+        >
+          {filtered.length === 0 ? (
+            <Box px={3} py={2}>
+              <Text fontSize="12px" color={MUTED}>
+                No ledgers found
+              </Text>
+            </Box>
+          ) : (
+            filtered.map((l) => {
+              const label = l.account_group_name
+                ? `${l.ledger_name} (${l.account_group_name})`
+                : l.ledger_name;
+              const isSelected = String(l.id) === String(value);
+              return (
+                <Box
+                  key={l.id}
+                  px={3}
+                  py={2}
+                  fontSize="13px"
+                  color={DARK}
+                  cursor="pointer"
+                  bg={isSelected ? "#FDF2F5" : "white"}
+                  _hover={{ bg: "#F7F9FB" }}
+                  onClick={() => handleSelect(l)}
+                >
+                  {label}
+                </Box>
+              );
+            })
+          )}
+        </Box>
+      )}
+    </Box>
+  );
+};
 
 const ReceiptCreatePage = () => {
   const navigate = useNavigate();
@@ -86,8 +275,24 @@ const ReceiptCreatePage = () => {
           return Array.isArray(d) ? d : [];
         };
 
+        const allLedgers = toArray(lRes);
+
+        // ✅ Filter + sort ledgers for a RECEIPT
+        const receiptLedgers = allLedgers
+          .filter((l) =>
+            RECEIPT_LEDGER_NATURES.includes(
+              String(l.ledger_nature || "").toUpperCase()
+            )
+          )
+          .sort((a, b) => {
+            const ga = (a.account_group_name || "").toLowerCase();
+            const gb = (b.account_group_name || "").toLowerCase();
+            if (ga !== gb) return ga.localeCompare(gb);
+            return (a.ledger_name || "").localeCompare(b.ledger_name || "");
+          });
+
         setMembers(toArray(mRes));
-        setLedgers(toArray(lRes));
+        setLedgers(receiptLedgers);
         setBankAccounts(toArray(bRes));
       } catch (err) {
         console.error(err);
@@ -166,8 +371,6 @@ const ReceiptCreatePage = () => {
       }
     }
 
-    // ✅ Bank account is now OPTIONAL — no validation here.
-
     const payload = {
       receipt_date: form.receipt_date,
       ref_no: form.ref_no || null,
@@ -175,7 +378,6 @@ const ReceiptCreatePage = () => {
       payment_type: form.payment_type,
       transaction_type:
         form.payment_type === "BANK" ? form.transaction_type : null,
-      // ✅ Send null instead of 0 when blank
       bank_account:
         form.payment_type === "BANK" && form.bank_account
           ? Number(form.bank_account)
@@ -477,7 +679,6 @@ const ReceiptCreatePage = () => {
             </Box>
 
             <Box flex="1">
-              {/* ✅ Removed the red asterisk — Bank Account is optional */}
               <Text fontSize="12px" fontWeight="600" color={DARK} mb={1}>
                 Bank Account
               </Text>
@@ -531,6 +732,7 @@ const ReceiptCreatePage = () => {
             borderRadius="8px"
             p={4}
             mb={4}
+            overflow="visible"
           >
             <Flex gap={4} mb={3}>
               <Box flex="1">
@@ -551,41 +753,12 @@ const ReceiptCreatePage = () => {
 
               return (
                 <Flex key={idx} gap={4} mb={3} align="center">
-                  <Box flex="1" position="relative">
-                    <select
+                  <Box flex="1">
+                    <SearchableLedgerSelect
                       value={line.ledger}
-                      onChange={(e) =>
-                        updateLine(idx, { ledger: e.target.value })
-                      }
-                      style={{
-                        width: "100%",
-                        height: "44px",
-                        border: `1px solid ${BORDER}`,
-                        borderRadius: "6px",
-                        padding: "0 35px 0 12px",
-                        fontSize: "13px",
-                        background: "white",
-                        color: DARK,
-                        appearance: "none",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <option value="">Select ledger</option>
-                      {ledgers.map((l) => (
-                        <option key={l.id} value={l.id}>
-                          {l.ledger_name}
-                        </option>
-                      ))}
-                    </select>
-                    <Icon
-                      as={LuChevronDown}
-                      position="absolute"
-                      right="12px"
-                      top="50%"
-                      transform="translateY(-50%)"
-                      color={MUTED}
-                      boxSize={4}
-                      pointerEvents="none"
+                      onChange={(val) => updateLine(idx, { ledger: val })}
+                      ledgers={ledgers}
+                      placeholder="Select ledger"
                     />
                   </Box>
 
@@ -600,6 +773,7 @@ const ReceiptCreatePage = () => {
                       transform="translateY(-50%)"
                       fontSize="13px"
                       color={MUTED}
+                      zIndex={1}
                     >
                       ₹
                     </Text>
@@ -618,45 +792,53 @@ const ReceiptCreatePage = () => {
                       placeholder="0.00"
                     />
 
-                    {/* +/- buttons */}
                     <HStack
                       position="absolute"
                       right="4px"
                       top="50%"
                       transform="translateY(-50%)"
                       gap={0}
+                      zIndex={2}
                     >
                       {isFirst && (
-                        <IconButton
+                        <Button
                           aria-label="Add line"
-                          icon={<LuPlus />}
                           size="sm"
                           h="36px"
                           w="36px"
+                          minW="36px"
+                          p={0}
                           bg={RED}
                           color="white"
                           _hover={{ bg: "#B0143A" }}
+                          _active={{ bg: "#B0143A" }}
                           onClick={addLine}
                           borderTopLeftRadius="4px"
                           borderBottomLeftRadius="4px"
                           borderTopRightRadius={isLast ? "4px" : "0"}
                           borderBottomRightRadius={isLast ? "4px" : "0"}
-                        />
+                        >
+                          <Icon as={LuPlus} boxSize={4} color="white" />
+                        </Button>
                       )}
                       {!isFirst && isLast && (
-                        <IconButton
+                        <Button
                           aria-label="Remove line"
-                          icon={<LuMinus />}
                           size="sm"
                           h="36px"
                           w="36px"
+                          minW="36px"
+                          p={0}
                           bg={RED}
                           color="white"
                           _hover={{ bg: "#B0143A" }}
+                          _active={{ bg: "#B0143A" }}
                           onClick={() => removeLine(idx)}
                           borderTopRightRadius="4px"
                           borderBottomRightRadius="4px"
-                        />
+                        >
+                          <Icon as={LuMinus} boxSize={4} color="white" />
+                        </Button>
                       )}
                     </HStack>
                   </Box>
@@ -687,23 +869,13 @@ const ReceiptCreatePage = () => {
                   isReadOnly
                   bg="#F7F9FB"
                   pl="28px"
-                  pr="42px"
+                  pr="12px"
                   h="40px"
                   borderColor={BORDER}
                   borderRadius="6px"
                   fontSize="13px"
                   fontWeight="700"
                   textAlign="right"
-                />
-                <Icon
-                  as={LuCalendar}
-                  position="absolute"
-                  right="12px"
-                  top="50%"
-                  transform="translateY(-50%)"
-                  color={MUTED}
-                  boxSize={4}
-                  pointerEvents="none"
                 />
               </Box>
               <Text fontSize="11px" color={MUTED} mt={1} textAlign="right">

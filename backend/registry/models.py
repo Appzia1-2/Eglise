@@ -16,6 +16,45 @@ from phonenumber_field.modelfields import PhoneNumberField
 from django.core.validators import URLValidator
 from django.core.exceptions import ValidationError
 
+
+
+# ============================================================
+# LEDGER RESOLUTION HELPERS
+# ============================================================
+
+def get_cash_ledger(church):
+    """
+    Return the church's primary Cash ledger.
+    Matches 'Cash in Hand'. Falls back to any ledger with 'cash' in name.
+    """
+    from django.db.models import Q
+    return (
+        AccountLedgerMaster.objects
+        .filter(church=church, ledger_name__iexact="Cash in Hand")
+        .first()
+        or AccountLedgerMaster.objects
+        .filter(church=church, ledger_name__icontains="cash")
+        .exclude(ledger_name__icontains="closing")
+        .first()
+    )
+
+
+def get_bank_ledger(church):
+    """
+    Return the church's primary Bank ledger.
+    Matches 'Balance in Savings Account'.
+    """
+    from django.db.models import Q
+    return (
+        AccountLedgerMaster.objects
+        .filter(church=church, ledger_name__iexact="Balance in Savings Account")
+        .first()
+        or AccountLedgerMaster.objects
+        .filter(church=church, ledger_name__icontains="savings")
+        .exclude(ledger_name__icontains="closing")
+        .first()
+    )
+
 class Diocese(models.Model):
     # Basic Information
     name = models.CharField(max_length=200, help_text="Name of the Diocese")
@@ -119,9 +158,9 @@ class Diocese(models.Model):
 class Church(models.Model):
     name = models.CharField(max_length=200, help_text="Name of the Church")
     code = models.CharField(
-        max_length=20, 
-        unique=True, 
-        blank=True, 
+        max_length=20,
+        unique=True,
+        blank=True,
         null=True,
         help_text="Auto-generated church code (CH-001)"
     )
@@ -133,60 +172,60 @@ class Church(models.Model):
         related_name="churches"
     )
     established_year = models.IntegerField(
-        blank=True, 
+        blank=True,
         null=True,
         help_text="Year the church was established"
     )
     registration_number = models.CharField(
-        max_length=100, 
-        blank=True, 
+        max_length=100,
+        blank=True,
         null=True,
         help_text="Government registration number"
     )
     currency = models.CharField(
-        max_length=10, 
-        blank=True, 
+        max_length=10,
+        blank=True,
         null=True,
         help_text="Currency used by the church"
     )
-    
+
     # Address Fields
     address = models.TextField(
-        blank=True, 
+        blank=True,
         null=True,
         help_text="Street address, building name, etc. (Address Line 1)"
     )
     address_line1 = models.CharField(
-        max_length=255, 
-        blank=True, 
+        max_length=255,
+        blank=True,
         null=True,
         help_text="Apartment, suite, unit, etc. (Address Line 2)"
     )
     city = models.CharField(
-        max_length=100, 
-        blank=True, 
+        max_length=100,
+        blank=True,
         null=True,
         help_text="City where church is located"
     )
     state = models.CharField(
-        max_length=100, 
-        blank=True, 
+        max_length=100,
+        blank=True,
         null=True,
         help_text="State/Province where church is located"
     )
     country = CountryField(
-        blank=True, 
-        null=True, 
-        blank_label="Select Country", 
+        blank=True,
+        null=True,
+        blank_label="Select Country",
         help_text="Country where church is located"
     )
     postal_code = models.CharField(
-        max_length=20, 
-        blank=True, 
+        max_length=20,
+        blank=True,
         null=True,
         help_text="Postal/ZIP code"
     )
-    
+
     # Contact Information
     email = models.EmailField(
         blank=True,
@@ -200,20 +239,20 @@ class Church(models.Model):
         help_text="Phone number with country code"
     )
     alternate_phone = models.CharField(
-        max_length=20, 
-        blank=True, 
+        max_length=20,
+        blank=True,
         null=True,
         help_text="Alternate phone number with country code"
     )
-    
+
     # Website
     website = models.URLField(
-        blank=True, 
+        blank=True,
         null=True,
         help_text="Official website of the church",
         validators=[URLValidator()]
     )
-    
+
     # Logo/Image
     logo = models.ImageField(
         upload_to="church_logos/",
@@ -221,13 +260,13 @@ class Church(models.Model):
         blank=True,
         help_text="Church logo or image"
     )
-    
+
     # Status
     is_active = models.BooleanField(
-        default=True, 
+        default=True,
         help_text="Whether this church is currently active"
     )
-    
+
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -241,14 +280,19 @@ class Church(models.Model):
 
     def __str__(self):
         return self.name
-    
+
     def save(self, *args, **kwargs):
+        is_new = self._state.adding
+
+        # -----------------------------------------------------
+        # Auto-generate church code
+        # -----------------------------------------------------
         if not self.code:
             import re
             last_church = Church.objects.filter(
                 is_deleted=False
             ).order_by('-id').first()
-            
+
             if last_church and last_church.code:
                 match = re.search(r'(?:CH|SMC)-(\d+)', last_church.code)
                 if match:
@@ -258,8 +302,36 @@ class Church(models.Model):
                     self.code = "CH-001"
             else:
                 self.code = "CH-001"
+
         super().save(*args, **kwargs)
-    
+
+        # -----------------------------------------------------
+        # Auto-seed defaults for BRAND NEW churches
+        # -----------------------------------------------------
+        if is_new:
+            import logging
+            logger = logging.getLogger(__name__)
+
+            # 1) Default relationships
+            try:
+                from registry.utils import seed_default_relationships
+                seed_default_relationships(self)
+            except Exception as e:
+                logger.error(
+                    f"Failed to seed relationships for "
+                    f"church #{self.pk}: {e}"
+                )
+
+            # 2) Full chart of accounts (83 groups + ~298 ledgers)
+            try:
+                from registry.utils import seed_default_accounts
+                seed_default_accounts(self)
+            except Exception as e:
+                logger.error(
+                    f"Failed to seed chart of accounts for "
+                    f"church #{self.pk}: {e}"
+                )
+
     def get_full_address(self):
         """Get full address as a string"""
         parts = []
@@ -2498,6 +2570,11 @@ class VisitorMaster(models.Model):
     
 
 class Subscription(models.Model):
+    BILLING_CYCLE_CHOICES = (
+        ("MONTHLY", "Monthly"),
+        ("YEARLY", "Yearly"),
+    )
+
     church = models.ForeignKey(
         Church,
         on_delete=models.CASCADE,
@@ -2515,13 +2592,28 @@ class Subscription(models.Model):
 
     amount = models.DecimalField(max_digits=10, decimal_places=2)
 
+    # NEW
+    billing_cycle = models.CharField(
+        max_length=10,
+        choices=BILLING_CYCLE_CHOICES,
+        default="MONTHLY",
+        help_text="Whether this subscription is charged monthly or yearly."
+    )
+
+    ledger = models.ForeignKey(
+        "AccountLedgerMaster",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="subscriptions",
+        help_text="Ledger this subscription posts to."
+    )
+
     is_cancelled = models.BooleanField(default=False)
     cancel_reason = models.TextField(blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(
-            auto_now=True
-        )
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.grade.name} - {self.term} ({self.amount})"
@@ -2612,12 +2704,19 @@ class AccountLedgerMaster(models.Model):
         Sign convention:
         - ASSET / EXPENSE  : DEBIT increases, CREDIT decreases
         - LIABILITY / INCOME / EQUITY : CREDIT increases, DEBIT decreases
-        """
-        from django.db.models import Sum
 
-        agg = self.entries.filter(is_cancelled=False).aggregate(
-            debits=Sum("amount", filter=models.Q(entry_type="DEBIT")),
-            credits=Sum("amount", filter=models.Q(entry_type="CREDIT")),
+        IMPORTANT: Both cancelled originals AND their reversal entries
+        are excluded. A cancelled voucher leaves zero net effect on the
+        balance.
+        """
+        from django.db.models import Sum, Q
+
+        agg = self.entries.filter(
+            is_cancelled=False,
+            is_reversal=False,
+        ).aggregate(
+            debits=Sum("amount", filter=Q(entry_type="DEBIT")),
+            credits=Sum("amount", filter=Q(entry_type="CREDIT")),
         )
 
         debits = agg["debits"] or 0
@@ -2730,18 +2829,13 @@ class LedgerEntry(models.Model):
         return entry_type
 
 
-# ============================================================
-# RECEIPTS
-# ============================================================
-
-# ============================================================
-# RECEIPTS
-# ============================================================
 
 class ReceiptMaster(models.Model):
     """
     Receipt header. Money coming IN.
-    Each line posts a DEBIT to its ledger -> increases balance.
+    Posts TWO LedgerEntries per receipt:
+      1. DEBIT on each income ledger
+      2. DEBIT on the Cash / Bank ledger
     """
 
     PAYMENT_TYPE_CHOICES = (
@@ -2881,7 +2975,10 @@ class ReceiptMaster(models.Model):
 
     def post_to_ledger(self):
         """
-        Post one DEBIT per line -> increases each ledger's balance.
+        Post TWO entries per receipt:
+          1. DEBIT on each income ledger (money in)
+          2. DEBIT on the Cash / Bank ledger (money in)
+
         Idempotent.
         """
         if self.ledger_entries.filter(
@@ -2889,6 +2986,8 @@ class ReceiptMaster(models.Model):
         ).exists():
             return
 
+        # 1. Income side — one entry per ReceiptLine
+        total = 0
         for line in self.lines.all():
             LedgerEntry.objects.create(
                 church=self.church,
@@ -2896,14 +2995,32 @@ class ReceiptMaster(models.Model):
                 entry_type="DEBIT",
                 amount=line.amount,
                 entry_date=self.receipt_date,
-                narration=self.narration
-                    or f"Receipt {self.receipt_number}",
+                narration=self.narration or f"Receipt {self.receipt_number}",
                 receipt=self,
             )
+            total += float(line.amount or 0)
+
+        # 2. Cash / Bank side — one entry for the whole receipt
+        if total > 0:
+            if self.payment_type == "CASH":
+                cash_bank_ledger = get_cash_ledger(self.church)
+            else:
+                cash_bank_ledger = get_bank_ledger(self.church)
+
+            if cash_bank_ledger:
+                LedgerEntry.objects.create(
+                    church=self.church,
+                    ledger=cash_bank_ledger,
+                    entry_type="DEBIT",   # money coming in
+                    amount=total,
+                    entry_date=self.receipt_date,
+                    narration=self.narration or f"Receipt {self.receipt_number}",
+                    receipt=self,
+                )
 
     def reverse_ledger_entry(self):
         """
-        Cancel: mark original entries cancelled and create a CREDIT
+        Cancel: mark original entries cancelled and create opposite
         reversal for each posted line.
         """
         originals = list(
@@ -2942,7 +3059,8 @@ class ReceiptMaster(models.Model):
 class ReceiptLine(models.Model):
     """
     One Particulars line on a receipt.
-    Each line is a single ledger + amount.
+    Each line is a single ledger + amount, optionally linked to a
+    subscription so receipts and subscriptions can be reconciled.
     """
 
     receipt = models.ForeignKey(
@@ -2957,10 +3075,16 @@ class ReceiptLine(models.Model):
         related_name="receipt_lines"
     )
 
-    amount = models.DecimalField(
-        max_digits=15,
-        decimal_places=2
+    # NEW — which subscription is this payment for (if any)
+    subscription = models.ForeignKey(
+        "Subscription",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="receipt_lines"
     )
+
+    amount = models.DecimalField(max_digits=15, decimal_places=2)
 
     position = models.PositiveIntegerField(default=0)
 
@@ -2977,7 +3101,6 @@ class ReceiptLine(models.Model):
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
-
         total = (
             ReceiptLine.objects
             .filter(receipt=self.receipt)
@@ -3012,8 +3135,6 @@ class BankAccount(models.Model):
     def __str__(self):
         return f"{self.bank_name} {self.masked_account_number}"
 
-
-# MODIFIED PaymentMaster
 class PaymentMaster(models.Model):
     PAYMENT_TYPE_CHOICES = (
         ("BANK", "Bank"),
@@ -3037,7 +3158,7 @@ class PaymentMaster(models.Model):
 
     church = models.ForeignKey(Church, on_delete=models.CASCADE, related_name="payments")
 
-    voucher_number = models.CharField(max_length=30, unique=True, blank=True, null=True)  # auto
+    voucher_number = models.CharField(max_length=30, unique=True, blank=True, null=True)
     ref_no = models.CharField(max_length=50, null=True, blank=True)
     payment_date = models.DateField()
     party_name = models.CharField(max_length=100)
@@ -3064,11 +3185,6 @@ class PaymentMaster(models.Model):
         ordering = ["-payment_date", "-id"]
 
     def save(self, *args, **kwargs):
-        """
-        Save payment. Voucher numbering handled here.
-        Ledger posting is done via post_to_ledger() / reverse_ledger_entry(),
-        called explicitly by the view so we can guarantee atomicity.
-        """
         if not self.voucher_number:
             year = timezone.now().year
             last = PaymentMaster.objects.filter(
@@ -3091,67 +3207,81 @@ class PaymentMaster(models.Model):
 
     def post_to_ledger(self):
         """
-        Create a single LedgerEntry for this payment.
+        Post TWO entries per payment:
+          1. DEBIT on the expense / party ledger
+          2. CREDIT on the Cash / Bank ledger (money out)
 
-        Only posts once (idempotent).
-        Uses the ledger's nature to decide DEBIT vs CREDIT
-        assuming money is going OUT (a payment).
+        Idempotent.
         """
-        # Already posted?
-        if self.ledger_entries.filter(is_cancelled=False, is_reversal=False).exists():
+        if self.ledger_entries.filter(
+            is_cancelled=False, is_reversal=False
+        ).exists():
             return
 
-        entry_type = LedgerEntry.resolve_entry_type(
-            ledger=self.account_ledger,
-            is_payment_out=True,
-        )
-
+        # 1. Expense side
         LedgerEntry.objects.create(
             church=self.church,
             ledger=self.account_ledger,
-            entry_type=entry_type,
+            entry_type="DEBIT",
             amount=self.amount,
             entry_date=self.payment_date,
             narration=self.narration or f"Payment {self.voucher_number}",
             payment=self,
         )
 
+        # 2. Cash / Bank side
+        if self.payment_type == "CASH":
+            cash_bank_ledger = get_cash_ledger(self.church)
+        else:
+            cash_bank_ledger = get_bank_ledger(self.church)
+
+        if cash_bank_ledger:
+            LedgerEntry.objects.create(
+                church=self.church,
+                ledger=cash_bank_ledger,
+                entry_type="CREDIT",   # money going out
+                amount=self.amount,
+                entry_date=self.payment_date,
+                narration=self.narration or f"Payment {self.voucher_number}",
+                payment=self,
+            )
+
     def reverse_ledger_entry(self):
         """
-        On cancel: mark existing entry as cancelled, create a
-        reversing entry that neutralises the original.
+        On cancel: mark ALL existing unreversed entries as cancelled
+        and create an opposite reversal for each.
         """
-        original = self.ledger_entries.filter(
-            is_cancelled=False, is_reversal=False
-        ).first()
-
-        if not original:
-            return  # nothing to reverse
-
-        # If already reversed, do nothing
-        if hasattr(original, "reversed_by") and original.reversed_by:
-            return
-
-        # Mark original as cancelled (keeps history)
-        original.is_cancelled = True
-        original.save(update_fields=["is_cancelled"])
-
-        # Create opposite entry
-        opposite = "CREDIT" if original.entry_type == "DEBIT" else "DEBIT"
-
-        reversal = LedgerEntry.objects.create(
-            church=self.church,
-            ledger=original.ledger,
-            entry_type=opposite,
-            amount=original.amount,
-            entry_date=timezone.now().date(),
-            narration=f"Reversal of {self.voucher_number}",
-            payment=self,
-            is_reversal=True,
+        originals = list(
+            self.ledger_entries.filter(
+                is_cancelled=False, is_reversal=False
+            )
         )
 
-        original.reversed_entry = reversal
-        original.save(update_fields=["reversed_entry"])
+        if not originals:
+            return
+
+        for original in originals:
+            if getattr(original, "reversed_by", None):
+                continue
+
+            original.is_cancelled = True
+            original.save(update_fields=["is_cancelled"])
+
+            opposite = "CREDIT" if original.entry_type == "DEBIT" else "DEBIT"
+
+            reversal = LedgerEntry.objects.create(
+                church=self.church,
+                ledger=original.ledger,
+                entry_type=opposite,
+                amount=original.amount,
+                entry_date=timezone.now().date(),
+                narration=f"Reversal of {self.voucher_number}",
+                payment=self,
+                is_reversal=True,
+            )
+
+            original.reversed_entry = reversal
+            original.save(update_fields=["reversed_entry"])
 
     def __str__(self):
         return f"{self.voucher_number} - {self.party_name} ({self.amount})"

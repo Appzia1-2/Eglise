@@ -78,7 +78,10 @@ from .views import (
     LegacyDeathDetailAPIView,LedgerEntryListAPIView,ReceiptListCreateAPIView,
     ReceiptDetailAPIView,
     ReceiptCancelAPIView,
-    LedgerBalanceAPIView,
+    LedgerBalanceAPIView,MemberLedgerReportAPIView,
+    IncomeExpenditureReportAPIView,
+    DonationRegisterReportAPIView,SubscriptionDueListAPIView,
+    SubscriptionPaidListAPIView,
 )
 
 urlpatterns = [
@@ -288,4 +291,31 @@ path("death-registers/<int:pk>/", DeathRegisterUpdateAPIView.as_view(), name="de
         ReceiptCancelAPIView.as_view(),
         name="receipt-cancel"
     ),
+
+    # Reports
+path(
+    "reports/member-ledger/",
+    MemberLedgerReportAPIView.as_view(),
+    name="report-member-ledger",
+),
+path(
+    "reports/income-expenditure/",
+    IncomeExpenditureReportAPIView.as_view(),
+    name="report-income-expenditure",
+),
+path(
+    "reports/donation-register/",
+    DonationRegisterReportAPIView.as_view(),
+    name="report-donation-register",
+),
+path(
+    "reports/subscription-due/",
+    SubscriptionDueListAPIView.as_view(),
+    name="report-subscription-due",
+),
+path(
+    "reports/subscription-paid/",
+    SubscriptionPaidListAPIView.as_view(),
+    name="report-subscription-paid",
+),
 ]
