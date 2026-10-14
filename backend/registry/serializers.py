@@ -430,23 +430,44 @@ class TombFeeSerializer(serializers.ModelSerializer):
     class Meta:
         model = TombFee
         fields = "__all__"
-        read_only_fields = ("church", "created_at", "updated_at")  # ✅ Added timestamps
+        read_only_fields = ("church", "created_at", "updated_at")
 
     def validate(self, data):
-        church = self.context["request"].user.church
+        request = self.context.get("request")
+        church = request.user.church
         tomb_type = data.get("tomb_type")
+        indication = (data.get("indication") or "").strip()
 
-        # ✅ Check if tomb_type exists before accessing .church
         if not tomb_type:
             raise serializers.ValidationError(
                 {"tomb_type": "This field is required."}
             )
 
-        # ✅ Verify tomb_type belongs to this church
         if tomb_type.church != church:
             raise serializers.ValidationError(
                 {"tomb_type": "Invalid tomb type for this church."}
             )
+
+        if not indication:
+            raise serializers.ValidationError(
+                {"indication": "Indication is required."}
+            )
+
+        qs = TombFee.objects.filter(
+            church=church,
+            tomb_type=tomb_type,
+            indication=indication,
+        )
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+
+        if qs.exists():
+            raise serializers.ValidationError({
+                "indication": (
+                    "A tomb fee with this tomb type and indication "
+                    "already exists for this church."
+                )
+            })
 
         return data
 
@@ -4033,9 +4054,9 @@ from rest_framework import serializers
 from .models import DeathRegister, TombFee, Priest
 
 
-class TombFeeSerializer(serializers.ModelSerializer):
+class TombFeeMiniSerializer(serializers.ModelSerializer):
     """
-    Minimal serializer for TombFee — adjust fields to match your model.
+    Minimal serializer for nested TombFee display inside Death Register.
     """
     tomb_type_name = serializers.CharField(
         source="tomb_type.name",
@@ -4183,9 +4204,9 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
     # Nested TombFee details
     # ---------------------------------------------------------
 
-    tomb_fee_details = TombFeeSerializer(
-        source="tomb_fee",
-        read_only=True
+    tomb_fee_details = TombFeeMiniSerializer(
+    source="tomb_fee",
+    read_only=True
     )
 
     # ---------------------------------------------------------
@@ -4357,7 +4378,7 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
                 tomb_type=obj.tomb_fee.tomb_type
             )
 
-            return TombFeeSerializer(fees, many=True).data
+            return TombFeeMiniSerializer(fees, many=True).data
 
         return []
 

@@ -283,37 +283,66 @@ def calculate_package_pricing(package, billing_cycle):
 # =====================================================
 
 def can_add_member(church):
-    subscription = getattr(church, "churchsubscription", None)
+    """
+    Check whether a new family head can be added.
+
+    Returns
+    -------
+    (allowed: bool, message: str | None, info: dict)
+
+    info keys:
+        current   -> int
+        limit     -> int
+        remaining -> int
+    """
+    subscription = getattr(church, "subscription", None)
 
     if not subscription or not subscription.is_active:
-        return False, "No active subscription."
+        return (
+            False,
+            "No active subscription.",
+            {"current": 0, "limit": 0, "remaining": 0},
+        )
+
+    if subscription.is_expired():
+        return (
+            False,
+            "Subscription has expired. Please renew to add more members.",
+            {"current": 0, "limit": 0, "remaining": 0},
+        )
 
     package = subscription.package
+
+    # --------------------------------------------------
+    # Resolve limit — prefer snapshot, fall back to live package
+    # --------------------------------------------------
+    if subscription.custom_capacity:
+        limit = subscription.custom_capacity
+    elif subscription.locked_capacity is not None:
+        limit = subscription.locked_capacity
+    else:
+        limit = package.member_limit or 0
+
     current_count = church.members.filter(
         is_active=True,
-        expired=False
+        expired=False,
     ).count()
 
-    # Trial
-    if package.is_trial:
-        if current_count >= package.trial_member_limit:
-            return False, "Trial limit reached."
-        return True, None
+    remaining = max(0, limit - current_count)
 
-    # Custom
-    if package.is_custom:
-        if not subscription.custom_capacity:
-            return False, "Custom capacity not set."
+    if current_count >= limit:
+        return (
+            False,
+            f"Member limit reached ({current_count}/{limit}). "
+            f"Please upgrade your package to add more family heads.",
+            {"current": current_count, "limit": limit, "remaining": 0},
+        )
 
-        if current_count >= subscription.custom_capacity:
-            return False, "Custom member limit reached."
-        return True, None
-
-    # Standard
-    if current_count >= package.member_limit:
-        return False, "Member limit exceeded."
-
-    return True, None
+    return (
+        True,
+        None,
+        {"current": current_count, "limit": limit, "remaining": remaining},
+    )
 
 
 # =====================================================

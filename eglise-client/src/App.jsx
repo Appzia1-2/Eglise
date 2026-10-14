@@ -10,47 +10,42 @@ import LoginPage from "./pages/LoginPage";
 
 import HomePage from "./pages/HomePage";
 
-
 import FamilyPage from "./pages/FamilyPage";
 import FamilyAddPage from "./pages/FamilyAddPage";
 import FamilyViewPage from "./pages/FamilyViewPage";
 import FamilyEditPage from "./pages/FamilyEditPage";
-
 
 import WardPage from "./pages/WardPage";
 import WardAddPage from "./pages/WardAddPage";
 import WardViewPage from "./pages/WardViewPage";
 import WardEditPage from "./pages/WardEditPage";
 
-
 import GradePage from "./pages/GradePage";
 import GradeAdd from "./pages/GradeAdd";
 import GradeEdit from "./pages/GradeEdit";
 import GradeView from "./pages/GradeView";
-
 
 import RelationshipPage from "./pages/RelationshipPage";
 import RelationshipAddPage from "./pages/RelationshipAddPage";
 import RelationshipViewPage from "./pages/RelationshipViewPage";
 import RelationshipEditPage from "./pages/RelationshipEditPage";
 
-
 // import MembersPage from "./pages/MembersPage";
 // import MemberDetailsPage from "./pages/MemberDetailsPage";
 import FamilyHeadDashboard from "./pages/FamilyHeadDashboard";
- 
+
 // Family Head Pages
 import RegisterFamilyHeadPage from "./pages/RegisterFamilyHeadPage"; // 2-step form
-import FamilyHeadDetailsPage from "./pages/FamilyHeadDetailsPage";    // View + Edit button
-import EditFamilyHeadPage from "./pages/Editfamilyheadpage";          // Full edit form
- 
+import FamilyHeadDetailsPage from "./pages/FamilyHeadDetailsPage"; // View + Edit button
+import EditFamilyHeadPage from "./pages/Editfamilyheadpage"; // Full edit form
+
 // Member Pages
 import MemberListUnderHeadPage from "./pages/MemberListUnderHeadPage"; // List members of a head
-import AddMemberPage from "./pages/AddMemberPage";                     // Create member under head
-import EditMemberPage from "./pages/EditMemberPage";                   // Edit member
-import MemberDetailPage from "./pages/MemberDetailPage";               // ✅ View member details
+import AddMemberPage from "./pages/AddMemberPage"; // Create member under head
+import EditMemberPage from "./pages/EditMemberPage"; // Edit member
+import MemberDetailPage from "./pages/MemberDetailPage"; // View member details
 import FamilyHeadPrintPreviewPage from "./pages/FamilyHeadPrintPreviewPage";
- 
+
 import HeadlessHouseMembersPage from "./pages/HeadlessHouseMembersPage";
 import HeadlessPromote from "./pages/HeadlessPromote";
 
@@ -62,34 +57,26 @@ import BaptismAddPage from "./pages/BaptismAddPage";
 import BaptismEditPage from "./pages/BaptismEditPage";
 import BaptismViewPage from "./pages/BaptismViewPage";
 
-
-
-
 import ChurchInfoPage from "./pages/ChurchInfoPage";
 
 import MarriagePage from "./pages/MarriagePage";
 import MarriageAddPage from "./pages/MarriageAddPage";
-import MarriageEditPage from "./pages/MarriageEditPage";  // ✅ Marriage Edit Page
-import MarriageViewPage from "./pages/MarriageViewPage";  // ✅ Marriage View Page
-
-
+import MarriageEditPage from "./pages/MarriageEditPage";
+import MarriageViewPage from "./pages/MarriageViewPage";
 
 import TombTypePage from "./pages/TombTypePage";
 import TombTypeAddPage from "./pages/TombTypeAddPage";
 import TombTypeViewPage from "./pages/TombTypeViewPage";
 import TombTypeEditPage from "./pages/TombTypeEditPage";
 
-
 import TombFeesPage from "./pages/TombFeesPage";
 import TombFeesAddPage from "./pages/TombFeesAddPage";
 import TombFeeEditPage from "./pages/TombFeeEditPage";
-
 
 import DesignationPage from "./pages/DesignationPage";
 import DesignationAddPage from "./pages/DesignationAddPage";
 import DesignationViewPage from "./pages/DesignationViewPage";
 import DesignationEditPage from "./pages/DesignationEditPage";
-
 
 import PriestPage from "./pages/PriestPage";
 import RegisterPriestPage from "./pages/RegisterPriestPage";
@@ -103,12 +90,9 @@ import DeathAddPage from "./pages/DeathAddPage";
 import DeathRegisterDetailPage from "./pages/Deathregisterdetailpage";
 import DeathEditPage from "./pages/DeathEditPage";
 
-
-
 import EventsPage from "./pages/EventsPage";
 import EventsAddPage from "./pages/EventsAddPage";
 import EventsEditPage from "./pages/EventsEditPage";
-
 
 // import DiocesePage from "./pages/DiocesePage";
 import OfferingPage from "./pages/OfferingPage";
@@ -118,8 +102,6 @@ import OfferingEditPage from "./pages/OfferingEditPage";
 import ReceiptsPage from "./pages/ReceiptsPage";
 import ReceiptCreatePage from "./pages/ReceiptCreatePage";
 import ReceiptDetailPage from "./pages/ReceiptDetailPage";
-
-
 
 import VisitorPage from "./pages/VisitorPage";
 import VisitorAddPage from "./pages/VisitorAddPage";
@@ -135,15 +117,11 @@ import AccountGroupAddPage from "./pages/AccountGroupAddPage";
 import AccountGroupViewPage from "./pages/AccountGroupViewPage";
 import AccountGroupEditPage from "./pages/AccountGroupEditPage";
 
-
-
-
 import AccountLedgerPage from "./pages/AccountLedgerPage";
 import AccountLedgerAddPage from "./pages/Accountledgeraddpage";
 import AccountLedgerEditPage from "./pages/Accountledgereditpage";
 import AccountLedgerViewPage from "./pages/Accountledgerviewpage";
 // import AccountLedgerTransactionsPage from "./pages/AccountLedgerTransactionsPage";
-
 
 // =========================================================
 // PAYMENT ROUTES — redesigned (List + Add + Edit)
@@ -166,31 +144,29 @@ import MemberDirectoryPage from "./pages/MemberDirectoryPage";
 import MemberAgeWisePage from "./pages/MemberAgeWisePage";
 import MemberPhoneDirectoryPage from "./pages/MemberPhoneDirectoryPage";
 
-
 // Legacy Baptism
-import LegacyBaptismListPage   from "./pages/LegacyBaptismListPage";
-import LegacyBaptismViewPage   from "./pages/LegacyBaptismViewPage";
-import LegacyBaptismAddPage    from "./pages/LegacyBaptismAddPage";
-import LegacyBaptismEditPage   from "./pages/LegacyBaptismEditPage";
+import LegacyBaptismListPage from "./pages/LegacyBaptismListPage";
+import LegacyBaptismViewPage from "./pages/LegacyBaptismViewPage";
+import LegacyBaptismAddPage from "./pages/LegacyBaptismAddPage";
+import LegacyBaptismEditPage from "./pages/LegacyBaptismEditPage";
 
 // Legacy Marriage
-import LegacyMarriageListPage  from "./pages/LegacyMarriageListPage";
-import LegacyMarriageViewPage  from "./pages/LegacyMarriageViewPage";
-import LegacyMarriageAddPage   from "./pages/LegacyMarriageAddPage";
-import LegacyMarriageEditPage  from "./pages/LegacyMarriageEditPage";
+import LegacyMarriageListPage from "./pages/LegacyMarriageListPage";
+import LegacyMarriageViewPage from "./pages/LegacyMarriageViewPage";
+import LegacyMarriageAddPage from "./pages/LegacyMarriageAddPage";
+import LegacyMarriageEditPage from "./pages/LegacyMarriageEditPage";
 
 // Legacy Death
-import LegacyDeathListPage     from "./pages/LegacyDeathListPage";
-import LegacyDeathViewPage     from "./pages/LegacyDeathViewPage";
-import LegacyDeathAddPage      from "./pages/LegacyDeathAddPage";
-import LegacyDeathEditPage     from "./pages/LegacyDeathEditPage";
+import LegacyDeathListPage from "./pages/LegacyDeathListPage";
+import LegacyDeathViewPage from "./pages/LegacyDeathViewPage";
+import LegacyDeathAddPage from "./pages/LegacyDeathAddPage";
+import LegacyDeathEditPage from "./pages/LegacyDeathEditPage";
 
 // Reports (list + print certificate)
 import ReportListPage from "./pages/reports/ReportListPage";
 import BaptismCertificatePage from "./pages/reports/BaptismCertificatePage";
 import MarriageCertificatePage from "./pages/reports/MarriageCertificatePage";
 import DeathCertificatePage from "./pages/reports/DeathCertificatePage";
-
 
 import DayBookPage from "./pages/DayBookPage";
 import CashBookPage from "./pages/CashBookPage";
@@ -208,7 +184,7 @@ import { Toaster } from "./components/ui/toaster";
 
 const ProtectedRoute = ({ children }) => {
   if (!authService.isAuthenticated()) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
 
   return <ForcePasswordChange>{children}</ForcePasswordChange>;
@@ -218,14 +194,13 @@ function App() {
   return (
     <Router>
       <Routes>
-        {/* ===== CHURCH/USER ROUTES ===== */}
-        <Route 
-  path="/" 
-  element={
-    import.meta.env.PROD ? <Navigate to="/login" replace /> : <LoginPage />
-  } 
-/>
-<Route path="/login" element={<LoginPage />} />
+
+        {/* =========================================================
+            CHURCH/USER ROUTES
+        ========================================================= */}
+        <Route path="/" element={<LoginPage />} />
+        {/* Old /login links still work, but the URL goes back to the clean root */}
+        <Route path="/login" element={<Navigate to="/" replace />} />
         <Route
           path="/change-password"
           element={
@@ -242,16 +217,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/family"
-          element={
-            <Navigate
-              to="/family-master"
-              replace
-            />
-          }
-        />
-
+        <Route path="/family" element={<Navigate to="/family-master" replace />} />
         <Route
           path="/family-master"
           element={
@@ -260,7 +226,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/family-master/add"
           element={
@@ -269,7 +234,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/family-master/:id/edit"
           element={
@@ -278,7 +242,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/family-master/:id"
           element={
@@ -295,7 +258,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/ward/add"
           element={
@@ -304,7 +266,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/ward/:id"
           element={
@@ -313,7 +274,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/ward/:id/edit"
           element={
@@ -330,7 +290,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/grade/add"
           element={
@@ -339,7 +298,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/grade/:id/edit"
           element={
@@ -348,7 +306,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/grade/:id"
           element={
@@ -367,23 +324,32 @@ function App() {
         />
         <Route
           path="/relationship/add"
-          element={<RelationshipAddPage />}
+          element={
+            <ProtectedRoute>
+              <RelationshipAddPage />
+            </ProtectedRoute>
+          }
         />
-
         <Route
           path="/relationship/:id"
-          element={<RelationshipViewPage />}
+          element={
+            <ProtectedRoute>
+              <RelationshipViewPage />
+            </ProtectedRoute>
+          }
         />
-
         <Route
           path="/relationship/:id/edit"
-          element={<RelationshipEditPage />}
+          element={
+            <ProtectedRoute>
+              <RelationshipEditPage />
+            </ProtectedRoute>
+          }
         />
-        
+
         {/* =========================================================
             FAMILY HEAD ROUTES
         ========================================================= */}
-
         <Route
           path="/family-heads"
           element={
@@ -392,7 +358,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/family-heads/create"
           element={
@@ -401,8 +366,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-
-        {/* ✅ IMPORTANT: Headless route MUST come BEFORE the :headId route */}
+        {/* IMPORTANT: Headless routes MUST come BEFORE the :headId route */}
         <Route
           path="/family-heads/headless"
           element={
@@ -411,7 +375,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/family-heads/headless/:familyId/:houseName/members"
           element={
@@ -420,7 +383,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/family-heads/:headId"
           element={
@@ -429,7 +391,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/family-heads/:headId/edit"
           element={
@@ -438,8 +399,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-
-         <Route
+        <Route
           path="/headless/promote"
           element={
             <ProtectedRoute>
@@ -447,7 +407,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/family-heads/:headId/print"
           element={
@@ -460,7 +419,6 @@ function App() {
         {/* =========================================================
             MEMBERS UNDER FAMILY HEAD
         ========================================================= */}
-
         {/* List members under a head */}
         <Route
           path="/family-heads/:headId/members"
@@ -470,7 +428,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         {/* Create new member under a head */}
         <Route
           path="/family-heads/:headId/members/create"
@@ -480,8 +437,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-
-        {/* ✅ View member details */}
+        {/* View member details */}
         <Route
           path="/family-heads/:headId/members/:memberId"
           element={
@@ -490,7 +446,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         {/* Edit member */}
         <Route
           path="/family-heads/:headId/members/:memberId/edit"
@@ -500,6 +455,10 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* =========================================================
+            BAPTISM
+        ========================================================= */}
         <Route
           path="/baptism"
           element={
@@ -509,30 +468,29 @@ function App() {
           }
         />
         <Route
-  path="/baptism/add"
-  element={
-    <ProtectedRoute>
-      <BaptismAddPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/baptism/:id/edit"
-  element={
-    <ProtectedRoute>
-      <BaptismEditPage />
-    </ProtectedRoute>
-  }
-/>
-
-<Route
-  path="/baptism/:id"
-  element={
-    <ProtectedRoute>
-      <BaptismViewPage />
-    </ProtectedRoute>
-  }
-/>
+          path="/baptism/add"
+          element={
+            <ProtectedRoute>
+              <BaptismAddPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/baptism/:id/edit"
+          element={
+            <ProtectedRoute>
+              <BaptismEditPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/baptism/:id"
+          element={
+            <ProtectedRoute>
+              <BaptismViewPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/church-info"
           element={
@@ -541,6 +499,10 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* =========================================================
+            MARRIAGE
+        ========================================================= */}
         <Route
           path="/marriage"
           element={
@@ -550,14 +512,14 @@ function App() {
           }
         />
         <Route
-  path="/marriage/add"
-  element={
-    <ProtectedRoute>
-      <MarriageAddPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
+          path="/marriage/add"
+          element={
+            <ProtectedRoute>
+              <MarriageAddPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/marriage/:id"
           element={
             <ProtectedRoute>
@@ -565,7 +527,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-        
         <Route
           path="/marriage/:id/edit"
           element={
@@ -574,45 +535,46 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         {/* =========================================================
-    TOMB TYPE MASTER ROUTES
-========================================================= */}
+            TOMB TYPE MASTER ROUTES
+        ========================================================= */}
+        <Route
+          path="/tomb-type"
+          element={
+            <ProtectedRoute>
+              <TombTypePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tomb-type/add"
+          element={
+            <ProtectedRoute>
+              <TombTypeAddPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tomb-type/:id/edit"
+          element={
+            <ProtectedRoute>
+              <TombTypeEditPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tomb-type/:id"
+          element={
+            <ProtectedRoute>
+              <TombTypeViewPage />
+            </ProtectedRoute>
+          }
+        />
 
-<Route 
-  path="/tomb-type" 
-  element={ 
-    <ProtectedRoute> 
-      <TombTypePage /> 
-    </ProtectedRoute> 
-  } 
-/>
-
-<Route 
-  path="/tomb-type/add" 
-  element={ 
-    <ProtectedRoute> 
-      <TombTypeAddPage /> 
-    </ProtectedRoute> 
-  } 
-/>
-
-<Route 
-  path="/tomb-type/:id/edit" 
-  element={ 
-    <ProtectedRoute> 
-      <TombTypeEditPage /> 
-    </ProtectedRoute> 
-  } 
-/>
-
-<Route 
-  path="/tomb-type/:id" 
-  element={ 
-    <ProtectedRoute> 
-      <TombTypeViewPage /> 
-    </ProtectedRoute> 
-  } 
-/>
+        {/* =========================================================
+            TOMB FEES
+        ========================================================= */}
         <Route
           path="/tomb-fees"
           element={
@@ -621,8 +583,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-
-          <Route
+        <Route
           path="/tomb-fees/add"
           element={
             <ProtectedRoute>
@@ -630,7 +591,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-          <Route
+        <Route
           path="/tomb-fees/:id/edit"
           element={
             <ProtectedRoute>
@@ -638,45 +599,46 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         {/* =========================================================
-    DESIGNATION MASTER ROUTES
-========================================================= */}
+            DESIGNATION MASTER ROUTES
+        ========================================================= */}
+        <Route
+          path="/designation"
+          element={
+            <ProtectedRoute>
+              <DesignationPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/designation/add"
+          element={
+            <ProtectedRoute>
+              <DesignationAddPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/designation/:id/edit"
+          element={
+            <ProtectedRoute>
+              <DesignationEditPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/designation/:id"
+          element={
+            <ProtectedRoute>
+              <DesignationViewPage />
+            </ProtectedRoute>
+          }
+        />
 
-<Route
-  path="/designation"
-  element={
-    <ProtectedRoute>
-      <DesignationPage />
-    </ProtectedRoute>
-  }
-/>
-
-<Route
-  path="/designation/add"
-  element={
-    <ProtectedRoute>
-      <DesignationAddPage />
-    </ProtectedRoute>
-  }
-/>
-
-<Route
-  path="/designation/:id/edit"
-  element={
-    <ProtectedRoute>
-      <DesignationEditPage />
-    </ProtectedRoute>
-  }
-/>
-
-<Route
-  path="/designation/:id"
-  element={
-    <ProtectedRoute>
-      <DesignationViewPage />
-    </ProtectedRoute>
-  }
-/>
+        {/* =========================================================
+            PRIEST MASTER
+        ========================================================= */}
         <Route
           path="/priest-master"
           element={
@@ -685,7 +647,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/priest-master/register"
           element={
@@ -696,13 +657,20 @@ function App() {
         />
         <Route
           path="/priest-master/edit/:id"
-          element={<EditPriestPage />}
+          element={
+            <ProtectedRoute>
+              <EditPriestPage />
+            </ProtectedRoute>
+          }
         />
         <Route
           path="/priest-master/:id"
-          element={<ViewPriestPage />}
+          element={
+            <ProtectedRoute>
+              <ViewPriestPage />
+            </ProtectedRoute>
+          }
         />
-
         <Route
           path="/register-settings"
           element={
@@ -711,6 +679,10 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* =========================================================
+            DEATH REGISTER
+        ========================================================= */}
         <Route
           path="/death-register"
           element={
@@ -719,8 +691,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-
-         <Route
+        <Route
           path="/death/add"
           element={
             <ProtectedRoute>
@@ -736,7 +707,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-         <Route
+        <Route
           path="/death/:id/edit"
           element={
             <ProtectedRoute>
@@ -744,6 +715,10 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* =========================================================
+            EVENTS
+        ========================================================= */}
         <Route
           path="/events"
           element={
@@ -752,7 +727,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-         <Route
+        <Route
           path="/events/add"
           element={
             <ProtectedRoute>
@@ -760,7 +735,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-          <Route
+        <Route
           path="/events/:id/edit"
           element={
             <ProtectedRoute>
@@ -776,6 +751,10 @@ function App() {
             </ProtectedRoute>
           }
         /> */}
+
+        {/* =========================================================
+            OFFERINGS
+        ========================================================= */}
         <Route
           path="/offerings"
           element={
@@ -800,47 +779,48 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* =========================================================
-    VISITOR MASTER ROUTES
-========================================================= */}
-<Route
-  path="/visitors"
-  element={
-    <ProtectedRoute>
-      <VisitorPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/visitors/add"
-  element={
-    <ProtectedRoute>
-      <VisitorAddPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/visitors/:id"
-  element={
-    <ProtectedRoute>
-      <VisitorViewPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/visitors/:id/edit"
-  element={
-    <ProtectedRoute>
-      <VisitorEditPage />
-    </ProtectedRoute>
-  }
-/>
 
-{/* Keep old singular path working (redirect) */}
-<Route
-  path="/visitor"
-  element={<Navigate to="/visitors" replace />}
-/>
+        {/* =========================================================
+            VISITOR MASTER ROUTES
+        ========================================================= */}
+        <Route
+          path="/visitors"
+          element={
+            <ProtectedRoute>
+              <VisitorPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/visitors/add"
+          element={
+            <ProtectedRoute>
+              <VisitorAddPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/visitors/:id"
+          element={
+            <ProtectedRoute>
+              <VisitorViewPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/visitors/:id/edit"
+          element={
+            <ProtectedRoute>
+              <VisitorEditPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* Keep old singular path working (redirect) */}
+        <Route path="/visitor" element={<Navigate to="/visitors" replace />} />
+
+        {/* =========================================================
+            SUBSCRIPTIONS
+        ========================================================= */}
         <Route
           path="/subscriptions"
           element={
@@ -850,21 +830,25 @@ function App() {
           }
         />
         <Route
-  path="/subscription/add"
-  element={
-    <ProtectedRoute>
-      <SubscriptionCreatePage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/subscriptions/:id/edit"
-  element={
-    <ProtectedRoute>
-      <SubscriptionEditPage />
-    </ProtectedRoute>
-  }
-/>
+          path="/subscription/add"
+          element={
+            <ProtectedRoute>
+              <SubscriptionCreatePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/subscriptions/:id/edit"
+          element={
+            <ProtectedRoute>
+              <SubscriptionEditPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* =========================================================
+            ACCOUNT GROUPS
+        ========================================================= */}
         <Route
           path="/account-groups"
           element={
@@ -877,69 +861,70 @@ function App() {
           path="/account-groups/add"
           element={
             <ProtectedRoute>
-              <AccountGroupAddPage  />
+              <AccountGroupAddPage />
             </ProtectedRoute>
           }
         />
-       
-         <Route
-  path="/account-groups/:id/edit"
-  element={
-    <ProtectedRoute>
-      <AccountGroupEditPage />
-    </ProtectedRoute>
-  }
-/>
-         <Route
+        <Route
+          path="/account-groups/:id/edit"
+          element={
+            <ProtectedRoute>
+              <AccountGroupEditPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/account-groups/:id"
           element={
             <ProtectedRoute>
-              <AccountGroupViewPage    />
+              <AccountGroupViewPage />
             </ProtectedRoute>
           }
         />
 
-
-       <Route
-  path="/account-ledgers"
-  element={
-    <ProtectedRoute>
-      <AccountLedgerPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/account-ledgers/add"
-  element={
-    <ProtectedRoute>
-      <AccountLedgerAddPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/account-ledgers/:id/edit"
-  element={
-    <ProtectedRoute>
-      <AccountLedgerEditPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/account-ledgers/:id"
-  element={
-    <ProtectedRoute>
-      <AccountLedgerViewPage />
-    </ProtectedRoute>
-  }
-/>
-{/* <Route
-  path="/account-ledgers/:id/transactions"
-  element={
-    <ProtectedRoute>
-      <AccountLedgerTransactionsPage />
-    </ProtectedRoute>
-  }
-/> */}
+        {/* =========================================================
+            ACCOUNT LEDGERS
+        ========================================================= */}
+        <Route
+          path="/account-ledgers"
+          element={
+            <ProtectedRoute>
+              <AccountLedgerPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/account-ledgers/add"
+          element={
+            <ProtectedRoute>
+              <AccountLedgerAddPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/account-ledgers/:id/edit"
+          element={
+            <ProtectedRoute>
+              <AccountLedgerEditPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/account-ledgers/:id"
+          element={
+            <ProtectedRoute>
+              <AccountLedgerViewPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* <Route
+          path="/account-ledgers/:id/transactions"
+          element={
+            <ProtectedRoute>
+              <AccountLedgerTransactionsPage />
+            </ProtectedRoute>
+          }
+        /> */}
 
         {/* =========================================================
             PAYMENTS — redesigned
@@ -952,7 +937,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/payments/add"
           element={
@@ -961,7 +945,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/payments/:id/edit"
           element={
@@ -971,10 +954,13 @@ function App() {
           }
         />
         <Route
-  path="/payments/:id"
-  element={<ProtectedRoute><PaymentDetailPage /></ProtectedRoute>}
-/>
-
+          path="/payments/:id"
+          element={
+            <ProtectedRoute>
+              <PaymentDetailPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/qurbana-receipts"
           element={
@@ -983,6 +969,10 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* =========================================================
+            COMMITTEES
+        ========================================================= */}
         <Route
           path="/committees"
           element={
@@ -992,37 +982,37 @@ function App() {
           }
         />
         <Route
-  path="/committees/add"
-  element={
-    <ProtectedRoute>
-      <CommitteeAddPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/committees/:id/edit"
-  element={
-    <ProtectedRoute>
-      <CommitteeEditPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/committees/:id"
-  element={
-    <ProtectedRoute>
-      <CommitteeViewPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/committees/:id/print"
-  element={
-    <ProtectedRoute>
-      <CommitteePrintPage  />
-    </ProtectedRoute>
-  }
-/>
+          path="/committees/add"
+          element={
+            <ProtectedRoute>
+              <CommitteeAddPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/committees/:id/edit"
+          element={
+            <ProtectedRoute>
+              <CommitteeEditPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/committees/:id"
+          element={
+            <ProtectedRoute>
+              <CommitteeViewPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/committees/:id/print"
+          element={
+            <ProtectedRoute>
+              <CommitteePrintPage />
+            </ProtectedRoute>
+          }
+        />
         {/* <Route
           path="/committee-members"
           element={
@@ -1064,303 +1054,329 @@ function App() {
           }
         />
 
+        {/* =========================================================
+            LEGACY BAPTISM ROUTES
+        ========================================================= */}
+        <Route
+          path="/legacy/baptism"
+          element={
+            <ProtectedRoute>
+              <LegacyBaptismListPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/legacy/baptism/add"
+          element={
+            <ProtectedRoute>
+              <LegacyBaptismAddPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/legacy/baptism/:id"
+          element={
+            <ProtectedRoute>
+              <LegacyBaptismViewPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/legacy/baptism/:id/edit"
+          element={
+            <ProtectedRoute>
+              <LegacyBaptismEditPage />
+            </ProtectedRoute>
+          }
+        />
 
         {/* =========================================================
-    LEGACY BAPTISM ROUTES
-========================================================= */}
-<Route
-  path="/legacy/baptism"
-  element={
-    <ProtectedRoute>
-      <LegacyBaptismListPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/legacy/baptism/add"
-  element={
-    <ProtectedRoute>
-      <LegacyBaptismAddPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/legacy/baptism/:id"
-  element={
-    <ProtectedRoute>
-      <LegacyBaptismViewPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/legacy/baptism/:id/edit"
-  element={
-    <ProtectedRoute>
-      <LegacyBaptismEditPage />
-    </ProtectedRoute>
-  }
-/>
-
-{/* =========================================================
-    LEGACY MARRIAGE ROUTES
-========================================================= */}
-<Route
-  path="/legacy/marriage"
-  element={
-    <ProtectedRoute>
-      <LegacyMarriageListPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/legacy/marriage/add"
-  element={
-    <ProtectedRoute>
-      <LegacyMarriageAddPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/legacy/marriage/:id"
-  element={
-    <ProtectedRoute>
-      <LegacyMarriageViewPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/legacy/marriage/:id/edit"
-  element={
-    <ProtectedRoute>
-      <LegacyMarriageEditPage />
-    </ProtectedRoute>
-  }
-/>
-
-{/* =========================================================
-    LEGACY DEATH ROUTES
-========================================================= */}
-<Route
-  path="/legacy/death"
-  element={
-    <ProtectedRoute>
-      <LegacyDeathListPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/legacy/death/add"
-  element={
-    <ProtectedRoute>
-      <LegacyDeathAddPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/legacy/death/:id"
-  element={
-    <ProtectedRoute>
-      <LegacyDeathViewPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/legacy/death/:id/edit"
-  element={
-    <ProtectedRoute>
-      <LegacyDeathEditPage />
-    </ProtectedRoute>
-  }
-/>
-
-{/* =========================================================
-    REPORTS: LIVE REGISTERS
-========================================================= */}
-<Route
-  path="/reports/baptism"
-  element={
-    <ProtectedRoute>
-      <ReportListPage type="baptism" />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/reports/baptism/:id/certificate"
-  element={
-    <ProtectedRoute>
-      <BaptismCertificatePage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/reports/marriage"
-  element={
-    <ProtectedRoute>
-      <ReportListPage type="marriage" />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/reports/marriage/:id/certificate"
-  element={
-    <ProtectedRoute>
-      <MarriageCertificatePage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/reports/death"
-  element={
-    <ProtectedRoute>
-      <ReportListPage type="death" />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/reports/death/:id/certificate"
-  element={
-    <ProtectedRoute>
-      <DeathCertificatePage />
-    </ProtectedRoute>
-  }
-/>
-
-{/* =========================================================
-    REPORTS: LEGACY REGISTERS
-========================================================= */}
-<Route
-  path="/reports/legacy/baptism"
-  element={
-    <ProtectedRoute>
-      <ReportListPage type="baptism" />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/reports/legacy/baptism/:id/certificate"
-  element={
-    <ProtectedRoute>
-      <BaptismCertificatePage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/reports/legacy/marriage"
-  element={
-    <ProtectedRoute>
-      <ReportListPage type="marriage" />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/reports/legacy/marriage/:id/certificate"
-  element={
-    <ProtectedRoute>
-      <MarriageCertificatePage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/reports/legacy/death"
-  element={
-    <ProtectedRoute>
-      <ReportListPage type="death" />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/reports/legacy/death/:id/certificate"
-  element={
-    <ProtectedRoute>
-      <DeathCertificatePage />
-    </ProtectedRoute>
-  }
-/>
-
-<Route
-  path="/receipts"
-  element={
-    <ProtectedRoute>
-      <ReceiptsPage />
-    </ProtectedRoute>
-  }
-/>
-
-<Route
-  path="/receipts/add"
-  element={
-    <ProtectedRoute>
-      <ReceiptCreatePage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/receipts/:id"
-  element={
-    <ProtectedRoute>
-      <ReceiptDetailPage />
-    </ProtectedRoute>
-  }
-/>       
+            LEGACY MARRIAGE ROUTES
+        ========================================================= */}
         <Route
-  path="/reports/day-book"
-  element={<ProtectedRoute><DayBookPage /></ProtectedRoute>}
-/>
-<Route
-  path="/reports/cash-book"
-  element={<ProtectedRoute><CashBookPage /></ProtectedRoute>}
-/>
-<Route
-  path="/reports/bank-book"
-  element={<ProtectedRoute><BankBookPage /></ProtectedRoute>}
-/>
-<Route
-  path="/reports/general-ledger"
-  element={<ProtectedRoute><GeneralLedgerPage /></ProtectedRoute>}
-/>
-<Route
-  path="/reports/member-ledger"
-  element={
-    <ProtectedRoute>
-      <MemberLedgerPage />
-    </ProtectedRoute>
-  }
-/>        
-<Route
-  path="/reports/income-expenditure"
-  element={
-    <ProtectedRoute>
-      <IncomeExpenditurePage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/reports/subscription-due"
-  element={
-    <ProtectedRoute>
-      <SubscriptionDueListPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/reports/subscription-paid"
-  element={
-    <ProtectedRoute>
-      <SubscriptionPaidListPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/reports/donation-register"
-  element={
-    <ProtectedRoute>
-      <DonationRegisterPage />
-    </ProtectedRoute>
-  }
-/>
-     
+          path="/legacy/marriage"
+          element={
+            <ProtectedRoute>
+              <LegacyMarriageListPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/legacy/marriage/add"
+          element={
+            <ProtectedRoute>
+              <LegacyMarriageAddPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/legacy/marriage/:id"
+          element={
+            <ProtectedRoute>
+              <LegacyMarriageViewPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/legacy/marriage/:id/edit"
+          element={
+            <ProtectedRoute>
+              <LegacyMarriageEditPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* =========================================================
+            LEGACY DEATH ROUTES
+        ========================================================= */}
+        <Route
+          path="/legacy/death"
+          element={
+            <ProtectedRoute>
+              <LegacyDeathListPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/legacy/death/add"
+          element={
+            <ProtectedRoute>
+              <LegacyDeathAddPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/legacy/death/:id"
+          element={
+            <ProtectedRoute>
+              <LegacyDeathViewPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/legacy/death/:id/edit"
+          element={
+            <ProtectedRoute>
+              <LegacyDeathEditPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* =========================================================
+            REPORTS: LIVE REGISTERS
+        ========================================================= */}
+        <Route
+          path="/reports/baptism"
+          element={
+            <ProtectedRoute>
+              <ReportListPage type="baptism" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/baptism/:id/certificate"
+          element={
+            <ProtectedRoute>
+              <BaptismCertificatePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/marriage"
+          element={
+            <ProtectedRoute>
+              <ReportListPage type="marriage" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/marriage/:id/certificate"
+          element={
+            <ProtectedRoute>
+              <MarriageCertificatePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/death"
+          element={
+            <ProtectedRoute>
+              <ReportListPage type="death" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/death/:id/certificate"
+          element={
+            <ProtectedRoute>
+              <DeathCertificatePage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* =========================================================
+            REPORTS: LEGACY REGISTERS
+        ========================================================= */}
+        <Route
+          path="/reports/legacy/baptism"
+          element={
+            <ProtectedRoute>
+              <ReportListPage type="baptism" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/legacy/baptism/:id/certificate"
+          element={
+            <ProtectedRoute>
+              <BaptismCertificatePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/legacy/marriage"
+          element={
+            <ProtectedRoute>
+              <ReportListPage type="marriage" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/legacy/marriage/:id/certificate"
+          element={
+            <ProtectedRoute>
+              <MarriageCertificatePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/legacy/death"
+          element={
+            <ProtectedRoute>
+              <ReportListPage type="death" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/legacy/death/:id/certificate"
+          element={
+            <ProtectedRoute>
+              <DeathCertificatePage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* =========================================================
+            RECEIPTS
+        ========================================================= */}
+        <Route
+          path="/receipts"
+          element={
+            <ProtectedRoute>
+              <ReceiptsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/receipts/add"
+          element={
+            <ProtectedRoute>
+              <ReceiptCreatePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/receipts/:id"
+          element={
+            <ProtectedRoute>
+              <ReceiptDetailPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* =========================================================
+            REPORTS: BOOKS & LEDGERS
+        ========================================================= */}
+        <Route
+          path="/reports/day-book"
+          element={
+            <ProtectedRoute>
+              <DayBookPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/cash-book"
+          element={
+            <ProtectedRoute>
+              <CashBookPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/bank-book"
+          element={
+            <ProtectedRoute>
+              <BankBookPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/general-ledger"
+          element={
+            <ProtectedRoute>
+              <GeneralLedgerPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/member-ledger"
+          element={
+            <ProtectedRoute>
+              <MemberLedgerPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/income-expenditure"
+          element={
+            <ProtectedRoute>
+              <IncomeExpenditurePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/subscription-due"
+          element={
+            <ProtectedRoute>
+              <SubscriptionDueListPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/subscription-paid"
+          element={
+            <ProtectedRoute>
+              <SubscriptionPaidListPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/donation-register"
+          element={
+            <ProtectedRoute>
+              <DonationRegisterPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* =========================================================
+            FALLBACK
+        ========================================================= */}
+        {/* Unknown URLs go to the login page at the root */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      
+
       {/* Toaster for notifications */}
       <Toaster />
     </Router>

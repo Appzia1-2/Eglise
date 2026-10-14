@@ -492,10 +492,10 @@ const LegacyDeathCard = ({ record, name, formatDate, onView, onEdit }) => (
       <Box flex="1" minW={0}>
         <Text fontSize="8px" color={TEXT_COLOR} fontWeight="700"
               mb="1px" letterSpacing="0.2px">
-          Age at Death
+          Funeral Date
         </Text>
         <Text fontSize="10px" color={TEXT_COLOR} noOfLines={1}>
-          {record?.age_at_death ?? "-"}
+          {formatDate(record?.funeral_on || record?.funeral_date)}
         </Text>
       </Box>
       <Box flex="1" minW={0}>

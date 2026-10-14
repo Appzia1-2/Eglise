@@ -161,7 +161,7 @@ const BASE = {
     cardFields: [
       { label: "Reg No.", keys: ["reg_no", "register_number"], strong: true },
       { label: "Died On", keys: ["died_on", "date_of_death", "death_date"], date: true },
-      { label: "Age at Death", keys: ["age_at_death", "age"] },
+      { label: "Funeral Date", keys: ["funeral_on", "funeral_date"], date: true },
       { label: "Tomb Type", keys: ["tomb_type_name"] },
     ],
   },

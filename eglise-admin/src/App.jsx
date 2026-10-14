@@ -1,4 +1,4 @@
-// src/App.jsx - Updated with Member View Route and Headless Route
+// src/App.jsx - Admin app
 
 import {
   BrowserRouter as Router,
@@ -6,7 +6,6 @@ import {
   Route,
   Navigate,
 } from "react-router-dom";
-
 
 // Admin Imports
 import AdminLogin from "./admin/pages/AdminLogin";
@@ -51,24 +50,14 @@ import UpgradeRequestsPage from "./admin/pages/UpgradeRequestsPage";
 import AdminProtectedRoute from "./admin/routes/ProtectedRoute";
 import { Toaster } from "./components/ui/toaster";
 
-const ProtectedRoute = ({ children }) => {
-  if (!authService.isAuthenticated()) {
-    return <Navigate to="/login" replace />;
-  }
-  return children;
-};
-
 function App() {
   return (
     <Router>
-       <Routes>
-      <Route path="/" element={<AdminLogin />} />
-
-        {/* ===== ADMIN ROUTES ===== */}
-        
-        {/* Admin Login - Public */}
+      <Routes>
+        {/* Admin login at the root and at /admin - Public */}
+        <Route path="/" element={<AdminLogin />} />
         <Route path="/admin" element={<AdminLogin />} />
-        
+
         {/* Admin Dashboard - Protected */}
         <Route
           path="/admin/dashboard"
@@ -78,7 +67,7 @@ function App() {
             </AdminProtectedRoute>
           }
         />
-        
+
         {/* Admin Diocese Routes */}
         <Route
           path="/admin/dioceses/add"
@@ -104,15 +93,15 @@ function App() {
             </AdminProtectedRoute>
           }
         />
-         <Route
+        <Route
           path="/admin/dioceses/view/:id"
           element={
             <AdminProtectedRoute>
-              <DioceseViewPage  />
+              <DioceseViewPage />
             </AdminProtectedRoute>
           }
         />
-        
+
         {/* Admin Church Routes */}
         <Route
           path="/admin/churches/add"
@@ -146,7 +135,7 @@ function App() {
             </AdminProtectedRoute>
           }
         />
-        
+
         {/* Admin Package Routes */}
         <Route
           path="/admin/packages"
@@ -173,15 +162,14 @@ function App() {
           }
         />
         <Route
-  path="/admin/packages/view/:id"
-  element={
-    <AdminProtectedRoute>
-      <PackageViewPage />
-    </AdminProtectedRoute>
-  }
-/>
-        
-        
+          path="/admin/packages/view/:id"
+          element={
+            <AdminProtectedRoute>
+              <PackageViewPage />
+            </AdminProtectedRoute>
+          }
+        />
+
         {/* Admin Subscription Routes */}
         <Route
           path="/admin/subscriptions"
@@ -211,11 +199,11 @@ function App() {
           path="/admin/subscriptions/edit/:id"
           element={
             <AdminProtectedRoute>
-              <EditSubscriptionPage  />
+              <EditSubscriptionPage />
             </AdminProtectedRoute>
           }
         />
-        
+
         {/* Admin Tax Type Routes */}
         <Route
           path="/admin/tax-types"
@@ -241,7 +229,7 @@ function App() {
             </AdminProtectedRoute>
           }
         />
-        
+
         {/* Admin Tax Rate Routes */}
         <Route
           path="/admin/tax-rates"
@@ -267,7 +255,7 @@ function App() {
             </AdminProtectedRoute>
           }
         />
-        
+
         {/* Admin Payment Routes */}
         <Route
           path="/admin/payments"
@@ -294,13 +282,13 @@ function App() {
           }
         />
         <Route
-  path="/admin/payments/:id/invoice"
-  element={
-    <AdminProtectedRoute>
-      <InvoicePreviewPage />
-    </AdminProtectedRoute>
-  }
-/>
+          path="/admin/payments/:id/invoice"
+          element={
+            <AdminProtectedRoute>
+              <InvoicePreviewPage />
+            </AdminProtectedRoute>
+          }
+        />
         {/* <Route
           path="/admin/payments/edit/:id"
           element={
@@ -309,7 +297,7 @@ function App() {
             </AdminProtectedRoute>
           }
         /> */}
-        
+
         {/* Admin Upgrade Requests */}
         <Route
           path="/admin/upgrade-requests"
@@ -320,10 +308,11 @@ function App() {
           }
         />
 
-        {/* Admin catch-all - redirect to admin dashboard - MUST BE LAST */}
+        {/* Catch-alls - MUST BE LAST */}
         <Route path="/admin/*" element={<Navigate to="/admin/dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      
+
       {/* Toaster for notifications */}
       <Toaster />
     </Router>

@@ -814,7 +814,7 @@ const FamilyHeadDashboard = () => {
             </Text>
 
             {/* ✅ NEW: capacity indicator */}
-            {membersInfo && membersInfo.limit > 0 && (
+            {/* {membersInfo && membersInfo.limit > 0 && (
               <Text
                 color={
                   limitReached
@@ -832,7 +832,7 @@ const FamilyHeadDashboard = () => {
                       membersInfo.remaining === 1 ? "" : "s"
                     } remaining`}
               </Text>
-            )}
+            )} */}
           </Box>
 
           {/* HEADER ACTIONS */}
@@ -943,7 +943,7 @@ const FamilyHeadDashboard = () => {
         </Flex>
 
         {/* ✅ NEW: LIMIT REACHED BANNER */}
-
+{/* 
         {limitReached && (
           <Box
             mb="16px"
@@ -1000,7 +1000,7 @@ const FamilyHeadDashboard = () => {
               Upgrade Plan
             </Button>
           </Box>
-        )}
+        )} */}
 
         {/* FILTER BAR */}
 
