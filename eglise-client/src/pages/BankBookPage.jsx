@@ -37,6 +37,26 @@ const toNumber = (v) => {
   return isNaN(n) ? 0 : n;
 };
 
+// ------------------------------------------------------------
+// Cash / Bank ledger detection (exact match)
+// ------------------------------------------------------------
+const CASH_BANK_EXACT_NAMES = [
+  "cash in hand",
+  "balance in savings account",
+];
+
+const isCashOrBankLedger = (ledgerName) => {
+  const n = String(ledgerName || "").trim().toLowerCase();
+  if (!n) return false;
+  return CASH_BANK_EXACT_NAMES.some((exact) => n === exact);
+};
+
+// ------------------------------------------------------------
+// Group flat LedgerEntry rows into one row per voucher.
+//
+// Amount    = cash / bank side amount
+// Direction = that row's entry_type (DEBIT = in, CREDIT = out)
+// ------------------------------------------------------------
 const groupLedgerEntries = (entries) => {
   const groups = new Map();
 
@@ -63,8 +83,8 @@ const groupLedgerEntries = (entries) => {
         particulars: "",
         cashBankAccount: "",
         narration: e.narration || "",
-        debit: 0,
-        credit: 0,
+        amount: 0,
+        direction: "DEBIT",
         _entries: [],
       });
     }
@@ -73,35 +93,41 @@ const groupLedgerEntries = (entries) => {
     g._entries.push(e);
 
     const amt = toNumber(e.amount);
-    if (e.entry_type === "DEBIT") g.debit += amt;
-    else if (e.entry_type === "CREDIT") g.credit += amt;
 
-    const ledgerName = String(e.ledger_name || "").toLowerCase();
-    const groupName = String(e.account_group_name || "").toLowerCase();
-
-    const isCashOrBank =
-      ledgerName.includes("cash") ||
-      ledgerName.includes("bank") ||
-      ledgerName.includes("savings") ||
-      ledgerName.includes("deposit") ||
-      groupName.includes("cash") ||
-      groupName.includes("bank");
-
-    if (isCashOrBank) {
-      if (!g.cashBankAccount) g.cashBankAccount = e.ledger_name || "";
+    if (isCashOrBankLedger(e.ledger_name)) {
+      g.cashBankAccount = e.ledger_name || "";
+      g.amount = amt;
+      g.direction = e.entry_type;
     } else {
-      if (!g.particulars) g.particulars = e.ledger_name || "";
+      if (!g.particulars) {
+        g.particulars = e.ledger_name || "";
+      }
     }
 
     if (!g.narration && e.narration) g.narration = e.narration;
   });
 
+  // Fallbacks for older data or orphan rows
   return Array.from(groups.values()).map((g) => {
-    if (!g.particulars) {
-      const firstLedger = g._entries.find((x) => x.ledger_name);
-      g.particulars = firstLedger ? firstLedger.ledger_name : "—";
+    if (!g.cashBankAccount) {
+      const anyLedger = g._entries.find((x) => x.ledger_name);
+      g.cashBankAccount = anyLedger ? anyLedger.ledger_name : "—";
+
+      if (g.amount === 0 && g._entries[0]) {
+        g.amount = toNumber(g._entries[0].amount);
+        g.direction = g._entries[0].entry_type;
+      }
     }
-    if (!g.cashBankAccount) g.cashBankAccount = "—";
+
+    if (!g.particulars) {
+      const otherLedger = g._entries.find(
+        (x) => !isCashOrBankLedger(x.ledger_name) && x.ledger_name
+      );
+      g.particulars = otherLedger
+        ? otherLedger.ledger_name
+        : g._entries[0]?.ledger_name || "—";
+    }
+
     delete g._entries;
     return g;
   });
@@ -117,7 +143,7 @@ const BankBookPage = () => {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  const [openingBalance, setOpeningBalance] = useState(0);
+  const [openingBalance, setOpeningBalance] = useState(undefined);
 
   const [church, setChurch] = useState({
     name: "",
@@ -160,6 +186,8 @@ const BankBookPage = () => {
 
       if (typeof body.opening_balance === "number") {
         setOpeningBalance(body.opening_balance);
+      } else {
+        setOpeningBalance(undefined);
       }
 
       setRawEntries(data);
@@ -204,6 +232,23 @@ const BankBookPage = () => {
 
     return grouped;
   }, [rawEntries, search]);
+
+  // -------- Totals --------
+  const totals = useMemo(() => {
+    let moneyIn = 0;   // DEBIT  = money in
+    let moneyOut = 0;  // CREDIT = money out
+
+    rows.forEach((r) => {
+      if (r.direction === "DEBIT") moneyIn += r.amount;
+      else if (r.direction === "CREDIT") moneyOut += r.amount;
+    });
+
+    return {
+      moneyIn,
+      moneyOut,
+      net: moneyIn - moneyOut,
+    };
+  }, [rows]);
 
   const reset = () => {
     setSearch("");
@@ -329,7 +374,12 @@ const BankBookPage = () => {
               onReset={reset}
             />
 
-            <ReportLedgerTable rows={rows} isLoading={isLoading} />
+            <ReportLedgerTable
+              rows={rows}
+              isLoading={isLoading}
+              totals={totals}
+              showTotals
+            />
 
             <Text fontSize="11px" color={MUTED} mt={2} textAlign="right">
               Showing {rows.length} entries
@@ -382,6 +432,7 @@ const BankBookPage = () => {
           >
             <BankBookPrintView
               rows={rows}
+              totals={totals}
               date={dateFrom || new Date().toISOString().split("T")[0]}
               churchName={church.name}
               churchAddress={church.address}

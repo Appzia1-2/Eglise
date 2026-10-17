@@ -1,6 +1,6 @@
 // src/pages/reports/MemberLedgerPage.jsx
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Box,
@@ -29,6 +29,9 @@ const SECONDARY_TEXT = "#60708C";
 const BORDER_COLOR = "#DCE2EA";
 const BLUE = "#315AB5";
 
+// ------------------------------------------------------------
+// Icons
+// ------------------------------------------------------------
 const ArrowLeftIcon = ({ size = 15, color = PRIMARY_RED }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <path d="M19 12H5M12 19l-7-7 7-7" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -56,6 +59,19 @@ const ChevronDownIcon = ({ size = 14, color = SECONDARY_TEXT }) => (
   </svg>
 );
 
+const SearchIcon = ({ size = 14, color = SECONDARY_TEXT }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <circle cx="11" cy="11" r="7" stroke={color} strokeWidth="2" />
+    <path d="M21 21l-4.3-4.3" stroke={color} strokeWidth="2" strokeLinecap="round" />
+  </svg>
+);
+
+const CloseIcon = ({ size = 12, color = SECONDARY_TEXT }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <path d="M6 6l12 12M18 6L6 18" stroke={color} strokeWidth="2" strokeLinecap="round" />
+  </svg>
+);
+
 const CalendarIcon = ({ size = 16, color = BLUE }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <rect x="3.5" y="5" width="17" height="15" rx="2" stroke={color} strokeWidth="1.7" />
@@ -63,8 +79,11 @@ const CalendarIcon = ({ size = 16, color = BLUE }) => (
   </svg>
 );
 
+// ------------------------------------------------------------
+// Formatting helpers
+// ------------------------------------------------------------
 const formatCurrency = (n) =>
-  n == null
+  n == null || n === ""
     ? "—"
     : "₹" + Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2 });
 
@@ -85,6 +104,256 @@ const monthStart = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 };
 
+// ------------------------------------------------------------
+// Row normalizer — accepts both shapes:
+//   { debit, credit }                    (Member Ledger API)
+//   { amount, direction }                (Day/Cash/Bank/GL rows)
+// ------------------------------------------------------------
+const normalizeRow = (row) => {
+  // Already has explicit debit / credit → use them
+  const hasSplitFields =
+    row.debit !== undefined ||
+    row.credit !== undefined;
+
+  if (hasSplitFields) {
+    return {
+      ...row,
+      debit: Number(row.debit || 0),
+      credit: Number(row.credit || 0),
+    };
+  }
+
+  // Fallback: { amount, direction }
+  const amt = Number(row.amount || 0);
+  const dir = String(row.direction || "").toUpperCase();
+  return {
+    ...row,
+    debit: dir === "DEBIT" ? amt : 0,
+    credit: dir === "CREDIT" ? amt : 0,
+  };
+};
+
+// ------------------------------------------------------------
+// Searchable Member Picker
+// ------------------------------------------------------------
+const SearchableMemberPicker = ({
+  members,
+  value,
+  onChange,
+  placeholder = "Select member",
+  loading = false,
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef(null);
+  const inputRef = useRef(null);
+
+  const selectedMember = members.find(
+    (m) => String(m.id) === String(value)
+  );
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return members;
+    return members.filter((m) => {
+      const name = String(m.name || "").toLowerCase();
+      const family = String(m.family_name || "").toLowerCase();
+      const house = String(m.house_name || "").toLowerCase();
+      const phone = String(m.mobile_no || "").toLowerCase();
+      return (
+        name.includes(q) ||
+        family.includes(q) ||
+        house.includes(q) ||
+        phone.includes(q)
+      );
+    });
+  }, [members, query]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target)
+      ) {
+        setIsOpen(false);
+        setQuery("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  }, [isOpen]);
+
+  const handleSelect = (member) => {
+    onChange(String(member.id));
+    setIsOpen(false);
+    setQuery("");
+  };
+
+  const handleClear = (e) => {
+    e.stopPropagation();
+    onChange("");
+    setQuery("");
+  };
+
+  return (
+    <Box ref={containerRef} position="relative" w="100%">
+      {isOpen ? (
+        <Box position="relative">
+          <Box
+            position="absolute"
+            left="11px"
+            top="50%"
+            transform="translateY(-50%)"
+            pointerEvents="none"
+            zIndex={1}
+          >
+            <SearchIcon />
+          </Box>
+          <Input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search member..."
+            pl="34px"
+            pr="34px"
+            h="40px"
+            fontSize="12px"
+            borderColor={PRIMARY_RED}
+            borderRadius="6px"
+            bg="white"
+            _focus={{
+              borderColor: PRIMARY_RED,
+              boxShadow: `0 0 0 1px ${PRIMARY_RED}`,
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setIsOpen(false);
+                setQuery("");
+              } else if (e.key === "Enter" && filtered.length > 0) {
+                handleSelect(filtered[0]);
+              }
+            }}
+          />
+          <Box
+            position="absolute"
+            right="11px"
+            top="50%"
+            transform="translateY(-50%)"
+            cursor="pointer"
+            onClick={() => {
+              setIsOpen(false);
+              setQuery("");
+            }}
+            zIndex={1}
+          >
+            <CloseIcon />
+          </Box>
+        </Box>
+      ) : (
+        <Flex
+          onClick={() => !loading && setIsOpen(true)}
+          h="40px"
+          border={`1px solid ${BORDER_COLOR}`}
+          borderRadius="6px"
+          px="11px"
+          align="center"
+          justify="space-between"
+          cursor={loading ? "not-allowed" : "pointer"}
+          bg={loading ? "#F7F9FB" : "white"}
+          _hover={{ borderColor: loading ? BORDER_COLOR : SECONDARY_TEXT }}
+        >
+          <Text
+            fontSize="12px"
+            color={selectedMember ? TEXT_COLOR : SECONDARY_TEXT}
+            noOfLines={1}
+          >
+            {loading
+              ? "Loading members…"
+              : selectedMember?.name || placeholder}
+          </Text>
+          <HStack gap={1} flexShrink={0}>
+            {selectedMember && !loading && (
+              <Box
+                as="span"
+                onClick={handleClear}
+                cursor="pointer"
+                display="inline-flex"
+                alignItems="center"
+                _hover={{ opacity: 0.7 }}
+              >
+                <CloseIcon />
+              </Box>
+            )}
+            <ChevronDownIcon color={TEXT_COLOR} />
+          </HStack>
+        </Flex>
+      )}
+
+      {isOpen && (
+        <Box
+          position="absolute"
+          top="calc(100% + 4px)"
+          left={0}
+          right={0}
+          bg="white"
+          border={`1px solid ${BORDER_COLOR}`}
+          borderRadius="6px"
+          boxShadow="0 6px 20px rgba(0,0,0,0.12)"
+          maxH="280px"
+          overflowY="auto"
+          zIndex={30}
+        >
+          {filtered.length === 0 ? (
+            <Box px={3} py={2}>
+              <Text fontSize="12px" color={SECONDARY_TEXT}>
+                No members found
+              </Text>
+            </Box>
+          ) : (
+            filtered.map((m) => {
+              const isSelected = String(m.id) === String(value);
+              const meta = [m.family_name, m.house_name]
+                .filter(Boolean)
+                .join(" • ");
+              return (
+                <Box
+                  key={m.id}
+                  px={3}
+                  py={2}
+                  fontSize="12px"
+                  color={TEXT_COLOR}
+                  cursor="pointer"
+                  bg={isSelected ? "#FDF2F5" : "white"}
+                  _hover={{ bg: "#F7F9FB" }}
+                  onClick={() => handleSelect(m)}
+                >
+                  <Text fontWeight={isSelected ? "600" : "500"}>
+                    {m.name}
+                  </Text>
+                  {meta && (
+                    <Text fontSize="10px" color={SECONDARY_TEXT}>
+                      {meta}
+                    </Text>
+                  )}
+                </Box>
+              );
+            })
+          )}
+        </Box>
+      )}
+    </Box>
+  );
+};
+
+// ------------------------------------------------------------
+// Page
+// ------------------------------------------------------------
 const MemberLedgerPage = () => {
   const navigate = useNavigate();
 
@@ -95,7 +364,7 @@ const MemberLedgerPage = () => {
   const [dateTo, setDateTo] = useState(today());
 
   const [opening, setOpening] = useState(0);
-  const [rows, setRows] = useState([]);
+  const [rawRows, setRawRows] = useState([]);
   const [totals, setTotals] = useState({ credit: 0, debit: 0, closing: 0 });
 
   const [loading, setLoading] = useState(false);
@@ -104,7 +373,7 @@ const MemberLedgerPage = () => {
 
   const [printOpen, setPrintOpen] = useState(false);
 
-  // -------- load members + church once --------
+  // -------- Load members + church once --------
   useEffect(() => {
     const load = async () => {
       try {
@@ -129,7 +398,7 @@ const MemberLedgerPage = () => {
     load();
   }, []);
 
-  // -------- fetch report when filters change --------
+  // -------- Fetch report --------
   const fetchReport = async () => {
     if (!selectedMember) return;
     try {
@@ -142,7 +411,7 @@ const MemberLedgerPage = () => {
       });
       const data = res?.data ?? {};
       setOpening(Number(data.opening_balance || 0));
-      setRows(Array.isArray(data.rows) ? data.rows : []);
+      setRawRows(Array.isArray(data.rows) ? data.rows : []);
       setTotals({
         credit: Number(data?.totals?.credit || 0),
         debit: Number(data?.totals?.debit || 0),
@@ -151,7 +420,7 @@ const MemberLedgerPage = () => {
     } catch (err) {
       console.error("Member ledger fetch error:", err);
       setPageError("Unable to load member ledger.");
-      setRows([]);
+      setRawRows([]);
       setOpening(0);
       setTotals({ credit: 0, debit: 0, closing: 0 });
     } finally {
@@ -164,12 +433,15 @@ const MemberLedgerPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMember, dateFrom, dateTo]);
 
+  // Normalize rows so the table works regardless of API shape
+  const rows = useMemo(() => rawRows.map(normalizeRow), [rawRows]);
+
   const memberName =
     members.find((m) => String(m.id) === String(selectedMember))?.name || "";
 
   const periodLabel = `${formatDateShort(dateFrom)} – ${formatDateShort(dateTo)}`;
 
-  // -------- table --------
+  // -------- Table --------
   const LedgerTable = ({ forPrint = false }) => {
     const headerBg = forPrint ? "#F4D8DE" : "#F7F9FB";
     const headerColor = forPrint ? DARK_RED : TEXT_COLOR;
@@ -216,14 +488,25 @@ const MemberLedgerPage = () => {
             {/* OPENING BALANCE */}
             <Box as="tr" bg={forPrint ? "#FBE9ED" : "#F5F7FA"}>
               <Box as="td" colSpan={4} px={3} py={2}>
-                <Text fontWeight="600" color={forPrint ? DARK_RED : BLUE} fontSize={forPrint ? "11px" : "12px"}>
+                <Text
+                  fontWeight="600"
+                  color={forPrint ? DARK_RED : BLUE}
+                  fontSize={forPrint ? "11px" : "12px"}
+                >
                   Opening Balance
                 </Text>
               </Box>
               <Box as="td" textAlign="right" px={3} py={2}>
                 <Text color={SECONDARY_TEXT}>—</Text>
               </Box>
-              <Box as="td" textAlign="right" px={3} py={2} color={forPrint ? DARK_RED : BLUE} fontWeight="700">
+              <Box
+                as="td"
+                textAlign="right"
+                px={3}
+                py={2}
+                color={forPrint ? DARK_RED : BLUE}
+                fontWeight="700"
+              >
                 {formatCurrency(opening)}
               </Box>
             </Box>
@@ -232,7 +515,7 @@ const MemberLedgerPage = () => {
             {rows.map((row, idx) => (
               <Box
                 as="tr"
-                key={row.id}
+                key={row.id ?? idx}
                 bg={idx % 2 === 1 ? stripeBg : "white"}
                 borderBottom={`1px solid ${rowBorder}`}
               >
@@ -240,13 +523,13 @@ const MemberLedgerPage = () => {
                   {formatDateShort(row.date)}
                 </Box>
                 <Box as="td" px={3} py={2} color={TEXT_COLOR}>
-                  {row.voucher}
+                  {row.voucher || "—"}
                 </Box>
                 <Box as="td" px={3} py={2} color={forPrint ? DARK_RED : BLUE}>
-                  {row.ledger_name}
+                  {row.ledger_name || "—"}
                 </Box>
                 <Box as="td" px={3} py={2} color={TEXT_COLOR}>
-                  {row.cash_bank}
+                  {row.cash_bank || "—"}
                 </Box>
                 <Box as="td" px={3} py={2} textAlign="right" color={TEXT_COLOR}>
                   {row.credit ? formatCurrency(row.credit) : "—"}
@@ -264,14 +547,32 @@ const MemberLedgerPage = () => {
               borderTop={`1px solid ${rowBorder}`}
             >
               <Box as="td" colSpan={4} px={3} py={2.5} textAlign="right">
-                <Text fontWeight="700" color={forPrint ? DARK_RED : BLUE} fontSize={forPrint ? "11px" : "12px"}>
+                <Text
+                  fontWeight="700"
+                  color={forPrint ? DARK_RED : BLUE}
+                  fontSize={forPrint ? "11px" : "12px"}
+                >
                   Total
                 </Text>
               </Box>
-              <Box as="td" textAlign="right" px={3} py={2.5} fontWeight="700" color={forPrint ? DARK_RED : BLUE}>
+              <Box
+                as="td"
+                textAlign="right"
+                px={3}
+                py={2.5}
+                fontWeight="700"
+                color={forPrint ? DARK_RED : BLUE}
+              >
                 {formatCurrency(totals.credit)}
               </Box>
-              <Box as="td" textAlign="right" px={3} py={2.5} fontWeight="700" color={forPrint ? DARK_RED : BLUE}>
+              <Box
+                as="td"
+                textAlign="right"
+                px={3}
+                py={2.5}
+                fontWeight="700"
+                color={forPrint ? DARK_RED : BLUE}
+              >
                 {formatCurrency(totals.debit)}
               </Box>
             </Box>
@@ -283,14 +584,25 @@ const MemberLedgerPage = () => {
               borderTop={`1px solid ${rowBorder}`}
             >
               <Box as="td" colSpan={4} px={3} py={2.5} textAlign="right">
-                <Text fontWeight="700" color={forPrint ? DARK_RED : BLUE} fontSize={forPrint ? "11px" : "12px"}>
+                <Text
+                  fontWeight="700"
+                  color={forPrint ? DARK_RED : BLUE}
+                  fontSize={forPrint ? "11px" : "12px"}
+                >
                   Closing Balance
                 </Text>
               </Box>
               <Box as="td" textAlign="right" px={3} py={2.5}>
                 <Text color={SECONDARY_TEXT}>—</Text>
               </Box>
-              <Box as="td" textAlign="right" px={3} py={2.5} fontWeight="700" color={forPrint ? DARK_RED : BLUE}>
+              <Box
+                as="td"
+                textAlign="right"
+                px={3}
+                py={2.5}
+                fontWeight="700"
+                color={forPrint ? DARK_RED : BLUE}
+              >
                 {formatCurrency(totals.closing)}
               </Box>
             </Box>
@@ -306,103 +618,242 @@ const MemberLedgerPage = () => {
 
       <Container maxW="1400px" px={{ base: 4, md: 5 }} py={4} flex="1">
         <HStack gap={2} mb={2} fontSize="12px">
-          <Text color={BLUE} cursor="pointer" onClick={() => navigate("/reports")}>Reports</Text>
+          <Text color={BLUE} cursor="pointer" onClick={() => navigate("/reports")}>
+            Reports
+          </Text>
           <Text color="#A2ACBB">/</Text>
           <Text color={SECONDARY_TEXT}>Member Ledger</Text>
         </HStack>
 
-        <Flex justify="space-between" align={{ base: "stretch", md: "center" }} direction={{ base: "column", md: "row" }} gap={4} mb={4}>
+        <Flex
+          justify="space-between"
+          align={{ base: "stretch", md: "center" }}
+          direction={{ base: "column", md: "row" }}
+          gap={4}
+          mb={4}
+        >
           <Box>
-            <Text fontSize="11px" fontWeight="700" color={PRIMARY_RED} letterSpacing="0.4px" mb={1}>MEMBER LEDGER REPORT</Text>
-            <Heading color={TEXT_COLOR} fontSize={{ base: "22px", md: "26px" }} mb={1}>Member Ledger</Heading>
-            <Text color={SECONDARY_TEXT} fontSize="12px">View transactions for an individual member account.</Text>
+            <Text
+              fontSize="11px"
+              fontWeight="700"
+              color={PRIMARY_RED}
+              letterSpacing="0.4px"
+              mb={1}
+            >
+              MEMBER LEDGER REPORT
+            </Text>
+            <Heading
+              color={TEXT_COLOR}
+              fontSize={{ base: "22px", md: "26px" }}
+              mb={1}
+            >
+              Member Ledger
+            </Heading>
+            <Text color={SECONDARY_TEXT} fontSize="12px">
+              View transactions for an individual member account.
+            </Text>
           </Box>
 
           <HStack gap={3} flexWrap="wrap">
-            <Button variant="outline" h="40px" px={5} borderColor={PRIMARY_RED} color={PRIMARY_RED} borderRadius="6px" fontSize="12px" fontWeight="600" onClick={() => navigate("/reports")} _hover={{ bg: "#FFF5F7" }} leftIcon={<ArrowLeftIcon />}>Back</Button>
-            <Button variant="outline" h="40px" px={5} borderColor={PRIMARY_RED} color={PRIMARY_RED} borderRadius="6px" fontSize="12px" fontWeight="600" onClick={() => setPrintOpen(true)} _hover={{ bg: "#FFF5F7" }} leftIcon={<PrinterIcon />}>Print</Button>
-            <Button variant="outline" h="40px" px={5} borderColor={PRIMARY_RED} color={PRIMARY_RED} borderRadius="6px" fontSize="12px" fontWeight="600" onClick={() => setPrintOpen(true)} _hover={{ bg: "#FFF5F7" }} leftIcon={<FilePdfIcon />}>Generate PDF</Button>
+            <Button
+              variant="outline"
+              h="40px"
+              px={5}
+              borderColor={PRIMARY_RED}
+              color={PRIMARY_RED}
+              borderRadius="6px"
+              fontSize="12px"
+              fontWeight="600"
+              onClick={() => navigate("/reports")}
+              _hover={{ bg: "#FFF5F7" }}
+              leftIcon={<ArrowLeftIcon />}
+            >
+              Back
+            </Button>
+            <Button
+              variant="outline"
+              h="40px"
+              px={5}
+              borderColor={PRIMARY_RED}
+              color={PRIMARY_RED}
+              borderRadius="6px"
+              fontSize="12px"
+              fontWeight="600"
+              onClick={() => setPrintOpen(true)}
+              _hover={{ bg: "#FFF5F7" }}
+              leftIcon={<PrinterIcon />}
+            >
+              Print
+            </Button>
+            <Button
+              variant="outline"
+              h="40px"
+              px={5}
+              borderColor={PRIMARY_RED}
+              color={PRIMARY_RED}
+              borderRadius="6px"
+              fontSize="12px"
+              fontWeight="600"
+              onClick={() => setPrintOpen(true)}
+              _hover={{ bg: "#FFF5F7" }}
+              leftIcon={<FilePdfIcon />}
+            >
+              Generate PDF
+            </Button>
           </HStack>
         </Flex>
 
         {/* FILTERS */}
-        <Box border={`1px solid ${BORDER_COLOR}`} borderRadius="10px" px={{ base: 4, md: 5 }} py={4} mb={4} bg="white">
-          <Flex gap={4} direction={{ base: "column", lg: "row" }} align={{ base: "stretch", lg: "flex-end" }} wrap="wrap">
+        <Box
+          border={`1px solid ${BORDER_COLOR}`}
+          borderRadius="10px"
+          px={{ base: 4, md: 5 }}
+          py={4}
+          mb={4}
+          bg="white"
+        >
+          <Flex
+            gap={4}
+            direction={{ base: "column", lg: "row" }}
+            align={{ base: "stretch", lg: "flex-end" }}
+            wrap="wrap"
+          >
             <Box flex="1" minW="220px">
-              <Text fontSize="10px" fontWeight="600" color={TEXT_COLOR} mb={1}>Member Name</Text>
+              <Text fontSize="10px" fontWeight="600" color={TEXT_COLOR} mb={1}>
+                Member Name
+              </Text>
+              <SearchableMemberPicker
+                members={members}
+                value={selectedMember}
+                onChange={setSelectedMember}
+                placeholder="Select member"
+                loading={optionsLoading}
+              />
+            </Box>
+
+            <Box flex="1" minW="180px">
+              <Text fontSize="10px" fontWeight="600" color={TEXT_COLOR} mb={1}>
+                Date From
+              </Text>
               <Box position="relative">
-                <Box
-                  as="select"
-                  value={selectedMember}
-                  onChange={(e) => setSelectedMember(e.target.value)}
-                  width="100%"
-                  height="40px"
+                <Input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  h="40px"
                   fontSize="12px"
-                  color={TEXT_COLOR}
-                  border={`1px solid ${BORDER_COLOR}`}
+                  borderColor={BORDER_COLOR}
                   borderRadius="6px"
-                  bg="white"
-                  appearance="none"
-                  px="11px"
-                  outline="none"
-                  cursor="pointer"
+                  color={TEXT_COLOR}
+                />
+                <Box
+                  position="absolute"
+                  right="12px"
+                  top="50%"
+                  transform="translateY(-50%)"
+                  pointerEvents="none"
                 >
-                  {optionsLoading ? (
-                    <option>Loading…</option>
-                  ) : members.length === 0 ? (
-                    <option>No members</option>
-                  ) : (
-                    members.map((m) => (
-                      <option key={m.id} value={m.id}>{m.name}</option>
-                    ))
-                  )}
+                  <CalendarIcon />
                 </Box>
-                <Box position="absolute" right="12px" top="50%" transform="translateY(-50%)" pointerEvents="none"><ChevronDownIcon /></Box>
               </Box>
             </Box>
 
             <Box flex="1" minW="180px">
-              <Text fontSize="10px" fontWeight="600" color={TEXT_COLOR} mb={1}>Date From</Text>
+              <Text fontSize="10px" fontWeight="600" color={TEXT_COLOR} mb={1}>
+                Date To
+              </Text>
               <Box position="relative">
-                <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} h="40px" fontSize="12px" borderColor={BORDER_COLOR} borderRadius="6px" color={TEXT_COLOR} />
-                <Box position="absolute" right="12px" top="50%" transform="translateY(-50%)" pointerEvents="none"><CalendarIcon /></Box>
-              </Box>
-            </Box>
-
-            <Box flex="1" minW="180px">
-              <Text fontSize="10px" fontWeight="600" color={TEXT_COLOR} mb={1}>Date To</Text>
-              <Box position="relative">
-                <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} h="40px" fontSize="12px" borderColor={BORDER_COLOR} borderRadius="6px" color={TEXT_COLOR} />
-                <Box position="absolute" right="12px" top="50%" transform="translateY(-50%)" pointerEvents="none"><CalendarIcon /></Box>
+                <Input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  h="40px"
+                  fontSize="12px"
+                  borderColor={BORDER_COLOR}
+                  borderRadius="6px"
+                  color={TEXT_COLOR}
+                />
+                <Box
+                  position="absolute"
+                  right="12px"
+                  top="50%"
+                  transform="translateY(-50%)"
+                  pointerEvents="none"
+                >
+                  <CalendarIcon />
+                </Box>
               </Box>
             </Box>
 
             <Box flexShrink={0}>
-              <Button h="40px" px={10} bg="white" border={`1px solid ${PRIMARY_RED}`} color={PRIMARY_RED} fontSize="12px" fontWeight="600" borderRadius="6px" onClick={fetchReport} _hover={{ bg: "#FFF5F7" }}>Filter</Button>
+              <Button
+                h="40px"
+                px={10}
+                bg="white"
+                border={`1px solid ${PRIMARY_RED}`}
+                color={PRIMARY_RED}
+                fontSize="12px"
+                fontWeight="600"
+                borderRadius="6px"
+                onClick={fetchReport}
+                _hover={{ bg: "#FFF5F7" }}
+              >
+                Filter
+              </Button>
             </Box>
           </Flex>
         </Box>
 
         {pageError && (
-          <Box mb={4} p={3} borderRadius="6px" bg="#FFF5F5" border="1px solid #FED7D7">
-            <Text color="red.600" fontSize="12px">{pageError}</Text>
+          <Box
+            mb={4}
+            p={3}
+            borderRadius="6px"
+            bg="#FFF5F5"
+            border="1px solid #FED7D7"
+          >
+            <Text color="red.600" fontSize="12px">
+              {pageError}
+            </Text>
           </Box>
         )}
 
         {loading ? (
-          <Box border={`1px solid ${BORDER_COLOR}`} borderRadius="10px" py={14} textAlign="center">
-            <Text color={SECONDARY_TEXT} fontSize="12px">Loading member ledger…</Text>
+          <Box
+            border={`1px solid ${BORDER_COLOR}`}
+            borderRadius="10px"
+            py={14}
+            textAlign="center"
+          >
+            <Text color={SECONDARY_TEXT} fontSize="12px">
+              Loading member ledger…
+            </Text>
           </Box>
         ) : rows.length === 0 ? (
-          <Box border={`1px solid ${BORDER_COLOR}`} borderRadius="10px" py={14} textAlign="center">
-            <Text color={TEXT_COLOR} fontSize="15px" fontWeight="600">No transactions found</Text>
-            <Text color={SECONDARY_TEXT} fontSize="12px" mt={1}>This member has no receipts in the selected period.</Text>
+          <Box
+            border={`1px solid ${BORDER_COLOR}`}
+            borderRadius="10px"
+            py={14}
+            textAlign="center"
+          >
+            <Text color={TEXT_COLOR} fontSize="15px" fontWeight="600">
+              No transactions found
+            </Text>
+            <Text color={SECONDARY_TEXT} fontSize="12px" mt={1}>
+              This member has no receipts in the selected period.
+            </Text>
           </Box>
         ) : (
           <LedgerTable />
         )}
 
-        <Flex mt={4} justify="space-between" align="center" direction={{ base: "column", md: "row" }} gap={2}>
+        <Flex
+          mt={4}
+          justify="space-between"
+          align="center"
+          direction={{ base: "column", md: "row" }}
+          gap={2}
+        >
           <Text color={SECONDARY_TEXT} fontSize="12px">
             Showing 1–{rows.length} of {rows.length} records
           </Text>
@@ -418,9 +869,17 @@ const MemberLedgerPage = () => {
         church={church}
         subtitle={
           <>
-            <Text as="span" fontWeight="700">Member Name:</Text> {memberName}
-            <Box as="span" mx={3}>•</Box>
-            <Text as="span" fontWeight="700">Period:</Text> {periodLabel}
+            <Text as="span" fontWeight="700">
+              Member Name:
+            </Text>{" "}
+            {memberName}
+            <Box as="span" mx={3}>
+              •
+            </Box>
+            <Text as="span" fontWeight="700">
+              Period:
+            </Text>{" "}
+            {periodLabel}
           </>
         }
       >

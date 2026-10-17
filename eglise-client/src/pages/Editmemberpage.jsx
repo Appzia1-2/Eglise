@@ -489,10 +489,6 @@ const ChangeHeadModal = ({
             </Center>
           ) : availableHeads.length ===
             0 ? (
-            /* =================================================
-               CHAKRA UI V3 ALERT
-            ================================================= */
-
             <Alert.Root
               status="warning"
               borderRadius="6px"
@@ -505,9 +501,9 @@ const ChangeHeadModal = ({
                 <Alert.Description
                   fontSize="12px"
                 >
-                  No active family heads
-                  available to transfer
-                  to.
+                  No other active family
+                  heads available to
+                  transfer to.
                 </Alert.Description>
               </Alert.Content>
             </Alert.Root>
@@ -717,9 +713,17 @@ const EditMemberPage = () => {
         )
       );
 
-      setAvailableHeads(
-        getArrayData(headsResponse)
+      // Filter out the current family head — no point
+      // offering them as a transfer target
+      const allHeads = getArrayData(
+        headsResponse
       );
+      const otherHeads = allHeads.filter(
+        (h) =>
+          String(h.id) !== String(headId)
+      );
+
+      setAvailableHeads(otherHeads);
     } catch (error) {
       console.error(
         "Error fetching dependent data:",
@@ -832,9 +836,18 @@ const EditMemberPage = () => {
           "Marital status is required"
         ),
 
-      dob: Yup.string().required(
-        "Date of birth is required"
-      ),
+      // ✅ DOB is required and must be a valid, non-future date
+      dob: Yup.date()
+        .typeError(
+          "Date of birth is required"
+        )
+        .max(
+          new Date(),
+          "Date of birth cannot be in the future"
+        )
+        .required(
+          "Date of birth is required"
+        ),
 
       email: Yup.string().email(
         "Enter a valid email address"
@@ -1564,7 +1577,7 @@ const EditMemberPage = () => {
                 validationSchema
               }
               validateOnBlur={true}
-              validateOnChange={false}
+              validateOnChange={true}
               onSubmit={handleSubmit}
             >
               {({
@@ -1923,7 +1936,7 @@ const EditMemberPage = () => {
                         }
                       />
 
-                      {/* DOB */}
+                      {/* DOB — REQUIRED */}
 
                       <FormField
                         label="Date of Birth"

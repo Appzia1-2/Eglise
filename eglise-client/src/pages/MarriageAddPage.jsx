@@ -254,64 +254,6 @@ const FormTextarea = ({
 );
 
 /* ============================================================
-   PHONE INPUT
-============================================================ */
-
-const PhoneInput = ({
-  label,
-  name,
-  value,
-  onChange,
-  required = false,
-  placeholder = "",
-  disabled = false,
-  error = "",
-}) => (
-  <Box>
-    <Text {...labelProps}>
-      {label}
-      {required && (
-        <Text as="span" color="#E00000" ml="2px">
-          *
-        </Text>
-      )}
-    </Text>
-
-    <Flex gap="7px">
-      <Box as="select" w="70px" {...inputProps} px="6px" disabled>
-        <option>+91</option>
-      </Box>
-
-      <Box
-        as="input"
-        name={name}
-        type="tel"
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        disabled={disabled}
-        flex="1"
-        {...inputProps}
-        bg={disabled ? "#F3F5F8" : "white"}
-        cursor={disabled ? "not-allowed" : "text"}
-        borderColor={error ? "#F3C4C4" : "#CBD5E1"}
-        _focus={
-          error
-            ? {
-                borderColor: "#F3C4C4",
-                boxShadow: "0 0 0 1px #F3C4C4",
-              }
-            : {
-                borderColor: "#3974D8",
-                boxShadow: "0 0 0 1px #3974D8",
-              }
-        }
-      />
-    </Flex>
-  </Box>
-);
-
-/* ============================================================
    INITIAL FORM
 ============================================================ */
 
@@ -360,7 +302,7 @@ const initialForm = {
 };
 
 /* ============================================================
-   FIELD LABELS (for toast messages)
+   FIELD LABELS
 ============================================================ */
 
 const FIELD_LABELS = {
@@ -525,10 +467,6 @@ const MarriageAddPage = () => {
   const isAddBride = formData.marriage_type === "ADD_BRIDE";
   const isTransferBride = formData.marriage_type === "TRANSFER_BRIDE";
 
-  const groomIsInternal =
-    formData.groom_is_internal === true ||
-    formData.groom_is_internal === "true";
-
   const brideIsInternal =
     formData.bride_is_internal === true ||
     formData.bride_is_internal === "true";
@@ -581,27 +519,6 @@ const MarriageAddPage = () => {
       bride_father: "",
       bride_mother: "",
       bride_address: "",
-    }));
-
-    setFieldErrors({});
-  };
-
-  const handleGroomTypeChange = (event) => {
-    const value = event.target.value;
-    const boolValue = value === "true" || value === true;
-
-    setFormData((prev) => ({
-      ...prev,
-      groom_is_internal: boolValue,
-      groom_family: "",
-      groom_member: "",
-      groom_name: "",
-      groom_dob: "",
-      groom_house_name: "",
-      groom_family_name: "",
-      groom_address: "",
-      groom_father: "",
-      groom_mother: "",
     }));
 
     setFieldErrors({});
@@ -682,10 +599,11 @@ const MarriageAddPage = () => {
 
     // TRANSFER_BRIDE
     if (isTransferBride) {
-      const fields = [
+      return [
         ...common,
         "bride_family",
         "bride_member",
+        "groom_name",
         "bride_father",
         "bride_mother",
         "transfer_to",
@@ -695,14 +613,6 @@ const MarriageAddPage = () => {
         "groom_nationality",
         "bride_nationality",
       ];
-
-      if (groomIsInternal) {
-        fields.push("groom_family", "groom_member");
-      } else {
-        fields.push("groom_name");
-      }
-
-      return fields;
     }
 
     return common;
@@ -732,32 +642,22 @@ const MarriageAddPage = () => {
 
   /* ==========================================================
      BUILD PAYLOAD
-     — Only send fields that exist on the Marriage model.
-     — Text fields → "" (never null).
-     — FK fields → null when empty.
-     — Date fields → null when empty.
   ========================================================== */
 
   const buildPayload = () => {
+    const toNumberOrNull = (val) => {
+      if (!val) return null;
+      const num = Number(val);
+      return isNaN(num) ? null : num;
+    };
+
     const payload = {
       marriage_type: formData.marriage_type,
       date: formData.date,
 
-      // Nullable FK fields
-      groom_family: formData.groom_family
-        ? Number(formData.groom_family)
-        : null,
-      groom_member: formData.groom_member
-        ? Number(formData.groom_member)
-        : null,
-      bride_family: formData.bride_family
-        ? Number(formData.bride_family)
-        : null,
-      bride_member: formData.bride_member
-        ? Number(formData.bride_member)
-        : null,
+      groom_member: toNumberOrNull(formData.groom_member),
+      bride_member: toNumberOrNull(formData.bride_member),
 
-      // Groom text fields — "" not null
       groom_name: formData.groom_name || "",
       groom_house_name: formData.groom_house_name || "",
       groom_family_name: formData.groom_family_name || "",
@@ -765,17 +665,14 @@ const MarriageAddPage = () => {
       groom_father: formData.groom_father || "",
       groom_mother: formData.groom_mother || "",
 
-      // Bride text fields
       bride_name: formData.bride_name || "",
       bride_address: formData.bride_address || "",
       bride_father: formData.bride_father || "",
       bride_mother: formData.bride_mother || "",
 
-      // Nationalities — backend field names differ!
       nationality_of_groom: formData.groom_nationality || "",
       nationality_of_bride: formData.bride_nationality || "",
 
-      // Witness / minister / remarks
       witness_groom_side: formData.witness_groom_side || "",
       witness_bride_side: formData.witness_bride_side || "",
       minister_of_marriage: formData.minister_of_marriage || "",
@@ -783,28 +680,29 @@ const MarriageAddPage = () => {
       transfer_to: formData.transfer_to || "",
       remarks: formData.remarks || "",
 
-      // Dates — null is OK
       groom_dob: formData.groom_dob || null,
       bride_dob: formData.bride_dob || null,
 
-      // Booleans
-      bride_is_internal: formData.bride_is_internal,
-      groom_is_internal: formData.groom_is_internal,
+      bride_is_internal: Boolean(formData.bride_is_internal),
+      groom_is_internal: true, // Hardcoded since we removed the dropdown
     };
 
-    // Confession dates — only for TRANSFER_BRIDE
     if (isTransferBride) {
-      payload.groom_confession_date =
-        formData.groom_confession_date || null;
-      payload.bride_confession_date =
-        formData.bride_confession_date || null;
+      payload.groom_confession_date = formData.groom_confession_date || null;
+      payload.bride_confession_date = formData.bride_confession_date || null;
     }
 
-    // Relationship with main member — only for ADD_BRIDE internal bride
     if (isAddBride && brideIsInternal && formData.relationship) {
-      payload.relation_of_bride_with_main_member = Number(
+      payload.relation_of_bride_with_main_member = toNumberOrNull(
         formData.relationship
       );
+    }
+
+    if (formData.groom_family) {
+      payload.groom_family = toNumberOrNull(formData.groom_family);
+    }
+    if (formData.bride_family) {
+      payload.bride_family = toNumberOrNull(formData.bride_family);
     }
 
     return payload;
@@ -1479,7 +1377,7 @@ const MarriageAddPage = () => {
             )}
 
             {/* =================================================
-                TRANSFER BRIDE
+                TRANSFER BRIDE (SIMPLIFIED - NO INTERNAL/EXTERNAL)
             ================================================= */}
             {isTransferBride && (
               <>
@@ -1516,97 +1414,16 @@ const MarriageAddPage = () => {
                     }
                   />
 
-                  <FormSelect
-                    label="Groom Type"
-                    name="groom_is_internal"
-                    value={String(formData.groom_is_internal)}
-                    onChange={handleGroomTypeChange}
+                  <FormField
+                    label="Groom's Full Name"
+                    name="groom_name"
+                    value={formData.groom_name}
+                    onChange={handleChange}
                     required
-                    error={fieldErrors.groom_is_internal}
-                    options={[
-                      {
-                        value: "true",
-                        label: "Internal Groom (Church Member)",
-                      },
-                      {
-                        value: "false",
-                        label: "External Groom (Non-Member)",
-                      },
-                    ]}
-                    placeholder="Select groom type"
+                    error={fieldErrors.groom_name}
+                    placeholder="Enter groom's full name"
                   />
                 </SimpleGrid>
-
-                {groomIsInternal ? (
-                  <SimpleGrid
-                    columns={{ base: 1, md: 2, lg: 3 }}
-                    columnGap={{ base: "14px", md: "24px" }}
-                    rowGap="7px"
-                    mb="7px"
-                  >
-                    <FormSelect
-                      label="Groom's Family"
-                      name="groom_family"
-                      value={formData.groom_family}
-                      onChange={handleGroomFamilyChange}
-                      required
-                      error={fieldErrors.groom_family}
-                      options={familyOptions}
-                      placeholder="Select groom's family"
-                    />
-
-                    <FormSelect
-                      label="Select Groom"
-                      name="groom_member"
-                      value={formData.groom_member}
-                      onChange={handleChange}
-                      required
-                      disabled={!formData.groom_family}
-                      error={fieldErrors.groom_member}
-                      options={groomOptions}
-                      placeholder={
-                        formData.groom_family
-                          ? "Select groom (SINGLE, WIDOWED, DIVORCED)"
-                          : "Select family first"
-                      }
-                    />
-                  </SimpleGrid>
-                ) : (
-                  <SimpleGrid
-                    columns={{ base: 1, md: 2, lg: 3 }}
-                    columnGap={{ base: "14px", md: "24px" }}
-                    rowGap="7px"
-                    mb="7px"
-                  >
-                    <FormField
-                      label="Groom Full Name"
-                      name="groom_name"
-                      value={formData.groom_name}
-                      onChange={handleChange}
-                      required
-                      error={fieldErrors.groom_name}
-                      placeholder="Enter groom's full name"
-                    />
-
-                    <FormField
-                      label="Groom Date of Birth"
-                      name="groom_dob"
-                      type="date"
-                      value={formData.groom_dob}
-                      onChange={handleChange}
-                      error={fieldErrors.groom_dob}
-                    />
-
-                    <FormField
-                      label="Groom House Name"
-                      name="groom_house_name"
-                      value={formData.groom_house_name}
-                      onChange={handleChange}
-                      error={fieldErrors.groom_house_name}
-                      placeholder="Enter house name"
-                    />
-                  </SimpleGrid>
-                )}
 
                 <SimpleGrid
                   columns={{ base: 1, md: 2, lg: 3 }}
@@ -1621,7 +1438,7 @@ const MarriageAddPage = () => {
                     onChange={handleChange}
                     required
                     error={fieldErrors.transfer_to}
-                    placeholder="Enter parish name"
+                    placeholder="Enter destination parish name"
                   />
 
                   <FormField
@@ -1634,16 +1451,14 @@ const MarriageAddPage = () => {
                     placeholder="Enter vicar name"
                   />
 
-                  {!groomIsInternal && (
-                    <FormField
-                      label="Groom Address"
-                      name="groom_address"
-                      value={formData.groom_address}
-                      onChange={handleChange}
-                      error={fieldErrors.groom_address}
-                      placeholder="Enter groom address"
-                    />
-                  )}
+                  <FormField
+                    label="Groom's House Name"
+                    name="groom_house_name"
+                    value={formData.groom_house_name}
+                    onChange={handleChange}
+                    error={fieldErrors.groom_house_name}
+                    placeholder="Enter groom's house name"
+                  />
                 </SimpleGrid>
 
                 <SimpleGrid
@@ -1671,6 +1486,16 @@ const MarriageAddPage = () => {
                     required
                     error={fieldErrors.bride_confession_date}
                   />
+
+                  <FormField
+                    label="Bride Father Name"
+                    name="bride_father"
+                    value={formData.bride_father}
+                    onChange={handleChange}
+                    required
+                    error={fieldErrors.bride_father}
+                    placeholder="Enter bride father name"
+                  />
                 </SimpleGrid>
 
                 <SimpleGrid
@@ -1679,6 +1504,16 @@ const MarriageAddPage = () => {
                   rowGap="7px"
                   mb="7px"
                 >
+                  <FormField
+                    label="Bride Mother Name"
+                    name="bride_mother"
+                    value={formData.bride_mother}
+                    onChange={handleChange}
+                    required
+                    error={fieldErrors.bride_mother}
+                    placeholder="Enter bride mother name"
+                  />
+
                   <FormField
                     label="Groom Nationality"
                     name="groom_nationality"
@@ -1697,55 +1532,6 @@ const MarriageAddPage = () => {
                     required
                     error={fieldErrors.bride_nationality}
                     placeholder="Enter bride nationality"
-                  />
-
-                  {!groomIsInternal && (
-                    <FormField
-                      label="Groom Father Name"
-                      name="groom_father"
-                      value={formData.groom_father}
-                      onChange={handleChange}
-                      error={fieldErrors.groom_father}
-                      placeholder="Enter groom father name"
-                    />
-                  )}
-                </SimpleGrid>
-
-                <SimpleGrid
-                  columns={{ base: 1, md: 2, lg: 3 }}
-                  columnGap={{ base: "14px", md: "24px" }}
-                  rowGap="7px"
-                  mb="7px"
-                >
-                  {!groomIsInternal && (
-                    <FormField
-                      label="Groom Mother Name"
-                      name="groom_mother"
-                      value={formData.groom_mother}
-                      onChange={handleChange}
-                      error={fieldErrors.groom_mother}
-                      placeholder="Enter groom mother name"
-                    />
-                  )}
-
-                  <FormField
-                    label="Bride Father Name"
-                    name="bride_father"
-                    value={formData.bride_father}
-                    onChange={handleChange}
-                    required
-                    error={fieldErrors.bride_father}
-                    placeholder="Enter bride father name"
-                  />
-
-                  <FormField
-                    label="Bride Mother Name"
-                    name="bride_mother"
-                    value={formData.bride_mother}
-                    onChange={handleChange}
-                    required
-                    error={fieldErrors.bride_mother}
-                    placeholder="Enter bride mother name"
                   />
                 </SimpleGrid>
 

@@ -6,6 +6,7 @@ import { LuFileDown, LuPrinter } from "react-icons/lu";
 
 import CertificateShell from "./CertificateShell";
 import { pick } from "./reportConfig";
+import { getMyChurch } from "../../api/registryServices"; // ✅ Import API
 
 // ============================================================
 // INJECTED STYLES — same as BaptismRegisterPrintModal
@@ -380,7 +381,7 @@ const dobTriplet = (dateString) => {
 // CERTIFICATE BODY
 // ============================================================
 
-const CertificateBody = ({ r, printRef }) => {
+const CertificateBody = ({ r, printRef, churchData }) => {
   // ---------------- DATA ----------------
 
   const childName = safe(
@@ -431,16 +432,20 @@ const CertificateBody = ({ r, printRef }) => {
   const registerNumber = safe(pick(r, ["register_number", "reg_no"], null));
   const slNo = safe(pick(r, ["id", "sl_no", "serial_number"], null));
 
+  // ✅ ROBUST FALLBACKS FOR PARISH & DIOCESE
   const churchName = safe(
-    pick(r, ["church_name", "parish_name", "parish"], null)
+    pick(r, ["church_name", "parish_name", "parish"], null) ||
+    churchData.name
   );
 
   const churchCity = safe(
-    pick(r, ["church_city", "city", "place"], null)
+    pick(r, ["church_city", "city", "place"], null) ||
+    churchData.city
   );
 
   const dioceseName = safe(
-    pick(r, ["diocese_name", "diocese"], null)
+    pick(r, ["diocese_name", "diocese"], null) ||
+    churchData.diocese
   );
 
   // ---------------- RENDER ----------------
@@ -648,6 +653,32 @@ const CertificateBody = ({ r, printRef }) => {
 const BaptismCertificatePage = () => {
   const [printRef, setPrintRef] = useState(null);
 
+  // ✅ NEW: State to hold fetched church data
+  const [churchData, setChurchData] = useState({
+    name: "",
+    city: "",
+    diocese: "",
+  });
+
+  // ✅ NEW: Fetch Church & Diocese details on mount
+  useEffect(() => {
+    const fetchChurchInfo = async () => {
+      try {
+        const res = await getMyChurch();
+        const c = res?.data ?? res ?? {};
+        setChurchData({
+          name: c.name || "",
+          city: c.city || "",
+          diocese: c.diocese?.name || c.diocese_name || "",
+        });
+      } catch (err) {
+        console.error("Failed to fetch church info for print:", err);
+      }
+    };
+
+    fetchChurchInfo();
+  }, []);
+
   // Inject the A4 certificate CSS once
   useEffect(() => {
     let tag = document.getElementById("baptism-report-cert-styles");
@@ -780,7 +811,7 @@ const BaptismCertificatePage = () => {
           </Flex>
 
           {/* CERTIFICATE */}
-          <CertificateBody r={r} printRef={setPrintRef} />
+          <CertificateBody r={r} printRef={setPrintRef} churchData={churchData} />
         </Box>
       )}
     </CertificateShell>

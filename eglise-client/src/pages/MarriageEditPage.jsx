@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import {
@@ -18,14 +18,11 @@ import {
 import {
   LuSave,
   LuUser,
-  LuMapPin,
-  LuPhone,
   LuChurch,
   LuCalendarDays,
   LuPencil,
   LuUsers,
   LuHeart,
-  LuArrowLeft,
 } from "react-icons/lu";
 
 import Navbar from "../components/Navbar";
@@ -610,7 +607,6 @@ const MarriageEditPage = () => {
   const type = formData.marriage_type || "ADD_BRIDE";
   const selectedGroomFamily = formData.groom_family;
   const selectedBrideFamily = formData.bride_family;
-  const groomIsInternal = formData.groom_is_internal === true || formData.groom_is_internal === "true";
   const brideIsInternal = formData.bride_is_internal === true || formData.bride_is_internal === "true";
 
   const groomOptions = getAvailableGrooms(selectedGroomFamily);
@@ -635,7 +631,6 @@ const MarriageEditPage = () => {
       ...prev,
       marriage_type: value,
       bride_is_internal: true,
-      groom_is_internal: true,
     }));
     setFieldErrors({});
     setError("");
@@ -647,17 +642,6 @@ const MarriageEditPage = () => {
     setFormData((prev) => ({
       ...prev,
       bride_is_internal: boolValue,
-    }));
-    setFieldErrors({});
-    setError("");
-  };
-
-  const handleGroomTypeChange = (event) => {
-    const value = event.target.value;
-    const boolValue = value === "true" || value === true;
-    setFormData((prev) => ({
-      ...prev,
-      groom_is_internal: boolValue,
     }));
     setFieldErrors({});
     setError("");
@@ -728,7 +712,7 @@ const MarriageEditPage = () => {
         bride_phone: formData.bride_phone || null,
         bride_confession_date: formData.bride_confession_date || null,
         bride_is_internal: formData.bride_is_internal,
-        groom_is_internal: formData.groom_is_internal,
+        groom_is_internal: true, // Hardcoded for transfer since we removed the dropdown
         relationship: formData.relationship || null,
         family: formData.family || null,
         transfer_to: formData.transfer_to || null,
@@ -1060,31 +1044,6 @@ const MarriageEditPage = () => {
                       >
                         <option value="true">Internal Bride (Church Member)</option>
                         <option value="false">External Bride (Non-Member)</option>
-                      </SelectField>
-                    </FormField>
-                  )}
-
-                  {/* Groom Type (only for TRANSFER_BRIDE) */}
-                  {isTransfer && (
-                    <FormField
-                      label="Groom Type"
-                      name="groom_is_internal"
-                      value={String(formData.groom_is_internal)}
-                      onChange={handleGroomTypeChange}
-                      onBlur={handleBlur}
-                      required
-                      error={fieldErrors.groom_is_internal}
-                      touched={fieldErrors.groom_is_internal}
-                    >
-                      <SelectField
-                        name="groom_is_internal"
-                        value={String(formData.groom_is_internal)}
-                        onChange={handleGroomTypeChange}
-                        onBlur={handleBlur}
-                        invalid={Boolean(fieldErrors.groom_is_internal)}
-                      >
-                        <option value="true">Internal Groom (Church Member)</option>
-                        <option value="false">External Groom (Non-Member)</option>
                       </SelectField>
                     </FormField>
                   )}

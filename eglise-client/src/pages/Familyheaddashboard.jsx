@@ -33,6 +33,7 @@ import {
   LuSearch,
   LuUserPlus,
   LuUsers,
+  LuSparkles,
 } from "react-icons/lu";
 
 import { useNavigate } from "react-router-dom";
@@ -47,7 +48,6 @@ import {
   listFamilies,
 } from "../api/registryServices";
 
-// ✅ NEW
 import { getChurchDashboard } from "../api/churchServices";
 
 const PAGE_SIZE = 6;
@@ -120,6 +120,13 @@ const FamilyHeadDashboard = () => {
     onClose: onDetailClose,
   } = useDisclosure();
 
+  // ✅ NEW: Upgrade prompt dialog
+  const {
+    open: isUpgradeOpen,
+    onOpen: onUpgradeOpen,
+    onClose: onUpgradeClose,
+  } = useDisclosure();
+
   /* ==========================================================
      STATE
   ========================================================== */
@@ -143,7 +150,6 @@ const FamilyHeadDashboard = () => {
 
   const [page, setPage] = useState(1);
 
-  // ✅ NEW: subscription capacity info
   const [membersInfo, setMembersInfo] = useState(null);
 
   /* ==========================================================
@@ -165,7 +171,6 @@ const FamilyHeadDashboard = () => {
           remaining: Number(m.remaining ?? 0),
         });
       } catch (err) {
-        // Non-fatal — the dashboard just won't show the badge
         console.warn("Could not load subscription info:", err);
       }
     };
@@ -657,6 +662,12 @@ const FamilyHeadDashboard = () => {
     houseName,
     houseSequence
   ) => {
+    // If limit is reached, show upgrade prompt instead of navigating
+    if (limitReached) {
+      onUpgradeOpen();
+      return;
+    }
+
     onClose();
 
     navigate(
@@ -686,15 +697,27 @@ const FamilyHeadDashboard = () => {
   };
 
   /* ==========================================================
-     ADD FAMILY HEAD — blocked when limit reached
+     ADD FAMILY HEAD
+     - Always clickable now.
+     - If limit reached, open upgrade dialog instead of navigating.
   ========================================================== */
 
   const handleAddFamilyHead = () => {
     if (limitReached) {
+      onUpgradeOpen();
       return;
     }
 
     navigate("/family-heads/create");
+  };
+
+  /* ==========================================================
+     UPGRADE (placeholder — wired later)
+  ========================================================== */
+
+  const handleGoToUpgrade = () => {
+    // TODO: wire this to the subscription / upgrade page once built.
+    // e.g. navigate("/subscription/upgrade");
   };
 
   /* ==========================================================
@@ -812,27 +835,6 @@ const FamilyHeadDashboard = () => {
               membership and dependent
               information.
             </Text>
-
-            {/* ✅ NEW: capacity indicator */}
-            {/* {membersInfo && membersInfo.limit > 0 && (
-              <Text
-                color={
-                  limitReached
-                    ? "var(--danger)"
-                    : "var(--light-gray)"
-                }
-                fontSize="12px"
-                mt="6px"
-                fontWeight={limitReached ? "600" : "400"}
-              >
-                {membersInfo.current} of {membersInfo.limit} family heads used
-                {limitReached
-                  ? " — upgrade your package to add more."
-                  : ` • ${membersInfo.remaining} slot${
-                      membersInfo.remaining === 1 ? "" : "s"
-                    } remaining`}
-              </Text>
-            )} */}
           </Box>
 
           {/* HEADER ACTIONS */}
@@ -897,7 +899,7 @@ const FamilyHeadDashboard = () => {
               )}
             </Button>
 
-            {/* ✅ NEW: disabled when limit reached */}
+            {/* ✅ Add Family Head — always clickable */}
             <Button
               flex={{
                 base: 1,
@@ -915,22 +917,9 @@ const FamilyHeadDashboard = () => {
               borderRadius="6px"
               fontWeight="500"
               onClick={handleAddFamilyHead}
-              disabled={limitReached}
-              title={
-                limitReached
-                  ? "Member limit reached — upgrade your package to add more family heads."
-                  : ""
-              }
               _hover={{
                 bg: "var(--primary-maroon)",
                 opacity: 0.9,
-              }}
-              _disabled={{
-                opacity: 0.5,
-                cursor: "not-allowed",
-                _hover: {
-                  opacity: 0.5,
-                },
               }}
             >
               <LuPlus size={17} />
@@ -941,66 +930,6 @@ const FamilyHeadDashboard = () => {
             </Button>
           </HStack>
         </Flex>
-
-        {/* ✅ NEW: LIMIT REACHED BANNER */}
-{/* 
-        {limitReached && (
-          <Box
-            mb="16px"
-            p="12px 16px"
-            border="1px solid"
-            borderColor="var(--warning-color)"
-            bg="var(--warning-bg)"
-            borderRadius="6px"
-            display="flex"
-            alignItems="center"
-            gap="10px"
-          >
-            <LuCircleAlert
-              size={18}
-              color="var(--warning-color)"
-            />
-
-            <Box flex="1">
-              <Text
-                fontSize="12.5px"
-                fontWeight="600"
-                color="var(--dark-text)"
-              >
-                Family head limit reached
-              </Text>
-
-              <Text
-                fontSize="11.5px"
-                color="var(--dark-text)"
-                mt="2px"
-              >
-                Your current package allows {membersInfo?.limit} family heads
-                and all slots are in use. Upgrade your package to register
-                more.
-              </Text>
-            </Box>
-
-            <Button
-              size="sm"
-              h="30px"
-              px="14px"
-              bg="var(--warning-color)"
-              color="var(--white)"
-              fontSize="11px"
-              borderRadius="5px"
-              fontWeight="600"
-              onClick={() => navigate("/subscription")}
-              _hover={{
-                bg: "var(--warning-color)",
-                opacity: 0.9,
-              }}
-              flexShrink={0}
-            >
-              Upgrade Plan
-            </Button>
-          </Box>
-        )} */}
 
         {/* FILTER BAR */}
 
@@ -1471,8 +1400,6 @@ const FamilyHeadDashboard = () => {
                                 "Unnamed"}
                             </Heading>
 
-                            {/* FAMILY + HOUSE TEXT BLACK */}
-
                             <Flex
                               align="center"
                               gap="6px"
@@ -1548,19 +1475,9 @@ const FamilyHeadDashboard = () => {
                           gap="5px"
                           mt="10px"
                         >
-                          {/* WARD */}
-
-                          <HStack
-                            gap="8px"
-                            minW="0"
-                          >
-                            <Box
-                              color="var(--dark-text)"
-                              flexShrink={0}
-                            >
-                              <LuMapPin
-                                size={14}
-                              />
+                          <HStack gap="8px" minW="0">
+                            <Box color="var(--dark-text)" flexShrink={0}>
+                              <LuMapPin size={14} />
                             </Box>
 
                             <Text
@@ -1569,24 +1486,13 @@ const FamilyHeadDashboard = () => {
                               fontWeight="500"
                               lineClamp={1}
                             >
-                              {head.ward_name ||
-                                "N/A"}
+                              {head.ward_name || "N/A"}
                             </Text>
                           </HStack>
 
-                          {/* GRADE */}
-
-                          <HStack
-                            gap="8px"
-                            minW="0"
-                          >
-                            <Box
-                              color="var(--dark-text)"
-                              flexShrink={0}
-                            >
-                              <LuGraduationCap
-                                size={14}
-                              />
+                          <HStack gap="8px" minW="0">
+                            <Box color="var(--dark-text)" flexShrink={0}>
+                              <LuGraduationCap size={14} />
                             </Box>
 
                             <Text
@@ -1595,24 +1501,13 @@ const FamilyHeadDashboard = () => {
                               fontWeight="500"
                               lineClamp={1}
                             >
-                              {head.grade_name ||
-                                "N/A"}
+                              {head.grade_name || "N/A"}
                             </Text>
                           </HStack>
 
-                          {/* PHONE */}
-
-                          <HStack
-                            gap="8px"
-                            minW="0"
-                          >
-                            <Box
-                              color="var(--dark-text)"
-                              flexShrink={0}
-                            >
-                              <LuPhone
-                                size={14}
-                              />
+                          <HStack gap="8px" minW="0">
+                            <Box color="var(--dark-text)" flexShrink={0}>
+                              <LuPhone size={14} />
                             </Box>
 
                             <Text
@@ -1628,19 +1523,9 @@ const FamilyHeadDashboard = () => {
                             </Text>
                           </HStack>
 
-                          {/* DEPENDENTS */}
-
-                          <HStack
-                            gap="8px"
-                            minW="0"
-                          >
-                            <Box
-                              color="var(--dark-text)"
-                              flexShrink={0}
-                            >
-                              <LuUsers
-                                size={14}
-                              />
+                          <HStack gap="8px" minW="0">
+                            <Box color="var(--dark-text)" flexShrink={0}>
+                              <LuUsers size={14} />
                             </Box>
 
                             <Text
@@ -1649,10 +1534,8 @@ const FamilyHeadDashboard = () => {
                               fontWeight="500"
                               lineClamp={1}
                             >
-                              {head.total_dependents ??
-                                0}{" "}
-                              {(head.total_dependents ??
-                                0) === 1
+                              {head.total_dependents ?? 0}{" "}
+                              {(head.total_dependents ?? 0) === 1
                                 ? "Dependent"
                                 : "Dependents"}
                             </Text>
@@ -1662,9 +1545,7 @@ const FamilyHeadDashboard = () => {
                     </Flex>
                   </Box>
 
-                  {/* =================================================
-                      ACTION BAR BELOW DIVIDER
-                  ================================================== */}
+                  {/* ACTION BAR */}
 
                   <Box
                     borderTop="1px solid"
@@ -1680,8 +1561,7 @@ const FamilyHeadDashboard = () => {
                       height="100%"
                     >
                       <HStack gap="6px">
-                        {/* MEMBERS ICON MAROON */}
-
+                        {/* MEMBERS */}
                         <Button
                           variant="ghost"
                           h="27px"
@@ -1695,19 +1575,14 @@ const FamilyHeadDashboard = () => {
                             )
                           }
                           _hover={{
-                            bg:
-                              "var(--light-maroon-bg)",
-                            color:
-                              "var(--primary-maroon)",
+                            bg: "var(--light-maroon-bg)",
+                            color: "var(--primary-maroon)",
                           }}
                         >
-                          <LuUserPlus
-                            size={17}
-                          />
+                          <LuUserPlus size={17} />
                         </Button>
 
-                        {/* VIEW ICON MAROON */}
-
+                        {/* VIEW */}
                         <Button
                           variant="ghost"
                           h="27px"
@@ -1721,19 +1596,14 @@ const FamilyHeadDashboard = () => {
                             )
                           }
                           _hover={{
-                            bg:
-                              "var(--light-maroon-bg)",
-                            color:
-                              "var(--primary-maroon)",
+                            bg: "var(--light-maroon-bg)",
+                            color: "var(--primary-maroon)",
                           }}
                         >
-                          <LuEye
-                            size={17}
-                          />
+                          <LuEye size={17} />
                         </Button>
 
-                        {/* EDIT ICON MAROON */}
-
+                        {/* EDIT */}
                         <Button
                           variant="ghost"
                           h="27px"
@@ -1747,15 +1617,11 @@ const FamilyHeadDashboard = () => {
                             )
                           }
                           _hover={{
-                            bg:
-                              "var(--light-maroon-bg)",
-                            color:
-                              "var(--primary-maroon)",
+                            bg: "var(--light-maroon-bg)",
+                            color: "var(--primary-maroon)",
                           }}
                         >
-                          <LuPencil
-                            size={17}
-                          />
+                          <LuPencil size={17} />
                         </Button>
                       </HStack>
                     </Flex>
@@ -1788,10 +1654,7 @@ const FamilyHeadDashboard = () => {
             family heads
           </Text>
 
-          <HStack
-            gap="4px"
-            flexShrink={0}
-          >
+          <HStack gap="4px" flexShrink={0}>
             <Button
               variant="outline"
               h="32px"
@@ -1805,35 +1668,20 @@ const FamilyHeadDashboard = () => {
               disabled={safePage === 1}
               onClick={() =>
                 setPage((prev) =>
-                  Math.max(
-                    1,
-                    prev - 1
-                  )
+                  Math.max(1, prev - 1)
                 )
               }
               _hover={{
-                bg:
-                  "var(--light-maroon-bg)",
+                bg: "var(--light-maroon-bg)",
               }}
             >
-              <LuChevronLeft
-                size={14}
-              />
-
-              <Text ml="3px">
-                Previous
-              </Text>
+              <LuChevronLeft size={14} />
+              <Text ml="3px">Previous</Text>
             </Button>
 
             {getPageNumbers().map(
-              (
-                pageNumber,
-                index
-              ) => {
-                if (
-                  pageNumber ===
-                  "..."
-                ) {
+              (pageNumber, index) => {
+                if (pageNumber === "...") {
                   return (
                     <Text
                       key={`dots-${index}`}
@@ -1854,20 +1702,17 @@ const FamilyHeadDashboard = () => {
                     px="7px"
                     border="1px solid"
                     borderColor={
-                      safePage ===
-                      pageNumber
+                      safePage === pageNumber
                         ? "var(--primary-maroon)"
                         : "var(--border-color)"
                     }
                     bg={
-                      safePage ===
-                      pageNumber
+                      safePage === pageNumber
                         ? "var(--primary-maroon)"
                         : "var(--white)"
                     }
                     color={
-                      safePage ===
-                      pageNumber
+                      safePage === pageNumber
                         ? "var(--white)"
                         : "var(--info)"
                     }
@@ -1875,14 +1720,11 @@ const FamilyHeadDashboard = () => {
                     fontWeight="500"
                     borderRadius="5px"
                     onClick={() =>
-                      setPage(
-                        pageNumber
-                      )
+                      setPage(pageNumber)
                     }
                     _hover={{
                       bg:
-                        safePage ===
-                        pageNumber
+                        safePage === pageNumber
                           ? "var(--primary-maroon)"
                           : "var(--light-bg)",
                     }}
@@ -1904,8 +1746,7 @@ const FamilyHeadDashboard = () => {
               fontWeight="400"
               borderRadius="5px"
               disabled={
-                safePage ===
-                totalPages
+                safePage === totalPages
               }
               onClick={() =>
                 setPage((prev) =>
@@ -1916,17 +1757,11 @@ const FamilyHeadDashboard = () => {
                 )
               }
               _hover={{
-                bg:
-                  "var(--light-maroon-bg)",
+                bg: "var(--light-maroon-bg)",
               }}
             >
-              <Text mr="3px">
-                Next
-              </Text>
-
-              <LuChevronRight
-                size={14}
-              />
+              <Text mr="3px">Next</Text>
+              <LuChevronRight size={14} />
             </Button>
           </HStack>
         </Flex>
@@ -2266,7 +2101,7 @@ const FamilyHeadDashboard = () => {
                               />
 
                               <Text ml="6px">
-                                View Details
+                                Member Count
                               </Text>
                             </Button>
 
@@ -2563,6 +2398,17 @@ const FamilyHeadDashboard = () => {
                             >
                               Status
                             </Table.ColumnHeader>
+
+                            {/* ✅ NEW: Actions Column */}
+                            <Table.ColumnHeader
+                              fontSize="10px"
+                              textTransform="uppercase"
+                              color="var(--light-gray)"
+                              textAlign="center"
+                              width="60px"
+                            >
+                              Action
+                            </Table.ColumnHeader>
                           </Table.Row>
                         </Table.Header>
 
@@ -2646,6 +2492,26 @@ const FamilyHeadDashboard = () => {
                                       : "Inactive"}
                                   </Badge>
                                 </Table.Cell>
+
+                                {/* ✅ NEW: Eye Button to View Member Details */}
+                                <Table.Cell textAlign="center">
+                                  <Button
+                                    variant="ghost"
+                                    h="26px"
+                                    minW="26px"
+                                    p="0"
+                                    color="var(--primary-maroon)"
+                                    title="View Member Details"
+                                    onClick={() => {
+                                      onDetailClose(); 
+                                      // Route to the dependent page using the family_id
+                                      navigate(`/family-heads/${selectedHousehold.family_id}/members/${member.id}`); 
+                                    }}
+                                    _hover={{ bg: "var(--light-maroon-bg)" }}
+                                  >
+                                    <LuEye size={16} />
+                                  </Button>
+                                </Table.Cell>
                               </Table.Row>
                             )
                           )}
@@ -2713,6 +2579,222 @@ const FamilyHeadDashboard = () => {
                     </Text>
                   </Button>
                 )}
+              </Flex>
+            </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Dialog.Root>
+
+      {/* =========================================================
+          UPGRADE PROMPT DIALOG
+          Shown when the user tries to add a family head /
+          promote a head while the subscription limit is full.
+          The "Go to Upgrade" button is intentionally inactive
+          for now — to be wired up in a future iteration.
+      ========================================================== */}
+
+      <Dialog.Root
+        open={isUpgradeOpen}
+        onOpenChange={(details) => {
+          if (!details.open) {
+            onUpgradeClose();
+          }
+        }}
+        size="md"
+        placement="center"
+        role="alertdialog"
+      >
+        <Dialog.Backdrop />
+
+        <Dialog.Positioner>
+          <Dialog.Content maxW="440px" borderRadius="10px">
+            <Dialog.Header
+              borderBottom="1px solid"
+              borderColor="var(--border-color)"
+              pb="14px"
+            >
+              <Flex align="center" gap="12px" pr="35px">
+                <Box
+                  bg="var(--warning-bg)"
+                  p="9px"
+                  borderRadius="8px"
+                  color="var(--warning-color)"
+                >
+                  <LuCircleAlert size={22} />
+                </Box>
+
+                <Box>
+                  <Dialog.Title>
+                    <Heading size="sm" color="var(--dark-text)">
+                      Member limit reached
+                    </Heading>
+                  </Dialog.Title>
+
+                  <Text
+                    fontSize="12px"
+                    color="var(--light-gray)"
+                    mt="2px"
+                  >
+                    Upgrade your package to add more family heads.
+                  </Text>
+                </Box>
+              </Flex>
+            </Dialog.Header>
+
+            <Dialog.CloseTrigger asChild>
+              <Button
+                variant="ghost"
+                position="absolute"
+                top="10px"
+                right="10px"
+                minW="30px"
+                h="30px"
+                p="0"
+                fontSize="18px"
+                color="var(--light-gray)"
+              >
+                ×
+              </Button>
+            </Dialog.CloseTrigger>
+
+            <Dialog.Body py="20px">
+              <VStack align="stretch" gap="14px">
+                <Box
+                  p="12px"
+                  bg="var(--light-bg)"
+                  border="1px solid"
+                  borderColor="var(--border-color)"
+                  borderRadius="8px"
+                >
+                  <Flex
+                    justify="space-between"
+                    align="center"
+                    mb="8px"
+                  >
+                    <Text
+                      fontSize="12px"
+                      fontWeight="600"
+                      color="var(--dark-text)"
+                    >
+                      Current Plan Usage
+                    </Text>
+
+                    <Badge
+                      bg="var(--danger)"
+                      color="var(--white)"
+                      fontSize="10px"
+                      px="7px"
+                      py="2px"
+                      borderRadius="4px"
+                    >
+                      Full
+                    </Badge>
+                  </Flex>
+
+                  <Flex
+                    justify="space-between"
+                    align="center"
+                    mb="6px"
+                  >
+                    <Text
+                      fontSize="12px"
+                      color="var(--light-gray)"
+                    >
+                      Active Family Heads
+                    </Text>
+
+                    <Text
+                      fontSize="12px"
+                      fontWeight="600"
+                      color="var(--dark-text)"
+                    >
+                      {membersInfo?.current ?? 0} /{" "}
+                      {membersInfo?.limit ?? 0}
+                    </Text>
+                  </Flex>
+
+                  <Box
+                    h="8px"
+                    bg="var(--border-color)"
+                    borderRadius="full"
+                    overflow="hidden"
+                    mt="6px"
+                  >
+                    <Box
+                      h="100%"
+                      bg="var(--danger)"
+                      width="100%"
+                    />
+                  </Box>
+
+                  <Text
+                    fontSize="11px"
+                    color="var(--light-gray)"
+                    mt="8px"
+                  >
+                    You've reached the maximum number of family heads allowed
+                    by your current package.
+                  </Text>
+                </Box>
+
+                <Text
+                  fontSize="12px"
+                  color="var(--light-gray)"
+                  lineHeight="1.5"
+                >
+                  Upgrade to a bigger package to add more family heads,
+                  manage more households, and unlock additional capacity
+                  for your church.
+                </Text>
+              </VStack>
+            </Dialog.Body>
+
+            <Dialog.Footer
+              borderTop="1px solid"
+              borderColor="var(--border-color)"
+              pt="14px"
+            >
+              <Flex justify="space-between" width="100%" gap="10px">
+                <Dialog.CloseTrigger asChild>
+                  <Button
+                    variant="outline"
+                    borderColor="var(--border-color)"
+                    color="var(--dark-text)"
+                    h="38px"
+                    px="16px"
+                    fontSize="12px"
+                    fontWeight="500"
+                    borderRadius="6px"
+                  >
+                    Cancel
+                  </Button>
+                </Dialog.CloseTrigger>
+
+                {/* ✅ Upgrade CTA — inactive for now, wired later */}
+                <Button
+                  bg="var(--primary-maroon)"
+                  color="var(--white)"
+                  h="38px"
+                  px="16px"
+                  fontSize="12px"
+                  fontWeight="600"
+                  borderRadius="6px"
+                  onClick={handleGoToUpgrade}
+                  disabled
+                  title="Upgrade flow coming soon"
+                  _hover={{
+                    bg: "var(--primary-maroon)",
+                    opacity: 0.9,
+                  }}
+                  _disabled={{
+                    opacity: 0.5,
+                    cursor: "not-allowed",
+                    _hover: { opacity: 0.5 },
+                  }}
+                >
+                  <LuSparkles size={14} />
+                  <Text ml="6px">Go to Upgrade</Text>
+                </Button>
               </Flex>
             </Dialog.Footer>
           </Dialog.Content>

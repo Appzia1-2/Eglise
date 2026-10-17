@@ -1,6 +1,6 @@
 // src/pages/SubscriptionAddPage.jsx
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   Box,
@@ -32,7 +32,6 @@ const DARK = "#182338";
 const MUTED = "#60708C";
 const BORDER = "#DCE2EA";
 
-
 // ============================================================
 // BILLING CYCLE OPTIONS
 // ============================================================
@@ -42,26 +41,56 @@ const BILLING_CYCLES = [
   { value: "YEARLY", label: "Yearly" },
 ];
 
+// ============================================================
+// NATURE BADGES
+// ============================================================
+
+const NATURE_COLORS = {
+  INCOME: { bg: "#E6F6EC", color: "#1E7A3E" },
+  EXPENSE: { bg: "#FDECEC", color: "#B32020" },
+  ASSET: { bg: "#E8F0FE", color: "#1A56DB" },
+  LIABILITY: { bg: "#FFF4E5", color: "#B45309" },
+  EQUITY: { bg: "#F3E8FF", color: "#6B21A8" },
+};
+
+// ============================================================
+// RECEIPT-RELEVANT LEDGER FILTER
+// ============================================================
+//
+// A receipt is money COMING IN. Any INCOME-nature ledger is a
+// valid target. The backend auto-posts the Cash / Bank side
+// based on payment_type, so those two system ledgers are
+// excluded here to prevent double-posting.
+
+const RECEIPT_EXCLUDE_LEDGER_NAMES = [
+  "cash in hand",
+  "balance in savings account",
+];
+
+const isReceiptLedger = (l) => {
+  const name = (l.ledger_name || "").toLowerCase().trim();
+  const nature = String(l.ledger_nature || "").toUpperCase();
+
+  // 1. Only INCOME ledgers can receive money on a receipt
+  if (nature !== "INCOME") return false;
+
+  // 2. Exclude the two system cash/bank ledgers
+  //    (auto-posted by the backend from payment_type)
+  if (RECEIPT_EXCLUDE_LEDGER_NAMES.includes(name)) return false;
+
+  // 3. Exclude anything with "closing" in name (safety net)
+  if (name.includes("closing")) return false;
+
+  return true;
+};
 
 // ============================================================
 // TOAST HELPER
 // ============================================================
 
-const showToast = ({
-  title,
-  description,
-  type = "info",
-  duration = 4000,
-}) => {
-  toaster.create({
-    title,
-    description,
-    type,
-    duration,
-    closable: true,
-  });
+const showToast = ({ title, description, type = "info", duration = 4000 }) => {
+  toaster.create({ title, description, type, duration, closable: true });
 };
-
 
 // ============================================================
 // FIELD LABELS
@@ -77,13 +106,288 @@ const FIELD_LABELS = {
   ledger: "Ledger",
 };
 
+// ============================================================
+// SEARCHABLE LEDGER DROPDOWN (Chakra UI v3 compatible)
+// ============================================================
+
+const LedgerSearchSelect = ({
+  ledgers,
+  value,
+  onChange,
+  disabled,
+  hasError,
+  loading,
+}) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const wrapperRef = useRef(null);
+
+  const selected = useMemo(
+    () => ledgers.find((l) => String(l.id) === String(value)),
+    [ledgers, value]
+  );
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return ledgers;
+    return ledgers.filter((l) => {
+      const name = (l.ledger_name || "").toLowerCase();
+      const group = (l.account_group_name || "").toLowerCase();
+      const nature = (l.ledger_nature || "").toLowerCase();
+      const alias = (l.alias || "").toLowerCase();
+      return (
+        name.includes(q) ||
+        group.includes(q) ||
+        nature.includes(q) ||
+        alias.includes(q)
+      );
+    });
+  }, [ledgers, query]);
+
+  const handlePick = (ledger) => {
+    onChange({ target: { name: "ledger", value: String(ledger.id) } });
+    setOpen(false);
+    setQuery("");
+  };
+
+  return (
+    <Box position="relative" ref={wrapperRef}>
+      {/* Trigger */}
+      <Flex
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        onClick={() => !disabled && setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (disabled) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen((o) => !o);
+          }
+        }}
+        align="center"
+        justify="space-between"
+        width="100%"
+        height="42px"
+        px={3}
+        border="1px solid"
+        borderColor={hasError ? "#F3C4C4" : open ? PRIMARY_MAROON : BORDER}
+        borderRadius="7px"
+        bg={disabled ? "#F7F9FB" : "white"}
+        cursor={disabled ? "not-allowed" : "pointer"}
+        _hover={!disabled ? { borderColor: "#BFC7D4" } : {}}
+        boxShadow={open ? `0 0 0 1px ${PRIMARY_MAROON}` : "none"}
+      >
+        <Text
+          fontSize="13px"
+          color={selected ? DARK : "#98A2B3"}
+          noOfLines={1}
+          flex="1"
+          textAlign="left"
+        >
+          {loading
+            ? "Loading ledgers..."
+            : selected
+            ? selected.ledger_name
+            : "Select ledger"}
+        </Text>
+        {selected?.ledger_nature && (
+          <Box
+            ml={2}
+            px="6px"
+            py="1px"
+            borderRadius="4px"
+            fontSize="10px"
+            fontWeight="700"
+            bg={NATURE_COLORS[selected.ledger_nature]?.bg || "#EEF2F7"}
+            color={NATURE_COLORS[selected.ledger_nature]?.color || MUTED}
+          >
+            {selected.ledger_nature}
+          </Box>
+        )}
+        <Box
+          ml={2}
+          transition="transform 0.15s ease"
+          transform={open ? "rotate(180deg)" : "rotate(0deg)"}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M6 9l6 6 6-6"
+              stroke={MUTED}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </Box>
+      </Flex>
+
+      {/* Popover */}
+      {open && !disabled && (
+        <Box
+          position="absolute"
+          top="calc(100% + 6px)"
+          left={0}
+          right={0}
+          zIndex={50}
+          bg="white"
+          border="1px solid"
+          borderColor={BORDER}
+          borderRadius="8px"
+          boxShadow="0 12px 30px rgba(0,0,0,0.10)"
+          maxH="320px"
+          display="flex"
+          flexDirection="column"
+          overflow="hidden"
+        >
+          {/* Search box with absolutely positioned icon (v3-compatible) */}
+          <Box p={2} borderBottom={`1px solid ${BORDER}`} bg="#F8FAFC">
+            <Box position="relative">
+              <Box
+                position="absolute"
+                left="10px"
+                top="50%"
+                transform="translateY(-50%)"
+                pointerEvents="none"
+                zIndex={1}
+                display="flex"
+                alignItems="center"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <circle
+                    cx="11"
+                    cy="11"
+                    r="7"
+                    stroke={MUTED}
+                    strokeWidth="2"
+                  />
+                  <path
+                    d="M20 20l-3.5-3.5"
+                    stroke={MUTED}
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </Box>
+              <Input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search ledger by name, group, nature..."
+                h="34px"
+                fontSize="12px"
+                pl="32px"
+                borderColor={BORDER}
+                borderRadius="6px"
+                bg="white"
+                color={DARK}
+                _placeholder={{ color: "#98A2B3" }}
+                _focus={{
+                  borderColor: PRIMARY_MAROON,
+                  boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
+                }}
+              />
+            </Box>
+          </Box>
+
+          {/* List */}
+          <Box overflowY="auto" flex="1" py={1}>
+            {filtered.length === 0 ? (
+              <Text fontSize="12px" color={MUTED} textAlign="center" py={4}>
+                {ledgers.length === 0
+                  ? "No receipt ledgers available"
+                  : `No ledgers match "${query}"`}
+              </Text>
+            ) : (
+              filtered.map((l) => {
+                const isSelected = String(l.id) === String(value);
+                const nature = (l.ledger_nature || "").toUpperCase();
+                const badge = NATURE_COLORS[nature] || {
+                  bg: "#EEF2F7",
+                  color: MUTED,
+                };
+
+                return (
+                  <Flex
+                    key={l.id}
+                    px={3}
+                    py={2}
+                    align="center"
+                    justify="space-between"
+                    cursor="pointer"
+                    bg={isSelected ? "#FFF5F7" : "white"}
+                    _hover={{ bg: isSelected ? "#FFF5F7" : "#F8FAFC" }}
+                    onClick={() => handlePick(l)}
+                  >
+                    <Box flex="1" minW={0}>
+                      <Text
+                        fontSize="12.5px"
+                        fontWeight={isSelected ? "700" : "600"}
+                        color={DARK}
+                        noOfLines={1}
+                      >
+                        {l.ledger_name}
+                      </Text>
+                      <Text fontSize="10.5px" color={MUTED} noOfLines={1}>
+                        {l.account_group_name || "—"}
+                        {l.alias ? ` · ${l.alias}` : ""}
+                      </Text>
+                    </Box>
+                    {nature && (
+                      <Box
+                        ml={2}
+                        px="6px"
+                        py="1px"
+                        borderRadius="4px"
+                        fontSize="10px"
+                        fontWeight="700"
+                        bg={badge.bg}
+                        color={badge.color}
+                        flexShrink={0}
+                      >
+                        {nature}
+                      </Box>
+                    )}
+                  </Flex>
+                );
+              })
+            )}
+          </Box>
+
+          {/* Footer count */}
+          <Box
+            borderTop={`1px solid ${BORDER}`}
+            px={3}
+            py="6px"
+            bg="#F8FAFC"
+            fontSize="10.5px"
+            color={MUTED}
+            textAlign="right"
+          >
+            {filtered.length} of {ledgers.length} receipt ledgers
+          </Box>
+        </Box>
+      )}
+    </Box>
+  );
+};
+
+// ============================================================
+// PAGE
+// ============================================================
 
 const SubscriptionAddPage = () => {
   const navigate = useNavigate();
-
-  // ==========================================================
-  // STATE
-  // ==========================================================
 
   const [grades, setGrades] = useState([]);
   const [ledgers, setLedgers] = useState([]);
@@ -116,17 +420,12 @@ const SubscriptionAddPage = () => {
   const fetchGrades = async () => {
     try {
       setLoadingGrades(true);
-
       const response = await listGrades();
       const data = response?.data ?? response;
 
-      if (Array.isArray(data)) {
-        setGrades(data);
-      } else if (Array.isArray(data?.results)) {
-        setGrades(data.results);
-      } else {
-        setGrades([]);
-      }
+      if (Array.isArray(data)) setGrades(data);
+      else if (Array.isArray(data?.results)) setGrades(data.results);
+      else setGrades([]);
     } catch (err) {
       console.error("Error loading grades:", err);
       showToast({
@@ -145,34 +444,33 @@ const SubscriptionAddPage = () => {
   const fetchLedgers = async () => {
     try {
       setLoadingLedgers(true);
-
       const response = await listAccountLedgers();
       const data = response?.data ?? response;
 
       let list = [];
-      if (Array.isArray(data)) {
-        list = data;
-      } else if (Array.isArray(data?.results)) {
-        list = data.results;
-      }
+      if (Array.isArray(data)) list = data;
+      else if (Array.isArray(data?.results)) list = data.results;
 
-      // Filter to subscription-related ledgers only
-      const subscriptionLedgers = list.filter((l) => {
-        const name = (l.ledger_name || "").toLowerCase();
-        const group = (l.account_group_name || "").toLowerCase();
-        return (
-          name.includes("subscription") ||
-          group.includes("subscription")
-        );
-      });
+      // ✅ ALL INCOME ledgers, except the auto-posted cash/bank ones
+      const receiptLedgers = list
+        .filter(isReceiptLedger)
+        .sort((a, b) => {
+          const ga = (a.account_group_name || "").toLowerCase();
+          const gb = (b.account_group_name || "").toLowerCase();
+          if (ga !== gb) return ga.localeCompare(gb);
+          return (a.ledger_name || "").localeCompare(b.ledger_name || "");
+        });
 
-      // Fallback: if no subscription ledgers exist, show all income ledgers
-      if (subscriptionLedgers.length === 0) {
-        setLedgers(
-          list.filter((l) => (l.ledger_nature || "").toUpperCase() === "INCOME")
-        );
-      } else {
-        setLedgers(subscriptionLedgers);
+      setLedgers(receiptLedgers);
+
+      if (receiptLedgers.length === 0) {
+        showToast({
+          title: "No receipt ledgers available",
+          description:
+            "No income ledgers were found. Please check your chart of accounts.",
+          type: "warning",
+          duration: 7000,
+        });
       }
     } catch (err) {
       console.error("Error loading ledgers:", err);
@@ -195,15 +493,8 @@ const SubscriptionAddPage = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-
-    setFieldErrors((prev) =>
-      prev[name] ? { ...prev, [name]: "" } : prev
-    );
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFieldErrors((prev) => (prev[name] ? { ...prev, [name]: "" } : prev));
   };
 
   // ==========================================================
@@ -218,22 +509,18 @@ const SubscriptionAddPage = () => {
       errors.grade = "Please select a grade.";
       missing.push(FIELD_LABELS.grade);
     }
-
     if (!formData.term.trim()) {
       errors.term = "Term is required.";
       missing.push(FIELD_LABELS.term);
     }
-
     if (!formData.start_date) {
       errors.start_date = "Start date is required.";
       missing.push(FIELD_LABELS.start_date);
     }
-
     if (!formData.end_date) {
       errors.end_date = "End date is required.";
       missing.push(FIELD_LABELS.end_date);
     }
-
     if (!formData.amount) {
       errors.amount = "Amount is required.";
       missing.push(FIELD_LABELS.amount);
@@ -243,18 +530,15 @@ const SubscriptionAddPage = () => {
         errors.amount = "Amount must be greater than zero.";
       }
     }
-
     if (!formData.billing_cycle) {
       errors.billing_cycle = "Billing cycle is required.";
       missing.push(FIELD_LABELS.billing_cycle);
     }
-
     if (!formData.ledger) {
       errors.ledger = "Ledger is required.";
       missing.push(FIELD_LABELS.ledger);
     }
 
-    // Date cross-check
     if (
       formData.start_date &&
       formData.end_date &&
@@ -280,14 +564,9 @@ const SubscriptionAddPage = () => {
         .map(([, msg]) => msg);
 
       let description;
-
-      if (explicitMessages.length > 0) {
-        description = explicitMessages.join("\n");
-      } else if (missing.length === 1) {
-        description = `${missing[0]} is required.`;
-      } else {
-        description = `Please fill: ${missing.join(", ")}.`;
-      }
+      if (explicitMessages.length > 0) description = explicitMessages.join("\n");
+      else if (missing.length === 1) description = `${missing[0]} is required.`;
+      else description = `Please fill: ${missing.join(", ")}.`;
 
       showToast({
         title: "Please fix the form",
@@ -302,14 +581,12 @@ const SubscriptionAddPage = () => {
       setSaving(true);
       setFieldErrors({});
 
-      const amount = Number(formData.amount);
-
       const payload = {
         grade: Number(formData.grade),
         term: formData.term.trim(),
         start_date: formData.start_date,
         end_date: formData.end_date,
-        amount: amount,
+        amount: Number(formData.amount),
         billing_cycle: formData.billing_cycle,
         ledger: Number(formData.ledger),
         is_cancelled: false,
@@ -319,8 +596,7 @@ const SubscriptionAddPage = () => {
 
       showToast({
         title: "Subscription created",
-        description:
-          "The subscription record was created successfully.",
+        description: "The subscription record was created successfully.",
         type: "success",
         duration: 4000,
       });
@@ -328,7 +604,6 @@ const SubscriptionAddPage = () => {
       navigate("/subscriptions");
     } catch (err) {
       console.error("Error creating subscription:", err);
-
       const responseData = err?.response?.data;
 
       if (
@@ -337,21 +612,17 @@ const SubscriptionAddPage = () => {
         !Array.isArray(responseData)
       ) {
         const errors = {};
-
         Object.entries(responseData).forEach(([key, value]) => {
           if (Array.isArray(value)) errors[key] = value.join(", ");
           else if (typeof value === "string") errors[key] = value;
           else errors[key] = JSON.stringify(value);
         });
-
         setFieldErrors(errors);
 
         const generalError =
           responseData.detail || responseData.non_field_errors?.[0];
-
         const fieldMessages = Object.values(errors).filter(Boolean);
-        const onlyOneFieldError =
-          fieldMessages.length === 1 && !generalError;
+        const onlyOneFieldError = fieldMessages.length === 1 && !generalError;
 
         showToast({
           title: "Could not create subscription",
@@ -368,8 +639,7 @@ const SubscriptionAddPage = () => {
       } else {
         showToast({
           title: "Could not create subscription",
-          description:
-            "Unable to create subscription. Please try again.",
+          description: "Unable to create subscription. Please try again.",
           type: "error",
           duration: 7000,
         });
@@ -379,16 +649,10 @@ const SubscriptionAddPage = () => {
     }
   };
 
-  // ==========================================================
-  // CANCEL
-  // ==========================================================
-
-  const handleCancel = () => {
-    navigate("/subscriptions");
-  };
+  const handleCancel = () => navigate("/subscriptions");
 
   // ==========================================================
-  // INPUT STYLE
+  // STYLES
   // ==========================================================
 
   const inputStyle = {
@@ -406,10 +670,6 @@ const SubscriptionAddPage = () => {
     },
   };
 
-  // ==========================================================
-  // SELECT STYLE
-  // ==========================================================
-
   const selectStyle = (hasError, disabled) => ({
     width: "100%",
     height: "42px",
@@ -422,10 +682,6 @@ const SubscriptionAddPage = () => {
     outline: "none",
     cursor: disabled ? "not-allowed" : "pointer",
   });
-
-  // ==========================================================
-  // LABEL
-  // ==========================================================
 
   const FieldLabel = ({ children, required = true }) => (
     <Text fontSize="12px" fontWeight="600" color={DARK} mb="8px">
@@ -519,7 +775,6 @@ const SubscriptionAddPage = () => {
               gap={{ base: 4, md: 5 }}
               mb={4}
             >
-              {/* GRADE */}
               <Box>
                 <FieldLabel>Grade</FieldLabel>
                 <select
@@ -540,7 +795,6 @@ const SubscriptionAddPage = () => {
                 </select>
               </Box>
 
-              {/* TERM */}
               <Box>
                 <FieldLabel>Term</FieldLabel>
                 <Input
@@ -560,7 +814,6 @@ const SubscriptionAddPage = () => {
               gap={{ base: 4, md: 5 }}
               mb={4}
             >
-              {/* BILLING CYCLE */}
               <Box>
                 <FieldLabel>Billing Cycle</FieldLabel>
                 <select
@@ -577,25 +830,17 @@ const SubscriptionAddPage = () => {
                 </select>
               </Box>
 
-              {/* LEDGER */}
+              {/* LEDGER — searchable dropdown, receipt ledgers only */}
               <Box>
                 <FieldLabel>Ledger</FieldLabel>
-                <select
-                  name="ledger"
+                <LedgerSearchSelect
+                  ledgers={ledgers}
                   value={formData.ledger}
                   onChange={handleChange}
                   disabled={loadingLedgers}
-                  style={selectStyle(!!fieldErrors.ledger, loadingLedgers)}
-                >
-                  <option value="">
-                    {loadingLedgers ? "Loading ledgers..." : "Select ledger"}
-                  </option>
-                  {ledgers.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.ledger_name}
-                    </option>
-                  ))}
-                </select>
+                  loading={loadingLedgers}
+                  hasError={!!fieldErrors.ledger}
+                />
               </Box>
             </Grid>
 
@@ -676,7 +921,6 @@ const SubscriptionAddPage = () => {
               </Flex>
             </Box>
 
-            {/* DIVIDER */}
             <Box borderTop="1px solid" borderColor="#E6EAF0" mb={4} />
 
             {/* BUTTONS */}

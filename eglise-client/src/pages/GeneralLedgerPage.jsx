@@ -1,6 +1,6 @@
 // src/pages/GeneralLedgerPage.jsx
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Box,
@@ -11,8 +11,16 @@ import {
   Icon,
   SimpleGrid,
   Text,
+  Input,
 } from "@chakra-ui/react";
-import { LuArrowLeft, LuPrinter, LuFileText, LuChevronDown } from "react-icons/lu";
+import {
+  LuArrowLeft,
+  LuPrinter,
+  LuFileText,
+  LuChevronDown,
+  LuSearch,
+  LuX,
+} from "react-icons/lu";
 
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -48,7 +56,7 @@ const toNumber = (v) => {
 };
 
 // ------------------------------------------------------------
-// Group flat LedgerEntry rows into one row per voucher
+// Group flat LedgerEntry rows into one row per voucher.
 // ------------------------------------------------------------
 const groupLedgerEntries = (entries) => {
   const groups = new Map();
@@ -73,8 +81,11 @@ const groupLedgerEntries = (entries) => {
         date: e.entry_date,
         voucherNo: voucherNo || "—",
         voucherType,
-        particulars: e.narration || "",
-        account: e.ledger_name || "",
+        particulars: "",
+        account: "",
+        narration: e.narration || "",
+        amount: 0,
+        direction: "DEBIT",
         debit: 0,
         credit: 0,
         _entries: [],
@@ -85,16 +96,231 @@ const groupLedgerEntries = (entries) => {
     g._entries.push(e);
 
     const amt = toNumber(e.amount);
-    if (e.entry_type === "DEBIT") g.debit += amt;
-    else if (e.entry_type === "CREDIT") g.credit += amt;
+    if (e.entry_type === "DEBIT") {
+      g.debit += amt;
+      g.amount = g.debit;
+      g.direction = "DEBIT";
+    } else if (e.entry_type === "CREDIT") {
+      g.credit += amt;
+    }
 
     if (!g.particulars && e.narration) g.particulars = e.narration;
+    if (!g.account && e.ledger_name) g.account = e.ledger_name;
   });
 
   return Array.from(groups.values()).map((g) => {
+    if (!g.particulars) g.particulars = g.account || "—";
     delete g._entries;
     return g;
   });
+};
+
+// ------------------------------------------------------------
+// Searchable Ledger Picker
+//
+// Click the box → search input opens with a dropdown list.
+// Type to filter. Click a row to select. Esc / outside click
+// closes without changing the selection.
+// ------------------------------------------------------------
+const SearchableLedgerPicker = ({
+  ledgers,
+  value,
+  onChange,
+  placeholder = "Select ledger",
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef(null);
+  const inputRef = useRef(null);
+
+  const selectedLedger = ledgers.find(
+    (l) => String(l.id) === String(value)
+  );
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return ledgers;
+    return ledgers.filter((l) => {
+      const name = String(l.ledger_name || "").toLowerCase();
+      const group = String(l.account_group_name || "").toLowerCase();
+      return name.includes(q) || group.includes(q);
+    });
+  }, [ledgers, query]);
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target)
+      ) {
+        setIsOpen(false);
+        setQuery("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // Focus the input when opening
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  }, [isOpen]);
+
+  const handleSelect = (ledger) => {
+    onChange(String(ledger.id));
+    setIsOpen(false);
+    setQuery("");
+  };
+
+  const handleClear = (e) => {
+    e.stopPropagation();
+    onChange("");
+    setQuery("");
+  };
+
+  return (
+    <Box ref={containerRef} position="relative" w="100%" minW="240px">
+      {isOpen ? (
+        <Box position="relative">
+          <Icon
+            as={LuSearch}
+            position="absolute"
+            left="11px"
+            top="50%"
+            transform="translateY(-50%)"
+            color={MUTED}
+            boxSize={4}
+            pointerEvents="none"
+            zIndex={1}
+          />
+          <Input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search ledger..."
+            pl="34px"
+            pr="34px"
+            h="38px"
+            fontSize="12px"
+            borderColor={RED}
+            borderRadius="6px"
+            bg="white"
+            _focus={{ borderColor: RED, boxShadow: `0 0 0 1px ${RED}` }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setIsOpen(false);
+                setQuery("");
+              } else if (e.key === "Enter" && filtered.length > 0) {
+                handleSelect(filtered[0]);
+              }
+            }}
+          />
+          <Icon
+            as={LuX}
+            position="absolute"
+            right="11px"
+            top="50%"
+            transform="translateY(-50%)"
+            color={MUTED}
+            boxSize={4}
+            cursor="pointer"
+            onClick={() => {
+              setIsOpen(false);
+              setQuery("");
+            }}
+            zIndex={1}
+          />
+        </Box>
+      ) : (
+        <Flex
+          onClick={() => setIsOpen(true)}
+          h="38px"
+          border={`1px solid ${BORDER}`}
+          borderRadius="6px"
+          px="11px"
+          align="center"
+          justify="space-between"
+          cursor="pointer"
+          bg="white"
+          _hover={{ borderColor: MUTED }}
+        >
+          <Text
+            fontSize="12px"
+            color={selectedLedger ? DARK : MUTED}
+            noOfLines={1}
+          >
+            {selectedLedger?.ledger_name || placeholder}
+          </Text>
+          <HStack gap={1} flexShrink={0}>
+            {selectedLedger && (
+              <Icon
+                as={LuX}
+                boxSize={3.5}
+                color={MUTED}
+                onClick={handleClear}
+                _hover={{ color: RED }}
+              />
+            )}
+            <Icon as={LuChevronDown} boxSize={4} color={DARK} />
+          </HStack>
+        </Flex>
+      )}
+
+      {isOpen && (
+        <Box
+          position="absolute"
+          top="calc(100% + 4px)"
+          left={0}
+          right={0}
+          bg="white"
+          border={`1px solid ${BORDER}`}
+          borderRadius="6px"
+          boxShadow="0 6px 20px rgba(0,0,0,0.12)"
+          maxH="260px"
+          overflowY="auto"
+          zIndex={30}
+        >
+          {filtered.length === 0 ? (
+            <Box px={3} py={2}>
+              <Text fontSize="12px" color={MUTED}>
+                No ledgers found
+              </Text>
+            </Box>
+          ) : (
+            filtered.map((l) => {
+              const isSelected =
+                String(l.id) === String(value);
+              return (
+                <Box
+                  key={l.id}
+                  px={3}
+                  py={2}
+                  fontSize="12px"
+                  color={DARK}
+                  cursor="pointer"
+                  bg={isSelected ? "#FDF2F5" : "white"}
+                  _hover={{ bg: "#F7F9FB" }}
+                  onClick={() => handleSelect(l)}
+                >
+                  <Text fontWeight={isSelected ? "600" : "500"}>
+                    {l.ledger_name}
+                  </Text>
+                  {l.account_group_name && (
+                    <Text fontSize="10px" color={MUTED}>
+                      {l.account_group_name}
+                    </Text>
+                  )}
+                </Box>
+              );
+            })
+          )}
+        </Box>
+      )}
+    </Box>
+  );
 };
 
 const SummaryCell = ({ label, value, color }) => (
@@ -206,7 +432,7 @@ const GeneralLedgerPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ledgerId, dateFrom, dateTo]);
 
-  /* Rows (grouped + search-filtered) */
+  /* Rows */
   const rows = useMemo(() => {
     let grouped = groupLedgerEntries(rawEntries);
 
@@ -230,6 +456,14 @@ const GeneralLedgerPage = () => {
     return grouped;
   }, [rawEntries, search]);
 
+  const totals = useMemo(() => {
+    return {
+      moneyIn: toNumber(totDebit),
+      moneyOut: toNumber(totCredit),
+      net: toNumber(totDebit) - toNumber(totCredit),
+    };
+  }, [totDebit, totCredit]);
+
   const selectedLedger = useMemo(
     () => ledgers.find((l) => String(l.id) === String(ledgerId)),
     [ledgers, ledgerId]
@@ -242,47 +476,16 @@ const GeneralLedgerPage = () => {
   };
 
   const ledgerPicker = (
-    <Box position="relative" minW="220px">
-      <select
-        value={ledgerId}
-        onChange={(e) => setLedgerId(e.target.value)}
-        style={{
-          width: "100%",
-          height: "38px",
-          border: `1px solid ${BORDER}`,
-          borderRadius: "6px",
-          padding: "0 35px 0 11px",
-          fontSize: "12px",
-          background: "white",
-          color: DARK,
-          outline: "none",
-          cursor: "pointer",
-          appearance: "none",
-        }}
-      >
-        <option value="">Select ledger</option>
-        {ledgers.map((l) => (
-          <option key={l.id} value={l.id}>
-            {l.ledger_name}
-          </option>
-        ))}
-      </select>
-      <Icon
-        as={LuChevronDown}
-        position="absolute"
-        right="11px"
-        top="50%"
-        transform="translateY(-50%)"
-        pointerEvents="none"
-        color={DARK}
-        boxSize={4}
-      />
-    </Box>
+    <SearchableLedgerPicker
+      ledgers={ledgers}
+      value={ledgerId}
+      onChange={setLedgerId}
+      placeholder="Select ledger"
+    />
   );
 
   return (
     <>
-      {/* Print styles for General Ledger */}
       <style>{`
         @media print {
           body * { visibility: hidden !important; }
@@ -400,13 +603,15 @@ const GeneralLedgerPage = () => {
               onReset={reset}
             />
 
-            {/* Summary strip */}
             <SimpleGrid
               columns={{ base: 1, sm: 2, md: 4 }}
               gap={3}
               mb={3}
             >
-              <SummaryCell label="Opening Balance" value={formatAmount(opening)} />
+              <SummaryCell
+                label="Opening Balance"
+                value={formatAmount(opening)}
+              />
               <SummaryCell
                 label="Total Debit"
                 value={formatAmount(totDebit)}
@@ -425,14 +630,12 @@ const GeneralLedgerPage = () => {
             </SimpleGrid>
 
             <ReportLedgerTable
-  rows={rows}
-  isLoading={isLoading}
-  openingBalance={opening}
-  totalDebit={totDebit}
-  totalCredit={totCredit}
-  closingBalance={closing}
-  showTotals={true}
-/>
+              rows={rows}
+              isLoading={isLoading}
+              openingBalance={opening}
+              totals={totals}
+              showTotals
+            />
 
             <Text fontSize="11px" color={MUTED} mt={2} textAlign="right">
               Showing {rows.length} entries
@@ -443,7 +646,6 @@ const GeneralLedgerPage = () => {
         <Footer />
       </Box>
 
-      {/* Print preview */}
       {showPrint && (
         <Box
           position="fixed"
@@ -486,6 +688,7 @@ const GeneralLedgerPage = () => {
           >
             <GeneralLedgerPrintView
               rows={rows}
+              totals={totals}
               date={dateTo || new Date().toISOString().split("T")[0]}
               ledgerName={selectedLedger?.ledger_name || ""}
               churchName={church.name}

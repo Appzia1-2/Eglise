@@ -4,18 +4,18 @@ import React from "react";
 import { Box, Text, Flex } from "@chakra-ui/react";
 
 // ============================================================
-// PALETTE — matches the screenshot exactly
+// PALETTE
 // ============================================================
 
-const RED = "#8B1A1A";              // deep maroon text
-const RED_TABLE = "#C25A5A";        // table cell borders
-const RED_FRAME = "#B01818";        // outer frame
-const RED_RIBBON_DARK = "#6B0F0F";  // ribbon shadow
-const RED_RIBBON_LIGHT = "#A01818"; // ribbon body
-const PINK_HEADER = "#F5DCDC";      // table header pink
-const PINK_HIGHLIGHT = "#F2D5D5";   // opening / total / closing pink
-const CREAM = "#FFFBF3";            // parchment background
-const BROWN = "#4A2A1E";            // address text
+const RED = "#8B1A1A";
+const RED_TABLE = "#C25A5A";
+const RED_FRAME = "#B01818";
+const RED_RIBBON_DARK = "#6B0F0F";
+const RED_RIBBON_LIGHT = "#A01818";
+const PINK_HEADER = "#F5DCDC";
+const PINK_HIGHLIGHT = "#F2D5D5";
+const CREAM = "#FFFBF3";
+const BROWN = "#4A2A1E";
 
 // ============================================================
 // HELPERS
@@ -43,54 +43,35 @@ const formatDate = (s) => {
 };
 
 // ============================================================
-// CHURCH LINE-ART (tower + cross + arched windows + door)
+// CHURCH ICON
 // ============================================================
 
 const ChurchIcon = () => (
   <svg width="110" height="110" viewBox="0 0 120 120" fill="none">
-    {/* Cross */}
     <line x1="60" y1="6" x2="60" y2="20" stroke={RED} strokeWidth="2.2" strokeLinecap="round" />
     <line x1="52" y1="12" x2="68" y2="12" stroke={RED} strokeWidth="2.2" strokeLinecap="round" />
-
-    {/* Central tower roof */}
     <path d="M60 20 L78 36 L78 44 L42 44 L42 36 Z" stroke={RED} strokeWidth="2" fill="white" />
-
-    {/* Round window in tower */}
     <circle cx="60" cy="34" r="3.5" stroke={RED} strokeWidth="1.6" fill="white" />
-
-    {/* Main body */}
     <rect x="42" y="44" width="36" height="52" stroke={RED} strokeWidth="2" fill="white" />
-
-    {/* Left wing */}
     <path d="M42 44 L20 58 L20 96 L42 96" stroke={RED} strokeWidth="2" fill="white" />
     <path d="M42 44 L20 58" stroke={RED} strokeWidth="2" fill="none" />
-
-    {/* Right wing */}
     <path d="M78 44 L100 58 L100 96 L78 96" stroke={RED} strokeWidth="2" fill="white" />
     <path d="M78 44 L100 58" stroke={RED} strokeWidth="2" fill="none" />
-
-    {/* Left arched window */}
     <path d="M27 66 Q27 60 33 60 Q39 60 39 66 L39 78 L27 78 Z"
       stroke={RED} strokeWidth="1.6" fill="white" />
     <line x1="33" y1="60" x2="33" y2="78" stroke={RED} strokeWidth="1.2" />
-
-    {/* Right arched window */}
     <path d="M81 66 Q81 60 87 60 Q93 60 93 66 L93 78 L81 78 Z"
       stroke={RED} strokeWidth="1.6" fill="white" />
     <line x1="87" y1="60" x2="87" y2="78" stroke={RED} strokeWidth="1.2" />
-
-    {/* Center door with rounded arch top */}
     <path d="M54 96 L54 76 Q54 70 60 70 Q66 70 66 76 L66 96 Z"
       stroke={RED} strokeWidth="1.8" fill="white" />
     <line x1="60" y1="70" x2="60" y2="96" stroke={RED} strokeWidth="1.2" />
-
-    {/* Ground line */}
     <line x1="14" y1="96" x2="106" y2="96" stroke={RED} strokeWidth="2" strokeLinecap="round" />
   </svg>
 );
 
 // ============================================================
-// CORNER FLOURISH (ornate curly vine + dots + leaves)
+// CORNER FLOURISH
 // ============================================================
 
 const CornerFlourish = ({ flip }) => (
@@ -122,12 +103,11 @@ const CornerFlourish = ({ flip }) => (
 );
 
 // ============================================================
-// CASH BOOK RIBBON with scrollwork ends
+// RIBBON
 // ============================================================
 
 const RibbonTitle = ({ children }) => (
   <Box position="relative" display="inline-block">
-    {/* Left scroll end */}
     <Box
       position="absolute"
       left="-42px"
@@ -148,7 +128,6 @@ const RibbonTitle = ({ children }) => (
       </svg>
     </Box>
 
-    {/* Right scroll end */}
     <Box
       position="absolute"
       right="-42px"
@@ -169,7 +148,6 @@ const RibbonTitle = ({ children }) => (
       </svg>
     </Box>
 
-    {/* Ribbon body */}
     <Box
       position="relative"
       zIndex={2}
@@ -197,13 +175,29 @@ const RibbonTitle = ({ children }) => (
 
 const DayBookPrintView = ({
   rows = [],
+  totals,
   date = "",
   churchName = "Church",
   churchAddress = "",
   openingBalance = 0,
 }) => {
-  const totalDebit = rows.reduce((s, r) => s + Number(r.debit || 0), 0);
-  const totalCredit = rows.reduce((s, r) => s + Number(r.credit || 0), 0);
+  // ----- Totals: prefer the `totals` prop, fall back to summing rows -----
+  // Debit column  = money IN  (entry_type DEBIT on cash / bank)
+  // Credit column = money OUT (entry_type CREDIT on cash / bank)
+  const totalDebit = totals?.moneyIn !== undefined
+    ? Number(totals.moneyIn || 0)
+    : rows.reduce((s, r) => {
+        const amt = Number(r.amount || 0);
+        return s + (r.direction === "DEBIT" ? amt : 0);
+      }, 0);
+
+  const totalCredit = totals?.moneyOut !== undefined
+    ? Number(totals.moneyOut || 0)
+    : rows.reduce((s, r) => {
+        const amt = Number(r.amount || 0);
+        return s + (r.direction === "CREDIT" ? amt : 0);
+      }, 0);
+
   const closingBalance = openingBalance + totalDebit - totalCredit;
 
   const columns = [
@@ -228,9 +222,6 @@ const DayBookPrintView = ({
         margin: "0 auto",
       }}
     >
-      {/* ====================================================
-          OUTER FRAME
-          ==================================================== */}
       <Box
         position="relative"
         border={`1.5px solid ${RED_FRAME}`}
@@ -238,7 +229,6 @@ const DayBookPrintView = ({
         minH="285mm"
         bg={CREAM}
       >
-        {/* Inner thin border */}
         <Box
           position="absolute"
           top="5px"
@@ -249,7 +239,6 @@ const DayBookPrintView = ({
           pointerEvents="none"
         />
 
-        {/* Corner flourishes */}
         <Box position="absolute" top="-6px" left="-6px" zIndex={5}>
           <CornerFlourish />
         </Box>
@@ -263,16 +252,8 @@ const DayBookPrintView = ({
           <CornerFlourish flip />
         </Box>
 
-        {/* ==================================================
-            HEADER — Church icon + name + address
-            ================================================== */}
-        <Flex
-          align="center"
-          justify="center"
-          gap={5}
-          mt="14px"
-          mb={3}
-        >
+        {/* HEADER */}
+        <Flex align="center" justify="center" gap={5} mt="14px" mb={3}>
           <ChurchIcon />
           <Box>
             <Text
@@ -299,16 +280,12 @@ const DayBookPrintView = ({
           </Box>
         </Flex>
 
-        {/* ==================================================
-            RIBBON — CASH BOOK
-            ================================================== */}
+        {/* RIBBON */}
         <Box textAlign="center" my="18px" position="relative">
           <RibbonTitle>DAY BOOK</RibbonTitle>
         </Box>
 
-        {/* ==================================================
-            DATE
-            ================================================== */}
+        {/* DATE */}
         <Text
           textAlign="center"
           fontSize="17px"
@@ -320,9 +297,7 @@ const DayBookPrintView = ({
           Date: {formatDate(date)}
         </Text>
 
-        {/* ==================================================
-            TABLE
-            ================================================== */}
+        {/* TABLE */}
         <Box
           as="table"
           width="96%"
@@ -415,76 +390,84 @@ const DayBookPrintView = ({
                 </Box>
               </Box>
             ) : (
-              rows.map((r, i) => (
-                <Box
-                  as="tr"
-                  key={r.key || i}
-                  bg={i % 2 === 1 ? "#FFF8F2" : CREAM}
-                >
+              rows.map((r, i) => {
+                const amt = Number(r.amount || 0);
+                const isDebit = r.direction === "DEBIT";
+                const isCredit = r.direction === "CREDIT";
+
+                return (
                   <Box
-                    as="td"
-                    px={3}
-                    py="10px"
-                    fontSize="14px"
-                    color={RED}
-                    border={`1px solid ${RED_TABLE}`}
+                    as="tr"
+                    key={r.key || i}
+                    bg={i % 2 === 1 ? "#FFF8F2" : CREAM}
                   >
-                    {formatDate(r.date)}
+                    <Box
+                      as="td"
+                      px={3}
+                      py="10px"
+                      fontSize="14px"
+                      color={RED}
+                      border={`1px solid ${RED_TABLE}`}
+                    >
+                      {formatDate(r.date)}
+                    </Box>
+                    <Box
+                      as="td"
+                      px={3}
+                      py="10px"
+                      fontSize="14px"
+                      color={RED}
+                      border={`1px solid ${RED_TABLE}`}
+                    >
+                      {r.voucherNo || "—"}
+                    </Box>
+                    <Box
+                      as="td"
+                      px={3}
+                      py="10px"
+                      fontSize="14px"
+                      color={RED}
+                      border={`1px solid ${RED_TABLE}`}
+                    >
+                      {r.voucherType || "—"}
+                    </Box>
+                    <Box
+                      as="td"
+                      px={3}
+                      py="10px"
+                      fontSize="14px"
+                      color={RED}
+                      border={`1px solid ${RED_TABLE}`}
+                    >
+                      {r.particulars || "—"}
+                    </Box>
+                    {/* Credit column — money OUT */}
+                    <Box
+                      as="td"
+                      px={3}
+                      py="10px"
+                      fontSize="14px"
+                      color={RED}
+                      textAlign="right"
+                      border={`1px solid ${RED_TABLE}`}
+                    >
+                      {isCredit && amt > 0 ? formatAmount(amt) : "—"}
+                    </Box>
+                    {/* Debit column — money IN */}
+                    <Box
+                      as="td"
+                      px={3}
+                      py="10px"
+                      fontSize="14px"
+                      color={RED}
+                      textAlign="right"
+                      border={`1px solid ${RED_TABLE}`}
+                    >
+                      {isDebit && amt > 0 ? formatAmount(amt) : "—"}
+                    </Box>
                   </Box>
-                  <Box
-                    as="td"
-                    px={3}
-                    py="10px"
-                    fontSize="14px"
-                    color={RED}
-                    border={`1px solid ${RED_TABLE}`}
-                  >
-                    {r.voucherNo || "—"}
-                  </Box>
-                  <Box
-                    as="td"
-                    px={3}
-                    py="10px"
-                    fontSize="14px"
-                    color={RED}
-                    border={`1px solid ${RED_TABLE}`}
-                  >
-                    {r.voucherType || "—"}
-                  </Box>
-                  <Box
-                    as="td"
-                    px={3}
-                    py="10px"
-                    fontSize="14px"
-                    color={RED}
-                    border={`1px solid ${RED_TABLE}`}
-                  >
-                    {r.particulars || "—"}
-                  </Box>
-                  <Box
-                    as="td"
-                    px={3}
-                    py="10px"
-                    fontSize="14px"
-                    color={RED}
-                    textAlign="right"
-                    border={`1px solid ${RED_TABLE}`}
-                  >
-                    {Number(r.credit) ? formatAmount(r.credit) : "—"}
-                  </Box>
-                  <Box
-                    as="td"
-                    px={3}
-                    py="10px"
-                    fontSize="14px"
-                    color={RED}
-                    textAlign="right"
-                    border={`1px solid ${RED_TABLE}`}
-                  >
-                    {Number(r.debit) ? formatAmount(r.debit) : "—"}
-                  </Box>
-                </Box>
-              ))
+                );
+              })
             )}
 
             {/* Total */}

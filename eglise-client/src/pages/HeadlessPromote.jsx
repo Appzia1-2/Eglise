@@ -15,6 +15,7 @@ import {
   Card,
   RadioGroup,
   Spinner,
+  IconButton,
 } from "@chakra-ui/react";
 
 import { useNavigate, useLocation } from "react-router-dom";
@@ -24,6 +25,7 @@ import {
   LuUserPlus,
   LuUsers,
   LuMapPin,
+  LuEye,
 } from "react-icons/lu";
 
 import Navbar from "../components/Navbar";
@@ -762,107 +764,128 @@ const HeadlessPromote = () => {
                               )
                             }
                           >
-                            <RadioGroup.Item
-                              value={String(
-                                member.id
-                              )}
-                            >
-                              <RadioGroup.ItemHiddenInput />
+                            <Flex align="center" justify="space-between">
+                              <RadioGroup.Item
+                                value={String(
+                                  member.id
+                                )}
+                              >
+                                <RadioGroup.ItemHiddenInput />
 
-                              <RadioGroup.ItemIndicator />
+                                <RadioGroup.ItemIndicator />
 
-                              <RadioGroup.ItemText>
-                                <Box
-                                  ml="6px"
-                                  minW="0"
-                                >
-                                  {/* NAME */}
-
-                                  <Flex
-                                    align="center"
-                                    gap="8px"
-                                    flexWrap="wrap"
+                                <RadioGroup.ItemText>
+                                  <Box
+                                    ml="6px"
+                                    minW="0"
                                   >
-                                    <Text
-                                      fontWeight="600"
-                                      color="var(--dark-text)"
-                                      fontSize="13px"
+                                    {/* NAME */}
+
+                                    <Flex
+                                      align="center"
+                                      gap="8px"
+                                      flexWrap="wrap"
                                     >
-                                      {member.name ||
-                                        "Unnamed Member"}
-                                    </Text>
-
-                                    {member.is_active && (
-                                      <Badge
-                                        bg="var(--success-bg)"
-                                        color="var(--success)"
-                                        fontSize="8px"
-                                        px="5px"
-                                        py="2px"
-                                        borderRadius="4px"
+                                      <Text
+                                        fontWeight="600"
+                                        color="var(--dark-text)"
+                                        fontSize="13px"
                                       >
-                                        Active
-                                      </Badge>
-                                    )}
-                                  </Flex>
+                                        {member.name ||
+                                          "Unnamed Member"}
+                                      </Text>
 
-                                  {/* MEMBER DETAILS */}
+                                      {member.is_active && (
+                                        <Badge
+                                          bg="var(--success-bg)"
+                                          color="var(--success)"
+                                          fontSize="8px"
+                                          px="5px"
+                                          py="2px"
+                                          borderRadius="4px"
+                                        >
+                                          Active
+                                        </Badge>
+                                      )}
+                                    </Flex>
 
-                                  <HStack
-                                    gap="12px"
-                                    mt="4px"
-                                    flexWrap="wrap"
-                                  >
-                                    <Text
-                                      fontSize="11px"
-                                      color="var(--light-gray)"
+                                    {/* MEMBER DETAILS */}
+
+                                    <HStack
+                                      gap="12px"
+                                      mt="4px"
+                                      flexWrap="wrap"
                                     >
-                                      {member.gender ||
-                                        "N/A"}
-                                    </Text>
-
-                                    {member.age && (
                                       <Text
                                         fontSize="11px"
                                         color="var(--light-gray)"
                                       >
-                                        Age:{" "}
-                                        {
-                                          member.age
-                                        }
+                                        {member.gender ||
+                                          "N/A"}
                                       </Text>
-                                    )}
 
-                                    {member.relationship
-                                      ?.name && (
-                                      <Text
-                                        fontSize="11px"
-                                        color="var(--light-gray)"
-                                      >
-                                        Relation:{" "}
-                                        {
-                                          member
-                                            .relationship
-                                            .name
-                                        }
-                                      </Text>
-                                    )}
+                                      {member.age && (
+                                        <Text
+                                          fontSize="11px"
+                                          color="var(--light-gray)"
+                                        >
+                                          Age:{" "}
+                                          {
+                                            member.age
+                                          }
+                                        </Text>
+                                      )}
 
-                                    {(member.mobile_no ||
-                                      member.phone) && (
-                                      <Text
-                                        fontSize="11px"
-                                        color="var(--light-gray)"
-                                      >
-                                        📱{" "}
-                                        {member.mobile_no ||
-                                          member.phone}
-                                      </Text>
-                                    )}
-                                  </HStack>
-                                </Box>
-                              </RadioGroup.ItemText>
-                            </RadioGroup.Item>
+                                      {member.relationship
+                                        ?.name && (
+                                        <Text
+                                          fontSize="11px"
+                                          color="var(--light-gray)"
+                                        >
+                                          Relation:{" "}
+                                          {
+                                            member
+                                              .relationship
+                                              .name
+                                          }
+                                        </Text>
+                                      )}
+
+                                      {(member.mobile_no ||
+                                        member.phone) && (
+                                        <Text
+                                          fontSize="11px"
+                                          color="var(--light-gray)"
+                                        >
+                                          📱{" "}
+                                          {member.mobile_no ||
+                                            member.phone}
+                                        </Text>
+                                      )}
+                                    </HStack>
+                                  </Box>
+                                </RadioGroup.ItemText>
+                              </RadioGroup.Item>
+
+                              {/* ✅ NEW: Eye Button to View Member Details */}
+                              <IconButton
+                                aria-label="View Member Details"
+                                variant="ghost"
+                                h="28px"
+                                minW="28px"
+                                p="0"
+                                color="var(--primary-maroon)"
+                                title="View Member Details"
+                                onClick={(e) => {
+                                  e.stopPropagation(); // Prevents selecting the radio button
+                                  navigate(`/family-heads/${family_id}/members/${member.id}`);
+                                }}
+                                _hover={{ bg: "var(--light-maroon-bg)" }}
+                                flexShrink={0}
+                              >
+                                <LuEye size={18} />
+                              </IconButton>
+                            </Flex>
                           </Box>
                         );
                       }

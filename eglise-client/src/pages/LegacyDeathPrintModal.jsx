@@ -1,6 +1,6 @@
 // src/pages/LegacyDeathPrintModal.jsx
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import {
   Box,
@@ -13,6 +13,7 @@ import {
 import { LuFileDown, LuPrinter } from "react-icons/lu";
 
 import html2pdf from "html2pdf.js";
+import { getMyChurch } from "../api/registryServices"; // ✅ Import API
 
 // ============================================================
 // COLORS
@@ -442,6 +443,34 @@ const getAge = (dob, refDate) => {
 const LegacyDeathPrintModal = ({ isOpen, onClose, record }) => {
   const printRef = useRef(null);
 
+  // ✅ NEW: State to hold fetched church data
+  const [churchData, setChurchData] = useState({
+    name: "",
+    city: "",
+    diocese: "",
+  });
+
+  // ✅ NEW: Fetch Church & Diocese details on open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const fetchChurchInfo = async () => {
+      try {
+        const res = await getMyChurch();
+        const c = res?.data ?? res ?? {};
+        setChurchData({
+          name: c.name || "",
+          city: c.city || "",
+          diocese: c.diocese?.name || c.diocese_name || "",
+        });
+      } catch (err) {
+        console.error("Failed to fetch church info for print:", err);
+      }
+    };
+
+    fetchChurchInfo();
+  }, [isOpen]);
+
   // ---------------- INJECT STYLES ----------------
   useEffect(() => {
     if (!isOpen) return;
@@ -497,17 +526,21 @@ const LegacyDeathPrintModal = ({ isOpen, onClose, record }) => {
     safe(record?.place_of_death, null) ||
     safe(record?.house_name, "N/A");
 
+  // ✅ ROBUST FALLBACKS FOR PARISH & DIOCESE
   const churchName =
     safe(record?.church_name, null) ||
-    safe(record?.church?.name, "N/A");
+    safe(record?.church?.name, null) ||
+    safe(churchData.name, "N/A");
 
   const churchCity =
     safe(record?.church_city, null) ||
-    safe(record?.church?.city, "N/A");
+    safe(record?.church?.city, null) ||
+    safe(churchData.city, "N/A");
 
   const dioceseName =
     safe(record?.diocese_name, null) ||
-    safe(record?.church?.diocese?.name, "N/A");
+    safe(record?.church?.diocese?.name, null) ||
+    safe(churchData.diocese, "N/A");
 
   // ==========================================================
   // PRINT

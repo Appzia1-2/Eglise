@@ -15,7 +15,7 @@
 //     <table>...</table>
 //   </ChurchPrintModal>
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Box, Button, Flex, Text } from "@chakra-ui/react";
 
 const PRIMARY_RED = "#D7193F";
@@ -87,13 +87,17 @@ const CornerFlourish = ({ rotate = 0, color = DARK_RED }) => (
 const ChurchPrintModal = ({
   isOpen,
   onClose,
-  title,           // e.g. "MEMBER LEDGER"
-  subtitle,        // JSX node — e.g. "Member Name: George • Period: ..."
-  church = {},     // { name, address, city, state, postal_code }
-  children,        // the <table> or content to render inside
-  onDownloadPDF,   // optional callback; if absent, Print is used
+  title,                     // e.g. "MEMBER LEDGER"
+  subtitle,                  // JSX node — e.g. "Member Name: George • Period: ..."
+  church = {},               // { name, address, city, state, postal_code }
+  children,                  // the <table> or content to render inside
+  onDownloadPDF,             // optional custom handler; if absent, uses html2pdf
+  pdfFileName,               // optional filename for downloaded PDF
+  orientation = "portrait",  // "portrait" | "landscape" — for the sheet size hint
+  showPdfButton = true,      // hide the Download PDF button if needed
 }) => {
   const sheetRef = useRef(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   // Lock body scroll while open
   useEffect(() => {
@@ -111,6 +115,71 @@ const ChurchPrintModal = ({
     window.print();
   };
 
+  // ------------------------------------------------------------
+  // Default PDF generator using html2pdf.js
+  // Falls back to window.print() if html2pdf isn't available
+  // ------------------------------------------------------------
+  const handleDownloadPDF = async () => {
+    if (onDownloadPDF) {
+      onDownloadPDF();
+      return;
+    }
+
+    const element = sheetRef.current;
+    if (!element) {
+      handlePrint();
+      return;
+    }
+
+    try {
+      setIsGeneratingPdf(true);
+
+      // Dynamic import so the bundle only loads html2pdf when needed
+      const html2pdf = (await import("html2pdf.js")).default;
+
+      const safeTitle = String(title || "report")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+
+      const fileName =
+        pdfFileName || `${safeTitle || "report"}.pdf`;
+
+      await html2pdf()
+        .set({
+          margin: 0,
+          filename: fileName,
+          image: { type: "jpeg", quality: 0.98 },
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: "#ffffff",
+            logging: false,
+            allowTaint: true,
+            imageTimeout: 5000,
+            scrollX: 0,
+            scrollY: 0,
+            windowWidth: element.scrollWidth,
+          },
+          jsPDF: {
+            orientation: orientation === "landscape" ? "l" : "p",
+            unit: "mm",
+            format: "a4",
+            compress: true,
+          },
+          pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+        })
+        .from(element)
+        .save();
+    } catch (error) {
+      console.error("PDF generation error:", error);
+      // Last-resort fallback: open the system print dialog
+      handlePrint();
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
   const churchName = church.name || "Church Name";
   const churchAddress = [
     church.address,
@@ -120,6 +189,9 @@ const ChurchPrintModal = ({
   ]
     .filter(Boolean)
     .join(", ");
+
+  const sheetWidth = orientation === "landscape" ? "297mm" : "210mm";
+  const sheetMinHeight = orientation === "landscape" ? "200mm" : "280mm";
 
   return (
     <Box
@@ -155,21 +227,25 @@ const ChurchPrintModal = ({
           ✕ Close
         </Button>
 
-        <Button
-          variant="outline"
-          h="40px"
-          px={5}
-          bg="white"
-          borderColor={PRIMARY_RED}
-          color={PRIMARY_RED}
-          borderRadius="6px"
-          fontSize="12px"
-          fontWeight="600"
-          onClick={onDownloadPDF || handlePrint}
-          _hover={{ bg: "#FFF5F7" }}
-        >
-          📄 Download PDF
-        </Button>
+        {showPdfButton && (
+          <Button
+            variant="outline"
+            h="40px"
+            px={5}
+            bg="white"
+            borderColor={PRIMARY_RED}
+            color={PRIMARY_RED}
+            borderRadius="6px"
+            fontSize="12px"
+            fontWeight="600"
+            onClick={handleDownloadPDF}
+            isLoading={isGeneratingPdf}
+            loadingText="Generating…"
+            _hover={{ bg: "#FFF5F7" }}
+          >
+            📄 Download PDF
+          </Button>
+        )}
 
         <Button
           h="40px"
@@ -192,8 +268,8 @@ const ChurchPrintModal = ({
           ref={sheetRef}
           className="print-sheet"
           bg="white"
-          width="210mm"
-          minH="280mm"
+          width={sheetWidth}
+          minH={sheetMinHeight}
           px="14mm"
           py="12mm"
           boxShadow="0 10px 40px rgba(0,0,0,0.25)"
@@ -324,12 +400,15 @@ const ChurchPrintModal = ({
           .print-scroll-wrap { padding: 0 !important; }
           .print-sheet {
             box-shadow: none !important;
-            width: 210mm !important;
+            width: ${sheetWidth} !important;
             min-height: auto !important;
             margin: 0 auto !important;
             padding: 10mm 12mm !important;
           }
-          @page { size: A4 portrait; margin: 6mm; }
+          @page {
+            size: A4 ${orientation};
+            margin: 6mm;
+          }
         }
       `}</style>
     </Box>

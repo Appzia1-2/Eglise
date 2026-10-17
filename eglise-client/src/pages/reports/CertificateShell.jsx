@@ -8,6 +8,7 @@ import { LuArrowLeft, LuPrinter } from "react-icons/lu";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import { getReportConfig, getSourceFromPath } from "./reportConfig";
+import ChurchPrintModal from "../../components/ChurchPrintModal"; // ✅ Import modal
 
 const PRIMARY_RED = "#D7193F";
 const DARK_RED = "#650A18";
@@ -32,6 +33,10 @@ const CertificateShell = ({ type, children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // ✅ NEW: State for Print Modal
+  const [isPrintOpen, setIsPrintOpen] = useState(false);
+  const [church, setChurch] = useState({ name: "Church Name", address: "" });
+
   useEffect(() => {
     (async () => {
       try {
@@ -51,17 +56,12 @@ const CertificateShell = ({ type, children }) => {
 
   return (
     <Box minH="100vh" bg="white" display="flex" flexDirection="column">
+      
+      {/* Hide Navbar and Footer on Print */}
       <style>{`
-        @page { size: A4 landscape; margin: 8mm; }
         @media print {
           .no-print { display: none !important; }
           body { background: white !important; }
-          .cert-wrap { padding: 0 !important; max-width: 100% !important; }
-          .cert-box {
-            box-shadow: none !important;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
         }
       `}</style>
 
@@ -69,17 +69,29 @@ const CertificateShell = ({ type, children }) => {
 
       <Container maxW="1050px" px={4} pt={3} pb={5} flex="1" className="cert-wrap">
         <Flex className="no-print" justify="space-between" align="center" mb={3}>
-          <Button variant="outline" h="34px" fontSize="11px"
-                  borderColor={BORDER_COLOR} color={SECONDARY_TEXT}
-                  onClick={() => navigate(cfg.basePath)}>
+          <Button 
+            variant="outline" 
+            h="34px" 
+            fontSize="11px"
+            borderColor={BORDER_COLOR} 
+            color={SECONDARY_TEXT}
+            onClick={() => navigate(cfg.basePath)}
+          >
             <LuArrowLeft size={14} style={{ marginRight: "6px" }} />
             Back to {cfg.title}
           </Button>
-          <Button bg={PRIMARY_RED} color="white" h="34px" px={4}
-                  fontSize="11px" fontWeight="600"
-                  onClick={() => window.print()}
-                  disabled={loading || !record}
-                  _hover={{ bg: DARK_RED }}>
+
+          <Button 
+            bg={PRIMARY_RED} 
+            color="white" 
+            h="34px" 
+            px={4}
+            fontSize="11px" 
+            fontWeight="600"
+            onClick={() => setIsPrintOpen(true)} // ✅ Open Modal
+            disabled={loading || !record}
+            _hover={{ bg: DARK_RED }}
+          >
             <LuPrinter size={14} style={{ marginRight: "6px" }} />
             Print Certificate
           </Button>
@@ -87,10 +99,30 @@ const CertificateShell = ({ type, children }) => {
 
         {loading && <Text fontSize="11px" color={SECONDARY_TEXT}>Loading...</Text>}
         {error && <Text fontSize="11px" color="red.600">{error}</Text>}
-        {!loading && record && children(record)}
+        
+        {!loading && record && (
+          <Box className="cert-box">
+            {children(record)}
+          </Box>
+        )}
       </Container>
 
       <Box className="no-print"><Footer /></Box>
+
+      {/* ✅ PRINT MODAL */}
+      <ChurchPrintModal
+        isOpen={isPrintOpen}
+        onClose={() => setIsPrintOpen(false)}
+        title={`${cfg.title.toUpperCase()} CERTIFICATE`}
+        church={church}
+        pdfFileName={`${type}-certificate-${id}.pdf`}
+        orientation="portrait"
+        showHeader={false} // Hide default header because the certificate has its own
+      >
+        {/* We re-render the child component inside the modal for the PDF */}
+        {record && children(record)}
+      </ChurchPrintModal>
+
     </Box>
   );
 };

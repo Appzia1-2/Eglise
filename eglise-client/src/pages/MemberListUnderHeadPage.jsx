@@ -13,6 +13,10 @@ import {
   LuChevronLeft,
   LuChevronRight,
   LuUserCog,
+  LuArrowLeft,
+  LuUsers,
+  LuUserX,
+  LuX,
 } from "react-icons/lu";
 
 import {
@@ -27,10 +31,12 @@ import {
   Input,
   Spinner,
   Text,
+  Dialog,
 } from "@chakra-ui/react";
 
 import {
   getMember,
+  getMemberDetail,
   listMembersByHead,
   listRelationships,
   transferAndPromoteHead,
@@ -51,6 +57,7 @@ const NAVY_LIGHT = "#26396C";
 
 const TEXT = "#26345A";
 const MUTED = "#68758F";
+const DARK = "#1F2937";
 
 const BORDER = "#E5EAF2";
 const PAGE_BG = "#FBFCFE";
@@ -91,6 +98,75 @@ const getNameFromObject = (value) => {
 };
 
 /* ============================================================
+   FIELD LABELS
+============================================================ */
+
+const FIELD_LABELS = {
+  family: "Family",
+  house_name: "House Name",
+  email: "Email",
+  name: "Name",
+  is_family_head: "Family Head",
+  relationship: "Relationship",
+  detail: "Error",
+  error: "Error",
+  non_field_errors: "Error",
+};
+
+/* ============================================================
+   EXTRACT BACKEND ERROR MESSAGES
+   Handles all the shapes DRF can return:
+     { "detail": "..." }
+     { "error": "..." }
+     { "field": ["..."] }
+     { "non_field_errors": ["..."] }
+============================================================ */
+
+const extractBackendErrors = (responseData) => {
+  const fieldErrors = {};
+  const messages = [];
+
+  if (!responseData) return { fieldErrors, messages };
+
+  if (typeof responseData === "string") {
+    messages.push(responseData);
+    return { fieldErrors, messages };
+  }
+
+  if (Array.isArray(responseData)) {
+    responseData.forEach((item) => {
+      if (typeof item === "string") messages.push(item);
+    });
+    return { fieldErrors, messages };
+  }
+
+  Object.entries(responseData).forEach(([key, value]) => {
+    const text = Array.isArray(value)
+      ? value.filter(Boolean).join(" ")
+      : typeof value === "string"
+      ? value
+      : value && typeof value === "object"
+      ? JSON.stringify(value)
+      : "";
+
+    if (!text) return;
+
+    if (
+      key === "detail" ||
+      key === "error" ||
+      key === "non_field_errors"
+    ) {
+      messages.push(text);
+    } else {
+      fieldErrors[key] = text;
+      messages.push(`${FIELD_LABELS[key] || key}: ${text}`);
+    }
+  });
+
+  return { fieldErrors, messages };
+};
+
+/* ============================================================
    COMPONENT
 ============================================================ */
 
@@ -109,13 +185,22 @@ const MemberListUnderHeadPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Toggle between Active and Old Members
+  const [viewMode, setViewMode] = useState("ACTIVE"); // "ACTIVE" | "OLD"
+
   const [search, setSearch] = useState("");
   const [relationshipFilter, setRelationshipFilter] = useState("");
   const [genderFilter, setGenderFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
 
-  const [promoting, setPromoting] = useState(null);
+  // ✅ Promote modal state
+  const [promoteModalOpen, setPromoteModalOpen] = useState(false);
+  const [selectedMember, setSelectedMember] = useState(null);
+  const [newHouseName, setNewHouseName] = useState("");
+  const [promoting, setPromoting] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [promoteFieldErrors, setPromoteFieldErrors] = useState({});
 
   /* ==========================================================
      LOAD DATA
@@ -145,11 +230,18 @@ const MemberListUnderHeadPage = () => {
       setRelationships(getArrayData(relationshipsResponse));
     } catch (err) {
       console.error("Unable to load dependent page:", err);
-      setError(
+
+      const { messages } = extractBackendErrors(err?.response?.data);
+
+      const errorMessage =
+        err?.response?.data?.error ||
         err?.response?.data?.detail ||
-          err?.response?.data?.message ||
-          "Unable to load dependents."
-      );
+        err?.response?.data?.message ||
+        err?.message ||
+        (messages.length > 0 ? messages.join("\n") : null) ||
+        "Unable to load dependents.";
+
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -179,11 +271,16 @@ const MemberListUnderHeadPage = () => {
 
   /* ==========================================================
      FAMILY NAME
+     Handles BOTH:
+       - MemberSerializer (flat; family = id, family_name may exist)
+       - MemberDetailSerializer (nested; family = { id, family_name })
   ========================================================== */
 
   const getFamilyName = (member) => {
+    if (!member) return "—";
+
     return (
-      member?.family_name ||
+      member.family_name ||
       member?.family?.family_name ||
       member?.family?.name ||
       head?.family_name ||
@@ -253,96 +350,123 @@ const MemberListUnderHeadPage = () => {
   };
 
   /* ==========================================================
-     STATUS - FIXED to correctly identify inactive members
+     STATUS
   ========================================================== */
 
   const getStatus = (member) => {
-    // Check if member is explicitly inactive
     if (member?.is_active === false) {
-      return "Inactive";
+      return "Old Member";
     }
-    
-    // Check if expired
+
     if (member?.expired === true) {
-      return "Inactive";
+      return "Old Member";
     }
-    
-    // Check status field
+
     if (String(member?.status || "").toUpperCase() === "INACTIVE") {
-      return "Inactive";
+      return "Old Member";
     }
 
     return "Active";
   };
 
   /* ==========================================================
-     PROMOTE HANDLER - Shows house name in alerts
+     PROMOTE HANDLERS
   ========================================================== */
 
-  const handlePromote = async (memberId, memberName, member) => {
-    // Ask for new house name
-    const newHouseName = window.prompt(
-      `Enter new house name for "${memberName}" to start their own household:\n\n` +
-      `Example: Kunnath Cottage, Kunnath Villa, etc.`,
-      `${memberName}'s House`
-    );
+  const openPromoteModal = async (member) => {
+    setPromoteFieldErrors({});
+    setSelectedMember(member);
+    setNewHouseName(`${member.name}'s House`);
+    setPromoteModalOpen(true);
 
-    if (newHouseName === null) {
-      return;
+    // ✅ Fetch full detail so we reliably get family_name + house info
+    try {
+      setDetailLoading(true);
+      const res = await getMemberDetail(member.id);
+      const detail = res?.data ?? res;
+      setSelectedMember((prev) => ({ ...prev, ...detail }));
+    } catch (err) {
+      console.error("Failed to load member detail for modal:", err);
+    } finally {
+      setDetailLoading(false);
     }
+  };
 
-    if (!newHouseName || newHouseName.trim() === "") {
+  const closePromoteModal = () => {
+    if (promoting) return;
+    setPromoteModalOpen(false);
+    setSelectedMember(null);
+    setNewHouseName("");
+    setDetailLoading(false);
+    setPromoteFieldErrors({});
+  };
+
+  const submitPromote = async () => {
+    if (!selectedMember) return;
+
+    if (!newHouseName.trim()) {
       alert("House name is required to promote to a new house.");
       return;
     }
 
-    const trimmedHouseName = newHouseName.trim();
-
-    // Show the entered house name in confirmation
-    if (!window.confirm(
-      `Are you sure you want to promote "${memberName}" to Family Head of "${trimmedHouseName}"?\n\n` +
-      `This will create a new household under the same family.`
-    )) {
-      return;
-    }
-
     try {
-      setPromoting(memberId);
+      setPromoting(true);
       setError("");
+      setPromoteFieldErrors({});
 
-      // Get family ID from head or member
-      const familyId = head?.family?.id || head?.family_id || member?.family?.id || member?.family;
+      const familyId =
+        selectedMember?.family?.id ||
+        selectedMember?.family ||
+        head?.family?.id ||
+        head?.family_id;
 
       if (!familyId) {
-        throw new Error("Family ID not found. Please make sure the family head is properly set.");
+        throw new Error(
+          "Family ID not found. Please make sure the family head is properly set."
+        );
       }
 
-      await transferAndPromoteHead(memberId, {
+      await transferAndPromoteHead(selectedMember.id, {
         family: familyId,
-        house_name: trimmedHouseName
+        house_name: newHouseName.trim(),
       });
 
       await loadPageData();
 
-      // Show success with the house name
+      const promotedName = selectedMember.name;
+
+      closePromoteModal();
+
       alert(
-        `✅ "${memberName}" has been promoted to Family Head of "${trimmedHouseName}" successfully!\n\n` +
-        `They now have their own household.`
+        `✅ "${promotedName}" has been promoted to Family Head of "${newHouseName.trim()}" successfully!\n\n` +
+          `They now have their own household.`
       );
     } catch (err) {
       console.error("Promotion failed:", err);
-      
-      const errorMessage = err?.response?.data?.error ||
+
+      const responseData = err?.response?.data;
+
+      // ✅ Same extraction pattern as OfferingAddPage
+      const { fieldErrors: backendFieldErrors, messages } =
+        extractBackendErrors(responseData);
+
+      const errorMessage =
+        err?.response?.data?.error ||
         err?.response?.data?.detail ||
         err?.response?.data?.message ||
         err?.message ||
+        (messages.length > 0 ? messages.join("\n") : null) ||
         "Failed to promote member. Please try again.";
 
       setError(errorMessage);
-      
       alert(`❌ Promotion Failed:\n\n${errorMessage}`);
+
+      // Keep the modal open and surface field errors inline if any
+      if (Object.keys(backendFieldErrors).length > 0) {
+        setPromoteFieldErrors(backendFieldErrors);
+      }
     } finally {
-      setPromoting(null);
+      setPromoting(false);
     }
   };
 
@@ -357,20 +481,27 @@ const MemberListUnderHeadPage = () => {
   }, [relationships]);
 
   /* ==========================================================
-     FILTER - FIXED to include inactive members
+     FILTER
   ========================================================== */
 
   const filteredMembers = useMemo(() => {
     const query = search.trim().toLowerCase();
 
     return members.filter((member) => {
+      const status = getStatus(member);
+      const isOldMember = status === "Old Member";
+
+      // 1. Filter by View Mode (Active vs Old)
+      if (viewMode === "ACTIVE" && isOldMember) return false;
+      if (viewMode === "OLD" && !isOldMember) return false;
+
+      // 2. Apply Search & Dropdowns
       const name = String(member?.name || "").toLowerCase();
       const family = String(getFamilyName(member)).toLowerCase();
       const familyHead = String(getFamilyHeadName(member)).toLowerCase();
       const phone = String(getPhone(member)).toLowerCase();
       const relationship = getRelationship(member);
       const gender = String(member?.gender || "").toUpperCase();
-      const status = getStatus(member);
 
       const matchesSearch =
         !query ||
@@ -382,11 +513,9 @@ const MemberListUnderHeadPage = () => {
       const matchesRelationship =
         !relationshipFilter || relationship === relationshipFilter;
 
-      const matchesGender =
-        !genderFilter || gender === genderFilter;
+      const matchesGender = !genderFilter || gender === genderFilter;
 
-      const matchesStatus =
-        !statusFilter || status === statusFilter;
+      const matchesStatus = !statusFilter || status === statusFilter;
 
       return (
         matchesSearch &&
@@ -395,7 +524,16 @@ const MemberListUnderHeadPage = () => {
         matchesStatus
       );
     });
-  }, [members, search, relationshipFilter, genderFilter, statusFilter, relationships, head]);
+  }, [
+    members,
+    search,
+    relationshipFilter,
+    genderFilter,
+    statusFilter,
+    relationships,
+    head,
+    viewMode,
+  ]);
 
   /* ==========================================================
      PAGINATION
@@ -415,7 +553,7 @@ const MemberListUnderHeadPage = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, relationshipFilter, genderFilter, statusFilter]);
+  }, [search, relationshipFilter, genderFilter, statusFilter, viewMode]);
 
   /* ==========================================================
      CLEAR FILTERS
@@ -472,12 +610,7 @@ const MemberListUnderHeadPage = () => {
 
   if (loading) {
     return (
-      <Box
-        minH="100vh"
-        display="flex"
-        flexDirection="column"
-        bg="white"
-      >
+      <Box minH="100vh" display="flex" flexDirection="column" bg="white">
         <Navbar />
         <Center flex="1">
           <Spinner size="lg" color={RED} />
@@ -492,12 +625,7 @@ const MemberListUnderHeadPage = () => {
   ========================================================== */
 
   return (
-    <Box
-      minH="100vh"
-      display="flex"
-      flexDirection="column"
-      bg="white"
-    >
+    <Box minH="100vh" display="flex" flexDirection="column" bg="white">
       <Navbar />
 
       <Box
@@ -575,21 +703,70 @@ const MemberListUnderHeadPage = () => {
               </Text>
             </Box>
 
-            <Button
-              bg={RED}
-              color="white"
-              h="38px"
-              px="16px"
-              borderRadius="4px"
-              fontSize="11px"
-              fontWeight="500"
-              flexShrink="0"
-              onClick={() => navigate(`/family-heads/${headId}/members/create`)}
-              _hover={{ bg: RED_DARK }}
-            >
-              <LuPlus size={16} />
-              <Text ml="6px">Add Dependent</Text>
-            </Button>
+            <HStack gap="10px" flexShrink="0" flexWrap="wrap">
+              {/* BACK BUTTON */}
+              <Button
+                variant="outline"
+                borderColor={RED}
+                color={RED}
+                bg="white"
+                h="38px"
+                px="16px"
+                borderRadius="4px"
+                fontSize="11px"
+                fontWeight="500"
+                onClick={() => navigate("/family-heads")}
+                _hover={{ bg: "#FFF8F8" }}
+              >
+                <LuArrowLeft size={15} />
+                <Text ml="6px">Back</Text>
+              </Button>
+
+              {/* TOGGLE BUTTON */}
+              <Button
+                variant="outline"
+                borderColor={viewMode === "OLD" ? "#D97706" : "#D8DFE9"}
+                color={viewMode === "OLD" ? "#D97706" : MUTED}
+                bg={viewMode === "OLD" ? "#FEF3C7" : "white"}
+                h="38px"
+                px="16px"
+                borderRadius="4px"
+                fontSize="11px"
+                fontWeight="600"
+                onClick={() => setViewMode(viewMode === "ACTIVE" ? "OLD" : "ACTIVE")}
+                _hover={{ bg: viewMode === "OLD" ? "#FDE68A" : "#F8F9FB" }}
+              >
+                {viewMode === "ACTIVE" ? (
+                  <>
+                    <LuUserX size={15} />
+                    <Text ml="6px">View Old Members</Text>
+                  </>
+                ) : (
+                  <>
+                    <LuUsers size={15} />
+                    <Text ml="6px">View Active Members</Text>
+                  </>
+                )}
+              </Button>
+
+              {/* ADD DEPENDENT */}
+              {viewMode === "ACTIVE" && (
+                <Button
+                  bg={RED}
+                  color="white"
+                  h="38px"
+                  px="16px"
+                  borderRadius="4px"
+                  fontSize="11px"
+                  fontWeight="500"
+                  onClick={() => navigate(`/family-heads/${headId}/members/create`)}
+                  _hover={{ bg: RED_DARK }}
+                >
+                  <LuPlus size={16} />
+                  <Text ml="6px">Add Dependent</Text>
+                </Button>
+              )}
+            </HStack>
           </Flex>
 
           {/* ERROR */}
@@ -602,7 +779,7 @@ const MemberListUnderHeadPage = () => {
               border="1px solid #F2C6C6"
               borderRadius="5px"
             >
-              <Text fontSize="11px" color="#B42318">
+              <Text fontSize="11px" color="#B42318" whiteSpace="pre-wrap">
                 {error}
               </Text>
             </Box>
@@ -719,41 +896,6 @@ const MemberListUnderHeadPage = () => {
               />
             </Box>
 
-            {/* STATUS */}
-            <Box position="relative" flex="0.75" minW="125px">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                style={{
-                  appearance: "none",
-                  WebkitAppearance: "none",
-                  width: "100%",
-                  height: "36px",
-                  padding: "0 31px 0 11px",
-                  background: "#FFFFFF",
-                  border: "1px solid #D8DFE9",
-                  borderRadius: "5px",
-                  fontSize: "11px",
-                  color: "#69758A",
-                  outline: "none",
-                }}
-              >
-                <option value="">All Status</option>
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
-              <LuChevronDown
-                size={14}
-                style={{
-                  position: "absolute",
-                  right: "10px",
-                  top: "11px",
-                  pointerEvents: "none",
-                  color: "#65748C",
-                }}
-              />
-            </Box>
-
             <Button
               h="36px"
               minW="88px"
@@ -780,11 +922,19 @@ const MemberListUnderHeadPage = () => {
 
           {/* DIRECTORY TITLE */}
           <Box mb="11px">
-            <Heading color={NAVY} fontSize="18px" fontWeight="700" lineHeight="1.2">
-              Dependent Directory
+            <Heading
+              color={viewMode === "OLD" ? "#B45309" : NAVY}
+              fontSize="18px"
+              fontWeight="700"
+              lineHeight="1.2"
+            >
+              {viewMode === "OLD"
+                ? "Previous Members Directory"
+                : "Dependent Directory"}
             </Heading>
             <Text color="#68758F" fontSize="11px" mt="4px">
-              Showing {showingFrom}-{showingTo} of {totalItems} dependents
+              Showing {showingFrom}-{showingTo} of {totalItems}{" "}
+              {viewMode === "OLD" ? "old members" : "dependents"}
             </Text>
           </Box>
 
@@ -799,10 +949,11 @@ const MemberListUnderHeadPage = () => {
               textAlign="center"
             >
               <Text fontSize="14px" fontWeight="600" color={TEXT}>
-                No dependents found.
+                No {viewMode === "OLD" ? "old members" : "dependents"} found.
               </Text>
               <Text fontSize="11px" color={MUTED} mt="5px">
-                No dependent matches the selected filters.
+                No {viewMode === "OLD" ? "old member" : "dependent"} matches the
+                selected filters.
               </Text>
               {hasFilters && (
                 <Button
@@ -820,7 +971,7 @@ const MemberListUnderHeadPage = () => {
               )}
             </Box>
           ) : (
-            /* DEPENDENT CARDS */
+            /* CARDS */
             <Grid
               templateColumns={{
                 base: "1fr",
@@ -832,30 +983,67 @@ const MemberListUnderHeadPage = () => {
               {visibleMembers.map((member) => {
                 const name = member?.name || "Unnamed";
                 const relation = getRelationship(member);
-                const status = getStatus(member);
                 const family = getFamilyName(member);
                 const familyHead = getFamilyHeadName(member);
                 const age = getAge(member?.dob);
                 const phone = getPhone(member);
 
                 const canPromote = member?.is_active && !member?.is_family_head;
+                const isOldMember = viewMode === "OLD";
 
-                // Check if member is inactive
-                const isInactive = status === "Inactive";
+                // ✅ OLD MEMBER CARD
+                if (isOldMember) {
+                  return (
+                    <Box
+                      key={member.id}
+                      bg="#FAFAF9"
+                      border="1px solid #E7E5E4"
+                      borderRadius="6px"
+                      px="14px"
+                      py="12px"
+                      display="flex"
+                      flexDirection="column"
+                      justifyContent="center"
+                    >
+                      <Flex align="center" gap="8px" mb="8px">
+                        <Text fontSize="14px" fontWeight="700" color="#44403C">
+                          {name}
+                        </Text>
+                        <Box
+                          bg="#FEF3C7"
+                          color="#B45309"
+                          px="6px"
+                          py="2px"
+                          borderRadius="4px"
+                          fontSize="9px"
+                          fontWeight="600"
+                        >
+                          MOVED OUT
+                        </Box>
+                      </Flex>
+                      <Text fontSize="11px" color="#78716C" fontWeight="500">
+                        {relation} • {family}
+                      </Text>
+                      <Text fontSize="11px" color="#78716C" mt="4px">
+                        {phone}
+                      </Text>
+                    </Box>
+                  );
+                }
 
+                // ✅ ACTIVE MEMBER CARD
                 return (
                   <Box
                     key={member.id}
                     bg="white"
                     border="1px solid"
-                    borderColor={isInactive ? "#F5E6E6" : BORDER}
+                    borderColor={BORDER}
                     borderRadius="6px"
                     h="145px"
                     px="14px"
                     py="12px"
                     position="relative"
                     transition="all 0.15s ease"
-                    opacity={isInactive ? 0.7 : 1}
                     _hover={{
                       borderColor: "#CBD4E1",
                       boxShadow: "0 3px 10px rgba(20,36,91,0.06)",
@@ -867,7 +1055,7 @@ const MemberListUnderHeadPage = () => {
                         <Text
                           fontSize="14px"
                           fontWeight="700"
-                          color={isInactive ? "#666666" : NAVY}
+                          color={NAVY}
                           whiteSpace="nowrap"
                           overflow="hidden"
                           textOverflow="ellipsis"
@@ -890,33 +1078,13 @@ const MemberListUnderHeadPage = () => {
                         >
                           {relation}
                         </Box>
-
-                        {/* Inactive Badge */}
-                        {isInactive && (
-                          <Box
-                            bg="#FEE2E2"
-                            border="1px solid #FECACA"
-                            color="#DC2626"
-                            borderRadius="4px"
-                            px="6px"
-                            py="2px"
-                            fontSize="9px"
-                            lineHeight="12px"
-                            fontWeight="600"
-                            whiteSpace="nowrap"
-                            flexShrink="0"
-                          >
-                            INACTIVE
-                          </Box>
-                        )}
                       </HStack>
 
                       <Box
                         flexShrink="0"
-                        bg={status === "Active" ? "#E4F5E8" : "#FEE2E2"}
-                        border="1px solid"
-                        borderColor={status === "Active" ? "#C8E6CF" : "#FECACA"}
-                        color={status === "Active" ? "#25813B" : "#DC2626"}
+                        bg="#E4F5E8"
+                        border="1px solid #C8E6CF"
+                        color="#25813B"
                         borderRadius="4px"
                         px="7px"
                         py="3px"
@@ -924,7 +1092,7 @@ const MemberListUnderHeadPage = () => {
                         lineHeight="12px"
                         fontWeight="500"
                       >
-                        {status}
+                        Active
                       </Box>
                     </Flex>
 
@@ -933,7 +1101,7 @@ const MemberListUnderHeadPage = () => {
                       mt="9px"
                       fontSize="11px"
                       fontWeight="600"
-                      color={isInactive ? "#666666" : NAVY_LIGHT}
+                      color={NAVY_LIGHT}
                       whiteSpace="nowrap"
                       overflow="hidden"
                       textOverflow="ellipsis"
@@ -949,7 +1117,7 @@ const MemberListUnderHeadPage = () => {
                       <Text
                         fontSize="10px"
                         fontWeight="600"
-                        color={isInactive ? "#666666" : NAVY_LIGHT}
+                        color={NAVY_LIGHT}
                         whiteSpace="nowrap"
                         overflow="hidden"
                         textOverflow="ellipsis"
@@ -969,20 +1137,14 @@ const MemberListUnderHeadPage = () => {
                     </Text>
 
                     {/* ACTION BUTTONS */}
-                    <Flex
-                      position="absolute"
-                      right="9px"
-                      bottom="8px"
-                      gap="3px"
-                    >
-                      {/* VIEW */}
+                    <Flex position="absolute" right="9px" bottom="8px" gap="3px">
                       <IconButton
                         aria-label="View dependent"
                         variant="ghost"
                         w="28px"
                         h="28px"
                         minW="28px"
-                        color={isInactive ? "#666666" : RED}
+                        color={RED}
                         borderRadius="4px"
                         onClick={() =>
                           navigate(`/family-heads/${headId}/members/${member.id}`)
@@ -992,8 +1154,7 @@ const MemberListUnderHeadPage = () => {
                         <LuEye size={17} />
                       </IconButton>
 
-                      {/* PROMOTE - Only show for active members */}
-                      {canPromote && !isInactive && (
+                      {canPromote && (
                         <IconButton
                           aria-label="Promote to Family Head (New House)"
                           variant="ghost"
@@ -1002,8 +1163,7 @@ const MemberListUnderHeadPage = () => {
                           minW="28px"
                           color={RED}
                           borderRadius="4px"
-                          isLoading={promoting === member.id}
-                          onClick={() => handlePromote(member.id, name, member)}
+                          onClick={() => openPromoteModal(member)}
                           _hover={{ bg: "#FFF2F3" }}
                           title="Promote to Family Head (Create New House)"
                         >
@@ -1011,17 +1171,18 @@ const MemberListUnderHeadPage = () => {
                         </IconButton>
                       )}
 
-                      {/* EDIT */}
                       <IconButton
                         aria-label="Edit dependent"
                         variant="ghost"
                         w="28px"
                         h="28px"
                         minW="28px"
-                        color={isInactive ? "#666666" : RED}
+                        color={RED}
                         borderRadius="4px"
                         onClick={() =>
-                          navigate(`/family-heads/${headId}/members/${member.id}/edit`)
+                          navigate(
+                            `/family-heads/${headId}/members/${member.id}/edit`
+                          )
                         }
                         _hover={{ bg: "#FFF2F3" }}
                       >
@@ -1043,7 +1204,8 @@ const MemberListUnderHeadPage = () => {
             flexWrap="wrap"
           >
             <Text color="#68758F" fontSize="11px">
-              Showing {showingFrom}-{showingTo} of {totalItems} dependents
+              Showing {showingFrom}-{showingTo} of {totalItems}{" "}
+              {viewMode === "OLD" ? "old members" : "dependents"}
             </Text>
 
             <HStack gap="5px">
@@ -1066,7 +1228,12 @@ const MemberListUnderHeadPage = () => {
 
               {getPageNumbers().map((page, index) =>
                 page === "..." ? (
-                  <Text key={`dots-${index}`} fontSize="11px" color="#77839A" px="3px">
+                  <Text
+                    key={`dots-${index}`}
+                    fontSize="11px"
+                    color="#77839A"
+                    px="3px"
+                  >
                     ...
                   </Text>
                 ) : (
@@ -1075,16 +1242,33 @@ const MemberListUnderHeadPage = () => {
                     h="28px"
                     minW="28px"
                     px="5px"
-                    bg={page === safePage ? RED : "white"}
+                    bg={
+                      page === safePage
+                        ? viewMode === "OLD"
+                          ? "#B45309"
+                          : RED
+                        : "white"
+                    }
                     color={page === safePage ? "white" : NAVY}
                     border="1px solid"
-                    borderColor={page === safePage ? RED : "#E0E5EC"}
+                    borderColor={
+                      page === safePage
+                        ? viewMode === "OLD"
+                          ? "#B45309"
+                          : RED
+                        : "#E0E5EC"
+                    }
                     borderRadius="4px"
                     fontSize="10px"
                     fontWeight="500"
                     onClick={() => setCurrentPage(page)}
                     _hover={{
-                      bg: page === safePage ? RED_DARK : "#F8F9FB",
+                      bg:
+                        page === safePage
+                          ? viewMode === "OLD"
+                            ? "#92400E"
+                            : RED_DARK
+                          : "#F8F9FB",
                     }}
                   >
                     {page}
@@ -1116,6 +1300,171 @@ const MemberListUnderHeadPage = () => {
       </Box>
 
       <Footer />
+
+      {/* ============================================================ */}
+      {/* PROMOTE TO HEAD MODAL                                        */}
+      {/* ============================================================ */}
+      <Dialog.Root
+        open={promoteModalOpen}
+        onOpenChange={(details) => {
+          if (!details.open) closePromoteModal();
+        }}
+        size="md"
+        placement="center"
+      >
+        <Dialog.Backdrop />
+        <Dialog.Positioner>
+          <Dialog.Content maxW="400px" borderRadius="8px">
+            <Dialog.Header
+              borderBottom="1px solid"
+              borderColor="#E5EAF1"
+              pb={4}
+            >
+              <Flex align="center" justify="space-between" w="full">
+                <Box>
+                  <Dialog.Title fontSize="16px" fontWeight="700" color={NAVY}>
+                    Promote to Family Head
+                  </Dialog.Title>
+                  <Text fontSize="11px" color={MUTED} mt={1}>
+                    Create a new household for this dependent.
+                  </Text>
+                </Box>
+                <IconButton
+                  aria-label="Close"
+                  variant="ghost"
+                  size="sm"
+                  onClick={closePromoteModal}
+                  color={MUTED}
+                  _hover={{ bg: "#F1F5F9" }}
+                >
+                  <LuX size={18} />
+                </IconButton>
+              </Flex>
+            </Dialog.Header>
+
+            <Dialog.Body py={5}>
+              {/* MEMBER SUMMARY */}
+              <Box
+                mb={4}
+                bg="#F8FAFC"
+                p={3}
+                borderRadius="6px"
+                border="1px solid #E2E8F0"
+              >
+                <Text fontSize="11px" color={MUTED} mb={1}>
+                  Promoting Member:
+                </Text>
+                <Text fontSize="14px" fontWeight="700" color={NAVY}>
+                  {selectedMember?.name || "—"}
+                </Text>
+
+                <Text fontSize="11px" color={MUTED} mt={2}>
+                  Current Family:{" "}
+                  {detailLoading ? (
+                    <Text as="span" fontSize="11px" color={MUTED}>
+                      Loading…
+                    </Text>
+                  ) : (
+                    <Text as="span" fontSize="12px" fontWeight="700" color={NAVY}>
+                      {getFamilyName(selectedMember)}
+                    </Text>
+                  )}
+                </Text>
+
+                {selectedMember?.house_name && (
+                  <Text fontSize="11px" color={MUTED} mt={1}>
+                    Current House:{" "}
+                    <Text as="span" fontSize="12px" fontWeight="600" color={NAVY}>
+                      {selectedMember.house_name}
+                      {selectedMember.house_sequence > 1
+                        ? ` (${selectedMember.house_sequence})`
+                        : ""}
+                    </Text>
+                  </Text>
+                )}
+              </Box>
+
+              <Text fontSize="12px" fontWeight="600" color={DARK} mb={2}>
+                New House Name{" "}
+                <Text as="span" color={RED}>
+                  *
+                </Text>
+              </Text>
+              <Input
+                value={newHouseName}
+                onChange={(e) => {
+                  setNewHouseName(e.target.value);
+                  if (promoteFieldErrors.house_name) {
+                    setPromoteFieldErrors((prev) => ({
+                      ...prev,
+                      house_name: "",
+                    }));
+                  }
+                }}
+                placeholder="e.g. Kunnath Cottage, Kunnath Villa"
+                h="40px"
+                fontSize="13px"
+                borderColor={
+                  promoteFieldErrors.house_name ? "#F3C4C4" : BORDER
+                }
+                borderRadius="6px"
+                color={TEXT}
+                _focus={{ borderColor: RED, boxShadow: `0 0 0 1px ${RED}` }}
+                autoFocus
+              />
+              {promoteFieldErrors.house_name && (
+                <Text color="#B42318" fontSize="11px" mt="6px">
+                  {promoteFieldErrors.house_name}
+                </Text>
+              )}
+              {promoteFieldErrors.family && (
+                <Text color="#B42318" fontSize="11px" mt="6px">
+                  {promoteFieldErrors.family}
+                </Text>
+              )}
+              <Text fontSize="10px" color={MUTED} mt={2}>
+                This will create a new household under the same family name. The
+                member will become the Family Head of this new house.
+              </Text>
+            </Dialog.Body>
+
+            <Dialog.Footer borderTop="1px solid" borderColor="#E5EAF1" pt={4}>
+              <Flex justify="flex-end" gap={3} w="full">
+                <Button
+                  variant="outline"
+                  h="36px"
+                  px={5}
+                  borderRadius="6px"
+                  fontSize="12px"
+                  fontWeight="600"
+                  onClick={closePromoteModal}
+                  disabled={promoting}
+                  borderColor={BORDER}
+                  color={TEXT}
+                  _hover={{ bg: "#F8FAFC" }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  h="36px"
+                  px={6}
+                  bg={RED}
+                  color="white"
+                  borderRadius="6px"
+                  fontSize="12px"
+                  fontWeight="600"
+                  onClick={submitPromote}
+                  loading={promoting}
+                  loadingText="Promoting..."
+                  _hover={{ bg: RED_DARK }}
+                >
+                  Confirm Promotion
+                </Button>
+              </Flex>
+            </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Dialog.Root>
     </Box>
   );
 };

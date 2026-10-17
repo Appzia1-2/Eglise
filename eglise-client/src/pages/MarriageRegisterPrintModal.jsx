@@ -1,6 +1,6 @@
 // src/pages/MarriageRegisterPrintModal.jsx
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import {
   Box,
@@ -13,6 +13,7 @@ import {
 import { LuFileDown, LuPrinter } from "react-icons/lu";
 
 import html2pdf from "html2pdf.js";
+import { getMyChurch } from "../api/registryServices"; // ✅ Import API
 
 // ============================================================
 // COLORS
@@ -462,6 +463,34 @@ const getAge = (dob, refDate) => {
 const MarriageRegisterPrintModal = ({ isOpen, onClose, marriage }) => {
   const printRef = useRef(null);
 
+  // ✅ NEW: State to hold fetched church data
+  const [churchData, setChurchData] = useState({
+    name: "",
+    city: "",
+    diocese: "",
+  });
+
+  // ✅ NEW: Fetch Church & Diocese details on open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const fetchChurchInfo = async () => {
+      try {
+        const res = await getMyChurch();
+        const c = res?.data ?? res ?? {};
+        setChurchData({
+          name: c.name || "",
+          city: c.city || "",
+          diocese: c.diocese?.name || c.diocese_name || "",
+        });
+      } catch (err) {
+        console.error("Failed to fetch church info for print:", err);
+      }
+    };
+
+    fetchChurchInfo();
+  }, [isOpen]);
+
   // ---------------- INJECT STYLES ----------------
   useEffect(() => {
     if (!isOpen) return;
@@ -558,20 +587,21 @@ const MarriageRegisterPrintModal = ({ isOpen, onClose, marriage }) => {
   const registerNumber = safe(marriage?.register_number);
   const slNo = safe(marriage?.id, "N/A");
 
+  // ✅ ROBUST FALLBACKS FOR PARISH & DIOCESE
   const churchCity =
     safe(marriage?.church_city, null) ||
     safe(marriage?.church?.city, null) ||
-    "N/A";
+    safe(churchData.city, "N/A");
 
   const churchName =
     safe(marriage?.church_name, null) ||
     safe(marriage?.church?.name, null) ||
-    "N/A";
+    safe(churchData.name, "N/A");
 
   const dioceseName =
     safe(marriage?.diocese_name, null) ||
     safe(marriage?.church?.diocese?.name, null) ||
-    "N/A";
+    safe(churchData.diocese, "N/A");
 
   // ==========================================================
   // PRINT

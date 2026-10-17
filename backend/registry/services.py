@@ -284,15 +284,15 @@ def calculate_package_pricing(package, billing_cycle):
 
 def can_add_member(church):
     """
-    Check whether a new family head can be added.
+    Check whether a new FAMILY HEAD can be added.
 
     Returns
     -------
     (allowed: bool, message: str | None, info: dict)
 
     info keys:
-        current   -> int
-        limit     -> int
+        current   -> int   (active family heads)
+        limit     -> int   (package slot limit)
         remaining -> int
     """
     subscription = getattr(church, "subscription", None)
@@ -323,7 +323,16 @@ def can_add_member(church):
     else:
         limit = package.member_limit or 0
 
+    # --------------------------------------------------
+    # Count only ACTIVE FAMILY HEADS
+    #
+    # Package capacity limits the number of HOUSEHOLDS
+    # (family heads), not the total number of individual
+    # members. Dependents, spouses, and children are
+    # free — they don't consume package slots.
+    # --------------------------------------------------
     current_count = church.members.filter(
+        is_family_head=True,
         is_active=True,
         expired=False,
     ).count()
@@ -344,7 +353,6 @@ def can_add_member(church):
         {"current": current_count, "limit": limit, "remaining": remaining},
     )
 
-
 # =====================================================
 # UPGRADE SUGGESTIONS
 # =====================================================
@@ -356,9 +364,19 @@ def get_next_subscription_action(church):
         return None
 
     package = subscription.package
+
+    # --------------------------------------------------
+    # Count only ACTIVE FAMILY HEADS
+    #
+    # Package capacity limits the number of HOUSEHOLDS
+    # (family heads), not the total number of individual
+    # members. Dependents, spouses, and children are free
+    # and do not consume package slots.
+    # --------------------------------------------------
     members = church.members.filter(
+        is_family_head=True,
         is_active=True,
-        expired=False
+        expired=False,
     ).count()
 
     if package.is_trial:
@@ -395,8 +413,6 @@ def get_next_subscription_action(church):
         "current_members": members,
         "suggested_package": next_package,
     }
-
-
 
 
 

@@ -265,6 +265,17 @@ const AddMemberPage = () => {
 
     marital_status: Yup.string()
       .required("Marital status is required"),
+
+    /*
+     * DATE OF BIRTH IS REQUIRED
+     */
+    dob: Yup.date()
+      .typeError("Date of birth is required")
+      .max(
+        new Date(),
+        "Date of birth cannot be in the future"
+      )
+      .required("Date of birth is required"),
   });
 
   /* ============================================================
@@ -327,6 +338,9 @@ const AddMemberPage = () => {
         mobile_no: values.mobile_no
           .replace(/\D/g, "")
           .slice(0, 10),
+
+        // ✅ DOB is now guaranteed by Yup validation
+        dob: values.dob,
       };
 
       /* ========================================================
@@ -362,10 +376,6 @@ const AddMemberPage = () => {
       ) {
         memberData.spouse_name =
           values.spouse_name.trim();
-      }
-
-      if (values.dob) {
-        memberData.dob = values.dob;
       }
 
       if (values.father_name?.trim()) {
@@ -1376,13 +1386,24 @@ const AddMemberPage = () => {
                             )}
                         </Field.Root>
 
-                        {/* DOB */}
+                        {/* DOB — NOW REQUIRED */}
 
-                        <Field.Root>
+                        <Field.Root
+                          invalid={
+                            touched.dob &&
+                            Boolean(errors.dob)
+                          }
+                        >
                           <Field.Label
                             {...labelProps}
                           >
-                            Date of Birth
+                            Date of Birth{" "}
+                            <Text
+                              as="span"
+                              color="#E00000"
+                            >
+                              *
+                            </Text>
                           </Field.Label>
 
                           <Input
@@ -1394,6 +1415,13 @@ const AddMemberPage = () => {
                             }
                             {...inputProps}
                           />
+
+                          {touched.dob &&
+                            errors.dob && (
+                              <Field.ErrorText fontSize="10px">
+                                {errors.dob}
+                              </Field.ErrorText>
+                            )}
                         </Field.Root>
 
                         {/* FATHER */}

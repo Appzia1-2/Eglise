@@ -2828,8 +2828,6 @@ class LedgerEntry(models.Model):
 
         return entry_type
 
-
-
 class ReceiptMaster(models.Model):
     """
     Receipt header. Money coming IN.
@@ -2866,9 +2864,10 @@ class ReceiptMaster(models.Model):
         related_name="receipts"
     )
 
+    # ✅ unique=True removed — uniqueness is now enforced per-church
+    #    via Meta.unique_together below
     receipt_number = models.CharField(
         max_length=30,
-        unique=True,
         blank=True,
         null=True
     )
@@ -2936,6 +2935,8 @@ class ReceiptMaster(models.Model):
         ordering = ["-receipt_date", "-id"]
         verbose_name = "Receipt"
         verbose_name_plural = "Receipts"
+        # ✅ Per-church uniqueness: two churches can both have RCP-2026-00001
+        unique_together = [("church", "receipt_number")]
 
     def __str__(self):
         return f"{self.receipt_number} - {self.member.name if self.member else ''} ({self.grand_total})"
@@ -3158,7 +3159,10 @@ class PaymentMaster(models.Model):
 
     church = models.ForeignKey(Church, on_delete=models.CASCADE, related_name="payments")
 
-    voucher_number = models.CharField(max_length=30, unique=True, blank=True, null=True)
+    # ✅ unique=True removed — uniqueness is now enforced per-church
+    #    via Meta.unique_together below
+    voucher_number = models.CharField(max_length=30, blank=True, null=True)
+
     ref_no = models.CharField(max_length=50, null=True, blank=True)
     payment_date = models.DateField()
     party_name = models.CharField(max_length=100)
@@ -3183,6 +3187,8 @@ class PaymentMaster(models.Model):
 
     class Meta:
         ordering = ["-payment_date", "-id"]
+        # ✅ Per-church uniqueness: two churches can both have PAY-2026-00001
+        unique_together = [("church", "voucher_number")]
 
     def save(self, *args, **kwargs):
         if not self.voucher_number:

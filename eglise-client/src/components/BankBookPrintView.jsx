@@ -103,7 +103,7 @@ const CornerFlourish = ({ flip }) => (
 );
 
 // ============================================================
-// RIBBON — "BANK BOOK"
+// RIBBON
 // ============================================================
 
 const RibbonTitle = ({ children }) => (
@@ -175,13 +175,29 @@ const RibbonTitle = ({ children }) => (
 
 const BankBookPrintView = ({
   rows = [],
+  totals,
   date = "",
   churchName = "Church",
   churchAddress = "",
   openingBalance = 0,
 }) => {
-  const totalDebit = rows.reduce((s, r) => s + Number(r.debit || 0), 0);
-  const totalCredit = rows.reduce((s, r) => s + Number(r.credit || 0), 0);
+  // ----- Totals: prefer the `totals` prop, fall back to summing rows -----
+  // Debit column  = money IN  (entry_type DEBIT on cash / bank)
+  // Credit column = money OUT (entry_type CREDIT on cash / bank)
+  const totalDebit = totals?.moneyIn !== undefined
+    ? Number(totals.moneyIn || 0)
+    : rows.reduce((s, r) => {
+        const amt = Number(r.amount || 0);
+        return s + (r.direction === "DEBIT" ? amt : 0);
+      }, 0);
+
+  const totalCredit = totals?.moneyOut !== undefined
+    ? Number(totals.moneyOut || 0)
+    : rows.reduce((s, r) => {
+        const amt = Number(r.amount || 0);
+        return s + (r.direction === "CREDIT" ? amt : 0);
+      }, 0);
+
   const closingBalance = openingBalance + totalDebit - totalCredit;
 
   const columns = [
@@ -374,32 +390,40 @@ const BankBookPrintView = ({
                 </Box>
               </Box>
             ) : (
-              rows.map((r, i) => (
-                <Box
-                  as="tr"
-                  key={r.key || i}
-                  bg={i % 2 === 1 ? "#FFF8F2" : CREAM}
-                >
-                  <Box as="td" px={3} py="10px" fontSize="14px" color={RED} border={`1px solid ${RED_TABLE}`}>
-                    {formatDate(r.date)}
+              rows.map((r, i) => {
+                const amt = Number(r.amount || 0);
+                const isDebit = r.direction === "DEBIT";
+                const isCredit = r.direction === "CREDIT";
+
+                return (
+                  <Box
+                    as="tr"
+                    key={r.key || i}
+                    bg={i % 2 === 1 ? "#FFF8F2" : CREAM}
+                  >
+                    <Box as="td" px={3} py="10px" fontSize="14px" color={RED} border={`1px solid ${RED_TABLE}`}>
+                      {formatDate(r.date)}
+                    </Box>
+                    <Box as="td" px={3} py="10px" fontSize="14px" color={RED} border={`1px solid ${RED_TABLE}`}>
+                      {r.voucherNo || "—"}
+                    </Box>
+                    <Box as="td" px={3} py="10px" fontSize="14px" color={RED} border={`1px solid ${RED_TABLE}`}>
+                      {r.voucherType || "—"}
+                    </Box>
+                    <Box as="td" px={3} py="10px" fontSize="14px" color={RED} border={`1px solid ${RED_TABLE}`}>
+                      {r.cashBankAccount || r.account || r.particulars || "—"}
+                    </Box>
+                    {/* Credit column — money OUT */}
+                    <Box as="td" px={3} py="10px" fontSize="14px" color={RED} textAlign="right" border={`1px solid ${RED_TABLE}`}>
+                      {isCredit && amt > 0 ? formatAmount(amt) : "—"}
+                    </Box>
+                    {/* Debit column — money IN */}
+                    <Box as="td" px={3} py="10px" fontSize="14px" color={RED} textAlign="right" border={`1px solid ${RED_TABLE}`}>
+                      {isDebit && amt > 0 ? formatAmount(amt) : "—"}
+                    </Box>
                   </Box>
-                  <Box as="td" px={3} py="10px" fontSize="14px" color={RED} border={`1px solid ${RED_TABLE}`}>
-                    {r.voucherNo || "—"}
-                  </Box>
-                  <Box as="td" px={3} py="10px" fontSize="14px" color={RED} border={`1px solid ${RED_TABLE}`}>
-                    {r.voucherType || "—"}
-                  </Box>
-                  <Box as="td" px={3} py="10px" fontSize="14px" color={RED} border={`1px solid ${RED_TABLE}`}>
-                    {r.account || r.particulars || "—"}
-                  </Box>
-                  <Box as="td" px={3} py="10px" fontSize="14px" color={RED} textAlign="right" border={`1px solid ${RED_TABLE}`}>
-                    {Number(r.credit) ? formatAmount(r.credit) : "—"}
-                  </Box>
-                  <Box as="td" px={3} py="10px" fontSize="14px" color={RED} textAlign="right" border={`1px solid ${RED_TABLE}`}>
-                    {Number(r.debit) ? formatAmount(r.debit) : "—"}
-                  </Box>
-                </Box>
-              ))
+                );
+              })
             )}
 
             {/* Total */}

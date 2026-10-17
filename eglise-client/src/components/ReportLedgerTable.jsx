@@ -43,23 +43,36 @@ const ReportLedgerTable = ({
   totalDebit,
   totalCredit,
   closingBalance,
+  totals,
   showTotals = false,
 }) => {
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
-  const computedTotalDebit = useMemo(
-    () => rows.reduce((s, r) => s + toNumber(r.debit), 0),
-    [rows]
-  );
-  const computedTotalCredit = useMemo(
-    () => rows.reduce((s, r) => s + toNumber(r.credit), 0),
-    [rows]
-  );
+  const computedTotals = useMemo(() => {
+    let moneyIn = 0;
+    let moneyOut = 0;
+    rows.forEach((r) => {
+      const amt = toNumber(r.amount);
+      if (r.direction === "DEBIT") moneyIn += amt;
+      else if (r.direction === "CREDIT") moneyOut += amt;
+    });
+    return { moneyIn, moneyOut };
+  }, [rows]);
 
-  const finalDebit = totalDebit !== undefined ? totalDebit : computedTotalDebit;
+  const finalDebit =
+    totals?.moneyIn !== undefined
+      ? totals.moneyIn
+      : totalDebit !== undefined
+      ? totalDebit
+      : computedTotals.moneyIn;
+
   const finalCredit =
-    totalCredit !== undefined ? totalCredit : computedTotalCredit;
+    totals?.moneyOut !== undefined
+      ? totals.moneyOut
+      : totalCredit !== undefined
+      ? totalCredit
+      : computedTotals.moneyOut;
 
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const startIdx = (page - 1) * pageSize;
@@ -122,7 +135,6 @@ const ReportLedgerTable = ({
               </Box>
             ) : (
               <>
-                {/* Opening Balance row */}
                 {openingBalance !== undefined && (
                   <Box as="tr" bg={HIGHLIGHT_BG}>
                     <Box
@@ -165,7 +177,6 @@ const ReportLedgerTable = ({
                   </Box>
                 )}
 
-                {/* Data rows */}
                 {pageRows.length === 0 && openingBalance === undefined ? (
                   <Box as="tr">
                     <Box
@@ -180,105 +191,114 @@ const ReportLedgerTable = ({
                     </Box>
                   </Box>
                 ) : (
-                  pageRows.map((r, idx) => (
-                    <Box
-                      as="tr"
-                      key={r.key || idx}
-                      height="48px"
-                      _hover={{ bg: "#FAFBFD" }}
-                    >
+                  pageRows.map((r, idx) => {
+                    const amt = toNumber(r.amount);
+                    const isCredit = r.direction === "CREDIT";
+                    const isDebit = r.direction === "DEBIT";
+
+                    return (
                       <Box
-                        as="td"
-                        px={4}
-                        py={2}
-                        fontSize="13px"
-                        color={BLUE}
-                        fontWeight="500"
-                        borderBottom={`1px solid ${BORDER}`}
-                        whiteSpace="nowrap"
+                        as="tr"
+                        key={r.key || idx}
+                        height="48px"
+                        _hover={{ bg: "#FAFBFD" }}
                       >
-                        {formatDate(r.date)}
+                        <Box
+                          as="td"
+                          px={4}
+                          py={2}
+                          fontSize="13px"
+                          color={BLUE}
+                          fontWeight="500"
+                          borderBottom={`1px solid ${BORDER}`}
+                          whiteSpace="nowrap"
+                        >
+                          {formatDate(r.date)}
+                        </Box>
+                        <Box
+                          as="td"
+                          px={4}
+                          py={2}
+                          fontSize="13px"
+                          color={BLUE}
+                          fontWeight="500"
+                          textAlign="center"
+                          borderBottom={`1px solid ${BORDER}`}
+                          whiteSpace="nowrap"
+                        >
+                          {r.voucherNo || "—"}
+                        </Box>
+                        <Box
+                          as="td"
+                          px={4}
+                          py={2}
+                          fontSize="13px"
+                          color={BLUE}
+                          fontWeight="500"
+                          borderBottom={`1px solid ${BORDER}`}
+                        >
+                          {r.particulars || r.account || "—"}
+                        </Box>
+                        <Box
+                          as="td"
+                          px={4}
+                          py={2}
+                          fontSize="13px"
+                          color={BLUE}
+                          fontWeight="500"
+                          textAlign="center"
+                          borderBottom={`1px solid ${BORDER}`}
+                          whiteSpace="nowrap"
+                        >
+                          {r.voucherType || "—"}
+                        </Box>
+                        <Box
+                          as="td"
+                          px={4}
+                          py={2}
+                          fontSize="13px"
+                          color={BLUE}
+                          fontWeight="500"
+                          borderBottom={`1px solid ${BORDER}`}
+                          whiteSpace="nowrap"
+                        >
+                          {r.cashBankAccount || r.cashBank || "—"}
+                        </Box>
+
+                        {/* Credit column — money OUT */}
+                        <Box
+                          as="td"
+                          px={4}
+                          py={2}
+                          fontSize="13px"
+                          color={BLUE}
+                          fontWeight="500"
+                          textAlign="right"
+                          borderBottom={`1px solid ${BORDER}`}
+                          whiteSpace="nowrap"
+                        >
+                          {isCredit && amt > 0 ? formatAmount(amt) : "—"}
+                        </Box>
+
+                        {/* Debit column — money IN */}
+                        <Box
+                          as="td"
+                          px={4}
+                          py={2}
+                          fontSize="13px"
+                          color={BLUE}
+                          fontWeight="500"
+                          textAlign="right"
+                          borderBottom={`1px solid ${BORDER}`}
+                          whiteSpace="nowrap"
+                        >
+                          {isDebit && amt > 0 ? formatAmount(amt) : "—"}
+                        </Box>
                       </Box>
-                      <Box
-                        as="td"
-                        px={4}
-                        py={2}
-                        fontSize="13px"
-                        color={BLUE}
-                        fontWeight="500"
-                        textAlign="center"
-                        borderBottom={`1px solid ${BORDER}`}
-                        whiteSpace="nowrap"
-                      >
-                        {r.voucherNo || "—"}
-                      </Box>
-                      <Box
-                        as="td"
-                        px={4}
-                        py={2}
-                        fontSize="13px"
-                        color={BLUE}
-                        fontWeight="500"
-                        borderBottom={`1px solid ${BORDER}`}
-                      >
-                        {r.particulars || r.account || "—"}
-                      </Box>
-                      <Box
-                        as="td"
-                        px={4}
-                        py={2}
-                        fontSize="13px"
-                        color={BLUE}
-                        fontWeight="500"
-                        textAlign="center"
-                        borderBottom={`1px solid ${BORDER}`}
-                        whiteSpace="nowrap"
-                      >
-                        {r.voucherType || "—"}
-                      </Box>
-                      <Box
-                        as="td"
-                        px={4}
-                        py={2}
-                        fontSize="13px"
-                        color={BLUE}
-                        fontWeight="500"
-                        borderBottom={`1px solid ${BORDER}`}
-                        whiteSpace="nowrap"
-                      >
-                        {r.cashBankAccount || r.cashBank || "—"}
-                      </Box>
-                      <Box
-                        as="td"
-                        px={4}
-                        py={2}
-                        fontSize="13px"
-                        color={BLUE}
-                        fontWeight="500"
-                        textAlign="right"
-                        borderBottom={`1px solid ${BORDER}`}
-                        whiteSpace="nowrap"
-                      >
-                        {Number(r.credit) ? formatAmount(r.credit) : "—"}
-                      </Box>
-                      <Box
-                        as="td"
-                        px={4}
-                        py={2}
-                        fontSize="13px"
-                        color={BLUE}
-                        fontWeight="500"
-                        textAlign="right"
-                        borderBottom={`1px solid ${BORDER}`}
-                        whiteSpace="nowrap"
-                      >
-                        {Number(r.debit) ? formatAmount(r.debit) : "—"}
-                      </Box>
-                    </Box>
-                  ))
+                    );
+                  })
                 )}
 
-                {/* Total row */}
                 {showTotals && rows.length > 0 && (
                   <Box as="tr" bg={HIGHLIGHT_BG}>
                     <Box
@@ -323,7 +343,6 @@ const ReportLedgerTable = ({
                   </Box>
                 )}
 
-                {/* Closing Balance row */}
                 {closingBalance !== undefined && rows.length > 0 && (
                   <Box as="tr" bg={HIGHLIGHT_BG}>
                     <Box
@@ -372,7 +391,6 @@ const ReportLedgerTable = ({
         </Box>
       </Box>
 
-      {/* Pagination */}
       <Flex
         justify="space-between"
         align="center"

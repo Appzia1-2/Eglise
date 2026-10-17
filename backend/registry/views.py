@@ -2031,7 +2031,6 @@ class DeathRegisterFinalizeView(APIView):
  
     
 #promote to head
-
 class PromoteFamilyHeadAPIView(APIView):
     permission_classes = [IsAuthenticated, IsChurchUser]
 
@@ -2066,14 +2065,29 @@ class PromoteFamilyHeadAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # 🔥 Match on the SAME household
+        # -----------------------------------------------------
+        # Check household
+        #
+        # `existing_head` — any member currently flagged as
+        #                   is_family_head=True in this household
+        #                   (may be expired/inactive)
+        #
+        # `household_ever_had_head` — was there ever a head in
+        #                            this household besides `member`?
+        #                            Includes EXPIRED heads.
+        #
+        # If yes  → promoting is a REPLACEMENT → skip capacity.
+        # If no   → new household slot → enforce capacity.
+        # -----------------------------------------------------
+
         existing_head = Member.objects.filter(
             family=member.family,
             house_name=member.house_name,
             house_sequence=member.house_sequence,
             is_family_head=True,
-        ).first()
+        ).exclude(pk=member.pk).first()
 
+        # Block if there's still an ACTIVE (not expired) head
         if existing_head and not existing_head.expired:
             return Response(
                 {
@@ -2086,17 +2100,31 @@ class PromoteFamilyHeadAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Did this household EVER have a head? (includes expired)
+        household_ever_had_head = Member.objects.filter(
+            family=member.family,
+            house_name=member.house_name,
+            house_sequence=member.house_sequence,
+            is_family_head=True,
+        ).exclude(pk=member.pk).exists()
+
         # -----------------------------------------------------
         # SUBSCRIPTION CAPACITY CHECK
+        #
+        # Only enforce capacity when this is a BRAND NEW household
+        # that has never had a head. If the household is being
+        # re-headed after the previous head died/was demoted,
+        # promoting is a REPLACEMENT and does not consume a slot.
         # -----------------------------------------------------
-        from .services import can_add_member
+        if not household_ever_had_head:
+            from .services import can_add_member
 
-        allowed, message, _info = can_add_member(request.user.church)
-        if not allowed:
-            return Response(
-                {"error": message},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            allowed, message, _info = can_add_member(request.user.church)
+            if not allowed:
+                return Response(
+                    {"error": message},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         try:
             with transaction.atomic():
@@ -2107,14 +2135,17 @@ class PromoteFamilyHeadAPIView(APIView):
                     church=request.user.church
                 ).first()
 
+                # If a previous head exists (even if expired),
+                # demote them cleanly and deactivate their login.
                 if existing_head:
                     existing_head.is_family_head = False
                     existing_head.save(update_fields=["is_family_head"])
 
-                    if hasattr(existing_head, "user"):
+                    if hasattr(existing_head, "user") and existing_head.user:
                         existing_head.user.is_active = False
                         existing_head.user.save(update_fields=["is_active"])
 
+                # Clear relationship — a head has no relationship
                 member.relationship = None
 
                 if not member.register_number:
@@ -2133,7 +2164,8 @@ class PromoteFamilyHeadAPIView(APIView):
                     "folio_number",
                 ])
 
-                if hasattr(member, "user"):
+                # Activate or create the user login
+                if hasattr(member, "user") and member.user:
                     member.user.is_active = True
                     member.user.save(update_fields=["is_active"])
                 else:
@@ -2160,7 +2192,6 @@ class PromoteFamilyHeadAPIView(APIView):
             },
             status=status.HTTP_200_OK,
         )
-
 
 class TransferAndPromoteHeadAPIView(APIView):
     permission_classes = [IsAuthenticated, IsChurchUser]

@@ -1,6 +1,6 @@
 // src/pages/BaptismRegisterPrintModal.jsx
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import {
   Box,
@@ -13,6 +13,7 @@ import {
 import { LuFileDown, LuPrinter } from "react-icons/lu";
 
 import html2pdf from "html2pdf.js";
+import { getMyChurch } from "../api/registryServices"; // ✅ Import API
 
 // ============================================================
 // COLORS
@@ -452,6 +453,34 @@ const getDobTriplet = (dateString) => {
 const BaptismRegisterPrintModal = ({ isOpen, onClose, baptism }) => {
   const printRef = useRef(null);
 
+  // ✅ NEW: State to hold fetched church data
+  const [churchData, setChurchData] = useState({
+    name: "",
+    city: "",
+    diocese: "",
+  });
+
+  // ✅ NEW: Fetch Church & Diocese details on open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const fetchChurchInfo = async () => {
+      try {
+        const res = await getMyChurch();
+        const c = res?.data ?? res ?? {};
+        setChurchData({
+          name: c.name || "",
+          city: c.city || "",
+          diocese: c.diocese?.name || c.diocese_name || "",
+        });
+      } catch (err) {
+        console.error("Failed to fetch church info for print:", err);
+      }
+    };
+
+    fetchChurchInfo();
+  }, [isOpen]);
+
   // ---------------- INJECT STYLES ----------------
   useEffect(() => {
     if (!isOpen) return;
@@ -471,10 +500,9 @@ const BaptismRegisterPrintModal = ({ isOpen, onClose, baptism }) => {
   }, [isOpen]);
 
   // ==========================================================
-  // DERIVED DATA
+  // DERIVED DATA (With robust fallbacks)
   // ==========================================================
 
-  // Child data (may be on baptism root or nested member)
   const childName =
     safe(baptism?.name, null) ||
     safe(baptism?.member?.name, "N/A");
@@ -491,7 +519,7 @@ const BaptismRegisterPrintModal = ({ isOpen, onClose, baptism }) => {
     safe(baptism?.parish_of_baptism, null) ||
     safe(baptism?.place_of_baptism, null) ||
     safe(baptism?.church_name, null) ||
-    "N/A";
+    safe(churchData.name, "N/A");
 
   const fatherName = safe(baptism?.father_name);
   const motherName = safe(baptism?.mother_name);
@@ -533,20 +561,21 @@ const BaptismRegisterPrintModal = ({ isOpen, onClose, baptism }) => {
   const registerNumber = safe(baptism?.register_number);
   const slNo = safe(baptism?.id, "N/A");
 
+  // ✅ ROBUST FALLBACKS FOR PARISH & DIOCESE
   const churchName =
     safe(baptism?.church_name, null) ||
     safe(baptism?.church?.name, null) ||
-    "N/A";
+    safe(churchData.name, "N/A");
 
   const churchCity =
     safe(baptism?.church_city, null) ||
     safe(baptism?.church?.city, null) ||
-    "N/A";
+    safe(churchData.city, "N/A");
 
   const dioceseName =
     safe(baptism?.diocese_name, null) ||
     safe(baptism?.church?.diocese?.name, null) ||
-    "N/A";
+    safe(churchData.diocese, "N/A");
 
   // ==========================================================
   // PRINT

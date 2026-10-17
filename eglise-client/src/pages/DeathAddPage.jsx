@@ -227,25 +227,6 @@ const DeathAddPage = () => {
   }, [members, formData.family]);
 
   // ==========================================================
-  // SELECTED TOMB FEE
-  // ==========================================================
-
-  const selectedTombFee = useMemo(() => {
-    if (
-      !formData.tomb_fee ||
-      tombFees.length === 0
-    ) {
-      return null;
-    }
-
-    return tombFees.find(
-      (fee) =>
-        String(fee.id) ===
-        String(formData.tomb_fee)
-    );
-  }, [formData.tomb_fee, tombFees]);
-
-  // ==========================================================
   // HELPERS
   // ==========================================================
 
@@ -327,64 +308,45 @@ const DeathAddPage = () => {
   };
 
   // ==========================================================
-  // VALIDATION
+  // VALIDATION (Date conditions removed)
   // ==========================================================
 
   const validateForm = () => {
     const errors = {};
 
     if (!formData.family) {
-      errors.family =
-        "Please select a family.";
+      errors.family = "Please select a family.";
     }
 
     if (!formData.member) {
-      errors.member =
-        "Please select a member.";
+      errors.member = "Please select a member.";
     }
 
     if (!formData.died_on) {
-      errors.died_on =
-        "Date of death is required.";
+      errors.died_on = "Date of death is required.";
     }
 
     if (!formData.funeral_on) {
-      errors.funeral_on =
-        "Date of funeral is required.";
+      errors.funeral_on = "Date of funeral is required.";
     }
 
-    if (
-      formData.died_on &&
-      formData.funeral_on &&
-      formData.funeral_on <
-        formData.died_on
-    ) {
-      errors.funeral_on =
-        "Funeral date cannot be before death date.";
-    }
+    // ❌ REMOVED: Check for funeral_on < died_on
 
     if (!formData.tomb_type) {
-      errors.tomb_type =
-        "Tomb type is required.";
+      errors.tomb_type = "Tomb type is required.";
     }
 
     if (!formData.tomb_fee) {
-      errors.tomb_fee =
-        "Tomb fee selection is required.";
+      errors.tomb_fee = "Tomb fee selection is required.";
     }
 
-    if (
-      !formData.reason_of_death.trim()
-    ) {
-      errors.reason_of_death =
-        "Reason of death is required.";
+    if (!formData.reason_of_death.trim()) {
+      errors.reason_of_death = "Reason of death is required.";
     }
 
     setFieldErrors(errors);
 
-    return (
-      Object.keys(errors).length === 0
-    );
+    return (Object.keys(errors).length === 0);
   };
 
   // ==========================================================
@@ -404,49 +366,22 @@ const DeathAddPage = () => {
     try {
       setSaving(true);
 
-      /*
-       * Send both tomb_type and tomb_fee.
-       *
-       * tomb_type = selected TombType ID
-       * tomb_fee  = selected TombFee ID
-       */
-
       const payload = {
         member: Number(formData.member),
-
         died_on: formData.died_on,
-
         funeral_on: formData.funeral_on,
-
         tomb_type: Number(formData.tomb_type),
-
         tomb_fee: Number(formData.tomb_fee),
-
         tomb_idn: formData.tomb_idn || "",
-
-        reason_of_death:
-          formData.reason_of_death.trim(),
-
+        reason_of_death: formData.reason_of_death.trim(),
         remarks: formData.remarks.trim(),
       };
 
-      console.log(
-        "Death registration payload:",
-        payload
-      );
+      console.log("Death registration payload:", payload);
 
-      const response =
-        await createDeathRecord(payload);
+      const response = await createDeathRecord(payload);
 
-      console.log(
-        "createDeathRecord response:",
-        response?.data
-      );
-
-      // ----------------------------------------------
-      // Extract the new record's ID from the response.
-      // Backend shape can vary — handle the common ones.
-      // ----------------------------------------------
+      console.log("createDeathRecord response:", response?.data);
 
       const created = response?.data ?? {};
 
@@ -472,73 +407,38 @@ const DeathAddPage = () => {
         return;
       }
 
-      // ----------------------------------------------
-      // ✅ Redirect to the detail view page
-      // which reads useParams().id
-      // ----------------------------------------------
-
       navigate(`/death/${newId}`, {
         replace: true,
       });
     } catch (error) {
-      console.error(
-        "Error registering death:",
-        error
-      );
+      console.error("Error registering death:", error);
 
-      const responseData =
-        error?.response?.data;
+      const responseData = error?.response?.data;
 
-      console.error(
-        "HTTP status:",
-        error?.response?.status
-      );
+      console.error("HTTP status:", error?.response?.status);
+      console.error("Backend response:", responseData);
 
-      console.error(
-        "Backend response:",
-        responseData
-      );
-
-      if (
-        responseData &&
-        typeof responseData === "object"
-      ) {
+      if (responseData && typeof responseData === "object") {
         const normalizedErrors = {};
 
-        Object.entries(
-          responseData
-        ).forEach(([key, value]) => {
+        Object.entries(responseData).forEach(([key, value]) => {
           if (Array.isArray(value)) {
-            normalizedErrors[key] =
-              value.join(" ");
-          } else if (
-            typeof value === "string"
-          ) {
-            normalizedErrors[key] =
-              value;
+            normalizedErrors[key] = value.join(" ");
+          } else if (typeof value === "string") {
+            normalizedErrors[key] = value;
           } else {
-            normalizedErrors[key] =
-              JSON.stringify(value);
+            normalizedErrors[key] = JSON.stringify(value);
           }
         });
 
-        setFieldErrors(
-          normalizedErrors
-        );
+        setFieldErrors(normalizedErrors);
 
-        const messages =
-          Object.entries(
-            normalizedErrors
-          )
-            .map(
-              ([key, value]) =>
-                `${key}: ${value}`
-            )
-            .join("\n");
+        const messages = Object.entries(normalizedErrors)
+          .map(([key, value]) => `${key}: ${value}`)
+          .join("\n");
 
         setPageError(
-          messages ||
-            "Unable to register death record."
+          messages || "Unable to register death record."
         );
       } else {
         setPageError(
@@ -574,20 +474,11 @@ const DeathAddPage = () => {
         flexDirection="column"
       >
         <Navbar />
-
-        <Container
-          maxW="1400px"
-          flex="1"
-          py={5}
-        >
-          <Text
-            color={SECONDARY_TEXT}
-            fontSize="13px"
-          >
+        <Container maxW="1400px" flex="1" py={5}>
+          <Text color={SECONDARY_TEXT} fontSize="13px">
             Loading registration form...
           </Text>
         </Container>
-
         <Footer />
       </Box>
     );
@@ -608,54 +499,21 @@ const DeathAddPage = () => {
 
       <Container
         maxW="1400px"
-        px={{
-          base: 4,
-          md: 5,
-        }}
-        pt={{
-          base: 3,
-          md: 3,
-        }}
-        pb={{
-          base: 3,
-          md: 3,
-        }}
+        px={{ base: 4, md: 5 }}
+        pt={{ base: 3, md: 3 }}
+        pb={{ base: 3, md: 3 }}
         flex="1"
       >
-        {/* ==================================================
-            BREADCRUMB
-        ================================================== */}
-
-        <HStack
-          gap={2}
-          mb={2}
-          fontSize="11px"
-        >
-          <Text color={BLUE}>
-            Activities
-          </Text>
-
-          <Text color="#A2ACBB">
-            /
-          </Text>
-
-          <Text color={BLUE}>
-            Death Register
-          </Text>
-
-          <Text color="#A2ACBB">
-            /
-          </Text>
-
-          <Text color={SECONDARY_TEXT}>
-            Register Death
-          </Text>
+        {/* BREADCRUMB */}
+        <HStack gap={2} mb={2} fontSize="11px">
+          <Text color={BLUE}>Activities</Text>
+          <Text color="#A2ACBB">/</Text>
+          <Text color={BLUE}>Death Register</Text>
+          <Text color="#A2ACBB">/</Text>
+          <Text color={SECONDARY_TEXT}>Register Death</Text>
         </HStack>
 
-        {/* ==================================================
-            PAGE HEADER
-        ================================================== */}
-
+        {/* PAGE HEADER */}
         <Box mb={4}>
           <Text
             color={PRIMARY_RED}
@@ -669,47 +527,28 @@ const DeathAddPage = () => {
 
           <Heading
             color={TEXT_COLOR}
-            fontSize={{
-              base: "23px",
-              md: "27px",
-            }}
+            fontSize={{ base: "23px", md: "27px" }}
             fontWeight="600"
             lineHeight="1.1"
           >
             Register Death Record
           </Heading>
 
-          <Text
-            color={SECONDARY_TEXT}
-            fontSize="12px"
-            mt={0.5}
-          >
-            Record death, funeral and burial
-            details for a parish member.
+          <Text color={SECONDARY_TEXT} fontSize="12px" mt={0.5}>
+            Record death, funeral and burial details for a parish member.
           </Text>
         </Box>
 
-        {/* ==================================================
-            FORM CARD
-        ================================================== */}
-
+        {/* FORM CARD */}
         <Box
           bg="white"
-          px={{
-            base: 4,
-            md: 5,
-          }}
-          py={{
-            base: 4,
-            md: 4,
-          }}
+          px={{ base: 4, md: 5 }}
+          py={{ base: 4, md: 4 }}
           border={`1px solid ${BORDER_COLOR}`}
           borderRadius="6px"
         >
           <form onSubmit={handleSubmit}>
-
             {/* PAGE ERROR */}
-
             {pageError && (
               <Box
                 mb={3}
@@ -718,80 +557,38 @@ const DeathAddPage = () => {
                 bg="#FFF5F5"
                 border="1px solid #FED7D7"
               >
-                <Text
-                  color="red.600"
-                  fontSize="11px"
-                  whiteSpace="pre-line"
-                >
+                <Text color="red.600" fontSize="11px" whiteSpace="pre-line">
                   {pageError}
                 </Text>
               </Box>
             )}
 
-            {/* ==================================================
-                1. MEMBER INFORMATION
-            ================================================== */}
+            {/* 1. MEMBER INFORMATION */}
+            <SectionTitle>1. Member Information</SectionTitle>
 
-            <SectionTitle>
-              1. Member Information
-            </SectionTitle>
-
-            <SimpleGrid
-              columns={{
-                base: 1,
-                md: 2,
-              }}
-              gap={3}
-              mb={2.5}
-            >
-
-              {/* FAMILY */}
-
-              <FormField
-                label="Family"
-                required
-                error={fieldErrors.family}
-              >
+            <SimpleGrid columns={{ base: 1, md: 2 }} gap={3} mb={2.5}>
+              <FormField label="Family" required error={fieldErrors.family}>
                 <SelectField
                   name="family"
                   value={formData.family}
-                  onChange={
-                    handleFamilyChange
-                  }
+                  onChange={handleFamilyChange}
                   error={fieldErrors.family}
                 >
-                  <option value="">
-                    Select Family
-                  </option>
-
-                  {families.map(
-                    (family) => (
-                      <option
-                        key={family.id}
-                        value={family.id}
-                      >
-                        {getFamilyName(
-                          family
-                        )}
-
-                        {family.family_no
-                          ? ` (${family.family_no})`
-                          : family.code
-                          ? ` (${family.code})`
-                          : ""}
-                      </option>
-                    )
-                  )}
+                  <option value="">Select Family</option>
+                  {families.map((family) => (
+                    <option key={family.id} value={family.id}>
+                      {getFamilyName(family)}
+                      {family.family_no
+                        ? ` (${family.family_no})`
+                        : family.code
+                        ? ` (${family.code})`
+                        : ""}
+                    </option>
+                  ))}
                 </SelectField>
               </FormField>
 
-              {/* MEMBER */}
-
-              <FormField
-                label="Member Name"
-                required
-                error={fieldErrors.member}
-              >
+              <FormField label="Member Name" required error={fieldErrors.member}>
                 <SelectField
                   name="member"
                   value={formData.member}
@@ -806,59 +603,27 @@ const DeathAddPage = () => {
                       ? "No active members"
                       : "Select Member"}
                   </option>
-
-                  {familyMembers.map(
-                    (member) => (
-                      <option
-                        key={member.id}
-                        value={member.id}
-                      >
-                        {member.name}
-
-                        {member.member_no
-                          ? ` (${member.member_no})`
-                          : member.reg_no
-                          ? ` (${member.reg_no})`
-                          : ""}
-                      </option>
-                    )
-                  )}
+                  {familyMembers.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.name}
+                      {member.member_no
+                        ? ` (${member.member_no})`
+                        : member.reg_no
+                        ? ` (${member.reg_no})`
+                        : ""}
+                    </option>
+                  ))}
                 </SelectField>
               </FormField>
-
             </SimpleGrid>
 
-            {/* DIVIDER */}
+            <Box borderTop={`1px solid ${BORDER_COLOR}`} my={2.5} />
 
-            <Box
-              borderTop={`1px solid ${BORDER_COLOR}`}
-              my={2.5}
-            />
+            {/* 2. DEATH & FUNERAL DETAILS */}
+            <SectionTitle>2. Death & Funeral Details</SectionTitle>
 
-            {/* ==================================================
-                2. DEATH & FUNERAL DETAILS
-            ================================================== */}
-
-            <SectionTitle>
-              2. Death & Funeral Details
-            </SectionTitle>
-
-            <SimpleGrid
-              columns={{
-                base: 1,
-                md: 2,
-              }}
-              gap={3}
-              mb={2.5}
-            >
-
-              {/* DATE OF DEATH */}
-
-              <FormField
-                label="Date of Death"
-                required
-                error={fieldErrors.died_on}
-              >
+            <SimpleGrid columns={{ base: 1, md: 2 }} gap={3} mb={2.5}>
+              <FormField label="Date of Death" required error={fieldErrors.died_on}>
                 <DateInput
                   name="died_on"
                   value={formData.died_on}
@@ -867,79 +632,37 @@ const DeathAddPage = () => {
                 />
               </FormField>
 
-              {/* DATE OF FUNERAL */}
-
-              <FormField
-                label="Date of Funeral"
-                required
-                error={
-                  fieldErrors.funeral_on
-                }
-              >
+              <FormField label="Date of Funeral" required error={fieldErrors.funeral_on}>
                 <DateInput
                   name="funeral_on"
-                  value={
-                    formData.funeral_on
-                  }
+                  value={formData.funeral_on}
                   onChange={handleChange}
-                  error={
-                    fieldErrors.funeral_on
-                  }
+                  error={fieldErrors.funeral_on}
                 />
               </FormField>
 
-              {/* TOMB TYPE */}
-
-              <FormField
-                label="Tomb Type"
-                required
-                error={
-                  fieldErrors.tomb_type
-                }
-              >
+              <FormField label="Tomb Type" required error={fieldErrors.tomb_type}>
                 <SelectField
                   name="tomb_type"
                   value={formData.tomb_type}
-                  onChange={
-                    handleTombTypeChange
-                  }
-                  error={
-                    fieldErrors.tomb_type
-                  }
+                  onChange={handleTombTypeChange}
+                  error={fieldErrors.tomb_type}
                 >
-                  <option value="">
-                    Select Tomb Type
-                  </option>
-
-                  {tombTypes.map(
-                    (tomb) => (
-                      <option
-                        key={tomb.id}
-                        value={tomb.id}
-                      >
-                        {tomb.name}
-                      </option>
-                    )
-                  )}
+                  <option value="">Select Tomb Type</option>
+                  {tombTypes.map((tomb) => (
+                    <option key={tomb.id} value={tomb.id}>
+                      {tomb.name}
+                    </option>
+                  ))}
                 </SelectField>
               </FormField>
 
-              {/* TOMB FEE */}
-
-              <FormField
-                label="Tomb Fee"
-                required
-                error={
-                  fieldErrors.tomb_fee
-                }
-              >
+              <FormField label="Tomb Fee" required error={fieldErrors.tomb_fee}>
                 <SelectField
                   name="tomb_fee"
                   value={formData.tomb_fee}
                   onChange={handleChange}
-                  error={
-                    fieldErrors.tomb_fee
-                  }
+                  error={fieldErrors.tomb_fee}
                   disabled={
                     !formData.tomb_type ||
                     loadingFees ||
@@ -955,108 +678,64 @@ const DeathAddPage = () => {
                       ? "No fees available"
                       : "Select Tomb Fee"}
                   </option>
-
-                  {tombFees.map(
-                    (fee) => (
-                      <option
-                        key={fee.id}
-                        value={fee.id}
-                      >
-                        {fee.indication} - ₹
-                        {fee.tomb_fees}
-                      </option>
-                    )
-                  )}
+                  {tombFees.map((fee) => (
+                    <option key={fee.id} value={fee.id}>
+                      {fee.indication} - ₹{fee.tomb_fees}
+                    </option>
+                  ))}
                 </SelectField>
               </FormField>
 
-              {/* TOMB IDN */}
-
-              <FormField
-                label="Tomb IDN"
-                error={
-                  fieldErrors.tomb_idn
-                }
-              >
+              <FormField label="Tomb IDN" error={fieldErrors.tomb_idn}>
                 <Input
                   name="tomb_idn"
-                  value={
-                    formData.tomb_idn
-                  }
+                  value={formData.tomb_idn}
                   onChange={handleChange}
                   placeholder="Enter tomb IDN"
                   h="32px"
-                  borderColor={
-                    fieldErrors.tomb_idn
-                      ? "red.400"
-                      : BORDER_COLOR
-                  }
+                  borderColor={fieldErrors.tomb_idn ? "red.400" : BORDER_COLOR}
                   borderRadius="6px"
                   fontSize="12px"
                   color={TEXT_COLOR}
                   _focus={{
-                    borderColor:
-                      PRIMARY_RED,
-                    boxShadow:
-                      `0 0 0 1px ${PRIMARY_RED}`,
+                    borderColor: PRIMARY_RED,
+                    boxShadow: `0 0 0 1px ${PRIMARY_RED}`,
                   }}
                 />
               </FormField>
-
             </SimpleGrid>
 
-            {/* ==================================================
-                REASON
-            ================================================== */}
-
+            {/* REASON */}
             <Box mb={2.5}>
               <FormField
                 label="Reason of Death"
                 required
-                error={
-                  fieldErrors.reason_of_death
-                }
+                error={fieldErrors.reason_of_death}
               >
                 <Textarea
                   name="reason_of_death"
-                  value={
-                    formData.reason_of_death
-                  }
+                  value={formData.reason_of_death}
                   onChange={handleChange}
                   placeholder="Enter reason of death"
                   minH="45px"
                   h="45px"
                   resize="none"
-                  borderColor={
-                    fieldErrors.reason_of_death
-                      ? "red.400"
-                      : BORDER_COLOR
-                  }
+                  borderColor={fieldErrors.reason_of_death ? "red.400" : BORDER_COLOR}
                   borderRadius="6px"
                   fontSize="12px"
                   color={TEXT_COLOR}
                   py={1.5}
                   _focus={{
-                    borderColor:
-                      PRIMARY_RED,
-                    boxShadow:
-                      `0 0 0 1px ${PRIMARY_RED}`,
+                    borderColor: PRIMARY_RED,
+                    boxShadow: `0 0 0 1px ${PRIMARY_RED}`,
                   }}
                 />
               </FormField>
             </Box>
 
-            {/* ==================================================
-                REMARKS
-            ================================================== */}
-
+            {/* REMARKS */}
             <Box mb={3}>
-              <FormField
-                label="Remarks"
-                error={
-                  fieldErrors.remarks
-                }
-              >
+              <FormField label="Remarks" error={fieldErrors.remarks}>
                 <Textarea
                   name="remarks"
                   value={formData.remarks}
@@ -1065,33 +744,21 @@ const DeathAddPage = () => {
                   minH="45px"
                   h="45px"
                   resize="none"
-                  borderColor={
-                    fieldErrors.remarks
-                      ? "red.400"
-                      : BORDER_COLOR
-                  }
+                  borderColor={fieldErrors.remarks ? "red.400" : BORDER_COLOR}
                   borderRadius="6px"
                   fontSize="12px"
                   color={TEXT_COLOR}
                   py={1.5}
                   _focus={{
-                    borderColor:
-                      PRIMARY_RED,
-                    boxShadow:
-                      `0 0 0 1px ${PRIMARY_RED}`,
+                    borderColor: PRIMARY_RED,
+                    boxShadow: `0 0 0 1px ${PRIMARY_RED}`,
                   }}
                 />
               </FormField>
             </Box>
 
-            {/* ==================================================
-                BUTTONS
-            ================================================== */}
-
-            <Flex
-              justify="flex-end"
-              gap={2.5}
-            >
+            {/* BUTTONS */}
+            <Flex justify="flex-end" gap={2.5}>
               <Button
                 type="button"
                 variant="outline"
@@ -1104,9 +771,7 @@ const DeathAddPage = () => {
                 borderRadius="6px"
                 onClick={handleCancel}
                 disabled={saving}
-                _hover={{
-                  bg: "#F7F9FB",
-                }}
+                _hover={{ bg: "#F7F9FB" }}
               >
                 Cancel
               </Button>
@@ -1123,14 +788,11 @@ const DeathAddPage = () => {
                 borderRadius="6px"
                 loading={saving}
                 loadingText="Registering..."
-                _hover={{
-                  bg: DARK_RED,
-                }}
+                _hover={{ bg: DARK_RED }}
               >
                 Register Death
               </Button>
             </Flex>
-
           </form>
         </Box>
       </Container>
@@ -1144,16 +806,9 @@ const DeathAddPage = () => {
 // SECTION TITLE
 // ==========================================================
 
-const SectionTitle = ({
-  children,
-}) => {
+const SectionTitle = ({ children }) => {
   return (
-    <Heading
-      fontSize="14px"
-      fontWeight="600"
-      color={TEXT_COLOR}
-      mb={2}
-    >
+    <Heading fontSize="14px" fontWeight="600" color={TEXT_COLOR} mb={2}>
       {children}
     </Heading>
   );
@@ -1163,41 +818,20 @@ const SectionTitle = ({
 // FORM FIELD
 // ==========================================================
 
-const FormField = ({
-  label,
-  required = false,
-  error,
-  children,
-}) => {
+const FormField = ({ label, required = false, error, children }) => {
   return (
     <Box>
-      <Text
-        color={TEXT_COLOR}
-        fontSize="10px"
-        fontWeight="600"
-        mb={0.5}
-      >
+      <Text color={TEXT_COLOR} fontSize="10px" fontWeight="600" mb={0.5}>
         {label}
-
         {required && (
-          <Text
-            as="span"
-            color={PRIMARY_RED}
-            ml="3px"
-          >
+          <Text as="span" color={PRIMARY_RED} ml="3px">
             *
           </Text>
         )}
       </Text>
-
       {children}
-
       {error && (
-        <Text
-          color="red.500"
-          fontSize="9px"
-          mt={0.5}
-        >
+        <Text color="red.500" fontSize="9px" mt={0.5}>
           {error}
         </Text>
       )}
@@ -1207,22 +841,11 @@ const FormField = ({
 
 // ==========================================================
 // SELECT FIELD
-// Chakra UI v3 compatible
 // ==========================================================
 
-const SelectField = ({
-  children,
-  name,
-  value,
-  onChange,
-  disabled = false,
-  error,
-}) => {
+const SelectField = ({ children, name, value, onChange, disabled = false, error }) => {
   return (
-    <Box
-      position="relative"
-      width="100%"
-    >
+    <Box position="relative" width="100%">
       <Box
         as="select"
         name={name}
@@ -1232,32 +855,18 @@ const SelectField = ({
         width="100%"
         height="32px"
         fontSize="12px"
-        color={
-          value
-            ? TEXT_COLOR
-            : SECONDARY_TEXT
-        }
-        border={`1px solid ${
-          error
-            ? "#F56565"
-            : BORDER_COLOR
-        }`}
+        color={value ? TEXT_COLOR : SECONDARY_TEXT}
+        border={`1px solid ${error ? "#F56565" : BORDER_COLOR}`}
         borderRadius="6px"
         bg="white"
         appearance="none"
         paddingLeft="10px"
         paddingRight="32px"
         outline="none"
-        cursor={
-          disabled
-            ? "not-allowed"
-            : "pointer"
-        }
+        cursor={disabled ? "not-allowed" : "pointer"}
         _focus={{
-          borderColor:
-            PRIMARY_RED,
-          boxShadow:
-            `0 0 0 1px ${PRIMARY_RED}`,
+          borderColor: PRIMARY_RED,
+          boxShadow: `0 0 0 1px ${PRIMARY_RED}`,
         }}
         _disabled={{
           bg: "#F7F9FB",
@@ -1267,9 +876,6 @@ const SelectField = ({
       >
         {children}
       </Box>
-
-      {/* Simple dropdown arrow */}
-
       <Box
         position="absolute"
         right="11px"
@@ -1290,12 +896,7 @@ const SelectField = ({
 // DATE INPUT
 // ==========================================================
 
-const DateInput = ({
-  name,
-  value,
-  onChange,
-  error,
-}) => {
+const DateInput = ({ name, value, onChange, error }) => {
   return (
     <Input
       name={name}
@@ -1305,17 +906,11 @@ const DateInput = ({
       h="32px"
       fontSize="12px"
       color={TEXT_COLOR}
-      borderColor={
-        error
-          ? "red.400"
-          : BORDER_COLOR
-      }
+      borderColor={error ? "red.400" : BORDER_COLOR}
       borderRadius="6px"
       _focus={{
-        borderColor:
-          PRIMARY_RED,
-        boxShadow:
-          `0 0 0 1px ${PRIMARY_RED}`,
+        borderColor: PRIMARY_RED,
+        boxShadow: `0 0 0 1px ${PRIMARY_RED}`,
       }}
     />
   );
@@ -1325,37 +920,17 @@ const DateInput = ({
 // API ERROR HELPER
 // ==========================================================
 
-const getApiErrorMessage = (
-  error,
-  fallback
-) => {
-  const data =
-    error?.response?.data;
-
-  if (!data) {
-    return fallback;
-  }
-
-  if (typeof data === "string") {
-    return data;
-  }
-
-  if (data.error) {
-    return data.error;
-  }
-
-  if (data.detail) {
-    return data.detail;
-  }
-
+const getApiErrorMessage = (error, fallback) => {
+  const data = error?.response?.data;
+  if (!data) return fallback;
+  if (typeof data === "string") return data;
+  if (data.error) return data.error;
+  if (data.detail) return data.detail;
   if (data.non_field_errors) {
-    return Array.isArray(
-      data.non_field_errors
-    )
+    return Array.isArray(data.non_field_errors)
       ? data.non_field_errors.join(" ")
       : data.non_field_errors;
   }
-
   return fallback;
 };
 

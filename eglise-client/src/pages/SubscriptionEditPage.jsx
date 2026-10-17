@@ -1,6 +1,6 @@
 // src/pages/SubscriptionEditPage.jsx
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   Box,
@@ -55,6 +55,42 @@ const BILLING_CYCLES = [
 ];
 
 // ============================================================
+// NATURE BADGES
+// ============================================================
+
+const NATURE_COLORS = {
+  INCOME: { bg: "#E6F6EC", color: "#1E7A3E" },
+  EXPENSE: { bg: "#FDECEC", color: "#B32020" },
+  ASSET: { bg: "#E8F0FE", color: "#1A56DB" },
+  LIABILITY: { bg: "#FFF4E5", color: "#B45309" },
+  EQUITY: { bg: "#F3E8FF", color: "#6B21A8" },
+};
+
+// ============================================================
+// RECEIPT-RELEVANT LEDGER FILTER
+// ============================================================
+//
+// A subscription's ledger is the income ledger that receipt
+// lines reconcile against. Any INCOME-nature ledger is valid
+// except the two auto-posted system cash/bank ledgers.
+
+const RECEIPT_EXCLUDE_LEDGER_NAMES = [
+  "cash in hand",
+  "balance in savings account",
+];
+
+const isReceiptLedger = (l) => {
+  const name = (l.ledger_name || "").toLowerCase().trim();
+  const nature = String(l.ledger_nature || "").toUpperCase();
+
+  if (nature !== "INCOME") return false;
+  if (RECEIPT_EXCLUDE_LEDGER_NAMES.includes(name)) return false;
+  if (name.includes("closing")) return false;
+
+  return true;
+};
+
+// ============================================================
 // TOAST HELPER
 // ============================================================
 
@@ -81,6 +117,282 @@ const FIELD_LABELS = {
   ledger: "Ledger",
   cancel_reason: "Cancel Reason",
 };
+
+// ============================================================
+// SEARCHABLE LEDGER DROPDOWN (Chakra UI v3 compatible)
+// ============================================================
+
+const LedgerSearchSelect = ({
+  ledgers,
+  value,
+  onChange,
+  disabled,
+  hasError,
+  loading,
+}) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const wrapperRef = useRef(null);
+
+  const selected = useMemo(
+    () => ledgers.find((l) => String(l.id) === String(value)),
+    [ledgers, value]
+  );
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return ledgers;
+    return ledgers.filter((l) => {
+      const name = (l.ledger_name || "").toLowerCase();
+      const group = (l.account_group_name || "").toLowerCase();
+      const nature = (l.ledger_nature || "").toLowerCase();
+      const alias = (l.alias || "").toLowerCase();
+      return (
+        name.includes(q) ||
+        group.includes(q) ||
+        nature.includes(q) ||
+        alias.includes(q)
+      );
+    });
+  }, [ledgers, query]);
+
+  const handlePick = (ledger) => {
+    onChange({ target: { name: "ledger", value: String(ledger.id) } });
+    setOpen(false);
+    setQuery("");
+  };
+
+  return (
+    <Box position="relative" ref={wrapperRef}>
+      {/* Trigger */}
+      <Flex
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        onClick={() => !disabled && setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (disabled) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen((o) => !o);
+          }
+        }}
+        align="center"
+        justify="space-between"
+        width="100%"
+        height="38px"
+        px={3}
+        border="1px solid"
+        borderColor={hasError ? "#F3C4C4" : open ? PRIMARY_MAROON : BORDER}
+        borderRadius="6px"
+        bg={disabled ? "#F7F9FB" : "white"}
+        cursor={disabled ? "not-allowed" : "pointer"}
+        _hover={!disabled ? { borderColor: "#BFC7D4" } : {}}
+        boxShadow={open ? `0 0 0 1px ${PRIMARY_MAROON}` : "none"}
+      >
+        <Text
+          fontSize="12px"
+          color={selected ? DARK : "#98A2B3"}
+          noOfLines={1}
+          flex="1"
+          textAlign="left"
+        >
+          {loading
+            ? "Loading ledgers..."
+            : selected
+            ? selected.ledger_name
+            : "Select ledger"}
+        </Text>
+        {selected?.ledger_nature && (
+          <Box
+            ml={2}
+            px="6px"
+            py="1px"
+            borderRadius="4px"
+            fontSize="10px"
+            fontWeight="700"
+            bg={NATURE_COLORS[selected.ledger_nature]?.bg || "#EEF2F7"}
+            color={NATURE_COLORS[selected.ledger_nature]?.color || MUTED}
+          >
+            {selected.ledger_nature}
+          </Box>
+        )}
+        <Box
+          ml={2}
+          transition="transform 0.15s ease"
+          transform={open ? "rotate(180deg)" : "rotate(0deg)"}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M6 9l6 6 6-6"
+              stroke={MUTED}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </Box>
+      </Flex>
+
+      {/* Popover */}
+      {open && !disabled && (
+        <Box
+          position="absolute"
+          top="calc(100% + 6px)"
+          left={0}
+          right={0}
+          zIndex={50}
+          bg="white"
+          border="1px solid"
+          borderColor={BORDER}
+          borderRadius="8px"
+          boxShadow="0 12px 30px rgba(0,0,0,0.10)"
+          maxH="320px"
+          display="flex"
+          flexDirection="column"
+          overflow="hidden"
+        >
+          <Box p={2} borderBottom={`1px solid ${BORDER}`} bg="#F8FAFC">
+            <Box position="relative">
+              <Box
+                position="absolute"
+                left="10px"
+                top="50%"
+                transform="translateY(-50%)"
+                pointerEvents="none"
+                zIndex={1}
+                display="flex"
+                alignItems="center"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <circle
+                    cx="11"
+                    cy="11"
+                    r="7"
+                    stroke={MUTED}
+                    strokeWidth="2"
+                  />
+                  <path
+                    d="M20 20l-3.5-3.5"
+                    stroke={MUTED}
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </Box>
+              <Input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search ledger by name, group, nature..."
+                h="34px"
+                fontSize="12px"
+                pl="32px"
+                borderColor={BORDER}
+                borderRadius="6px"
+                bg="white"
+                color={DARK}
+                _placeholder={{ color: "#98A2B3" }}
+                _focus={{
+                  borderColor: PRIMARY_MAROON,
+                  boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
+                }}
+              />
+            </Box>
+          </Box>
+
+          <Box overflowY="auto" flex="1" py={1}>
+            {filtered.length === 0 ? (
+              <Text fontSize="12px" color={MUTED} textAlign="center" py={4}>
+                {ledgers.length === 0
+                  ? "No receipt ledgers available"
+                  : `No ledgers match "${query}"`}
+              </Text>
+            ) : (
+              filtered.map((l) => {
+                const isSelected = String(l.id) === String(value);
+                const nature = (l.ledger_nature || "").toUpperCase();
+                const badge = NATURE_COLORS[nature] || {
+                  bg: "#EEF2F7",
+                  color: MUTED,
+                };
+
+                return (
+                  <Flex
+                    key={l.id}
+                    px={3}
+                    py={2}
+                    align="center"
+                    justify="space-between"
+                    cursor="pointer"
+                    bg={isSelected ? "#FFF5F7" : "white"}
+                    _hover={{ bg: isSelected ? "#FFF5F7" : "#F8FAFC" }}
+                    onClick={() => handlePick(l)}
+                  >
+                    <Box flex="1" minW={0}>
+                      <Text
+                        fontSize="12px"
+                        fontWeight={isSelected ? "700" : "600"}
+                        color={DARK}
+                        noOfLines={1}
+                      >
+                        {l.ledger_name}
+                      </Text>
+                      <Text fontSize="10.5px" color={MUTED} noOfLines={1}>
+                        {l.account_group_name || "—"}
+                        {l.alias ? ` · ${l.alias}` : ""}
+                      </Text>
+                    </Box>
+                    {nature && (
+                      <Box
+                        ml={2}
+                        px="6px"
+                        py="1px"
+                        borderRadius="4px"
+                        fontSize="10px"
+                        fontWeight="700"
+                        bg={badge.bg}
+                        color={badge.color}
+                        flexShrink={0}
+                      >
+                        {nature}
+                      </Box>
+                    )}
+                  </Flex>
+                );
+              })
+            )}
+          </Box>
+
+          <Box
+            borderTop={`1px solid ${BORDER}`}
+            px={3}
+            py="6px"
+            bg="#F8FAFC"
+            fontSize="10.5px"
+            color={MUTED}
+            textAlign="right"
+          >
+            {filtered.length} of {ledgers.length} receipt ledgers
+          </Box>
+        </Box>
+      )}
+    </Box>
+  );
+};
+
+// ============================================================
+// PAGE
+// ============================================================
 
 const SubscriptionEditPage = () => {
   const navigate = useNavigate();
@@ -170,35 +482,28 @@ const SubscriptionEditPage = () => {
         : gradeData?.results || [];
       setGrades(gradeList);
 
-      // ---- ledgers ----
+      // ---- ledgers (receipt-relevant only) ----
       setLoadingLedgers(true);
       const ledgerData = ledgerRes?.data ?? ledgerRes;
-      let ledgerList = Array.isArray(ledgerData)
+      const ledgerList = Array.isArray(ledgerData)
         ? ledgerData
         : ledgerData?.results || [];
 
-      // Filter to subscription ledgers
-      const subLedgers = ledgerList.filter((l) => {
-        const name = (l.ledger_name || "").toLowerCase();
-        const group = (l.account_group_name || "").toLowerCase();
-        return name.includes("subscription") || group.includes("subscription");
-      });
+      const receiptLedgers = ledgerList
+        .filter(isReceiptLedger)
+        .sort((a, b) => {
+          const ga = (a.account_group_name || "").toLowerCase();
+          const gb = (b.account_group_name || "").toLowerCase();
+          if (ga !== gb) return ga.localeCompare(gb);
+          return (a.ledger_name || "").localeCompare(b.ledger_name || "");
+        });
 
-      if (subLedgers.length === 0) {
-        ledgerList = ledgerList.filter(
-          (l) => (l.ledger_nature || "").toUpperCase() === "INCOME"
-        );
-      } else {
-        ledgerList = subLedgers;
-      }
-      setLedgers(ledgerList);
+      setLedgers(receiptLedgers);
       setLoadingLedgers(false);
 
       // ---- form ----
-      const gradeId =
-        sub?.grade?.id ?? sub?.grade ?? "";
-      const ledgerId =
-        sub?.ledger?.id ?? sub?.ledger ?? "";
+      const gradeId = sub?.grade?.id ?? sub?.grade ?? "";
+      const ledgerId = sub?.ledger?.id ?? sub?.ledger ?? "";
 
       const loaded = {
         grade: gradeId ? String(gradeId) : "",
@@ -751,37 +1056,19 @@ const SubscriptionEditPage = () => {
                   </select>
                 </Box>
 
+                {/* LEDGER — searchable dropdown, receipt ledgers only */}
                 <Box>
                   <Text fontSize="11px" fontWeight="700" color={DARK} mb={1.5}>
                     Ledger <Text as="span" color={RED}>*</Text>
                   </Text>
-                  <select
-                    name="ledger"
+                  <LedgerSearchSelect
+                    ledgers={ledgers}
                     value={formData.ledger}
                     onChange={handleChange}
                     disabled={loadingLedgers}
-                    style={{
-                      width: "100%",
-                      height: "38px",
-                      border: `1px solid ${fieldErrors.ledger ? "#F3C4C4" : BORDER}`,
-                      borderRadius: "6px",
-                      padding: "0 10px",
-                      fontSize: "12px",
-                      background: loadingLedgers ? "#F7F9FB" : "white",
-                      color: DARK,
-                      outline: "none",
-                      cursor: loadingLedgers ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    <option value="">
-                      {loadingLedgers ? "Loading ledgers..." : "Select ledger"}
-                    </option>
-                    {ledgers.map((l) => (
-                      <option key={l.id} value={l.id}>
-                        {l.ledger_name}
-                      </option>
-                    ))}
-                  </select>
+                    loading={loadingLedgers}
+                    hasError={!!fieldErrors.ledger}
+                  />
                 </Box>
               </Grid>
 

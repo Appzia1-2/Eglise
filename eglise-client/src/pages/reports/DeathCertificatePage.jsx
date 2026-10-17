@@ -1,9 +1,11 @@
 // src/pages/reports/DeathCertificatePage.jsx
 
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { Box } from "@chakra-ui/react";
 
 import CertificateShell from "./CertificateShell";
 import { pick, formatDate } from "./reportConfig";
+import { getMyChurch } from "../../api/registryServices"; // ✅ Import API
 
 // ============================================================
 // COLORS
@@ -120,175 +122,209 @@ const formatDOB = (value) => {
 // ============================================================
 // PAGE
 // ============================================================
-const DeathCertificatePage = () => (
-  <CertificateShell type="death">
-    {(r) => {
-      const name = clean(pick(r, ["name", "member_name", "deceased_name"]));
-      const diocese = clean(pick(r, ["diocese_name"]));
-      const church = clean(pick(r, ["church_name"]));
-      const churchCity = pick(r, ["place", "church_city"]);
+const DeathCertificatePage = () => {
+  // ✅ NEW: State to hold fetched church data
+  const [churchData, setChurchData] = useState({
+    name: "",
+    city: "",
+    diocese: "",
+  });
 
-      const age = clean(pick(r, ["age_at_death", "age"]));
-      const dob = pick(r, ["date_of_birth", "dob"], null);
-      const gender = clean(cap(pick(r, ["gender"])));
-      const address = clean(pick(r, ["address", "member_address"]));
-      const houseNo = clean(
-        pick(r, ["house_no", "house_number", "house_name", "member_id"])
-      );
+  // ✅ NEW: Fetch Church & Diocese details on mount
+  useEffect(() => {
+    const fetchChurchInfo = async () => {
+      try {
+        const res = await getMyChurch();
+        const c = res?.data ?? res ?? {};
+        setChurchData({
+          name: c.name || "",
+          city: c.city || "",
+          diocese: c.diocese?.name || c.diocese_name || "",
+        });
+      } catch (err) {
+        console.error("Failed to fetch church info for print:", err);
+      }
+    };
 
-      const diedRaw = pick(r, ["died_on", "date_of_death", "death_date"], null);
-      const funeralRaw = pick(
-        r,
-        ["funeral_on", "burial_date", "buried_on"],
-        null
-      );
-      const celebrant = clean(
-        pick(r, ["priest_name", "vicar_name", "minister_name"])
-      );
+    fetchChurchInfo();
+  }, []);
 
-      return (
-        <Box_ScrollWrap>
-          <style>{STYLES}</style>
+  return (
+    <CertificateShell type="death">
+      {(r) => {
+        const name = clean(pick(r, ["name", "member_name", "deceased_name"]));
+        
+        // ✅ ROBUST FALLBACKS FOR PARISH & DIOCESE
+        const diocese = clean(
+          pick(r, ["diocese_name"]) || churchData.diocese
+        );
+        const church = clean(
+          pick(r, ["church_name"]) || churchData.name
+        );
+        const churchCity = pick(r, ["place", "church_city"]) || churchData.city;
 
-          <div className="cert-box dc-page">
-            <div className="dc-outer" />
-            <div className="dc-inner" />
-            <div className="dc-corner tl">❧</div>
-            <div className="dc-corner tr">❧</div>
-            <div className="dc-corner bl">❧</div>
-            <div className="dc-corner br">❧</div>
+        const age = clean(pick(r, ["age_at_death", "age"]));
+        const dob = pick(r, ["date_of_birth", "dob"], null);
+        const gender = clean(cap(pick(r, ["gender"])));
+        const address = clean(pick(r, ["address", "member_address"]));
+        const houseNo = clean(
+          pick(r, ["house_no", "house_number", "house_name", "member_id"])
+        );
 
-            {/* HEADER */}
-            <div className="dc-header">
-              <div className="dc-header-inner">
-                <div />
-                <div className="dc-church">
-                  <div className="dc-church-name">Malankara Orthodox</div>
-                  <div className="dc-church-sub">Syrian Church</div>
+        const diedRaw = pick(r, ["died_on", "date_of_death", "death_date"], null);
+        const funeralRaw = pick(
+          r,
+          ["funeral_on", "burial_date", "buried_on"],
+          null
+        );
+        const celebrant = clean(
+          pick(r, ["priest_name", "vicar_name", "minister_name"])
+        );
+
+        return (
+          <Box_ScrollWrap>
+            <style>{STYLES}</style>
+
+            <div className="cert-box dc-page">
+              <div className="dc-outer" />
+              <div className="dc-inner" />
+              <div className="dc-corner tl">❧</div>
+              <div className="dc-corner tr">❧</div>
+              <div className="dc-corner bl">❧</div>
+              <div className="dc-corner br">❧</div>
+
+              {/* HEADER */}
+              <div className="dc-header">
+                <div className="dc-header-inner">
+                  <div />
+                  <div className="dc-church">
+                    <div className="dc-church-name">Malankara Orthodox</div>
+                    <div className="dc-church-sub">Syrian Church</div>
+                  </div>
+                  <div />
                 </div>
-                <div />
               </div>
-            </div>
 
-            {/* TITLE */}
-            <div className="dc-title-area">
-              <div className="dc-banner">
-                <div className="dc-banner-text">Death/Funeral Certificate</div>
-              </div>
-            </div>
-
-            {/* CONTENT */}
-            <div className="dc-content">
-              <table className="dc-top-table">
-                <tbody>
-                  <tr>
-                    <td className="dc-top-label">Diocese</td>
-                    <td className="dc-top-value">{diocese}</td>
-                  </tr>
-                  <tr>
-                    <td className="dc-top-label">Parish</td>
-                    <td className="dc-top-value">{church}</td>
-                  </tr>
-                </tbody>
-              </table>
-
-              <div className="dc-watermark">
-                <div className="dc-watermark-text">
-                  MALANKARA ORTHODOX SYRIAN CHURCH
+              {/* TITLE */}
+              <div className="dc-title-area">
+                <div className="dc-banner">
+                  <div className="dc-banner-text">Death/Funeral Certificate</div>
                 </div>
               </div>
 
-              <table className="dc-details">
-                <tbody>
-                  <tr className="dc-name-row">
-                    <td className="dc-label">Name</td>
-                    <td className="dc-value" colSpan="6">{name}</td>
-                  </tr>
+              {/* CONTENT */}
+              <div className="dc-content">
+                <table className="dc-top-table">
+                  <tbody>
+                    <tr>
+                      <td className="dc-top-label">Diocese</td>
+                      <td className="dc-top-value">{diocese}</td>
+                    </tr>
+                    <tr>
+                      <td className="dc-top-label">Parish</td>
+                      <td className="dc-top-value">{church}</td>
+                    </tr>
+                  </tbody>
+                </table>
 
-                  <tr className="dc-age-row">
-                    <td className="dc-label">Age, Date of Birth</td>
-                    <td className="dc-age-number">{age}</td>
-                    <td className="dc-value" colSpan="3" style={{ textAlign: "center" }}>
-                      {formatDOB(dob)}
-                    </td>
-                    <td className="dc-sex-sep">Sex :</td>
-                    <td className="dc-sex-cell">{gender}</td>
-                  </tr>
-
-                  <tr className="dc-address-row">
-                    <td className="dc-label">Address</td>
-                    <td className="dc-value" colSpan="6">{address}</td>
-                  </tr>
-
-                  <tr className="dc-normal-row">
-                    <td className="dc-label">House No. in the Church Register</td>
-                    <td className="dc-value" colSpan="6">{houseNo}</td>
-                  </tr>
-
-                  <tr className="dc-date-row">
-                    <td className="dc-label">Date of Death</td>
-                    <td className="dc-value" colSpan="6">
-                      {diedRaw ? formatDate(diedRaw) : "N/A"}
-                    </td>
-                  </tr>
-
-                  <tr className="dc-date-row">
-                    <td className="dc-label">Date of Funeral</td>
-                    <td className="dc-value" colSpan="6">
-                      {funeralRaw ? formatDate(funeralRaw) : "N/A"}
-                    </td>
-                  </tr>
-
-                  <tr className="dc-date-row">
-                    <td className="dc-label">Chief Celebrant</td>
-                    <td className="dc-value" colSpan="6">
-                      {celebrant === "N/A" ? celebrant : `Rev. Fr. ${celebrant}`}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* CERTIFICATION */}
-            <div className="dc-certify">
-              I do hereby certify that the above is a true copy of an entry in the
-              <br />
-              Funeral Register maintained at this Parish.
-            </div>
-
-            <div className="dc-gap" />
-
-            {/* FOOTER */}
-            <div className="dc-footer">
-              <div className="dc-footer-grid">
-                <div className="dc-footer-item">
-                  <strong>Place :</strong> {clean(churchCity)}
-                  <div className="dc-footer-date">
-                    <strong>Date :</strong>{" "}
-                    {funeralRaw || diedRaw
-                      ? formatDate(funeralRaw || diedRaw)
-                      : "N/A"}
+                <div className="dc-watermark">
+                  <div className="dc-watermark-text">
+                    MALANKARA ORTHODOX SYRIAN CHURCH
                   </div>
                 </div>
 
-                <div className="dc-footer-item dc-footer-center">
-                  <div className="dc-footer-label">SEAL</div>
-                </div>
+                <table className="dc-details">
+                  <tbody>
+                    <tr className="dc-name-row">
+                      <td className="dc-label">Name</td>
+                      <td className="dc-value" colSpan="6">{name}</td>
+                    </tr>
 
-                <div className="dc-footer-item dc-footer-right">
-                  <div className="dc-footer-label">
-                    <br />
-                    Name and Signature of Vicar
+                    <tr className="dc-age-row">
+                      <td className="dc-label">Age, Date of Birth</td>
+                      <td className="dc-age-number">{age}</td>
+                      <td className="dc-value" colSpan="3" style={{ textAlign: "center" }}>
+                        {formatDOB(dob)}
+                      </td>
+                      <td className="dc-sex-sep">Sex :</td>
+                      <td className="dc-sex-cell">{gender}</td>
+                    </tr>
+
+                    <tr className="dc-address-row">
+                      <td className="dc-label">Address</td>
+                      <td className="dc-value" colSpan="6">{address}</td>
+                    </tr>
+
+                    <tr className="dc-normal-row">
+                      <td className="dc-label">House No. in the Church Register</td>
+                      <td className="dc-value" colSpan="6">{houseNo}</td>
+                    </tr>
+
+                    <tr className="dc-date-row">
+                      <td className="dc-label">Date of Death</td>
+                      <td className="dc-value" colSpan="6">
+                        {diedRaw ? formatDate(diedRaw) : "N/A"}
+                      </td>
+                    </tr>
+
+                    <tr className="dc-date-row">
+                      <td className="dc-label">Date of Funeral</td>
+                      <td className="dc-value" colSpan="6">
+                        {funeralRaw ? formatDate(funeralRaw) : "N/A"}
+                      </td>
+                    </tr>
+
+                    <tr className="dc-date-row">
+                      <td className="dc-label">Chief Celebrant</td>
+                      <td className="dc-value" colSpan="6">
+                        {celebrant === "N/A" ? celebrant : `Rev. Fr. ${celebrant}`}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* CERTIFICATION */}
+              <div className="dc-certify">
+                I do hereby certify that the above is a true copy of an entry in the
+                <br />
+                Funeral Register maintained at this Parish.
+              </div>
+
+              <div className="dc-gap" />
+
+              {/* FOOTER */}
+              <div className="dc-footer">
+                <div className="dc-footer-grid">
+                  <div className="dc-footer-item">
+                    <strong>Place :</strong> {clean(churchCity)}
+                    <div className="dc-footer-date">
+                      <strong>Date :</strong>{" "}
+                      {funeralRaw || diedRaw
+                        ? formatDate(funeralRaw || diedRaw)
+                        : "N/A"}
+                    </div>
+                  </div>
+
+                  <div className="dc-footer-item dc-footer-center">
+                    <div className="dc-footer-label">SEAL</div>
+                  </div>
+
+                  <div className="dc-footer-item dc-footer-right">
+                    <div className="dc-footer-label">
+                      <br />
+                      Name and Signature of Vicar
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </Box_ScrollWrap>
-      );
-    }}
-  </CertificateShell>
-);
+          </Box_ScrollWrap>
+        );
+      }}
+    </CertificateShell>
+  );
+};
 
 // Lets the fixed-size A4 page scroll sideways on small screens
 const Box_ScrollWrap = ({ children }) => (
