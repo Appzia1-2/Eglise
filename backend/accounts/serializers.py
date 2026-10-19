@@ -174,6 +174,11 @@ class ChurchProfileSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ("is_active",)
 
+# accounts/serializers.py
+
+from rest_framework import serializers
+from django.contrib.auth.password_validation import validate_password
+
 class ChangePasswordSerializer(serializers.Serializer):
     old_password = serializers.CharField(write_only=True)
     new_password = serializers.CharField(write_only=True)
@@ -185,9 +190,7 @@ class ChangePasswordSerializer(serializers.Serializer):
                 "New password and confirm password do not match"
             )
 
-        if len(data["new_password"]) < 8:
-            raise serializers.ValidationError(
-                "Password must be at least 8 characters long"
-            )
+        # ✅ This triggers the StrongPasswordValidator
+        validate_password(data["new_password"], self.context["request"].user)
 
         return data

@@ -1,9 +1,7 @@
 // src/admin/pages/AccountLedgerPage.jsx
 
 import React, { useEffect, useMemo, useState } from "react";
-
 import { useNavigate } from "react-router-dom";
-
 import {
   Box,
   Button,
@@ -30,7 +28,8 @@ import {
   LuChevronLeft,
   LuChevronRight,
   LuFilter,
-  LuRefreshCw, // ✅ NEW
+  LuRefreshCw,
+  LuShieldCheck,
 } from "react-icons/lu";
 
 import Navbar from "../components/Navbar";
@@ -44,23 +43,17 @@ import {
 /* =========================================================
    COLORS
 ========================================================= */
-
 const PRIMARY_MAROON = "var(--primary-maroon)";
 const RED = "#D7193F";
 const DARK = "#182338";
 const MUTED = "#60708C";
 const BORDER = "#DCE2EA";
 
-/* =========================================================
-   CONSTANTS
-========================================================= */
-
 const PAGE_SIZE = 5;
 
 /* =========================================================
    HELPERS
 ========================================================= */
-
 const pick = (obj, keys, fallback = "—") => {
   for (const key of keys) {
     const value = key
@@ -71,7 +64,6 @@ const pick = (obj, keys, fallback = "—") => {
       return value;
     }
   }
-
   return fallback;
 };
 
@@ -85,12 +77,8 @@ const formatAmount = (amount) => `₹ ${formatMoney(amount)}`;
 
 const formatDate = (dateString) => {
   if (!dateString) return "—";
-
   const date = new Date(dateString);
-
-  if (Number.isNaN(date.getTime())) {
-    return "—";
-  }
+  if (Number.isNaN(date.getTime())) return "—";
 
   return date.toLocaleDateString("en-GB", {
     day: "2-digit",
@@ -102,7 +90,6 @@ const formatDate = (dateString) => {
 /* =========================================================
    STAT CARD
 ========================================================= */
-
 const StatCard = ({ icon, title, value }) => {
   return (
     <Box
@@ -131,7 +118,6 @@ const StatCard = ({ icon, title, value }) => {
           <Text fontSize="12px" color={DARK} mb={1} fontWeight="600">
             {title}
           </Text>
-
           <Text
             fontSize={
               typeof value === "string" && value.length > 15 ? "18px" : "24px"
@@ -152,36 +138,25 @@ const StatCard = ({ icon, title, value }) => {
 /* =========================================================
    MAIN PAGE
 ========================================================= */
-
 const AccountLedgerPage = () => {
   const navigate = useNavigate();
 
   const [isLoading, setIsLoading] = useState(true);
-
-  const [isRefreshing, setIsRefreshing] = useState(false); // ✅ NEW
-
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [ledgers, setLedgers] = useState([]);
-
   const [groups, setGroups] = useState([]);
 
   const [searchTerm, setSearchTerm] = useState("");
-
   const [groupFilter, setGroupFilter] = useState("");
-
   const [statusFilter, setStatusFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState(""); // ✅ NEW
 
   const [page, setPage] = useState(1);
 
-  /* =======================================================
-     LOAD DATA
-  ======================================================= */
-
+  /* LOAD DATA */
   const fetchData = async (showRefresh = false) => {
-    if (showRefresh) {
-      setIsRefreshing(true);
-    } else {
-      setIsLoading(true);
-    }
+    if (showRefresh) setIsRefreshing(true);
+    else setIsLoading(true);
 
     try {
       const [ledgersRes, groupsRes] = await Promise.all([
@@ -190,15 +165,12 @@ const AccountLedgerPage = () => {
       ]);
 
       const ledgersData = ledgersRes?.data?.results || ledgersRes?.data || [];
-
       const groupsData = groupsRes?.data?.results || groupsRes?.data || [];
 
       setLedgers(Array.isArray(ledgersData) ? ledgersData : []);
-
       setGroups(Array.isArray(groupsData) ? groupsData : []);
     } catch (error) {
       console.error("Error fetching account ledgers:", error);
-
       setLedgers([]);
       setGroups([]);
     } finally {
@@ -211,29 +183,20 @@ const AccountLedgerPage = () => {
     fetchData();
   }, []);
 
-  /* =======================================================
-     ENRICH LEDGERS
-  ======================================================= */
-
+  /* ENRICH LEDGERS */
   const enrichedLedgers = useMemo(() => {
     return ledgers.map((ledger) => {
       const groupId = ledger.account_group?.id ?? ledger.account_group;
-
       const groupObj = groups.find(
         (group) => String(group.id) === String(groupId)
       );
 
       return {
         ...ledger,
-
         account_group_id: groupId,
-
         account_group_name:
           ledger.account_group_name || groupObj?.group_name || "—",
-
         is_active: ledger.status ?? ledger.is_active ?? true,
-
-        // ✅ current_balance comes from backend serializer now
         current_balance: Number(ledger.current_balance ?? 0),
         opening_balance: Number(
           pick(ledger, ["op_balance", "opening_balance"], 0)
@@ -242,10 +205,7 @@ const AccountLedgerPage = () => {
     });
   }, [ledgers, groups]);
 
-  /* =======================================================
-     STATS
-  ======================================================= */
-
+  /* STATS */
   const stats = useMemo(() => {
     const totalLedgers = enrichedLedgers.length;
 
@@ -255,12 +215,6 @@ const AccountLedgerPage = () => {
 
     const inactiveLedgers = totalLedgers - activeLedgers;
 
-    const openingTotal = enrichedLedgers.reduce(
-      (sum, ledger) => sum + ledger.opening_balance,
-      0
-    );
-
-    // ✅ NEW: current total across all ledgers
     const currentTotal = enrichedLedgers.reduce(
       (sum, ledger) => sum + ledger.current_balance,
       0
@@ -270,15 +224,11 @@ const AccountLedgerPage = () => {
       totalLedgers,
       activeLedgers,
       inactiveLedgers,
-      openingTotal,
       currentTotal,
     };
   }, [enrichedLedgers]);
 
-  /* =======================================================
-     FILTER
-  ======================================================= */
-
+  /* FILTER */
   const filteredLedgers = useMemo(() => {
     return enrichedLedgers.filter((ledger) => {
       const search = searchTerm.trim().toLowerCase();
@@ -297,130 +247,77 @@ const AccountLedgerPage = () => {
         (statusFilter === "ACTIVE" && ledger.is_active) ||
         (statusFilter === "INACTIVE" && !ledger.is_active);
 
-      return matchesSearch && matchesGroup && matchesStatus;
+      // ✅ NEW: Type Filter
+      const matchesType =
+        !typeFilter ||
+        (typeFilter === "SYSTEM" && ledger.reserved === true) ||
+        (typeFilter === "CUSTOM" && ledger.reserved !== true);
+
+      return matchesSearch && matchesGroup && matchesStatus && matchesType;
     });
-  }, [enrichedLedgers, searchTerm, groupFilter, statusFilter]);
+  }, [enrichedLedgers, searchTerm, groupFilter, statusFilter, typeFilter]);
 
-  /* =======================================================
-     PAGINATION
-  ======================================================= */
-
+  /* PAGINATION */
   const totalCount = filteredLedgers.length;
-
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-
   const safePage = Math.min(page, totalPages);
-
   const startIndex = (safePage - 1) * PAGE_SIZE;
-
   const paginatedLedgers = filteredLedgers.slice(
     startIndex,
     startIndex + PAGE_SIZE
   );
 
   const rangeStart = totalCount === 0 ? 0 : startIndex + 1;
-
   const rangeEnd = Math.min(startIndex + paginatedLedgers.length, totalCount);
-
-  /* =======================================================
-     RESET PAGE WHEN FILTER CHANGES
-  ======================================================= */
 
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, groupFilter, statusFilter]);
+  }, [searchTerm, groupFilter, statusFilter, typeFilter]);
 
-  /* =======================================================
-     PAGE NUMBERS
-  ======================================================= */
-
+  /* PAGE NUMBERS */
   const pageNumbers = useMemo(() => {
     const pages = [];
-
     if (totalPages <= 5) {
-      for (let i = 1; i <= totalPages; i++) {
-        pages.push(i);
-      }
-
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
       return pages;
     }
 
     pages.push(1);
-
-    if (safePage > 3) {
-      pages.push("...");
-    }
+    if (safePage > 3) pages.push("...");
 
     const start = Math.max(2, safePage - 1);
-
     const end = Math.min(totalPages - 1, safePage + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
 
-    for (let i = start; i <= end; i++) {
-      pages.push(i);
-    }
-
-    if (safePage < totalPages - 2) {
-      pages.push("...");
-    }
-
+    if (safePage < totalPages - 2) pages.push("...");
     pages.push(totalPages);
 
     return pages;
   }, [safePage, totalPages]);
 
-  /* =======================================================
-     NAVIGATION
-  ======================================================= */
+  /* NAVIGATION */
+  const handleAdd = () => navigate("/account-ledgers/add");
+  const handleView = (ledger) => navigate(`/account-ledgers/${ledger.id}`);
+  const handleEdit = (ledger) => navigate(`/account-ledgers/${ledger.id}/edit`);
 
-  const handleAdd = () => {
-    navigate("/account-ledgers/add");
-  };
-
-  const handleView = (ledger) => {
-    navigate(`/account-ledgers/${ledger.id}`);
-  };
-
-  const handleEdit = (ledger) => {
-    navigate(`/account-ledgers/${ledger.id}/edit`);
-  };
-
-  /* =======================================================
-     TABLE COLUMNS
-     ✅ NEW: added "Current Balance"
-  ======================================================= */
-
+  /* TABLE COLUMNS */
   const columns = [
     "Ledger Name",
-    "Ledger Code",
-    "Alias",
+    "Type", // ✅ NEW
     "Account Group",
     "Opening Balance",
-    "Current Balance", // ✅ NEW
+    "Current Balance",
     "Status",
-    "Last Updated",
     "Actions",
   ];
 
-  /* =======================================================
-     RENDER
-  ======================================================= */
-
   return (
     <Box minH="100vh" bg="white" display="flex" flexDirection="column">
-      {/* NAVBAR */}
-
       <Navbar />
 
-      {/* MAIN CONTENT */}
-
       <Box flex="1" w="100%">
-        <Box
-          w="100%"
-          px={{ base: 3, md: 4 }}
-          py={{ base: 3, md: 4 }}
-        >
+        <Box w="100%" px={{ base: 3, md: 4 }} py={{ base: 3, md: 4 }}>
           {/* BREADCRUMB */}
-
           <HStack gap={2} mb={2} color={MUTED} fontSize="11px">
             <Text
               color={PRIMARY_MAROON}
@@ -429,14 +326,11 @@ const AccountLedgerPage = () => {
             >
               Masters
             </Text>
-
             <Text>/</Text>
-
             <Text>Account Ledger Master</Text>
           </HStack>
 
           {/* HEADER */}
-
           <Flex
             justify="space-between"
             align={{ base: "flex-start", md: "center" }}
@@ -448,7 +342,6 @@ const AccountLedgerPage = () => {
               <Text fontSize="10px" fontWeight="700" color={RED} mb={1}>
                 ACCOUNT LEDGER MASTER
               </Text>
-
               <Heading
                 color={DARK}
                 fontSize={{ base: "22px", md: "26px" }}
@@ -457,7 +350,6 @@ const AccountLedgerPage = () => {
               >
                 Account Ledger Master
               </Heading>
-
               <Text color={MUTED} fontSize="11px">
                 Manage account ledgers, opening balances and account
                 classifications.
@@ -465,8 +357,6 @@ const AccountLedgerPage = () => {
             </Box>
 
             <HStack gap={2} flexShrink={0}>
-              {/* ✅ NEW: refresh button */}
-
               <Button
                 variant="outline"
                 borderColor={BORDER}
@@ -499,35 +389,28 @@ const AccountLedgerPage = () => {
                 _hover={{ bg: "#650A18" }}
               >
                 <Icon as={LuPlus} mr={2} boxSize={4} />
-
                 Add Account Ledger
               </Button>
             </HStack>
           </Flex>
 
           {/* STAT CARDS */}
-
           <SimpleGrid columns={{ base: 1, md: 2, xl: 4 }} gap={3} mb={3}>
             <StatCard
               icon={LuBookOpen}
               title="Total Ledgers"
               value={stats.totalLedgers}
             />
-
             <StatCard
               icon={LuFileCheck2}
               title="Active Ledgers"
               value={stats.activeLedgers}
             />
-
             <StatCard
               icon={LuFileX2}
               title="Inactive Ledgers"
               value={stats.inactiveLedgers}
             />
-
-            {/* ✅ CHANGED: show Current Balance total instead of Opening */}
-
             <StatCard
               icon={LuIndianRupee}
               title="Total Current Balance"
@@ -536,7 +419,6 @@ const AccountLedgerPage = () => {
           </SimpleGrid>
 
           {/* TABLE CARD */}
-
           <Box
             border={`1px solid ${BORDER}`}
             borderRadius="8px"
@@ -545,14 +427,11 @@ const AccountLedgerPage = () => {
             w="100%"
           >
             {/* SEARCH / FILTER */}
-
             <Flex gap={3} mb={3} direction={{ base: "column", md: "row" }}>
-              {/* SEARCH */}
-
               <Box
                 position="relative"
                 flex="1"
-                maxW={{ base: "100%", md: "400px" }}
+                maxW={{ base: "100%", md: "320px" }}
               >
                 <Icon
                   as={LuSearch}
@@ -564,13 +443,9 @@ const AccountLedgerPage = () => {
                   zIndex={1}
                   boxSize={4}
                 />
-
                 <Input
                   value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    setPage(1);
-                  }}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search ledger, code or alias"
                   pl="38px"
                   h="38px"
@@ -584,15 +459,46 @@ const AccountLedgerPage = () => {
                 />
               </Box>
 
-              {/* ACCOUNT GROUP */}
+              {/* TYPE FILTER (NEW) */}
+              <Box position="relative" width={{ base: "100%", md: "150px" }}>
+                <select
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  style={{
+                    width: "100%",
+                    height: "38px",
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: "6px",
+                    padding: "0 35px 0 11px",
+                    fontSize: "12px",
+                    background: "white",
+                    color: DARK,
+                    outline: "none",
+                    cursor: "pointer",
+                    appearance: "none",
+                  }}
+                >
+                  <option value="">All Types</option>
+                  <option value="SYSTEM">System</option>
+                  <option value="CUSTOM">Custom</option>
+                </select>
+                <Icon
+                  as={LuChevronDown}
+                  position="absolute"
+                  right="11px"
+                  top="50%"
+                  transform="translateY(-50%)"
+                  pointerEvents="none"
+                  color={DARK}
+                  boxSize={4}
+                />
+              </Box>
 
-              <Box position="relative" width={{ base: "100%", md: "210px" }}>
+              {/* ACCOUNT GROUP */}
+              <Box position="relative" width={{ base: "100%", md: "180px" }}>
                 <select
                   value={groupFilter}
-                  onChange={(e) => {
-                    setGroupFilter(e.target.value);
-                    setPage(1);
-                  }}
+                  onChange={(e) => setGroupFilter(e.target.value)}
                   style={{
                     width: "100%",
                     height: "38px",
@@ -608,14 +514,12 @@ const AccountLedgerPage = () => {
                   }}
                 >
                   <option value="">All Account Groups</option>
-
                   {groups.map((group) => (
                     <option key={group.id} value={group.id}>
                       {group.group_name}
                     </option>
                   ))}
                 </select>
-
                 <Icon
                   as={LuChevronDown}
                   position="absolute"
@@ -629,14 +533,10 @@ const AccountLedgerPage = () => {
               </Box>
 
               {/* STATUS */}
-
-              <Box position="relative" width={{ base: "100%", md: "170px" }}>
+              <Box position="relative" width={{ base: "100%", md: "130px" }}>
                 <select
                   value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value);
-                    setPage(1);
-                  }}
+                  onChange={(e) => setStatusFilter(e.target.value)}
                   style={{
                     width: "100%",
                     height: "38px",
@@ -652,12 +552,9 @@ const AccountLedgerPage = () => {
                   }}
                 >
                   <option value="">All Status</option>
-
                   <option value="ACTIVE">Active</option>
-
                   <option value="INACTIVE">Inactive</option>
                 </select>
-
                 <Icon
                   as={LuChevronDown}
                   position="absolute"
@@ -671,7 +568,6 @@ const AccountLedgerPage = () => {
               </Box>
 
               {/* FILTER / RESET */}
-
               <Button
                 variant="outline"
                 h="38px"
@@ -684,17 +580,15 @@ const AccountLedgerPage = () => {
                   setSearchTerm("");
                   setGroupFilter("");
                   setStatusFilter("");
-                  setPage(1);
+                  setTypeFilter("");
                 }}
               >
                 <Icon as={LuFilter} mr={2} boxSize={4} />
-
                 Filter
               </Button>
             </Flex>
 
             {/* TABLE */}
-
             <Box
               overflowX="auto"
               overflowY="hidden"
@@ -705,11 +599,9 @@ const AccountLedgerPage = () => {
               <Box
                 as="table"
                 width="100%"
-                minW="1050px"
+                minW="1000px"
                 borderCollapse="collapse"
               >
-                {/* TABLE HEADER */}
-
                 <Box as="thead">
                   <Box as="tr" height="42px">
                     {columns.map((heading) => (
@@ -717,9 +609,7 @@ const AccountLedgerPage = () => {
                         as="th"
                         key={heading}
                         textAlign={
-                          heading === "Actions" ||
-                          heading === "Opening Balance" ||
-                          heading === "Current Balance" // ✅ NEW
+                          ["Actions", "Opening Balance", "Current Balance"].includes(heading)
                             ? "right"
                             : "left"
                         }
@@ -737,8 +627,6 @@ const AccountLedgerPage = () => {
                     ))}
                   </Box>
                 </Box>
-
-                {/* TABLE BODY */}
 
                 <Box as="tbody">
                   {isLoading ? (
@@ -768,15 +656,17 @@ const AccountLedgerPage = () => {
                       </Box>
                     </Box>
                   ) : (
-                    paginatedLedgers.map((ledger) => (
+                    paginatedLedgers.map((ledger) => {
+                      const isReserved = ledger.reserved === true;
+                      
+                      return (
                       <Box
                         as="tr"
                         key={ledger.id}
                         height="42px"
                         _hover={{ bg: "#FFFBFC" }}
                       >
-                        {/* LEDGER NAME */}
-
+                        {/* NAME */}
                         <Box
                           as="td"
                           px={4}
@@ -789,41 +679,50 @@ const AccountLedgerPage = () => {
                         >
                           <HStack gap={2}>
                             <Icon as={LuBookOpen} boxSize={3.5} color={RED} />
-
                             <Text>{pick(ledger, ["ledger_name"])}</Text>
                           </HStack>
                         </Box>
 
-                        {/* LEDGER CODE */}
-
+                        {/* TYPE BADGE */}
                         <Box
                           as="td"
                           px={4}
                           py={1}
-                          fontSize="12px"
-                          color="#344054"
                           borderBottom="1px solid #E6EAF0"
                           whiteSpace="nowrap"
                         >
-                          {pick(ledger, ["ledger_code"])}
+                          {isReserved ? (
+                            <HStack
+                              gap={1}
+                              display="inline-flex"
+                              bg="#FFF0F4"
+                              color={RED}
+                              px={2}
+                              py={0.5}
+                              borderRadius="4px"
+                              fontSize="10px"
+                              fontWeight="700"
+                            >
+                              <Icon as={LuShieldCheck} boxSize={3} />
+                              SYSTEM
+                            </HStack>
+                          ) : (
+                            <Box
+                              display="inline-block"
+                              bg="#F0F4F8"
+                              color={MUTED}
+                              px={2}
+                              py={0.5}
+                              borderRadius="4px"
+                              fontSize="10px"
+                              fontWeight="700"
+                            >
+                              CUSTOM
+                            </Box>
+                          )}
                         </Box>
 
-                        {/* ALIAS */}
-
-                        <Box
-                          as="td"
-                          px={4}
-                          py={1}
-                          fontSize="12px"
-                          color="#344054"
-                          borderBottom="1px solid #E6EAF0"
-                          whiteSpace="nowrap"
-                        >
-                          {pick(ledger, ["alias"])}
-                        </Box>
-
-                        {/* ACCOUNT GROUP */}
-
+                        {/* GROUP */}
                         <Box
                           as="td"
                           px={4}
@@ -836,8 +735,7 @@ const AccountLedgerPage = () => {
                           {ledger.account_group_name}
                         </Box>
 
-                        {/* OPENING BALANCE */}
-
+                        {/* OPENING */}
                         <Box
                           as="td"
                           px={4}
@@ -852,8 +750,7 @@ const AccountLedgerPage = () => {
                           {formatAmount(ledger.opening_balance)}
                         </Box>
 
-                        {/* ✅ NEW: CURRENT BALANCE */}
-
+                        {/* CURRENT */}
                         <Box
                           as="td"
                           px={4}
@@ -869,7 +766,6 @@ const AccountLedgerPage = () => {
                         </Box>
 
                         {/* STATUS */}
-
                         <Box
                           as="td"
                           px={4}
@@ -889,24 +785,7 @@ const AccountLedgerPage = () => {
                           </Badge>
                         </Box>
 
-                        {/* LAST UPDATED */}
-
-                        <Box
-                          as="td"
-                          px={4}
-                          py={1}
-                          fontSize="12px"
-                          color="#344054"
-                          borderBottom="1px solid #E6EAF0"
-                          whiteSpace="nowrap"
-                        >
-                          {formatDate(
-                            pick(ledger, ["updated_at", "last_updated"], null)
-                          )}
-                        </Box>
-
                         {/* ACTIONS */}
-
                         <Box
                           as="td"
                           px={4}
@@ -925,7 +804,6 @@ const AccountLedgerPage = () => {
                               _hover={{ bg: "#FFF0F4" }}
                             >
                               <Icon as={LuEye} mr={1} boxSize={3.5} />
-
                               View
                             </Button>
 
@@ -940,20 +818,18 @@ const AccountLedgerPage = () => {
                               _hover={{ bg: "#FFF0F4" }}
                             >
                               <Icon as={LuPencil} mr={1} boxSize={3.5} />
-
                               Edit
                             </Button>
                           </HStack>
                         </Box>
                       </Box>
-                    ))
+                    )})
                   )}
                 </Box>
               </Box>
             </Box>
 
             {/* PAGINATION */}
-
             <Flex
               justify="space-between"
               align="center"
@@ -961,19 +837,13 @@ const AccountLedgerPage = () => {
               gap={3}
               direction={{ base: "column", md: "row" }}
             >
-              {/* COUNT */}
-
               <Text fontSize="11px" color={MUTED}>
                 {totalCount === 0
                   ? "Showing 0 account ledgers"
                   : `Showing ${rangeStart}–${rangeEnd} of ${totalCount} account ledgers`}
               </Text>
 
-              {/* PAGINATION */}
-
               <HStack gap={1}>
-                {/* PREVIOUS */}
-
                 <Button
                   size="xs"
                   h="30px"
@@ -984,11 +854,8 @@ const AccountLedgerPage = () => {
                   onClick={() => setPage(Math.max(1, safePage - 1))}
                 >
                   <Icon as={LuChevronLeft} boxSize={3.5} />
-
                   Previous
                 </Button>
-
-                {/* PAGE NUMBERS */}
 
                 {pageNumbers.map((num, index) =>
                   num === "..." ? (
@@ -1020,8 +887,6 @@ const AccountLedgerPage = () => {
                   )
                 )}
 
-                {/* NEXT */}
-
                 <Button
                   size="xs"
                   h="30px"
@@ -1039,9 +904,6 @@ const AccountLedgerPage = () => {
           </Box>
         </Box>
       </Box>
-
-      {/* FOOTER */}
-
       <Footer />
     </Box>
   );

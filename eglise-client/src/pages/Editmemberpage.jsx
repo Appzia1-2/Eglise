@@ -33,6 +33,7 @@ import {
   LuPencil,
   LuRefreshCw,
   LuX,
+  LuUserPlus,
 } from "react-icons/lu";
 
 import {
@@ -41,6 +42,7 @@ import {
   listRelationships,
   changeMemberHead,
   listFamilyHeads,
+  promoteToHead,
 } from "../api/registryServices";
 
 import {
@@ -159,7 +161,6 @@ const getInitials = (name) => {
     .toUpperCase();
 };
 
-// Trimmed string, "" when empty
 const text = (value) =>
   value === null || value === undefined
     ? ""
@@ -385,8 +386,6 @@ const ChangeHeadModal = ({
           event.stopPropagation()
         }
       >
-        {/* HEADER */}
-
         <Box
           borderBottom="1px solid #E5EAF1"
           px="20px"
@@ -428,8 +427,6 @@ const ChangeHeadModal = ({
             </IconButton>
           </Flex>
         </Box>
-
-        {/* BODY */}
 
         <Box
           px="20px"
@@ -584,8 +581,6 @@ const ChangeHeadModal = ({
           )}
         </Box>
 
-        {/* FOOTER */}
-
         <Flex
           borderTop="1px solid #E5EAF1"
           px="20px"
@@ -647,6 +642,9 @@ const EditMemberPage = () => {
   const [head, setHead] =
     useState(null);
 
+  const [effectiveHeadId, setEffectiveHeadId] =
+    useState(headId || null);
+
   const [relationships, setRelationships] =
     useState([]);
 
@@ -664,6 +662,9 @@ const EditMemberPage = () => {
     setIsSubmittingChange,
   ] = useState(false);
 
+  const [isPromoting, setIsPromoting] =
+    useState(false);
+
   const {
     open: isChangeHeadModalOpen,
     onOpen: onChangeHeadModalOpen,
@@ -671,59 +672,122 @@ const EditMemberPage = () => {
   } = useDisclosure();
 
   /* ==========================================================
+     DERIVED VALUES
+     ✅ Declared BEFORE the handlers that use them
+  ========================================================== */
+
+  const hasHead = Boolean(head?.id);
+
+  const canPromoteToHead =
+    !member?.is_family_head && !hasHead;
+
+  /* ==========================================================
      FETCH DATA
   ========================================================== */
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memberId, headId]);
 
   const fetchData = async () => {
     setLoading(true);
 
     try {
-      const [
-        memberResponse,
-        headResponse,
-        relationshipsResponse,
-        headsResponse,
-      ] = await Promise.all([
-        getMemberDetail(memberId),
-        getMemberDetail(headId),
-        listRelationships(),
-        listFamilyHeads(),
-      ]);
+      /* =========================================================
+         1. MEMBER — the only hard requirement
+      ========================================================= */
+      let memberData = null;
+      try {
+        const memberResponse = await getMemberDetail(memberId);
+        memberData =
+          memberResponse?.data || memberResponse || null;
+      } catch (err) {
+        const status = err?.response?.status;
 
-      const memberData =
-        memberResponse?.data ||
-        memberResponse ||
-        null;
+        if (status === 404) {
+          notifyError(
+            "Member not found",
+            "This member no longer exists in your church."
+          );
+          navigate("/family-heads");
+          return;
+        }
+        throw err;
+      }
 
-      const headData =
-        headResponse?.data ||
-        headResponse ||
-        null;
+      if (!memberData) {
+        notifyError(
+          "Load failed",
+          "Could not load member details."
+        );
+        navigate("/family-heads");
+        return;
+      }
 
       setMember(memberData);
+
+      /* =========================================================
+         2. RESOLVE THE HEAD — member payload first, then URL param
+      ========================================================= */
+      const resolvedHeadId =
+        memberData?.head_id ||
+        memberData?.family_head_id ||
+        memberData?.head?.id ||
+        headId ||
+        null;
+
+      setEffectiveHeadId(resolvedHeadId);
+
+      /* =========================================================
+         3. HEAD — best-effort. 404 expected when head is dead.
+      ========================================================= */
+      let headData = null;
+      if (resolvedHeadId) {
+        try {
+          const headResponse =
+            await getMemberDetail(resolvedHeadId);
+          headData =
+            headResponse?.data || headResponse || null;
+        } catch (err) {
+          headData = null;
+        }
+      }
       setHead(headData);
 
-      setRelationships(
-        getArrayData(
-          relationshipsResponse
-        )
-      );
+      /* =========================================================
+         4. RELATIONSHIPS — best-effort
+      ========================================================= */
+      try {
+        const relationshipsResponse =
+          await listRelationships();
+        setRelationships(
+          getArrayData(relationshipsResponse)
+        );
+      } catch {
+        setRelationships([]);
+      }
 
-      // Filter out the current family head — no point
-      // offering them as a transfer target
-      const allHeads = getArrayData(
-        headsResponse
-      );
-      const otherHeads = allHeads.filter(
-        (h) =>
-          String(h.id) !== String(headId)
-      );
+      /* =========================================================
+         5. FAMILY HEAD DROPDOWN — best-effort
+      ========================================================= */
+      setLoadingHeads(true);
+      try {
+        const headsResponse = await listFamilyHeads();
+        const allHeads = getArrayData(headsResponse);
 
-      setAvailableHeads(otherHeads);
+        const otherHeads = allHeads.filter(
+          (h) =>
+            String(h.id) !== String(resolvedHeadId) &&
+            String(h.id) !== String(memberData.id)
+        );
+
+        setAvailableHeads(otherHeads);
+      } catch {
+        setAvailableHeads([]);
+      } finally {
+        setLoadingHeads(false);
+      }
     } catch (error) {
       console.error(
         "Error fetching dependent data:",
@@ -738,9 +802,7 @@ const EditMemberPage = () => {
         )
       );
 
-      navigate(
-        `/family-heads/${headId}/members`
-      );
+      navigate("/family-heads");
     } finally {
       setLoading(false);
     }
@@ -795,6 +857,56 @@ const EditMemberPage = () => {
   };
 
   /* ==========================================================
+     PROMOTE TO FAMILY HEAD
+  ========================================================== */
+
+  const handlePromote = async () => {
+    setIsPromoting(true);
+
+    try {
+      await promoteToHead(memberId);
+
+      notifySuccess(
+        "Promoted",
+        `${member?.name || "Member"} is now the family head.`
+      );
+
+      navigate(`/family-heads`);
+    } catch (error) {
+      console.error("Error promoting:", error);
+      console.error(
+        "Backend response:",
+        error?.response?.data
+      );
+
+      notifyError(
+        "Could not promote",
+        getErrorMessage(
+          error,
+          "Failed to promote member."
+        )
+      );
+    } finally {
+      setIsPromoting(false);
+    }
+  };
+
+  /* ==========================================================
+     REDIRECT HELPER
+     ✅ After save / cancel:
+        - Headless household → /family-heads
+        - Household with head → that head's members page
+  ========================================================== */
+
+  const goBackAfterEdit = () => {
+    if (hasHead && effectiveHeadId) {
+      navigate(`/family-heads/${effectiveHeadId}/members`);
+    } else {
+      navigate("/family-heads");
+    }
+  };
+
+  /* ==========================================================
      VALIDATION
   ========================================================== */
 
@@ -805,12 +917,14 @@ const EditMemberPage = () => {
         .required("Name is required"),
 
       relationship: Yup.number()
-        .typeError(
-          "Relationship is required"
-        )
-        .required(
-          "Relationship is required"
-        ),
+        .typeError("Relationship is required")
+        .when("$hasHead", {
+          is: true,
+          then: (schema) =>
+            schema.required("Relationship is required"),
+          otherwise: (schema) =>
+            schema.nullable().notRequired(),
+        }),
 
       gender: Yup.string()
         .oneOf(
@@ -836,7 +950,6 @@ const EditMemberPage = () => {
           "Marital status is required"
         ),
 
-      // ✅ DOB is required and must be a valid, non-future date
       dob: Yup.date()
         .typeError(
           "Date of birth is required"
@@ -865,16 +978,24 @@ const EditMemberPage = () => {
     }
   ) => {
     try {
-      /*
-       * Every editable field is sent, including empty ones.
-       * Previously empty values were skipped, so clearing a
-       * field (e.g. father name) did not update the record.
-       *
-       *  - text fields   -> "" when cleared
-       *  - date fields   -> null when cleared
-       *  - email         -> null when cleared (it is unique)
-       *  - spouse name   -> only kept when married
-       */
+      if (!values.gender) {
+        notifyError(
+          "Missing field",
+          "Please select a gender."
+        );
+        setSubmitting(false);
+        return;
+      }
+
+      if (!values.marital_status) {
+        notifyError(
+          "Missing field",
+          "Please select a marital status."
+        );
+        setSubmitting(false);
+        return;
+      }
+
       const updateData = {
         name: text(values.name),
 
@@ -940,18 +1061,20 @@ const EditMemberPage = () => {
           null,
       };
 
-      const relationshipId = Number(
-        values.relationship
-      );
+      // ✅ 400 fix — only send relationship when the household
+      // has an active head.
+      if (hasHead) {
+        const relationshipId = Number(
+          values.relationship
+        );
 
-      if (
-        !Number.isNaN(
-          relationshipId
-        ) &&
-        relationshipId > 0
-      ) {
-        updateData.relationship =
-          relationshipId;
+        if (
+          !Number.isNaN(relationshipId) &&
+          relationshipId > 0
+        ) {
+          updateData.relationship =
+            relationshipId;
+        }
       }
 
       console.log(
@@ -969,9 +1092,7 @@ const EditMemberPage = () => {
         "The dependent was updated successfully."
       );
 
-      navigate(
-        `/family-heads/${headId}/members`
-      );
+      goBackAfterEdit();
     } catch (error) {
       console.error(
         "Error updating dependent:",
@@ -981,6 +1102,14 @@ const EditMemberPage = () => {
       console.error(
         "Backend response:",
         error?.response?.data
+      );
+      console.error(
+        "Backend JSON:",
+        JSON.stringify(
+          error?.response?.data,
+          null,
+          2
+        )
       );
 
       notifyError(
@@ -1053,18 +1182,22 @@ const EditMemberPage = () => {
   const familyName =
     head?.family?.family_name ||
     head?.family_name ||
+    member?.family?.family_name ||
     "—";
 
   const headName =
-    head?.name || "—";
+    head?.name || "";
 
   const wardName =
     head?.ward?.ward_name ||
     head?.ward_name ||
+    member?.ward?.ward_name ||
+    member?.ward_name ||
     "—";
 
   const relationshipName =
     member?.relationship?.name ||
+    member?.relationship_name ||
     "—";
 
   const age =
@@ -1077,6 +1210,8 @@ const EditMemberPage = () => {
     member?.image ||
     member?.photo ||
     member?.family_image;
+
+  /* NOTE: hasHead / canPromoteToHead are declared above. */
 
   /* ==========================================================
      INITIAL VALUES
@@ -1196,9 +1331,7 @@ const EditMemberPage = () => {
           mx="auto"
           width="100%"
         >
-          {/* ==================================================
-              BREADCRUMB
-          ================================================== */}
+          {/* BREADCRUMB */}
 
           <Flex
             align="center"
@@ -1240,18 +1373,28 @@ const EditMemberPage = () => {
               /
             </Text>
 
-            <Text
-              fontSize="12px"
-              color="#3674D9"
-              cursor="pointer"
-              onClick={() =>
-                navigate(
-                  `/family-heads/${headId}/members`
-                )
-              }
-            >
-              {headName}
-            </Text>
+            {effectiveHeadId ? (
+              <Text
+                fontSize="12px"
+                color="#3674D9"
+                cursor="pointer"
+                onClick={() =>
+                  navigate(
+                    `/family-heads/${effectiveHeadId}/members`
+                  )
+                }
+              >
+                {headName || "Household"}
+              </Text>
+            ) : (
+              <Text
+                fontSize="12px"
+                color="#A8071A"
+                fontWeight="600"
+              >
+                Headless Household
+              </Text>
+            )}
 
             <Text color="#98A2B3">
               /
@@ -1276,9 +1419,7 @@ const EditMemberPage = () => {
             </Text>
           </Flex>
 
-          {/* ==================================================
-              PAGE TITLE
-          ================================================== */}
+          {/* PAGE TITLE */}
 
           <Box mb="13px">
             <Text
@@ -1321,35 +1462,84 @@ const EditMemberPage = () => {
                 </Text>
               </Box>
 
-              <Button
-                onClick={
-                  onChangeHeadModalOpen
-                }
-                h="36px"
-                bg="white"
-                color={NAVY}
-                border="1px solid #D7DFEA"
-                borderRadius="5px"
-                fontSize="11.5px"
-                fontWeight="600"
-                gap="7px"
-                _hover={{
-                  bg: "#F5F6FA",
-                  borderColor:
-                    "#B8C3D4",
-                }}
-              >
-                <LuRefreshCw
-                  size={16}
-                />
-                Change Head
-              </Button>
+              <Flex gap="10px" flexWrap="wrap">
+                {canPromoteToHead && (
+                  <Button
+                    onClick={handlePromote}
+                    h="36px"
+                    bg={RED}
+                    color="white"
+                    borderRadius="5px"
+                    fontSize="11.5px"
+                    fontWeight="600"
+                    gap="7px"
+                    loading={isPromoting}
+                    loadingText="Promoting..."
+                    _hover={{
+                      bg: RED_DARK,
+                    }}
+                  >
+                    <LuUserPlus size={16} />
+                    Promote to Family Head
+                  </Button>
+                )}
+
+                {hasHead && availableHeads.length > 0 && (
+                  <Button
+                    onClick={
+                      onChangeHeadModalOpen
+                    }
+                    h="36px"
+                    bg="white"
+                    color={NAVY}
+                    border="1px solid #D7DFEA"
+                    borderRadius="5px"
+                    fontSize="11.5px"
+                    fontWeight="600"
+                    gap="7px"
+                    _hover={{
+                      bg: "#F5F6FA",
+                      borderColor:
+                        "#B8C3D4",
+                    }}
+                  >
+                    <LuRefreshCw
+                      size={16}
+                    />
+                    Change Head
+                  </Button>
+                )}
+              </Flex>
             </Flex>
           </Box>
 
-          {/* ==================================================
-              DEPENDENT SUMMARY
-          ================================================== */}
+          {/* Headless household alert banner */}
+
+          {!hasHead && (
+            <Alert.Root
+              status="warning"
+              mb="12px"
+              borderRadius="6px"
+            >
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Title
+                  fontSize="12.5px"
+                  fontWeight="700"
+                >
+                  No active family head
+                </Alert.Title>
+                <Alert.Description fontSize="11.5px">
+                  This household does not have an active
+                  head right now. You can still edit this
+                  dependent, but promote a new family head
+                  to keep the household organized.
+                </Alert.Description>
+              </Alert.Content>
+            </Alert.Root>
+          )}
+
+          {/* DEPENDENT SUMMARY */}
 
           <Box
             bg="white"
@@ -1443,9 +1633,9 @@ const EditMemberPage = () => {
                   <Text
                     fontSize="13px"
                     fontWeight="600"
-                    color={NAVY}
+                    color={hasHead ? NAVY : "#A8071A"}
                   >
-                    {headName}
+                    {headName || "No active head"}
                   </Text>
 
                   <Text
@@ -1552,9 +1742,7 @@ const EditMemberPage = () => {
             </Grid>
           </Box>
 
-          {/* ==================================================
-              CONTENT AREA
-          ================================================== */}
+          {/* CONTENT AREA */}
 
           <Grid
             templateColumns={{
@@ -1564,9 +1752,7 @@ const EditMemberPage = () => {
             gap="22px"
             alignItems="start"
           >
-            {/* =================================================
-                LEFT FORM
-            ================================================= */}
+            {/* LEFT FORM */}
 
             <Formik
               enableReinitialize
@@ -1579,6 +1765,7 @@ const EditMemberPage = () => {
               validateOnBlur={true}
               validateOnChange={true}
               onSubmit={handleSubmit}
+              context={{ hasHead }}
             >
               {({
                 values,
@@ -1623,7 +1810,7 @@ const EditMemberPage = () => {
                       {/* FAMILY HEAD */}
 
                       <Field.Root
-                        required
+                        required={hasHead}
                         gap="0"
                       >
                         <Field.Label
@@ -1634,30 +1821,51 @@ const EditMemberPage = () => {
                         >
                           Family Head
 
-                          <Field.RequiredIndicator
-                            color={RED}
-                            ml="3px"
-                          />
+                          {hasHead && (
+                            <Field.RequiredIndicator
+                              color={RED}
+                              ml="3px"
+                            />
+                          )}
                         </Field.Label>
 
-                        <SelectField
-                          name="family_head"
-                          value={
-                            head?.id || ""
-                          }
-                          disabled
-                          onChange={() => {}}
-                        >
-                          <option
+                        {hasHead ? (
+                          <SelectField
+                            name="family_head"
                             value={
-                              head?.id ||
-                              ""
+                              head?.id || ""
                             }
+                            disabled
+                            onChange={() => {}}
                           >
-                            {headName} —{" "}
-                            {familyName}
-                          </option>
-                        </SelectField>
+                            <option
+                              value={
+                                head?.id ||
+                                ""
+                              }
+                            >
+                              {headName} —{" "}
+                              {familyName}
+                            </option>
+                          </SelectField>
+                        ) : (
+                          <Flex
+                            align="center"
+                            h="34px"
+                            px="10px"
+                            border="1px dashed #F5C2C7"
+                            borderRadius="5px"
+                            bg="#FFF6F7"
+                          >
+                            <Text
+                              fontSize="11px"
+                              color="#A8071A"
+                              fontWeight="600"
+                            >
+                              No active head (headless household)
+                            </Text>
+                          </Flex>
+                        )}
                       </Field.Root>
 
                       {/* NAME */}
@@ -1719,7 +1927,7 @@ const EditMemberPage = () => {
                         touched={
                           touched.relationship
                         }
-                        required
+                        required={hasHead}
                       >
                         <SelectField
                           name="relationship"
@@ -1736,10 +1944,12 @@ const EditMemberPage = () => {
                             touched.relationship &&
                               errors.relationship
                           )}
+                          disabled={!hasHead}
                         >
                           <option value="">
-                            Select
-                            relationship
+                            {hasHead
+                              ? "Select relationship"
+                              : "No active head — cannot assign relationship"}
                           </option>
 
                           {relationships.map(
@@ -1868,7 +2078,6 @@ const EditMemberPage = () => {
                           onChange={(event) => {
                             handleChange(event);
 
-                            // Spouse only allowed when married
                             if (
                               event.target
                                 .value !==
@@ -1936,7 +2145,7 @@ const EditMemberPage = () => {
                         }
                       />
 
-                      {/* DOB — REQUIRED */}
+                      {/* DOB */}
 
                       <FormField
                         label="Date of Birth"
@@ -2108,37 +2317,14 @@ const EditMemberPage = () => {
                             Select
                           </option>
 
-                          <option value="O+">
-                            O+
-                          </option>
-
-                          <option value="O-">
-                            O-
-                          </option>
-
-                          <option value="A+">
-                            A+
-                          </option>
-
-                          <option value="A-">
-                            A-
-                          </option>
-
-                          <option value="B+">
-                            B+
-                          </option>
-
-                          <option value="B-">
-                            B-
-                          </option>
-
-                          <option value="AB+">
-                            AB+
-                          </option>
-
-                          <option value="AB-">
-                            AB-
-                          </option>
+                          <option value="O+">O+</option>
+                          <option value="O-">O-</option>
+                          <option value="A+">A+</option>
+                          <option value="A-">A-</option>
+                          <option value="B+">B+</option>
+                          <option value="B-">B-</option>
+                          <option value="AB+">AB+</option>
+                          <option value="AB-">AB-</option>
                         </SelectField>
                       </FormField>
 
@@ -2295,11 +2481,7 @@ const EditMemberPage = () => {
                         borderRadius="5px"
                         fontSize="11.5px"
                         fontWeight="600"
-                        onClick={() =>
-                          navigate(
-                            `/family-heads/${headId}/members`
-                          )
-                        }
+                        onClick={goBackAfterEdit}
                         _hover={{
                           bg: "#FFF7F8",
                         }}
@@ -2332,9 +2514,7 @@ const EditMemberPage = () => {
               )}
             </Formik>
 
-            {/* =================================================
-                RIGHT SIDEBAR
-            ================================================= */}
+            {/* RIGHT SIDEBAR */}
 
             <VStack
               align="stretch"
@@ -2507,9 +2687,14 @@ const EditMemberPage = () => {
 
                       <Text
                         fontSize="12px"
-                        color={NAVY}
+                        color={
+                          hasHead ? NAVY : "#A8071A"
+                        }
+                        fontWeight={
+                          hasHead ? "400" : "600"
+                        }
                       >
-                        {headName}
+                        {headName || "No active head"}
                       </Text>
                     </Flex>
 
@@ -2542,35 +2727,37 @@ const EditMemberPage = () => {
                   </Box>
                 </Flex>
 
-                <Button
-                  variant="ghost"
-                  p="0"
-                  mt="23px"
-                  height="auto"
-                  color={RED}
-                  fontSize="12px"
-                  fontWeight="700"
-                  onClick={() =>
-                    navigate(
-                      `/family-heads/${headId}`
-                    )
-                  }
-                  _hover={{
-                    bg: "transparent",
-                    color: RED_DARK,
-                  }}
-                >
-                  View Family
-
-                  <Text
-                    as="span"
-                    fontSize="19px"
-                    ml="8px"
-                    lineHeight="1"
+                {hasHead && (
+                  <Button
+                    variant="ghost"
+                    p="0"
+                    mt="23px"
+                    height="auto"
+                    color={RED}
+                    fontSize="12px"
+                    fontWeight="700"
+                    onClick={() =>
+                      navigate(
+                        `/family-heads/${effectiveHeadId}`
+                      )
+                    }
+                    _hover={{
+                      bg: "transparent",
+                      color: RED_DARK,
+                    }}
                   >
-                    →
-                  </Text>
-                </Button>
+                    View Family
+
+                    <Text
+                      as="span"
+                      fontSize="19px"
+                      ml="8px"
+                      lineHeight="1"
+                    >
+                      →
+                    </Text>
+                  </Button>
+                )}
               </Box>
             </VStack>
           </Grid>

@@ -1357,6 +1357,11 @@ class Relationship(models.Model):
 
     name = models.CharField(max_length=50)
 
+    reserved = models.BooleanField(
+        default=False,
+        help_text="True for system-seeded relationships that cannot be edited or deleted."
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1366,6 +1371,11 @@ class Relationship(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.church.name})"
+
+    @property
+    def display_name(self):
+        """Human-friendly name — replaces underscores with spaces."""
+        return self.name.replace("_", " ")
 
 
 
@@ -1448,6 +1458,12 @@ class Designation(models.Model):
     )
 
     designation_name = models.CharField(max_length=150)
+
+    # ✅ NEW: Lock system defaults
+    reserved = models.BooleanField(
+        default=False,
+        help_text="True for system-seeded designations that cannot be edited or deleted."
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1572,6 +1588,43 @@ class Priest(models.Model):
     updated_at = models.DateTimeField(
         auto_now=True
     )
+
+    # ==============================
+    # SAVE — AUTO-CLOSE PREVIOUS VICAR
+    # ==============================
+
+    def save(self, *args, **kwargs):
+        """
+        When a new MAIN vicar starts on date_from, automatically
+        close every earlier, still-open MAIN vicar by setting
+        date_to = new.date_from - 1 day and is_active = False.
+
+        This guarantees that at most ONE MAIN vicar is "currently
+        serving" at any point in time, without requiring the admin
+        to manually edit the previous record.
+        """
+        is_new_open_vicar = (
+            self.designation == "MAIN"
+            and self.is_active
+            and self.date_from
+            and not self.date_to
+        )
+
+        super().save(*args, **kwargs)
+
+        if is_new_open_vicar:
+            from datetime import timedelta as _td
+
+            Priest.objects.filter(
+                church=self.church,
+                designation="MAIN",
+                is_active=True,
+                date_from__lt=self.date_from,
+                date_to__isnull=True,
+            ).exclude(pk=self.pk).update(
+                date_to=self.date_from - _td(days=1),
+                is_active=False,
+            )
 
     # ==============================
     # STRING

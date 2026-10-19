@@ -161,11 +161,14 @@ class LogoutAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+# accounts/views.py
+
 class ChangePasswordAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        serializer = ChangePasswordSerializer(data=request.data)
+        # ✅ Pass the request in context so the serializer can access the user
+        serializer = ChangePasswordSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
 
         user = request.user
@@ -179,7 +182,7 @@ class ChangePasswordAPIView(APIView):
             )
 
         user.set_password(new_password)
-        user.force_password_change = False  # NEW: Mark password as changed
+        user.force_password_change = False
         user.save()
 
         return Response(

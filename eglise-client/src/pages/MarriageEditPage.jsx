@@ -466,6 +466,7 @@ const MarriageEditPage = () => {
 
   useEffect(() => {
     loadPage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const loadPage = async () => {
@@ -473,13 +474,17 @@ const MarriageEditPage = () => {
     setError("");
 
     try {
-      const [marriageResponse, familiesResponse, membersResponse, relationshipsResponse] =
-        await Promise.all([
-          getMarriage(id),
-          listFamilies(),
-          listMembers(),
-          listRelationships(),
-        ]);
+      const [
+        marriageResponse,
+        familiesResponse,
+        membersResponse,
+        relationshipsResponse,
+      ] = await Promise.all([
+        getMarriage(id),
+        listFamilies(),
+        listMembers(),
+        listRelationships(),
+      ]);
 
       const record = marriageResponse.data;
       setMarriage(record);
@@ -488,7 +493,6 @@ const MarriageEditPage = () => {
       setMembers(getResponseData(membersResponse));
       setRelationships(getResponseData(relationshipsResponse));
 
-      // Set form data from record
       setFormData({
         marriage_type: record.marriage_type || "ADD_BRIDE",
         date: record.date || "",
@@ -514,8 +518,14 @@ const MarriageEditPage = () => {
         bride_address: record.bride_address || "",
         bride_phone: record.bride_phone || "",
         bride_confession_date: record.bride_confession_date || "",
-        bride_is_internal: record.bride_is_internal !== undefined ? record.bride_is_internal : true,
-        groom_is_internal: record.groom_is_internal !== undefined ? record.groom_is_internal : true,
+        bride_is_internal:
+          record.bride_is_internal !== undefined
+            ? record.bride_is_internal
+            : true,
+        groom_is_internal:
+          record.groom_is_internal !== undefined
+            ? record.groom_is_internal
+            : true,
         relationship: getValue(record.relationship),
         family: getValue(record.family),
         transfer_to: record.transfer_to || "",
@@ -528,7 +538,9 @@ const MarriageEditPage = () => {
       });
     } catch (err) {
       console.error("Error loading marriage:", err);
-      setError(err?.response?.data?.detail || "Unable to load marriage record.");
+      setError(
+        err?.response?.data?.detail || "Unable to load marriage record."
+      );
       navigate("/marriage");
     } finally {
       setLoading(false);
@@ -536,18 +548,27 @@ const MarriageEditPage = () => {
   };
 
   /* ==========================================================
-     HELPERS - Get Available Grooms/Brides
+     HELPERS — Get Available Grooms/Brides
+     Always include the currently-selected member so a
+     disabled <select> never falls back to blank.
   ========================================================== */
 
   const getAvailableGrooms = (familyId) => {
     if (!familyId) return [];
 
-    const familyIdInt = typeof familyId === "string" ? parseInt(familyId) : familyId;
+    const familyIdInt =
+      typeof familyId === "string" ? parseInt(familyId) : familyId;
 
     return members
       .filter((m) => {
         const memberFamilyId = m.family?.id || m.family;
         const matchesFamily = memberFamilyId === familyIdInt;
+
+        const isCurrentlySelected =
+          String(m.id) === String(formData.groom_member);
+
+        if (isCurrentlySelected) return matchesFamily;
+
         const isEligible =
           m.is_active !== false &&
           m.expired !== true &&
@@ -557,6 +578,7 @@ const MarriageEditPage = () => {
           m.marital_status !== "" &&
           !m.spouse &&
           !m.is_family_head;
+
         return isEligible && matchesFamily;
       })
       .map((m) => ({
@@ -568,12 +590,19 @@ const MarriageEditPage = () => {
   const getAvailableBrides = (familyId) => {
     if (!familyId) return [];
 
-    const familyIdInt = typeof familyId === "string" ? parseInt(familyId) : familyId;
+    const familyIdInt =
+      typeof familyId === "string" ? parseInt(familyId) : familyId;
 
     return members
       .filter((m) => {
         const memberFamilyId = m.family?.id || m.family;
         const matchesFamily = memberFamilyId === familyIdInt;
+
+        const isCurrentlySelected =
+          String(m.id) === String(formData.bride_member);
+
+        if (isCurrentlySelected) return matchesFamily;
+
         const isEligible =
           m.is_active !== false &&
           m.expired !== true &&
@@ -582,6 +611,7 @@ const MarriageEditPage = () => {
           m.marital_status !== "Married" &&
           m.marital_status !== "" &&
           !m.spouse;
+
         return isEligible && matchesFamily;
       })
       .map((m) => ({
@@ -601,13 +631,18 @@ const MarriageEditPage = () => {
 
   const relationshipOptions = relationships.map((relationship) => ({
     value: relationship.id,
-    label: relationship.name || relationship.relationship_name || `Relationship #${relationship.id}`,
+    label:
+      relationship.name ||
+      relationship.relationship_name ||
+      `Relationship #${relationship.id}`,
   }));
 
   const type = formData.marriage_type || "ADD_BRIDE";
   const selectedGroomFamily = formData.groom_family;
   const selectedBrideFamily = formData.bride_family;
-  const brideIsInternal = formData.bride_is_internal === true || formData.bride_is_internal === "true";
+  const brideIsInternal =
+    formData.bride_is_internal === true ||
+    formData.bride_is_internal === "true";
 
   const groomOptions = getAvailableGrooms(selectedGroomFamily);
   const brideOptions = getAvailableBrides(selectedBrideFamily);
@@ -677,6 +712,9 @@ const MarriageEditPage = () => {
 
   /* ==========================================================
      SUBMIT
+     Only editable fields are sent. Marriage type, bride type,
+     groom family/member and bride family/member are OMITTED
+     because they are locked in edit mode.
   ========================================================== */
 
   const handleSubmit = async (event) => {
@@ -687,10 +725,18 @@ const MarriageEditPage = () => {
 
     try {
       const payload = {
-        marriage_type: formData.marriage_type,
+        // ❌ Locked identity fields — do NOT send
+        // marriage_type,
+        // bride_is_internal,
+        // groom_is_internal,
+        // groom_family,
+        // groom_member,
+        // bride_family,
+        // bride_member,
+
         date: formData.date,
-        groom_family: formData.groom_family || null,
-        groom_member: formData.groom_member || null,
+
+        // Groom descriptive fields (editable)
         groom_name: formData.groom_name || null,
         groom_nationality: formData.groom_nationality || null,
         groom_father: formData.groom_father || null,
@@ -701,8 +747,8 @@ const MarriageEditPage = () => {
         groom_address: formData.groom_address || null,
         groom_phone: formData.groom_phone || null,
         groom_confession_date: formData.groom_confession_date || null,
-        bride_family: formData.bride_family || null,
-        bride_member: formData.bride_member || null,
+
+        // Bride descriptive fields (editable)
         bride_name: formData.bride_name || null,
         bride_nationality: formData.bride_nationality || null,
         bride_father: formData.bride_father || null,
@@ -711,8 +757,8 @@ const MarriageEditPage = () => {
         bride_address: formData.bride_address || null,
         bride_phone: formData.bride_phone || null,
         bride_confession_date: formData.bride_confession_date || null,
-        bride_is_internal: formData.bride_is_internal,
-        groom_is_internal: true, // Hardcoded for transfer since we removed the dropdown
+
+        // Other editable fields
         relationship: formData.relationship || null,
         family: formData.family || null,
         transfer_to: formData.transfer_to || null,
@@ -791,8 +837,10 @@ const MarriageEditPage = () => {
      VALUES FOR TOP BAR
   ========================================================== */
 
-  const groomName = marriage?.groom_member?.name || marriage?.groom_name || "—";
-  const brideName = marriage?.bride_member?.name || marriage?.bride_name || "—";
+  const groomName =
+    marriage?.groom_member?.name || marriage?.groom_name || "—";
+  const brideName =
+    marriage?.bride_member?.name || marriage?.bride_name || "—";
   const familyName = marriage?.family?.family_name || "—";
   const isTransfer = marriage?.marriage_type === "TRANSFER_BRIDE";
 
@@ -821,15 +869,30 @@ const MarriageEditPage = () => {
         <Box maxW="1540px" mx="auto" width="100%">
           {/* BREADCRUMB */}
           <Flex align="center" gap="6px" mb="8px" flexWrap="wrap">
-            <Text fontSize="10px" color="#3674D9" cursor="pointer" onClick={() => navigate("/")}>
+            <Text
+              fontSize="10px"
+              color="#3674D9"
+              cursor="pointer"
+              onClick={() => navigate("/")}
+            >
               Masters
             </Text>
             <Text fontSize="10px" color="#98A2B3">/</Text>
-            <Text fontSize="10px" color="#3674D9" cursor="pointer" onClick={() => navigate("/marriage")}>
+            <Text
+              fontSize="10px"
+              color="#3674D9"
+              cursor="pointer"
+              onClick={() => navigate("/marriage")}
+            >
               Marriage Register
             </Text>
             <Text fontSize="10px" color="#98A2B3">/</Text>
-            <Text fontSize="10px" color="#3674D9" cursor="pointer" onClick={() => navigate(`/marriage/${id}`)}>
+            <Text
+              fontSize="10px"
+              color="#3674D9"
+              cursor="pointer"
+              onClick={() => navigate(`/marriage/${id}`)}
+            >
               {groomName} & {brideName}
             </Text>
             <Text fontSize="10px" color="#98A2B3">/</Text>
@@ -837,12 +900,29 @@ const MarriageEditPage = () => {
           </Flex>
 
           {/* PAGE TITLE */}
-          <Flex align="center" justify="space-between" flexWrap="wrap" gap="8px" mb="8px">
+          <Flex
+            align="center"
+            justify="space-between"
+            flexWrap="wrap"
+            gap="8px"
+            mb="8px"
+          >
             <Box>
-              <Text fontSize="9px" fontWeight="800" color={RED} letterSpacing="0.25px" mb="1px">
+              <Text
+                fontSize="9px"
+                fontWeight="800"
+                color={RED}
+                letterSpacing="0.25px"
+                mb="1px"
+              >
                 MARRIAGE REGISTER
               </Text>
-              <Heading fontSize={{ base: "18px", md: "20px" }} fontWeight="700" color={NAVY} lineHeight="1.1">
+              <Heading
+                fontSize={{ base: "18px", md: "20px" }}
+                fontWeight="700"
+                color={NAVY}
+                lineHeight="1.1"
+              >
                 Edit Marriage
               </Heading>
               <Text fontSize="10px" color={MUTED} mt="2px">
@@ -853,7 +933,14 @@ const MarriageEditPage = () => {
 
           {/* GENERAL ERROR */}
           {error && (
-            <Box bg="#FFF8FA" border="1px solid #FECACA" borderRadius="4px" px="10px" py="6px" mb="8px">
+            <Box
+              bg="#FFF8FA"
+              border="1px solid #FECACA"
+              borderRadius="4px"
+              px="10px"
+              py="6px"
+              mb="8px"
+            >
               <Text fontSize="10px" color={RED} fontWeight="500">
                 {error}
               </Text>
@@ -892,7 +979,12 @@ const MarriageEditPage = () => {
                 </Avatar.Root>
 
                 <Box>
-                  <Text fontSize="15px" fontWeight="700" color={NAVY} lineHeight="1.2">
+                  <Text
+                    fontSize="15px"
+                    fontWeight="700"
+                    color={NAVY}
+                    lineHeight="1.2"
+                  >
                     {groomName} & {brideName}
                   </Text>
                   <Text fontSize="11px" color={NAVY} mt="2px">
@@ -909,7 +1001,9 @@ const MarriageEditPage = () => {
                   <Text fontSize="11px" fontWeight="600" color={NAVY}>
                     {formatDate(marriage?.date)}
                   </Text>
-                  <Text fontSize="9px" color={MUTED}>Marriage Date</Text>
+                  <Text fontSize="9px" color={MUTED}>
+                    Marriage Date
+                  </Text>
                 </Box>
               </Flex>
 
@@ -975,7 +1069,10 @@ const MarriageEditPage = () => {
                 <Text fontSize="10px" color={MUTED} fontWeight="500">
                   {marriage?.register_number && (
                     <>
-                      Reg No: <Text as="span" color={NAVY} fontWeight="600">{marriage.register_number}</Text>
+                      Reg No:{" "}
+                      <Text as="span" color={NAVY} fontWeight="600">
+                        {marriage.register_number}
+                      </Text>
                     </>
                   )}
                 </Text>
@@ -987,7 +1084,7 @@ const MarriageEditPage = () => {
                   templateColumns={{ base: "1fr", md: "repeat(3, 1fr)" }}
                   gap={{ base: "8px", md: "8px 14px" }}
                 >
-                  {/* Marriage Type */}
+                  {/* Marriage Type — LOCKED */}
                   <FormField
                     label="Marriage Type"
                     name="marriage_type"
@@ -1003,6 +1100,7 @@ const MarriageEditPage = () => {
                       value={formData.marriage_type}
                       onChange={handleMarriageTypeChange}
                       onBlur={handleBlur}
+                      disabled
                       invalid={Boolean(fieldErrors.marriage_type)}
                     >
                       <option value="ADD_BRIDE">Add Bride</option>
@@ -1010,7 +1108,7 @@ const MarriageEditPage = () => {
                     </SelectField>
                   </FormField>
 
-                  {/* Date */}
+                  {/* Date — editable */}
                   <FormField
                     label={isTransfer ? "Day & Time" : "Marriage Date"}
                     name="date"
@@ -1023,7 +1121,7 @@ const MarriageEditPage = () => {
                     touched={fieldErrors.date}
                   />
 
-                  {/* Bride Type (only for ADD_BRIDE) */}
+                  {/* Bride Type — LOCKED (only for ADD_BRIDE) */}
                   {isAddBride && (
                     <FormField
                       label="Bride Type"
@@ -1040,15 +1138,20 @@ const MarriageEditPage = () => {
                         value={String(formData.bride_is_internal)}
                         onChange={handleBrideTypeChange}
                         onBlur={handleBlur}
+                        disabled
                         invalid={Boolean(fieldErrors.bride_is_internal)}
                       >
-                        <option value="true">Internal Bride (Church Member)</option>
-                        <option value="false">External Bride (Non-Member)</option>
+                        <option value="true">
+                          Internal Bride (Church Member)
+                        </option>
+                        <option value="false">
+                          External Bride (Non-Member)
+                        </option>
                       </SelectField>
                     </FormField>
                   )}
 
-                  {/* Groom Family */}
+                  {/* Groom's Family — LOCKED */}
                   <FormField
                     label="Groom's Family"
                     name="groom_family"
@@ -1063,6 +1166,7 @@ const MarriageEditPage = () => {
                       value={formData.groom_family}
                       onChange={handleGroomFamilyChange}
                       onBlur={handleBlur}
+                      disabled
                       invalid={Boolean(fieldErrors.groom_family)}
                     >
                       <option value="">Select</option>
@@ -1074,7 +1178,7 @@ const MarriageEditPage = () => {
                     </SelectField>
                   </FormField>
 
-                  {/* Groom Member */}
+                  {/* Select Groom — LOCKED */}
                   <FormField
                     label="Select Groom"
                     name="groom_member"
@@ -1089,11 +1193,13 @@ const MarriageEditPage = () => {
                       value={formData.groom_member}
                       onChange={handleChange}
                       onBlur={handleBlur}
-                      disabled={!formData.groom_family}
+                      disabled
                       invalid={Boolean(fieldErrors.groom_member)}
                     >
                       <option value="">
-                        {formData.groom_family ? "Select groom" : "Select family first"}
+                        {formData.groom_family
+                          ? "Select groom"
+                          : "Select family first"}
                       </option>
                       {groomOptions.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -1103,7 +1209,7 @@ const MarriageEditPage = () => {
                     </SelectField>
                   </FormField>
 
-                  {/* Groom Name (manual) */}
+                  {/* Groom Name (manual) — editable */}
                   <FormField
                     label="Groom Name"
                     name="groom_name"
@@ -1115,7 +1221,7 @@ const MarriageEditPage = () => {
                     touched={fieldErrors.groom_name}
                   />
 
-                  {/* Bride Family */}
+                  {/* Bride's Family — LOCKED */}
                   <FormField
                     label="Bride's Family"
                     name="bride_family"
@@ -1130,6 +1236,7 @@ const MarriageEditPage = () => {
                       value={formData.bride_family}
                       onChange={handleBrideFamilyChange}
                       onBlur={handleBlur}
+                      disabled
                       invalid={Boolean(fieldErrors.bride_family)}
                     >
                       <option value="">Select</option>
@@ -1141,7 +1248,7 @@ const MarriageEditPage = () => {
                     </SelectField>
                   </FormField>
 
-                  {/* Bride Member */}
+                  {/* Select Bride — LOCKED */}
                   <FormField
                     label="Select Bride"
                     name="bride_member"
@@ -1156,11 +1263,13 @@ const MarriageEditPage = () => {
                       value={formData.bride_member}
                       onChange={handleChange}
                       onBlur={handleBlur}
-                      disabled={!formData.bride_family}
+                      disabled
                       invalid={Boolean(fieldErrors.bride_member)}
                     >
                       <option value="">
-                        {formData.bride_family ? "Select bride" : "Select family first"}
+                        {formData.bride_family
+                          ? "Select bride"
+                          : "Select family first"}
                       </option>
                       {brideOptions.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -1170,7 +1279,7 @@ const MarriageEditPage = () => {
                     </SelectField>
                   </FormField>
 
-                  {/* Bride Name (manual) */}
+                  {/* Bride Name (manual) — editable */}
                   <FormField
                     label="Bride Name"
                     name="bride_name"
@@ -1182,7 +1291,7 @@ const MarriageEditPage = () => {
                     touched={fieldErrors.bride_name}
                   />
 
-                  {/* Relationship */}
+                  {/* Relationship — editable */}
                   <FormField
                     label="Relationship"
                     name="relationship"
@@ -1208,7 +1317,7 @@ const MarriageEditPage = () => {
                     </SelectField>
                   </FormField>
 
-                  {/* Primary Family */}
+                  {/* Primary Family — editable */}
                   <FormField
                     label="Primary Family"
                     name="family"
@@ -1234,7 +1343,7 @@ const MarriageEditPage = () => {
                     </SelectField>
                   </FormField>
 
-                  {/* Groom Nationality */}
+                  {/* Groom Nationality — editable */}
                   <FormField
                     label="Groom Nationality"
                     name="groom_nationality"
@@ -1246,7 +1355,7 @@ const MarriageEditPage = () => {
                     touched={fieldErrors.groom_nationality}
                   />
 
-                  {/* Bride Nationality */}
+                  {/* Bride Nationality — editable */}
                   <FormField
                     label="Bride Nationality"
                     name="bride_nationality"
@@ -1258,7 +1367,7 @@ const MarriageEditPage = () => {
                     touched={fieldErrors.bride_nationality}
                   />
 
-                  {/* Groom Father */}
+                  {/* Groom Father — editable */}
                   <FormField
                     label="Groom's Father"
                     name="groom_father"
@@ -1270,7 +1379,7 @@ const MarriageEditPage = () => {
                     touched={fieldErrors.groom_father}
                   />
 
-                  {/* Bride Father */}
+                  {/* Bride Father — editable */}
                   <FormField
                     label="Bride's Father"
                     name="bride_father"
@@ -1282,7 +1391,7 @@ const MarriageEditPage = () => {
                     touched={fieldErrors.bride_father}
                   />
 
-                  {/* Groom Mother */}
+                  {/* Groom Mother — editable */}
                   <FormField
                     label="Groom's Mother"
                     name="groom_mother"
@@ -1294,7 +1403,7 @@ const MarriageEditPage = () => {
                     touched={fieldErrors.groom_mother}
                   />
 
-                  {/* Bride Mother */}
+                  {/* Bride Mother — editable */}
                   <FormField
                     label="Bride's Mother"
                     name="bride_mother"
@@ -1362,7 +1471,7 @@ const MarriageEditPage = () => {
                     />
                   )}
 
-                  {/* Groom Phone */}
+                  {/* Groom Phone — editable */}
                   <Box>
                     <PhoneField
                       label="Groom Phone"
@@ -1376,7 +1485,7 @@ const MarriageEditPage = () => {
                     />
                   </Box>
 
-                  {/* Bride Phone */}
+                  {/* Bride Phone — editable */}
                   <Box>
                     <PhoneField
                       label="Bride Phone"
@@ -1390,7 +1499,7 @@ const MarriageEditPage = () => {
                     />
                   </Box>
 
-                  {/* Groom Side Witness */}
+                  {/* Groom Side Witness — editable */}
                   <FormField
                     label="Groom Side Witness"
                     name="witness_groom_side"
@@ -1402,7 +1511,7 @@ const MarriageEditPage = () => {
                     touched={fieldErrors.witness_groom_side}
                   />
 
-                  {/* Bride Side Witness */}
+                  {/* Bride Side Witness — editable */}
                   <FormField
                     label="Bride Side Witness"
                     name="witness_bride_side"
@@ -1414,7 +1523,7 @@ const MarriageEditPage = () => {
                     touched={fieldErrors.witness_bride_side}
                   />
 
-                  {/* Minister of Marriage */}
+                  {/* Minister of Marriage — editable */}
                   <FormField
                     label="Minister of Marriage"
                     name="minister_of_marriage"
@@ -1426,7 +1535,7 @@ const MarriageEditPage = () => {
                     touched={fieldErrors.minister_of_marriage}
                   />
 
-                  {/* Other Priests */}
+                  {/* Other Priests — editable */}
                   <FormField
                     label="Other Priests"
                     name="other_priests"
@@ -1438,7 +1547,7 @@ const MarriageEditPage = () => {
                     touched={fieldErrors.other_priests}
                   />
 
-                  {/* Remarks - full width */}
+                  {/* Remarks — full width */}
                   <Box gridColumn="1 / -1">
                     <TextareaField
                       label="Remarks"
@@ -1523,7 +1632,13 @@ const MarriageEditPage = () => {
                   Record Information
                 </Text>
 
-                <Flex align="flex-start" gap="10px" pb="12px" borderBottom="1px solid" borderColor="#E5EAF1">
+                <Flex
+                  align="flex-start"
+                  gap="10px"
+                  pb="12px"
+                  borderBottom="1px solid"
+                  borderColor="#E5EAF1"
+                >
                   <Box color={NAVY} mt="1px">
                     <LuCalendarDays size="16" />
                   </Box>
@@ -1532,7 +1647,9 @@ const MarriageEditPage = () => {
                       Created
                     </Text>
                     <Text fontSize="10px" color={NAVY} mt="3px">
-                      {marriage?.created_at ? formatDate(marriage.created_at) : "—"}
+                      {marriage?.created_at
+                        ? formatDate(marriage.created_at)
+                        : "—"}
                     </Text>
                   </Box>
                 </Flex>
@@ -1546,7 +1663,9 @@ const MarriageEditPage = () => {
                       Last updated
                     </Text>
                     <Text fontSize="10px" color={NAVY} mt="3px">
-                      {marriage?.updated_at ? formatDate(marriage.updated_at) : "—"}
+                      {marriage?.updated_at
+                        ? formatDate(marriage.updated_at)
+                        : "—"}
                     </Text>
                     {marriage?.updated_by && (
                       <Text fontSize="8px" color={MUTED} mt="2px">

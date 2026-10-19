@@ -238,16 +238,71 @@ def generate_random_password():
 # ============================================================
 
 DEFAULT_RELATIONSHIPS = [
-    "Father", "Mother", "Husband", "Wife", "Son", "Daughter",
-    "Brother", "Sister", "Son_In_Law", "Daughter_In_Law",
+    # Immediate family
+    "Father",
+    "Mother",
+    "Husband",
+    "Wife",
+    "Son",
+    "Daughter",
+    "Brother",
+    "Sister",
+
+    # In-laws
+    "Son-in-Law",
+    "Daughter-in-Law",
+    "Father-in-Law",
+    "Mother-in-Law",
+    "Brother-in-Law",
+    "Sister-in-Law",
+
+    # Extended / relatives
+    "Grandfather",
+    "Grandmother",
+    "Grandson",
+    "Granddaughter",
+    "Uncle",
+    "Aunt",
+    "Nephew",
+    "Niece",
+    "Cousin",
+
+    # Step / adopted
+    "Step Father",
+    "Step Mother",
+    "Step Son",
+    "Step Daughter",
+    "Adopted Son",
+    "Adopted Daughter",
+
+    # Guardians / spiritual
+    "Guardian",
+    "Ward",
+    "Godfather",
+    "Godmother",
+    "Godson",
+    "Goddaughter",
+
+    # Other dependents
+    "Servant",
+    "Other",
 ]
 
 
 def seed_default_relationships(church):
-    """Seed default relationships for a church"""
+    """
+    Seed the full default relationship set for a church.
+    All seeded rows are marked reserved=True so they cannot be
+    edited or deleted through the API.
+    Idempotent: safe to run multiple times.
+    """
     from .models import Relationship
     for name in DEFAULT_RELATIONSHIPS:
-        Relationship.objects.get_or_create(church=church, name=name)
+        Relationship.objects.get_or_create(
+            church=church,
+            name=name,
+            defaults={"reserved": True},
+        )
 
 
 # ============================================================
@@ -892,3 +947,33 @@ def seed_all_churches(verbose=False):
             total[k] += stats[k]
 
     return total
+
+
+# ============================================================
+# DEFAULT DESIGNATIONS
+# ============================================================
+
+DEFAULT_DESIGNATIONS = [
+    "President",          # ✅ Changed from Vicar
+    "Vice President",     # ✅ Changed from Assistant Vicar
+    "Secretary",
+    "Joint Secretary",
+    "Treasurer",
+    "Trustee",
+    "Lay Leader",
+    "Accountant",
+    "Committee Member",
+]
+
+def seed_default_designations(church):
+    """
+    Seed the default designations for a church.
+    Marked reserved=True so they cannot be edited or deleted.
+    """
+    from .models import Designation
+    for name in DEFAULT_DESIGNATIONS:
+        Designation.objects.get_or_create(
+            church=church,
+            designation_name=name,
+            defaults={"reserved": True},
+        )

@@ -102,17 +102,50 @@ const getFullAddress = (priest) => {
 };
 
 // ============================================================
-// ACTIVE STATUS
+// PRIEST STATUS — derived from dates, not from is_active
 // ============================================================
 
-const isPriestActive = (priest) => {
-  return (
-    priest.is_active === true ||
-    priest.is_active === 1 ||
-    priest.is_active === "true" ||
-    priest.is_active === "1"
-  );
+const getPriestStatus = (priest) => {
+  if (!priest) {
+    return "PREVIOUS";
+  }
+
+  // Manually archived / disabled
+  if (
+    priest.is_active === false ||
+    priest.is_active === 0 ||
+    priest.is_active === "false" ||
+    priest.is_active === "0"
+  ) {
+    return "PREVIOUS";
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const parse = (value) => {
+    if (!value) {
+      return null;
+    }
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+
+  const from = parse(priest.date_from || priest.serving_from);
+  const to = parse(priest.date_to || priest.serving_to);
+
+  if (from && from > today) {
+    return "UPCOMING";
+  }
+
+  if (from && from <= today && (!to || to >= today)) {
+    return "CURRENT";
+  }
+
+  return "PREVIOUS";
 };
+
+const isPriestActive = (priest) => getPriestStatus(priest) === "CURRENT";
 
 // ============================================================
 // PRIEST IMAGE
@@ -184,7 +217,7 @@ const CurrentPriestCard = ({
       border="1px solid"
       borderColor="#E0E5EC"
       borderRadius="9px"
-      bg="white"
+      bg="#FFFFFF"
       px={4}
       py={3}
       minH="200px"
@@ -199,15 +232,7 @@ const CurrentPriestCard = ({
         gap={4}
         h="100%"
       >
-        {/* ==================================================
-            PHOTO
-        ================================================== */}
-
         <PriestImage priest={priest} />
-
-        {/* ==================================================
-            DETAILS
-        ================================================== */}
 
         <Box
           flex="1"
@@ -223,8 +248,7 @@ const CurrentPriestCard = ({
             mb={1}
             noOfLines={1}
           >
-            {priest.name ||
-              "Unnamed Priest"}
+            {priest.name || "Unnamed Priest"}
           </Heading>
 
           <Text
@@ -233,73 +257,45 @@ const CurrentPriestCard = ({
             mb={2}
           >
             {priest.designation_label ||
-              (priest.designation ===
-              "ASSISTANT"
+              (priest.designation === "ASSISTANT"
                 ? "Assistant Vicar"
                 : "Vicar")}
           </Text>
 
-          {/* FAMILY */}
-
           {priest.family_name && (
-            <HStack
-              gap={2}
-              mb={1}
-              align="center"
-            >
+            <HStack gap={2} mb={1} align="center">
               <Icon
                 as={LuUserRound}
                 boxSize={4}
                 color="#52627A"
               />
-
-              <Text
-                fontSize="sm"
-                color="#344054"
-              >
+              <Text fontSize="sm" color="#344054">
                 {priest.family_name} Family
               </Text>
             </HStack>
           )}
 
-          {/* PHONE */}
-
           {priest.phone_number && (
-            <HStack
-              gap={2}
-              mb={1}
-              align="center"
-            >
+            <HStack gap={2} mb={1} align="center">
               <Icon
                 as={LuPhone}
                 boxSize={4}
                 color="#52627A"
               />
-
-              <Text
-                fontSize="sm"
-                color="#344054"
-              >
+              <Text fontSize="sm" color="#344054">
                 {priest.phone_number}
               </Text>
             </HStack>
           )}
 
-          {/* ADDRESS */}
-
           {getFullAddress(priest) && (
-            <HStack
-              gap={2}
-              align="flex-start"
-              mb={1}
-            >
+            <HStack gap={2} align="flex-start" mb={1}>
               <Icon
                 as={LuMapPin}
                 boxSize={4}
                 color="#52627A"
                 mt="2px"
               />
-
               <Text
                 fontSize="xs"
                 color="#52627A"
@@ -311,38 +307,21 @@ const CurrentPriestCard = ({
             </HStack>
           )}
 
-          {/* DATE */}
-
-          <HStack
-            gap={2}
-            mt={1}
-          >
+          <HStack gap={2} mt={1}>
             <Icon
               as={LuCalendar}
               boxSize={4}
               color="#52627A"
             />
-
-            <Text
-              fontSize="xs"
-              color="#52627A"
-            >
+            <Text fontSize="xs" color="#52627A">
               {formatDate(
-                priest.date_from ||
-                  priest.serving_from
+                priest.date_from || priest.serving_from
               )}
-
-              {!(
-                priest.date_to ||
-                priest.serving_to
-              ) && " — Present"}
+              {!(priest.date_to || priest.serving_to) &&
+                " — Present"}
             </Text>
           </HStack>
         </Box>
-
-        {/* ==================================================
-            ACTIONS
-        ================================================== */}
 
         <VStack
           align="stretch"
@@ -351,8 +330,6 @@ const CurrentPriestCard = ({
           minW="120px"
           alignSelf="stretch"
         >
-          {/* CURRENTLY SERVING */}
-
           <Badge
             display="flex"
             alignItems="center"
@@ -370,25 +347,17 @@ const CurrentPriestCard = ({
             Currently Serving
           </Badge>
 
-          {/* VIEW */}
-
           <Button
             size="sm"
             h="36px"
             variant="outline"
             borderColor={PRIMARY_MAROON}
             color={PRIMARY_MAROON}
-            onClick={() =>
-              onView?.(priest)
-            }
-            _hover={{
-              bg: "#FFF5F7",
-            }}
+            onClick={() => onView?.(priest)}
+            _hover={{ bg: "#FFF5F7" }}
           >
             View Details
           </Button>
-
-          {/* EDIT */}
 
           <Button
             variant="ghost"
@@ -396,9 +365,7 @@ const CurrentPriestCard = ({
             h="30px"
             color={PRIMARY_MAROON}
             justifyContent="center"
-            onClick={() =>
-              onEdit?.(priest)
-            }
+            onClick={() => onEdit?.(priest)}
             _hover={{
               bg: "transparent",
               color: "#650A18",
@@ -414,20 +381,6 @@ const CurrentPriestCard = ({
 
 // ============================================================
 // PREVIOUS VICAR CARD
-//
-// Shows:
-// - Photo
-// - Name
-// - Designation
-// - Phone
-// - Date
-// - Previous badge
-// - View Details
-//
-// Does NOT show:
-// - Family
-// - Address
-// - Edit
 // ============================================================
 
 const PreviousPriestCard = ({
@@ -439,7 +392,7 @@ const PreviousPriestCard = ({
       border="1px solid"
       borderColor="#E0E5EC"
       borderRadius="9px"
-      bg="white"
+      bg="#FFFFFF"
       px={4}
       py={3}
       minH="140px"
@@ -454,18 +407,7 @@ const PreviousPriestCard = ({
         gap={4}
         h="100%"
       >
-        {/* ==================================================
-            PHOTO
-        ================================================== */}
-
-        <PriestImage
-          priest={priest}
-          previous
-        />
-
-        {/* ==================================================
-            DETAILS
-        ================================================== */}
+        <PriestImage priest={priest} previous />
 
         <Box
           flex="1"
@@ -481,8 +423,7 @@ const PreviousPriestCard = ({
             mb={1}
             noOfLines={1}
           >
-            {priest.name ||
-              "Unnamed Priest"}
+            {priest.name || "Unnamed Priest"}
           </Heading>
 
           <Text
@@ -491,26 +432,18 @@ const PreviousPriestCard = ({
             mb={2}
           >
             {priest.designation_label ||
-              (priest.designation ===
-              "ASSISTANT"
+              (priest.designation === "ASSISTANT"
                 ? "Assistant Vicar"
                 : "Vicar")}
           </Text>
 
-          {/* PHONE */}
-
           {priest.phone_number && (
-            <HStack
-              gap={2}
-              mb={1}
-              align="center"
-            >
+            <HStack gap={2} mb={1} align="center">
               <Icon
                 as={LuPhone}
                 boxSize={4}
                 color="#52627A"
               />
-
               <Text
                 fontSize="xs"
                 color="#344054"
@@ -521,38 +454,27 @@ const PreviousPriestCard = ({
             </HStack>
           )}
 
-          {/* SERVICE DATE */}
-
           <HStack gap={2}>
             <Icon
               as={LuCalendar}
               boxSize={4}
               color="#52627A"
             />
-
             <Text
               fontSize="xs"
               color="#52627A"
               whiteSpace="nowrap"
             >
               {formatDate(
-                priest.date_from ||
-                  priest.serving_from
+                priest.date_from || priest.serving_from
               )}
-
-              {(priest.date_to ||
-                priest.serving_to) &&
+              {(priest.date_to || priest.serving_to) &&
                 ` — ${formatDate(
-                  priest.date_to ||
-                    priest.serving_to
+                  priest.date_to || priest.serving_to
                 )}`}
             </Text>
           </HStack>
         </Box>
-
-        {/* ==================================================
-            ACTIONS
-        ================================================== */}
 
         <VStack
           align="stretch"
@@ -561,8 +483,6 @@ const PreviousPriestCard = ({
           minW="112px"
           alignSelf="stretch"
         >
-          {/* PREVIOUS */}
-
           <Badge
             display="flex"
             alignItems="center"
@@ -580,20 +500,14 @@ const PreviousPriestCard = ({
             Previous
           </Badge>
 
-          {/* VIEW */}
-
           <Button
             size="sm"
             h="36px"
             variant="outline"
             borderColor={PRIMARY_MAROON}
             color={PRIMARY_MAROON}
-            onClick={() =>
-              onView?.(priest)
-            }
-            _hover={{
-              bg: "#FFF5F7",
-            }}
+            onClick={() => onView?.(priest)}
+            _hover={{ bg: "#FFF5F7" }}
           >
             View Details
           </Button>
@@ -607,10 +521,7 @@ const PreviousPriestCard = ({
 // STAT
 // ============================================================
 
-const Stat = ({
-  value,
-  label,
-}) => {
+const Stat = ({ value, label }) => {
   return (
     <Box textAlign="center">
       <Text
@@ -621,7 +532,6 @@ const Stat = ({
       >
         {value}
       </Text>
-
       <Text
         fontSize="sm"
         color="#52627A"
@@ -641,84 +551,41 @@ const Stat = ({
 const PriestPage = () => {
   const navigate = useNavigate();
 
-  const [priests, setPriests] =
-    useState([]);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [search, setSearch] =
-    useState("");
-
-  const [designationFilter, setDesignationFilter] =
-    useState("");
-
-  // ==========================================================
-  // LOAD DATA
-  // ==========================================================
+  const [priests, setPriests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [designationFilter, setDesignationFilter] = useState("");
 
   const loadData = async () => {
     try {
       setLoading(true);
 
-      const response =
-        await getPriestMaster();
+      const response = await getPriestMaster();
 
-      let result =
-        response?.data;
+      let result = response?.data;
 
-      if (
-        result &&
-        !Array.isArray(result)
-      ) {
-        if (
-          Array.isArray(
-            result.results
-          )
-        ) {
-          result =
-            result.results;
-        } else if (
-          Array.isArray(
-            result.data
-          )
-        ) {
-          result =
-            result.data;
-        } else if (
-          Array.isArray(
-            result.priests
-          )
-        ) {
-          result =
-            result.priests;
-        } else if (
-          Array.isArray(
-            result.current
-          )
-        ) {
+      if (result && !Array.isArray(result)) {
+        if (Array.isArray(result.results)) {
+          result = result.results;
+        } else if (Array.isArray(result.data)) {
+          result = result.data;
+        } else if (Array.isArray(result.priests)) {
+          result = result.priests;
+        } else if (Array.isArray(result.current)) {
           result = [
-            ...(result.current ||
-              []),
-            ...(result.previous ||
-              []),
+            ...(result.current || []),
+            ...(result.previous || []),
           ];
         }
       }
 
-      if (
-        !Array.isArray(result)
-      ) {
+      if (!Array.isArray(result)) {
         result = [];
       }
 
       setPriests(result);
     } catch (error) {
-      console.error(
-        "ERROR LOADING PRIESTS:",
-        error
-      );
-
+      console.error("ERROR LOADING PRIESTS:", error);
       setPriests([]);
     } finally {
       setLoading(false);
@@ -729,18 +596,9 @@ const PriestPage = () => {
     loadData();
   }, []);
 
-  // ==========================================================
-  // SEARCH + FILTER
-  // ==========================================================
-
-  const filterPriest = (
-    priest
-  ) => {
-    // Text search
-
+  const filterPriest = (priest) => {
     if (search.trim()) {
-      const query =
-        search.toLowerCase().trim();
+      const query = search.toLowerCase().trim();
 
       const matches = [
         priest.name,
@@ -763,20 +621,14 @@ const PriestPage = () => {
       }
     }
 
-    // Designation filter
-
     if (designationFilter) {
       const priestDesignation =
         priest.designation ||
-        (priest.designation_label ===
-        "Assistant Vicar"
+        (priest.designation_label === "Assistant Vicar"
           ? "ASSISTANT"
           : "MAIN");
 
-      if (
-        priestDesignation !==
-        designationFilter
-      ) {
+      if (priestDesignation !== designationFilter) {
         return false;
       }
     }
@@ -784,85 +636,60 @@ const PriestPage = () => {
     return true;
   };
 
-  // ==========================================================
-  // FILTER
-  // ==========================================================
+  const filteredPriests = priests.filter(filterPriest);
 
-  const filteredPriests =
-    priests.filter(
-      filterPriest
-    );
+  // ==========================================
+  // GROUPING LOGIC
+  // ==========================================
 
-  const current =
-    filteredPriests.filter(
-      (priest) =>
-        isPriestActive(priest)
-    );
+  const upcoming = filteredPriests.filter(
+    (priest) => getPriestStatus(priest) === "UPCOMING"
+  );
 
-  const previous =
-    filteredPriests.filter(
-      (priest) =>
-        !isPriestActive(priest)
-    );
+  const current = filteredPriests.filter(
+    (priest) => getPriestStatus(priest) === "CURRENT"
+  );
 
-  // ==========================================================
+  const previous = filteredPriests.filter(
+    (priest) => getPriestStatus(priest) === "PREVIOUS"
+  );
+
+  // ==========================================
   // COUNTS
-  // ==========================================================
+  // ==========================================
 
-  const totalCurrent =
-    priests.filter(
-      isPriestActive
-    ).length;
+  const totalUpcoming = priests.filter(
+    (priest) => getPriestStatus(priest) === "UPCOMING"
+  ).length;
 
-  const totalPrevious =
-    priests.filter(
-      (priest) =>
-        !isPriestActive(priest)
-    ).length;
+  const totalCurrent = priests.filter(
+    (priest) => getPriestStatus(priest) === "CURRENT"
+  ).length;
 
-  const totalRecords =
-    priests.length;
+  const totalPrevious = priests.filter(
+    (priest) => getPriestStatus(priest) === "PREVIOUS"
+  ).length;
 
-  // ==========================================================
-  // VIEW
-  // ==========================================================
+  const totalRecords = priests.length;
 
-  const handleView = (
-    priest
-  ) => {
+  const handleView = (priest) => {
     if (!priest?.id) {
       return;
     }
-
-    navigate(
-      `/priest-master/${priest.id}`
-    );
+    navigate(`/priest-master/${priest.id}`);
   };
 
-  // ==========================================================
-  // EDIT
-  // ==========================================================
-
-  const handleEdit = (
-    priest
-  ) => {
+  const handleEdit = (priest) => {
     if (!priest?.id) {
       return;
     }
-
-    navigate(
-      `/priest-master/edit/${priest.id}`
-    );
+    navigate(`/priest-master/edit/${priest.id}`);
   };
-
-  // ==========================================================
-  // RENDER
-  // ==========================================================
 
   return (
     <Box
       minH="100vh"
-      bg="#F8F9FB"
+      bg="#FFFFFF"
       display="flex"
       flexDirection="column"
     >
@@ -873,30 +700,16 @@ const PriestPage = () => {
         flex="1"
         py={5}
       >
-        {/* ==================================================
-            BREADCRUMB
-        ================================================== */}
-
         <HStack
           gap={2}
           color="#60708C"
           fontSize="sm"
           mb={4}
         >
-          <Text>
-            Masters
-          </Text>
-
+          <Text>Masters</Text>
           <Text>/</Text>
-
-          <Text>
-            Priest Master
-          </Text>
+          <Text>Priest Master</Text>
         </HStack>
-
-        {/* ==================================================
-            HEADER
-        ================================================== */}
 
         <Flex
           justify="space-between"
@@ -918,10 +731,7 @@ const PriestPage = () => {
               PRIEST MANAGEMENT
             </Text>
 
-            <Heading
-              size="xl"
-              color="#182338"
-            >
+            <Heading size="xl" color="#182338">
               Priest Master
             </Heading>
 
@@ -936,24 +746,17 @@ const PriestPage = () => {
             </Text>
           </Box>
 
-          <HStack
-            gap={3}
-            align="center"
-          >
-            {/* DESIGNATION FILTER */}
-
+          <HStack gap={3} align="center">
             <Box
               as="select"
               value={designationFilter}
               onChange={(e) =>
-                setDesignationFilter(
-                  e.target.value
-                )
+                setDesignationFilter(e.target.value)
               }
               h="40px"
               borderColor="#DCE2EA"
               borderRadius="7px"
-              bg="white"
+              bg="#FFFFFF"
               fontSize="sm"
               minW="160px"
               border="1px solid"
@@ -961,8 +764,7 @@ const PriestPage = () => {
               py={2}
               cursor="pointer"
               _focus={{
-                borderColor:
-                  PRIMARY_MAROON,
+                borderColor: PRIMARY_MAROON,
                 boxShadow: `0 0 0 1px ${PRIMARY_MAROON}`,
                 outline: "none",
               }}
@@ -970,17 +772,11 @@ const PriestPage = () => {
               <option value="">
                 All Designations
               </option>
-
-              <option value="MAIN">
-                Vicar
-              </option>
-
+              <option value="MAIN">Vicar</option>
               <option value="ASSISTANT">
                 Assistant Vicar
               </option>
             </Box>
-
-            {/* ADD BUTTON */}
 
             <Button
               bg={PRIMARY_MAROON}
@@ -988,27 +784,15 @@ const PriestPage = () => {
               px={5}
               h="40px"
               onClick={() =>
-                navigate(
-                  "/priest-master/register"
-                )
+                navigate("/priest-master/register")
               }
-              _hover={{
-                bg: "#650A18",
-              }}
+              _hover={{ bg: "#650A18" }}
             >
-              <Icon
-                as={LuPlus}
-                mr={2}
-              />
-
+              <Icon as={LuPlus} mr={2} />
               Add Priest
             </Button>
           </HStack>
         </Flex>
-
-        {/* ==================================================
-            DIRECTORY SUMMARY
-        ================================================== */}
 
         <Box
           border="1px solid"
@@ -1017,20 +801,14 @@ const PriestPage = () => {
           px={5}
           py={4}
           mb={6}
-          bg="white"
+          bg="#FFFFFF"
         >
           <Flex
             align="center"
             gap={5}
             flexWrap="wrap"
           >
-            {/* TITLE */}
-
-            <HStack
-              gap={4}
-              flex="1"
-              minW="280px"
-            >
+            <HStack gap={4} flex="1" minW="280px">
               <Box
                 boxSize="60px"
                 borderRadius="full"
@@ -1048,13 +826,9 @@ const PriestPage = () => {
               </Box>
 
               <Box>
-                <Heading
-                  size="md"
-                  color="#182338"
-                >
+                <Heading size="md" color="#182338">
                   Priest Service Directory
                 </Heading>
-
                 <Text
                   fontSize="xs"
                   color="#667085"
@@ -1065,48 +839,31 @@ const PriestPage = () => {
               </Box>
             </HStack>
 
-            {/* STATS */}
-
             <Flex
               gap={4}
               align="center"
               flexWrap="wrap"
             >
               <Stat
-                value={
-                  totalCurrent
-                }
+                value={totalCurrent}
                 label="Currently Serving"
               />
-
-              <Box
-                h="40px"
-                w="1px"
-                bg="#E0E5EC"
-              />
-
+              <Box h="40px" w="1px" bg="#E0E5EC" />
               <Stat
-                value={
-                  totalPrevious
-                }
+                value={totalUpcoming}
+                label="Upcoming"
+              />
+              <Box h="40px" w="1px" bg="#E0E5EC" />
+              <Stat
+                value={totalPrevious}
                 label="Previous Vicars"
               />
-
-              <Box
-                h="40px"
-                w="1px"
-                bg="#E0E5EC"
-              />
-
+              <Box h="40px" w="1px" bg="#E0E5EC" />
               <Stat
-                value={
-                  totalRecords
-                }
+                value={totalRecords}
                 label="Total Records"
               />
             </Flex>
-
-            {/* SEARCH */}
 
             <Box
               position="relative"
@@ -1128,39 +885,26 @@ const PriestPage = () => {
               <Input
                 value={search}
                 onChange={(e) =>
-                  setSearch(
-                    e.target.value
-                  )
+                  setSearch(e.target.value)
                 }
                 placeholder="Search priests"
                 h="40px"
                 borderColor="#DCE2EA"
                 borderRadius="7px"
                 pl="38px"
-                bg="white"
+                bg="#FFFFFF"
               />
             </Box>
           </Flex>
         </Box>
 
-        {/* ==================================================
-            LOADING
-        ================================================== */}
-
         {loading ? (
-          <Box
-            textAlign="center"
-            py={20}
-          >
+          <Box textAlign="center" py={20}>
             <Spinner
               size="lg"
               color={PRIMARY_MAROON}
             />
-
-            <Text
-              mt={3}
-              color="#667085"
-            >
+            <Text mt={3} color="#667085">
               Loading priests...
             </Text>
           </Box>
@@ -1169,16 +913,8 @@ const PriestPage = () => {
             {/* =================================================
                 CURRENTLY SERVING
             ================================================= */}
-
-            <Flex
-              align="center"
-              gap={2}
-              mb={3}
-            >
-              <Heading
-                size="md"
-                color="#182338"
-              >
+            <Flex align="center" gap={2} mb={3}>
+              <Heading size="md" color="#182338">
                 Currently Serving
               </Heading>
 
@@ -1196,31 +932,18 @@ const PriestPage = () => {
 
             {current.length > 0 ? (
               <SimpleGrid
-                columns={{
-                  base: 1,
-                  lg: 2,
-                }}
+                columns={{ base: 1, lg: 2 }}
                 gap={4}
                 mb={6}
               >
-                {current.map(
-                  (priest) => (
-                    <CurrentPriestCard
-                      key={
-                        priest.id
-                      }
-                      priest={
-                        priest
-                      }
-                      onView={
-                        handleView
-                      }
-                      onEdit={
-                        handleEdit
-                      }
-                    />
-                  )
-                )}
+                {current.map((priest) => (
+                  <CurrentPriestCard
+                    key={priest.id}
+                    priest={priest}
+                    onView={handleView}
+                    onEdit={handleEdit}
+                  />
+                ))}
               </SimpleGrid>
             ) : (
               <Box
@@ -1229,30 +952,58 @@ const PriestPage = () => {
                 p={8}
                 textAlign="center"
                 mb={6}
+                bg="#FFFFFF"
               >
-                <Text
-                  color="#667085"
-                  fontSize="sm"
-                >
-                  No priests currently
-                  serving.
+                <Text color="#667085" fontSize="sm">
+                  No priests currently serving.
                 </Text>
               </Box>
             )}
 
             {/* =================================================
-                PREVIOUS VICARS
+                UPCOMING PRIESTS
             ================================================= */}
+            {upcoming.length > 0 && (
+              <>
+                <Flex align="center" gap={2} mb={3} mt={6}>
+                  <Heading size="md" color="#182338">
+                    Upcoming Priests
+                  </Heading>
 
-            <Flex
-              align="center"
-              gap={2}
-              mb={3}
-            >
-              <Heading
-                size="md"
-                color="#182338"
-              >
+                  <Badge
+                    bg="#FFF3E0"
+                    color="#E65100"
+                    borderRadius="5px"
+                    px={2}
+                    py={1}
+                    fontSize="xs"
+                  >
+                    {upcoming.length} Scheduled
+                  </Badge>
+                </Flex>
+
+                <SimpleGrid
+                  columns={{ base: 1, lg: 2 }}
+                  gap={4}
+                  mb={6}
+                >
+                  {upcoming.map((priest) => (
+                    <CurrentPriestCard
+                      key={priest.id}
+                      priest={priest}
+                      onView={handleView}
+                      onEdit={handleEdit}
+                    />
+                  ))}
+                </SimpleGrid>
+              </>
+            )}
+
+            {/* =================================================
+                PREVIOUS PRIESTS
+            ================================================= */}
+            <Flex align="center" gap={2} mb={3} mt={6}>
+              <Heading size="md" color="#182338">
                 Previous Priests
               </Heading>
 
@@ -1278,21 +1029,13 @@ const PriestPage = () => {
                 gap={4}
                 pb={6}
               >
-                {previous.map(
-                  (priest) => (
-                    <PreviousPriestCard
-                      key={
-                        priest.id
-                      }
-                      priest={
-                        priest
-                      }
-                      onView={
-                        handleView
-                      }
-                    />
-                  )
-                )}
+                {previous.map((priest) => (
+                  <PreviousPriestCard
+                    key={priest.id}
+                    priest={priest}
+                    onView={handleView}
+                  />
+                ))}
               </SimpleGrid>
             ) : (
               <Box
@@ -1300,13 +1043,10 @@ const PriestPage = () => {
                 borderRadius="8px"
                 p={8}
                 textAlign="center"
+                bg="#FFFFFF"
               >
-                <Text
-                  color="#667085"
-                  fontSize="sm"
-                >
-                  No previous priest
-                  records found.
+                <Text color="#667085" fontSize="sm">
+                  No previous priest records found.
                 </Text>
               </Box>
             )}

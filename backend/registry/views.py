@@ -261,24 +261,17 @@ class RelationshipListCreateAPIView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         church = getattr(self.request.user, "church", None)
-
         if not church:
             return Relationship.objects.none()
-
-        return Relationship.objects.filter(
-            church=church
-        ).order_by("name")
+        return Relationship.objects.filter(church=church).order_by("name")
 
     def perform_create(self, serializer):
         church = getattr(self.request.user, "church", None)
-
         if not church:
             from rest_framework.exceptions import ValidationError
-
             raise ValidationError(
                 {"detail": "Your user is not associated with a church."}
             )
-
         serializer.save(church=church)
 
 
@@ -294,9 +287,29 @@ class RelationshipDetailView(
         if not church:
             return Relationship.objects.none()
 
-        return Relationship.objects.filter(
-            church=church
-        )
+        return Relationship.objects.filter(church=church)
+
+    # ========================================================
+    # BLOCK UPDATE ON RESERVED
+    # ========================================================
+
+    def perform_update(self, serializer):
+        if serializer.instance.reserved:
+            raise ValidationError(
+                "This is a system default relationship and cannot be edited."
+            )
+        serializer.save()
+
+    # ========================================================
+    # BLOCK DELETE ON RESERVED
+    # ========================================================
+
+    def perform_destroy(self, instance):
+        if instance.reserved:
+            raise ValidationError(
+                "This is a system default relationship and cannot be deleted."
+            )
+        instance.delete()
 
     
 
@@ -1739,10 +1752,21 @@ from .permissions import IsChurchUser
 # MARRIAGE VIEWS
 # ============================================================
 
+# ============================================================
+# MARRIAGE VIEWS
+# ============================================================
+
 class MarriageListCreateAPIView(ListCreateAPIView):
     """
     List all marriages or create a new marriage.
     Create handles both ADD_BRIDE and TRANSFER_BRIDE types.
+
+    ✅ @transaction.atomic on perform_create ensures that
+       generate_register_number() and the Marriage INSERT
+       commit or roll back together. Without this, the
+       register counter could advance even when the INSERT
+       failed (e.g. unique collision), leaving the counter
+       out of sync with the DB.
     """
     serializer_class = MarriageSerializer
     permission_classes = [IsAuthenticated, IsChurchUser]
@@ -1754,9 +1778,9 @@ class MarriageListCreateAPIView(ListCreateAPIView):
         ).select_related(
             "groom_member",
             "bride_member",
-            
         ).order_by("-date")
 
+    @transaction.atomic
     def perform_create(self, serializer):
         church = self.request.user.church
         serializer.save(church=church)
@@ -2540,26 +2564,57 @@ class TombFeeDetailView(generics.RetrieveUpdateDestroyAPIView):
         ).select_related("tomb_type")
 
 
-#designation
+# ============================================================
+# DESIGNATION VIEWS
+# ============================================================
+
 class DesignationListCreateView(generics.ListCreateAPIView):
-    permission_classes=[IsAuthenticated, IsChurchUser]
+    permission_classes = [IsAuthenticated, IsChurchUser]
     serializer_class = DesignationSerializer
+
     def get_queryset(self):
         return Designation.objects.filter(
             church=self.request.user.church
         ).order_by("designation_name")
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
 
     def perform_create(self, serializer):
         serializer.save(church=self.request.user.church)
 
 
 class DesignationDetailView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes=[IsAuthenticated, IsChurchUser]
+    permission_classes = [IsAuthenticated, IsChurchUser]
     serializer_class = DesignationSerializer
+
     def get_queryset(self):
         return Designation.objects.filter(
             church=self.request.user.church
-        ).order_by("designation_name")
+        )
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
+
+    # ✅ Block update on reserved
+    def perform_update(self, serializer):
+        if serializer.instance.reserved:
+            raise ValidationError(
+                "This is a system default designation and cannot be edited."
+            )
+        serializer.save()
+
+    # ✅ Block delete on reserved
+    def perform_destroy(self, instance):
+        if instance.reserved:
+            raise ValidationError(
+                "This is a system default designation and cannot be deleted."
+            )
+        instance.delete()
 
 #dioces
 class DioceseListCreateView(generics.ListCreateAPIView):
@@ -2754,75 +2809,57 @@ class PriestDropdownAPIView(APIView):
 
         return Response(data)
 
-
+from .services import reseal_vicar_windows
 # ============================================================
 # CREATE PRIEST
 # ============================================================
 
-class PriestListCreateView(
-    generics.ListCreateAPIView
-):
+class PriestListCreateView(generics.ListCreateAPIView):
 
-    permission_classes = [
-        IsAuthenticated,
-        IsChurchUser
-    ]
-
+    permission_classes = [IsAuthenticated, IsChurchUser]
     serializer_class = PriestSerializer
 
     def get_queryset(self):
-
         return Priest.objects.filter(
             church=self.request.user.church
-        ).order_by(
-            "-date_from",
-            "name"
-        )
+        ).order_by("-date_from", "name")
 
     def get_serializer_context(self):
-
         context = super().get_serializer_context()
-
         context["request"] = self.request
-
         return context
 
+    @transaction.atomic
     def perform_create(self, serializer):
-
-        serializer.save(
-            church=self.request.user.church
-        )
+        serializer.save(church=self.request.user.church)
+        reseal_vicar_windows(self.request.user.church)
 
 
-# ============================================================
-# PRIEST DETAIL
-# ============================================================
+class PriestDetailView(generics.RetrieveUpdateDestroyAPIView):
 
-class PriestDetailView(
-    generics.RetrieveUpdateDestroyAPIView
-):
-
-    permission_classes = [
-        IsAuthenticated,
-        IsChurchUser
-    ]
-
+    permission_classes = [IsAuthenticated, IsChurchUser]
     serializer_class = PriestSerializer
 
     def get_queryset(self):
-
         return Priest.objects.filter(
             church=self.request.user.church
         )
 
     def get_serializer_context(self):
-
         context = super().get_serializer_context()
-
         context["request"] = self.request
-
         return context
 
+    @transaction.atomic
+    def perform_update(self, serializer):
+        serializer.save()
+        reseal_vicar_windows(self.request.user.church)
+
+    @transaction.atomic
+    def perform_destroy(self, instance):
+        church = instance.church
+        instance.delete()
+        reseal_vicar_windows(church)
 
 #Registersettings
 class RegisterSettingCreateAPIView(APIView):
@@ -3002,7 +3039,14 @@ class MarkMemberDeadAPIView(APIView):
 from django.utils.dateparse import parse_date
 
 class DeathRegisterCreateAPIView(APIView):
-    """Create a new death registration"""
+    """
+    Create a new death registration.
+
+    Date rules:
+    - Only ONE rule applies: funeral_on must be >= died_on.
+    - No upper bound on funeral date.
+    - No future-date restriction (retroactive entry allowed).
+    """
     permission_classes = [IsAuthenticated, IsChurchUser]
 
     def post(self, request):
@@ -3011,35 +3055,38 @@ class DeathRegisterCreateAPIView(APIView):
         if not member_id:
             return Response(
                 {"error": "member is required."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
             member = Member.objects.get(
                 pk=member_id,
-                church=request.user.church
+                church=request.user.church,
             )
         except Member.DoesNotExist:
             return Response(
                 {"error": "Member not found."},
-                status=status.HTTP_404_NOT_FOUND
+                status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Check if already deceased
+        # ---------------------------------------------------------
+        # Already deceased / already registered
+        # ---------------------------------------------------------
         if member.expired:
             return Response(
                 {"error": "Member is already marked as deceased."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Check if death record already exists
         if DeathRegister.objects.filter(member=member).exists():
             return Response(
                 {"error": "Death record already exists for this member."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Validate required fields
+        # ---------------------------------------------------------
+        # Required fields
+        # ---------------------------------------------------------
         required_fields = [
             "died_on",
             "funeral_on",
@@ -3057,19 +3104,21 @@ class DeathRegisterCreateAPIView(APIView):
                     field: "This field is required."
                     for field in missing_fields
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Validate tomb_fee exists and belongs to church
+        # ---------------------------------------------------------
+        # Tomb fee belongs to this church
+        # ---------------------------------------------------------
         try:
             tomb_fee = TombFee.objects.get(
                 id=request.data.get("tomb_fee"),
-                church=request.user.church
+                church=request.user.church,
             )
         except TombFee.DoesNotExist:
             return Response(
                 {"error": "Selected tomb fee does not belong to this church."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         with transaction.atomic():
@@ -3080,68 +3129,26 @@ class DeathRegisterCreateAPIView(APIView):
             if not died_on or not funeral_on:
                 return Response(
                     {"error": "Invalid date format. Use YYYY-MM-DD."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            today = date.today()
-
-            # ---------------------------------------------------------
-            # DATE OF DEATH
-            # Cannot be in the future.
-            # Backdating is allowed because records are often entered
-            # days or weeks after the actual death.
-            # ---------------------------------------------------------
-
-            if died_on > today:
-                return Response(
-                    {"error": "Date of death cannot be in the future."},
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
             # ---------------------------------------------------------
-            # FUNERAL DATE
-            # Cannot be in the future.
+            # SINGLE RULE: funeral cannot be before death.
+            # No upper bound. No future-date restriction.
             # ---------------------------------------------------------
-
-            if funeral_on > today:
-                return Response(
-                    {"error": "Funeral date cannot be in the future."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # ---------------------------------------------------------
-            # FUNERAL CANNOT BE BEFORE DEATH
-            # ---------------------------------------------------------
-
             if funeral_on < died_on:
                 return Response(
                     {
-                        "error": (
-                            "Funeral date cannot be before "
-                            "the date of death."
-                        )
+                        "funeral_on": [
+                            "Funeral date cannot be before the date of death."
+                        ]
                     },
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
             # ---------------------------------------------------------
-            # FUNERAL MAX 4 DAYS AFTER DEATH
+            # Create death record
             # ---------------------------------------------------------
-
-            max_funeral_date = died_on + timedelta(days=4)
-
-            if funeral_on > max_funeral_date:
-                return Response(
-                    {
-                        "error": (
-                            "Funeral date can be a maximum "
-                            "of 4 days after the date of death."
-                        )
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Create death record with tomb_fee
             death = DeathRegister.objects.create(
                 church=request.user.church,
                 member=member,
@@ -5159,4 +5166,343 @@ class SubscriptionPaidListAPIView(APIView):
             "to": month_end.isoformat(),
             "wards": wards,
             "grand_total": float(grand_total),
+        })
+
+
+
+# registry/views.py
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from accounts.permissions import IsChurchUser
+from datetime import date
+from .models import ReceiptLine, PaymentMaster
+
+class ReceiptPaymentCombinedAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsChurchUser]
+
+    def get(self, request):
+        church = request.user.church
+        date_from = request.query_params.get("from")
+        date_to = request.query_params.get("to")
+
+        if not date_from or not date_to:
+            today = date.today()
+            date_from = today.replace(day=1)
+            date_to = today
+
+        # ==========================================
+        # 1. FETCH RECEIPTS (INCOME)
+        # ==========================================
+        receipt_lines = ReceiptLine.objects.filter(
+            receipt__church=church,
+            receipt__is_cancelled=False,
+            receipt__receipt_date__gte=date_from,
+            receipt__receipt_date__lte=date_to,
+        ).select_related('ledger', 'ledger__account_group', 'ledger__account_group__under_group')
+
+        income_groups = {}
+        total_income = 0
+
+        for line in receipt_lines:
+            if not line.ledger or not line.ledger.account_group:
+                continue
+                
+            group = line.ledger.account_group
+            # If the group has a parent, we group it under the parent
+            parent_name = group.under_group.group_name if group.under_group else group.group_name
+            sub_group_name = group.group_name if group.under_group else None
+            
+            amount = float(line.amount or 0)
+            total_income += amount
+
+            if parent_name not in income_groups:
+                income_groups[parent_name] = {
+                    "name": parent_name,
+                    "amount": 0,
+                    "is_sub": False,
+                    "sub_groups": {}
+                }
+            
+            income_groups[parent_name]["amount"] += amount
+
+            if sub_group_name:
+                if sub_group_name not in income_groups[parent_name]["sub_groups"]:
+                    income_groups[parent_name]["sub_groups"][sub_group_name] = {"name": sub_group_name, "amount": 0, "ledgers": {}}
+                
+                income_groups[parent_name]["sub_groups"][sub_group_name]["amount"] += amount
+                ledger_name = line.ledger.ledger_name
+                if ledger_name not in income_groups[parent_name]["sub_groups"][sub_group_name]["ledgers"]:
+                    income_groups[parent_name]["sub_groups"][sub_group_name]["ledgers"][ledger_name] = 0
+                income_groups[parent_name]["sub_groups"][sub_group_name]["ledgers"][ledger_name] += amount
+            else:
+                # If no parent, the ledger goes directly under the group
+                if "ledgers" not in income_groups[parent_name]:
+                    income_groups[parent_name]["ledgers"] = {}
+                ledger_name = line.ledger.ledger_name
+                if ledger_name not in income_groups[parent_name]["ledgers"]:
+                    income_groups[parent_name]["ledgers"][ledger_name] = 0
+                income_groups[parent_name]["ledgers"][ledger_name] += amount
+
+        # Format for frontend
+        receipts_data = []
+        for g in income_groups.values():
+            formatted_subs = []
+            for sg in g["sub_groups"].values():
+                sg["ledgers"] = [{"name": k, "amount": v} for k, v in sg["ledgers"].items()]
+                formatted_subs.append(sg)
+            
+            g["sub_groups"] = formatted_subs
+            if "ledgers" in g:
+                g["ledgers"] = [{"name": k, "amount": v} for k, v in g["ledgers"].items()]
+            receipts_data.append(g)
+            
+        receipts_data.sort(key=lambda x: x['name'])
+
+        # ==========================================
+        # 2. FETCH PAYMENTS (EXPENSES)
+        # ==========================================
+        payments = PaymentMaster.objects.filter(
+            church=church,
+            is_cancelled=False,
+            payment_date__gte=date_from,
+            payment_date__lte=date_to,
+        ).select_related('account_ledger', 'account_ledger__account_group', 'account_ledger__account_group__under_group')
+
+        expense_groups = {}
+        total_expense = 0
+
+        for p in payments:
+            if not p.account_ledger or not p.account_ledger.account_group:
+                continue
+                
+            group = p.account_ledger.account_group
+            parent_name = group.under_group.group_name if group.under_group else group.group_name
+            sub_group_name = group.group_name if group.under_group else None
+            
+            amount = float(p.amount or 0)
+            total_expense += amount
+
+            if parent_name not in expense_groups:
+                expense_groups[parent_name] = {
+                    "name": parent_name,
+                    "amount": 0,
+                    "is_sub": False,
+                    "sub_groups": {}
+                }
+            
+            expense_groups[parent_name]["amount"] += amount
+
+            if sub_group_name:
+                if sub_group_name not in expense_groups[parent_name]["sub_groups"]:
+                    expense_groups[parent_name]["sub_groups"][sub_group_name] = {"name": sub_group_name, "amount": 0, "ledgers": {}}
+                
+                expense_groups[parent_name]["sub_groups"][sub_group_name]["amount"] += amount
+                ledger_name = p.account_ledger.ledger_name
+                if ledger_name not in expense_groups[parent_name]["sub_groups"][sub_group_name]["ledgers"]:
+                    expense_groups[parent_name]["sub_groups"][sub_group_name]["ledgers"][ledger_name] = 0
+                expense_groups[parent_name]["sub_groups"][sub_group_name]["ledgers"][ledger_name] += amount
+            else:
+                if "ledgers" not in expense_groups[parent_name]:
+                    expense_groups[parent_name]["ledgers"] = {}
+                ledger_name = p.account_ledger.ledger_name
+                if ledger_name not in expense_groups[parent_name]["ledgers"]:
+                    expense_groups[parent_name]["ledgers"][ledger_name] = 0
+                expense_groups[parent_name]["ledgers"][ledger_name] += amount
+
+        payments_data = []
+        for g in expense_groups.values():
+            formatted_subs = []
+            for sg in g["sub_groups"].values():
+                sg["ledgers"] = [{"name": k, "amount": v} for k, v in sg["ledgers"].items()]
+                formatted_subs.append(sg)
+            
+            g["sub_groups"] = formatted_subs
+            if "ledgers" in g:
+                g["ledgers"] = [{"name": k, "amount": v} for k, v in g["ledgers"].items()]
+            payments_data.append(g)
+            
+        payments_data.sort(key=lambda x: x['name'])
+
+        # ==========================================
+        # 3. RETURN RESPONSE
+        # ==========================================
+        net_balance = total_income - total_expense
+
+        return Response({
+            "from": date_from,
+            "to": date_to,
+            "receipts": receipts_data,
+            "payments": payments_data,
+            "summary": {
+                "total_income": total_income,
+                "total_expense": total_expense,
+                "net_balance": net_balance,
+                "is_balanced": abs(net_balance) < 0.01
+            }
+        })
+# --------------------------------------------------Dash Board------------------------------------------------
+# registry/views.py
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from accounts.permissions import IsChurchUser
+from django.utils import timezone
+from datetime import date, timedelta
+from django.db.models import Sum, Count, Q
+from django.db.models.functions import TruncDate
+# Import all required models
+from .models import (
+    Member, ReceiptMaster, PaymentMaster, Baptism, Marriage, 
+    DeathRegister, QurbanaReceipts, Events
+)
+
+class ChurchDashboardMetricsAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsChurchUser]
+
+    def get(self, request):
+        church = request.user.church
+        today = date.today()
+        
+        # Calculate dates for comparisons
+        first_day_this_month = today.replace(day=1)
+        first_day_last_month = (first_day_this_month - timedelta(days=1)).replace(day=1)
+        first_day_this_year = today.replace(month=1, day=1)
+        first_day_last_year = today.replace(year=today.year - 1, month=1, day=1)
+
+        # ---------------------------------------------------------
+        # 1. MEMBER STATS & GROWTH
+        # ---------------------------------------------------------
+        total_members = Member.objects.filter(church=church, is_active=True, expired=False).count()
+        
+        # Real Member Growth Percentage calculation
+        this_month_members = Member.objects.filter(church=church, is_active=True, expired=False, created_at__date__gte=first_day_this_month).count()
+        last_month_members = Member.objects.filter(church=church, is_active=True, expired=False, created_at__date__gte=first_day_last_month, created_at__date__lt=first_day_this_month).count()
+        
+        if last_month_members > 0:
+            member_growth_pct = round(((this_month_members - last_month_members) / last_month_members) * 100, 1)
+        else:
+            member_growth_pct = 100.0 if this_month_members > 0 else 0.0
+
+        # ---------------------------------------------------------
+        # 2. FINANCIAL STATS (Receipts & Payments)
+        # ---------------------------------------------------------
+        monthly_receipts = ReceiptMaster.objects.filter(church=church, is_cancelled=False, receipt_date__gte=first_day_this_month).aggregate(t=Sum('grand_total'))['t'] or 0
+        yearly_receipts = ReceiptMaster.objects.filter(church=church, is_cancelled=False, receipt_date__gte=first_day_this_year).aggregate(t=Sum('grand_total'))['t'] or 0
+        
+        monthly_payments = PaymentMaster.objects.filter(church=church, is_cancelled=False, payment_date__gte=first_day_this_month).aggregate(t=Sum('amount'))['t'] or 0
+        yearly_payments = PaymentMaster.objects.filter(church=church, is_cancelled=False, payment_date__gte=first_day_this_year).aggregate(t=Sum('amount'))['t'] or 0
+
+        # ---------------------------------------------------------
+        # 3. SACRAMENTS (Baptism, Qurbana, Marriage, Death)
+        # ---------------------------------------------------------
+        baptisms = Baptism.objects.filter(church=church).count()
+        qurbana = QurbanaReceipts.objects.filter(church=church).count() # Fixed: Using actual QurbanaReceipts model
+        marriages = Marriage.objects.filter(church=church).count()
+        deaths = DeathRegister.objects.filter(church=church).count()
+        total_sacraments = baptisms + qurbana + marriages + deaths
+
+        # ---------------------------------------------------------
+        # 4. RECENT ACTIVITIES
+        # ---------------------------------------------------------
+        recent_receipts = ReceiptMaster.objects.filter(church=church, is_cancelled=False).order_by('-created_at')[:3]
+        recent_payments = PaymentMaster.objects.filter(church=church, is_cancelled=False).order_by('-created_at')[:2]
+        
+        activities = []
+        for r in recent_receipts:
+            activities.append({
+                "id": f"rec-{r.id}",
+                "type": "RECEIPT",
+                "title": "Donation received",
+                "description": f"₹{r.grand_total} from {r.member.name if r.member else 'Anonymous'}",
+                "time": r.created_at.strftime("%b %d, %I:%M %p")
+            })
+        for p in recent_payments:
+            activities.append({
+                "id": f"pay-{p.id}",
+                "type": "PAYMENT",
+                "title": "Payment made",
+                "description": f"₹{p.amount} to {p.party_name}",
+                "time": p.created_at.strftime("%b %d, %I:%M %p")
+            })
+        
+        # Sort combined activities by date
+        activities = sorted(activities, key=lambda x: x['time'], reverse=True)[:5]
+
+        # ---------------------------------------------------------
+        # 5. CHART DATA (Member Growth & Weekly Receipts)
+        # ---------------------------------------------------------
+        # Member Growth Chart (Last 30 Days)
+        thirty_days_ago = today - timedelta(days=30)
+        members_by_date = Member.objects.filter(
+            church=church, 
+            is_active=True, 
+            expired=False,
+            created_at__date__gte=thirty_days_ago
+        ).annotate(date=TruncDate('created_at')).values('date').annotate(count=Count('id')).order_by('date')
+        
+        member_chart_data = [
+            {"name": m['date'].strftime("%b %d"), "members": m['count']} 
+            for m in members_by_date
+        ]
+
+        # Financial Chart (Last 4 Weeks of Receipts)
+        financial_chart_data = []
+        for i in range(4):
+            week_start = today - timedelta(days=(7 * (4 - i)))
+            week_end = week_start + timedelta(days=6)
+            
+            week_receipts = ReceiptMaster.objects.filter(
+                church=church, is_cancelled=False, 
+                receipt_date__range=[week_start, week_end]
+            ).aggregate(t=Sum('grand_total'))['t'] or 0
+            
+            financial_chart_data.append({
+                "name": f"Week {i+1}",
+                "amount": float(week_receipts)
+            })
+
+        chart_data = {
+            "member_chart": member_chart_data,
+            "financial_chart": financial_chart_data
+        }
+
+        # ---------------------------------------------------------
+        # 6. UPCOMING EVENTS
+        # ---------------------------------------------------------
+        # Fetch real events from the database instead of mocked data
+        upcoming_events_qs = Events.objects.filter(church=church).order_by('-created_at')[:4]
+        events = []
+        for ev in upcoming_events_qs:
+            events.append({
+                "id": ev.id,
+                "day": ev.created_at.strftime("%d"),
+                "month": ev.created_at.strftime("%b").upper(),
+                "title": ev.name,
+                "location": "Church", # If you add a location field to Events model, replace this
+                "time": ev.created_at.strftime("%I:%M %p")
+            })
+
+        return Response({
+            "metrics": {
+                "total_members": total_members,
+                "member_growth_pct": member_growth_pct,
+                "monthly_receipts": monthly_receipts,
+                "yearly_receipts": yearly_receipts,
+                "monthly_payments": monthly_payments,
+                "yearly_payments": yearly_payments,
+                "net_balance": monthly_receipts - monthly_payments,
+                "pending_receipts": 0, # Replace with real logic if you have a pending Receipts concept
+            },
+            "sacraments": {
+                "total": total_sacraments,
+                "baptism": baptisms,
+                "qurbana": qurbana,
+                "marriage": marriages,
+                "death": deaths,
+            },
+            "activities": activities,
+            "chart_data": chart_data,
+            "events": events,
         })

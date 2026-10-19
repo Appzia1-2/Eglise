@@ -990,7 +990,7 @@ const MarriageAddPage = () => {
                     options={groomOptions}
                     placeholder={
                       formData.groom_family
-                        ? "Select groom (SINGLE, WIDOWED, DIVORCED)"
+                        ? "Select groom"
                         : "Select family first"
                     }
                   />
@@ -1044,7 +1044,7 @@ const MarriageAddPage = () => {
                     options={brideOptions}
                     placeholder={
                       formData.bride_family
-                        ? "Select bride (SINGLE, WIDOWED, DIVORCED)"
+                        ? "Select bride"
                         : "Select family first"
                     }
                   />
@@ -1185,7 +1185,7 @@ const MarriageAddPage = () => {
                     options={groomOptions}
                     placeholder={
                       formData.groom_family
-                        ? "Select groom (SINGLE, WIDOWED, DIVORCED)"
+                        ? "Select groom"
                         : "Select family first"
                     }
                   />
@@ -1409,7 +1409,7 @@ const MarriageAddPage = () => {
                     options={brideOptions}
                     placeholder={
                       formData.bride_family
-                        ? "Select bride (SINGLE, WIDOWED, DIVORCED)"
+                        ? "Select bride"
                         : "Select family first"
                     }
                   />

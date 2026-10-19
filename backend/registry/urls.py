@@ -81,10 +81,13 @@ from .views import (
     LedgerBalanceAPIView,MemberLedgerReportAPIView,
     IncomeExpenditureReportAPIView,
     DonationRegisterReportAPIView,SubscriptionDueListAPIView,
-    SubscriptionPaidListAPIView,
+    SubscriptionPaidListAPIView,ChurchDashboardMetricsAPIView,ReceiptPaymentCombinedAPIView,
 )
 
 urlpatterns = [
+
+    path("church/dashboard-metrics/", ChurchDashboardMetricsAPIView.as_view(), name="church-dashboard-metrics"),
+
     # Wards
     path("wards/", WardListCreateAPIView.as_view()),
     path("wards/<int:pk>/", WardDetailAPIView.as_view()),
@@ -318,4 +321,7 @@ path(
     SubscriptionPaidListAPIView.as_view(),
     name="report-subscription-paid",
 ),
+
+# registry/urls.py
+path("reports/receipt-payment/", ReceiptPaymentCombinedAPIView.as_view(), name="report-receipt-payment"),
 ]

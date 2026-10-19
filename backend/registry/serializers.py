@@ -512,7 +512,32 @@ class DesignationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Designation
         fields = "__all__"
-        read_only_fields = ("church",)
+        read_only_fields = ("church", "reserved") # ✅ reserved is locked
+
+    def validate_designation_name(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("Designation name cannot be empty.")
+            
+        request = self.context.get("request")
+        church = request.user.church if request else getattr(self.instance, "church", None)
+        
+        # Case-insensitive uniqueness check
+        qs = Designation.objects.filter(church=church, designation_name__iexact=value.strip())
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+            
+        if qs.exists():
+            raise serializers.ValidationError(f'Designation "{value}" already exists in this church.')
+            
+        return value.strip()
+
+    # ✅ Block edits on system reserved designations
+    def update(self, instance, validated_data):
+        if instance.reserved:
+            raise serializers.ValidationError(
+                "This is a system default designation and cannot be edited."
+            )
+        return super().update(instance, validated_data)
 
 class DioceseSerializer(serializers.ModelSerializer):
 
@@ -909,19 +934,23 @@ class PriestSerializer(serializers.ModelSerializer):
                     if existing_end and existing_end < today:
                         continue
  
-                    # ========================================
+                                        # ========================================
                     # EXISTING VICAR IS ONGOING
                     # ========================================
- 
+                    #
+                    # Do NOT raise here. The model's save() will
+                    # auto-close the previous open vicar by setting
+                    # its date_to = new.date_from - 1 day and
+                    # is_active = False. This allows a smooth
+                    # handover without a manual edit.
+                    #
+                    # Genuine overlaps (existing vicar has a known
+                    # end date and the new vicar starts before it)
+                    # are still rejected by the check below.
+                    # ========================================
+
                     if existing_end is None:
- 
-                        raise serializers.ValidationError({
-                            "date_from": (
-                                f"{existing.name} is already "
-                                "serving as Vicar until ongoing. "
-                                "The service period cannot overlap."
-                            )
-                        })
+                        continue
  
                     # ========================================
                     # EXISTING VICAR HAS AN END DATE
@@ -971,15 +1000,15 @@ User = get_user_model()
 
 
 # ============================================================
-# FAMILY MEMBER SERIALIZER
+# MEMBER SERIALIZER
 # ============================================================
 
 class MemberSerializer(serializers.ModelSerializer):
- 
+
     class Meta:
         model = Member
         fields = "__all__"
- 
+
         read_only_fields = (
             "church",
             "age",
@@ -987,47 +1016,47 @@ class MemberSerializer(serializers.ModelSerializer):
             "address",
             "family_image",
         )
- 
+
     # ========================================================
     # DATE OF BIRTH
     # ========================================================
- 
+
     def validate_dob(self, value):
- 
+
         if value and value > date.today():
             raise serializers.ValidationError(
                 "Date of birth cannot be in the future."
             )
- 
+
         return value
- 
+
     # ========================================================
     # EMAIL
     # ========================================================
- 
+
     def validate_email(self, value):
- 
+
         if not value:
             return value
- 
+
         qs = Member.objects.filter(
             email=value
         )
- 
+
         if self.instance:
             qs = qs.exclude(
                 pk=self.instance.pk
             )
- 
+
         if qs.exists():
             raise serializers.ValidationError(
                 "This email is already used by another member in the system."
             )
- 
+
         if User.objects.filter(
             username=value
         ).exists():
- 
+
             if (
                 self.instance
                 and self.instance.email == value
@@ -1037,22 +1066,22 @@ class MemberSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     "This email is already used as a login username."
                 )
- 
+
         return value
- 
+
     # ========================================================
     # SPOUSE
     # ========================================================
- 
+
     def validate_spouse(self, value):
- 
+
         if not value:
             return value
- 
+
         # ----------------------------------------------------
         # Cannot be own spouse
         # ----------------------------------------------------
- 
+
         if (
             self.instance
             and value.pk == self.instance.pk
@@ -1060,11 +1089,11 @@ class MemberSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "A member cannot be their own spouse."
             )
- 
+
         # ----------------------------------------------------
         # Gender validation
         # ----------------------------------------------------
- 
+
         if (
             self.instance
             and self.instance.gender == value.gender
@@ -1072,11 +1101,11 @@ class MemberSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Spouse must be of opposite gender."
             )
- 
+
         # ----------------------------------------------------
         # Already married
         # ----------------------------------------------------
- 
+
         if (
             value.spouse
             and (
@@ -1087,24 +1116,24 @@ class MemberSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "This person is already married to someone else."
             )
- 
+
         # ----------------------------------------------------
         # Expired member
         # ----------------------------------------------------
- 
+
         if value.expired:
             raise serializers.ValidationError(
                 "Cannot set an expired member as spouse."
             )
- 
+
         return value
- 
+
     # ========================================================
     # MAIN VALIDATION
     # ========================================================
- 
+
     def validate(self, data):
- 
+
         # ====================================================
         # IMPORTANT
         # ====================================================
@@ -1117,7 +1146,7 @@ class MemberSerializer(serializers.ModelSerializer):
         # and DO NOT consume subscription capacity.
         #
         # ====================================================
- 
+
         # ====================================================
         # SPOUSE ONLY FOR MARRIED MEMBERS
         # ====================================================
@@ -1127,7 +1156,7 @@ class MemberSerializer(serializers.ModelSerializer):
         # a spouse link) can be edited without being blocked.
         #
         # ====================================================
- 
+
         marital_status = data.get(
             "marital_status",
             getattr(
@@ -1136,13 +1165,13 @@ class MemberSerializer(serializers.ModelSerializer):
                 None,
             ),
         )
- 
+
         incoming_spouse = data.get("spouse")
- 
+
         incoming_spouse_name = (
             data.get("spouse_name") or ""
         ).strip()
- 
+
         if (
             marital_status != "MARRIED"
             and (
@@ -1150,99 +1179,99 @@ class MemberSerializer(serializers.ModelSerializer):
                 or incoming_spouse_name
             )
         ):
- 
+
             raise serializers.ValidationError({
                 "spouse_name":
                     "Spouse can only be added when marital status is Married."
             })
- 
+
         # ====================================================
         # CREATE
         # ====================================================
- 
+
         if not self.instance:
- 
+
             # ------------------------------------------------
             # Family head cannot be created through this API
             # ------------------------------------------------
- 
+
             if data.get("is_family_head"):
- 
+
                 raise serializers.ValidationError({
                     "is_family_head":
                         "Use family head API to create family head."
                 })
- 
+
             # ------------------------------------------------
             # Required family
             # ------------------------------------------------
- 
+
             family = data.get("family")
- 
+
             if not family:
- 
+
                 raise serializers.ValidationError({
                     "family":
                         "Family is required."
                 })
- 
+
             # ------------------------------------------------
             # House information
             # ------------------------------------------------
- 
+
             house_name = data.get(
                 "house_name"
             )
- 
+
             house_sequence = data.get(
                 "house_sequence",
                 1
             )
- 
+
             if not house_name:
- 
+
                 raise serializers.ValidationError({
                     "house_name":
                         "House name is required."
                 })
- 
+
             # ------------------------------------------------
             # Address cannot be manually assigned
             # ------------------------------------------------
- 
+
             if data.get("address"):
- 
+
                 raise serializers.ValidationError({
                     "address":
                         "Address should not be assigned manually."
                 })
- 
+
             # ------------------------------------------------
             # Ward cannot be manually assigned
             # ------------------------------------------------
- 
+
             if data.get("ward"):
- 
+
                 raise serializers.ValidationError({
                     "ward":
                         "Ward should not be assigned manually."
                 })
- 
+
             # ------------------------------------------------
             # Family image only for family head
             # ------------------------------------------------
- 
+
             if data.get("family_image"):
- 
+
                 raise serializers.ValidationError({
                     "family_image":
                         "Family image can only be uploaded for family head."
                 })
- 
+
             # ------------------------------------------------
             # Find active family head for this household
             # ------------------------------------------------
- 
+
             head = Member.objects.filter(
                 family=family,
                 house_name__iexact=house_name.strip(),
@@ -1250,27 +1279,27 @@ class MemberSerializer(serializers.ModelSerializer):
                 is_family_head=True,
                 is_active=True,
             ).first()
- 
+
             # ------------------------------------------------
             # If exact household head doesn't exist
             # ------------------------------------------------
- 
+
             if not head:
- 
+
                 # --------------------------------------------
                 # Check whether same house has a head with
                 # another sequence number
                 # --------------------------------------------
- 
+
                 head_with_different_seq = Member.objects.filter(
                     family=family,
                     house_name__iexact=house_name.strip(),
                     is_family_head=True,
                     is_active=True,
                 ).first()
- 
+
                 if head_with_different_seq:
- 
+
                     raise serializers.ValidationError({
                         "house_name":
                             f"Cannot add member. Active head exists "
@@ -1280,105 +1309,111 @@ class MemberSerializer(serializers.ModelSerializer):
                             f"house_sequence="
                             f"{head_with_different_seq.house_sequence}."
                     })
- 
+
                 # --------------------------------------------
                 # No active head
                 # --------------------------------------------
- 
+
                 raise serializers.ValidationError({
                     "house_name":
                         "Cannot add member. No active head for this house."
                 })
- 
+
         # ====================================================
         # UPDATE
         # ====================================================
- 
+
         else:
- 
+
             instance = self.instance
- 
+
             # ------------------------------------------------
-            # Relationship
+            # Relationship (may or may not be in the payload)
             # ------------------------------------------------
- 
+
             relationship = data.get(
                 "relationship",
                 instance.relationship
             )
- 
+
+            # ✅ FIX — 400 fix
+            # Whether the caller actually sent a relationship
+            # in this PATCH. Used below to decide if the
+            # relationship rules should run.
+            relationship_was_sent = "relationship" in data
+
             # ------------------------------------------------
             # Family cannot be changed here
             # ------------------------------------------------
- 
+
             family = instance.family
- 
+
             # ------------------------------------------------
             # Expired cannot be manually changed
             # ------------------------------------------------
- 
+
             if "expired" in data:
- 
+
                 raise serializers.ValidationError({
                     "expired":
                         "Use mark-dead API to mark a member as deceased."
                 })
- 
+
             # ------------------------------------------------
             # Family head cannot be assigned here
             # ------------------------------------------------
- 
+
             if data.get("is_family_head"):
- 
+
                 raise serializers.ValidationError({
                     "is_family_head":
                         "Use family head API to assign family head."
                 })
- 
+
             # ------------------------------------------------
             # Family image
             # ------------------------------------------------
- 
+
             if (
                 "family_image" in data
                 and not instance.is_family_head
             ):
- 
+
                 raise serializers.ValidationError({
                     "family_image":
                         "Only family head can have family image."
                 })
- 
+
             # ------------------------------------------------
             # Ward cannot be changed
             # ------------------------------------------------
- 
+
             if "ward" in data:
- 
+
                 raise serializers.ValidationError({
                     "ward":
                         "Ward cannot be modified here."
                 })
- 
+
             # ------------------------------------------------
             # House sequence cannot be changed
             # ------------------------------------------------
- 
+
             if (
                 "house_sequence" in data
                 and data["house_sequence"]
                 != instance.house_sequence
             ):
- 
+
                 raise serializers.ValidationError({
                     "house_sequence":
                         "House sequence cannot be changed after creation."
                 })
- 
+
             # ------------------------------------------------
             # Find active head
             # ------------------------------------------------
- 
+
             head = Member.objects.filter(
                 family=family,
                 house_name=instance.house_name,
@@ -1386,38 +1421,63 @@ class MemberSerializer(serializers.ModelSerializer):
                 is_family_head=True,
                 is_active=True,
             ).first()
- 
+
             # ------------------------------------------------
             # Family head cannot have relationship
             # ------------------------------------------------
- 
+
             if (
                 instance.is_family_head
                 and relationship
             ):
- 
+
                 raise serializers.ValidationError({
                     "relationship":
                         "Family head cannot have a relationship."
                 })
- 
+
             # =================================================
             # RELATIONSHIP VALIDATION
+            #
+            # ✅ FIX — 400 fix:
+            #
+            # Only validate the relationship when:
+            #
+            #   1. The client explicitly sent it, OR
+            #   2. The household actually has an active head.
+            #
+            # Previously the rules always ran against
+            # `instance.relationship` even when the client
+            # didn't send it. On a headless household that
+            # meant every PATCH rejected with
+            # "Cannot assign child relationship without
+            # active head" — even for unrelated fields like
+            # name, mobile, dob, etc.
+            #
+            # With this guard, editing a dependent of a
+            # deceased head succeeds normally, while the
+            # stricter rules still apply whenever the
+            # relationship is genuinely being changed or a
+            # head exists.
             # =================================================
- 
-            if relationship:
- 
+
+            if relationship and (
+                relationship_was_sent or head is not None
+            ):
+
                 rel_name = relationship.name
- 
+
                 # ------------------------------------------------
-                # Father / Mother
+                # Father / Mother (one per family)
                 # ------------------------------------------------
- 
+
                 if rel_name in [
                     "Father",
                     "Mother",
+                    "Father-in-Law",
+                    "Mother-in-Law",
                 ]:
- 
+
                     existing = Member.objects.filter(
                         family=family,
                         relationship__name=rel_name,
@@ -1425,95 +1485,111 @@ class MemberSerializer(serializers.ModelSerializer):
                     ).exclude(
                         pk=instance.pk
                     )
- 
+
                     if existing.exists():
- 
+
                         raise serializers.ValidationError({
                             "relationship":
                                 f"{rel_name} already exists in this family."
                         })
- 
+
                 # ------------------------------------------------
-                # Son / Daughter
+                # Son / Daughter (must be younger than head)
                 # ------------------------------------------------
- 
+
                 if rel_name in [
                     "Son",
                     "Daughter",
+                    "Son-in-Law",
+                    "Daughter-in-Law",
+                    "Step Son",
+                    "Step Daughter",
+                    "Adopted Son",
+                    "Adopted Daughter",
                 ]:
- 
+
                     if not head:
- 
+
                         raise serializers.ValidationError({
-                            "relationship":
-                                "Cannot assign child relationship without active head."
+                            "relationship": (
+                                "This household has no active family head. "
+                                "Promote a family head before assigning a "
+                                "child relationship."
+                            )
                         })
- 
+
                     if (
                         not instance.dob
                         or not head.dob
                     ):
- 
+
                         raise serializers.ValidationError({
                             "dob":
                                 "DOB required to validate child relationship."
                         })
- 
+
                     if instance.dob <= head.dob:
- 
+
                         raise serializers.ValidationError({
                             "relationship":
                                 "Child must be younger than family head."
                         })
- 
+
                 # ------------------------------------------------
-                # In-laws
+                # Spouse-type relations — require a linked spouse
+                # in the same family
                 # ------------------------------------------------
- 
-                if rel_name in [
-                    "Son_In_Low",
-                    "Daughter_In_Low",
-                ]:
- 
+
+                SPOUSE_REQUIRED = {
+                    "Husband",
+                    "Wife",
+                    "Son-in-Law",
+                    "Daughter-in-Law",
+                    "Brother-in-Law",
+                    "Sister-in-Law",
+                }
+
+                if rel_name in SPOUSE_REQUIRED:
+
                     if not instance.spouse:
- 
+
                         raise serializers.ValidationError({
                             "relationship":
-                                "In-law must have spouse assigned."
+                                f"{rel_name} requires a spouse to be linked."
                         })
- 
+
                     if instance.spouse.family != family:
- 
+
                         raise serializers.ValidationError({
                             "relationship":
                                 "Spouse must be in the same family."
                         })
- 
+
         return data
- 
+
     # ============================================================
     # CREATE MEMBER
     # ============================================================
- 
+
     def create(self, validated_data):
- 
+
         family = validated_data.get(
             "family"
         )
- 
+
         house_name = validated_data.get(
             "house_name"
         )
- 
+
         house_sequence = validated_data.get(
             "house_sequence",
             1
         )
- 
+
         # --------------------------------------------------------
         # Find family head
         # --------------------------------------------------------
- 
+
         head = Member.objects.filter(
             family=family,
             house_name__iexact=house_name.strip(),
@@ -1521,152 +1597,167 @@ class MemberSerializer(serializers.ModelSerializer):
             is_family_head=True,
             is_active=True,
         ).first()
- 
+
         # --------------------------------------------------------
         # Safety check
         # --------------------------------------------------------
- 
+
         if not head:
- 
+
             raise serializers.ValidationError({
                 "house_name":
                     "Cannot add member. No active head for this house."
             })
- 
+
         # --------------------------------------------------------
         # Automatically inherit head information
         # --------------------------------------------------------
- 
+
         validated_data["ward"] = head.ward
- 
+
         validated_data["church"] = self.context[
             "church"
         ]
- 
+
         validated_data["family_image"] = head.family_image
- 
+
         validated_data["address"] = head.address
- 
+
         # --------------------------------------------------------
         # Create member
         # --------------------------------------------------------
- 
+
         try:
- 
+
             return super().create(
                 validated_data
             )
- 
+
         # --------------------------------------------------------
         # Database data error
         # --------------------------------------------------------
- 
+
         except DataError as e:
- 
+
             raise serializers.ValidationError({
                 "dob":
                     f"Please check the date of birth. Error: {str(e)}"
             })
- 
+
         # --------------------------------------------------------
         # Integrity error
         # --------------------------------------------------------
- 
+
         except IntegrityError as e:
- 
+
             logger.error(
                 "Member creation IntegrityError: %s",
                 str(e),
                 exc_info=True,
             )
- 
+
             raise serializers.ValidationError({
                 "non_field_errors":
                     f"This member could not be saved. Error: {str(e)}"
             })
- 
+
         # --------------------------------------------------------
         # Django validation error
         # --------------------------------------------------------
- 
+
         except DjangoValidationError as e:
- 
+
             raise serializers.ValidationError({
                 "non_field_errors":
                     str(e)
             })
- 
+
     # ============================================================
     # UPDATE MEMBER
     # ============================================================
- 
+
     def update(
         self,
         instance,
         validated_data
     ):
- 
+
         try:
- 
+
             return super().update(
                 instance,
                 validated_data
             )
- 
+
         # --------------------------------------------------------
         # Database data error
         # --------------------------------------------------------
- 
+
         except DataError as e:
- 
+
             raise serializers.ValidationError({
                 "dob":
                     f"Please check the date of birth. Error: {str(e)}"
             })
- 
+
         # --------------------------------------------------------
         # Integrity error
         # --------------------------------------------------------
- 
+
         except IntegrityError as e:
- 
+
             logger.error(
                 "Member update IntegrityError: %s",
                 str(e),
                 exc_info=True,
             )
- 
+
             raise serializers.ValidationError({
                 "non_field_errors":
                     f"This member could not be saved. Error: {str(e)}"
             })
- 
+
         # --------------------------------------------------------
         # Django validation error
         # --------------------------------------------------------
- 
+
         except DjangoValidationError as e:
- 
+
             raise serializers.ValidationError({
                 "non_field_errors":
                     str(e)
             })
-
+        
 class RelationshipSerializer(serializers.ModelSerializer):
     class Meta:
         model = Relationship
         fields = "__all__"
-        read_only_fields = ("church",)
+        read_only_fields = ("church", "reserved")
+
+    # ========================================================
+    # NAME VALIDATION
+    # ========================================================
 
     def validate_name(self, value):
         cleaned = value.strip().title()
+
         if any(char.isdigit() for char in cleaned):
-            raise serializers.ValidationError("Relationship name should not contain numbers.")
+            raise serializers.ValidationError(
+                "Relationship name should not contain numbers."
+            )
 
         request = self.context.get("request")
-        church = request.user.church if request else getattr(self.instance, "church", None)
+        church = (
+            request.user.church
+            if request
+            else getattr(self.instance, "church", None)
+        )
 
-        qs = Relationship.objects.filter(church=church, name=cleaned)
+        # Case-insensitive uniqueness within the church
+        qs = Relationship.objects.filter(
+            church=church,
+            name__iexact=cleaned,
+        )
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
 
@@ -1674,7 +1765,19 @@ class RelationshipSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 f'A relationship named "{cleaned}" already exists in this church.'
             )
+
         return cleaned
+
+    # ========================================================
+    # LOCK RESERVED ROWS
+    # ========================================================
+
+    def update(self, instance, validated_data):
+        if instance.reserved:
+            raise serializers.ValidationError(
+                "This is a system default relationship and cannot be edited."
+            )
+        return super().update(instance, validated_data)
 
 
 
@@ -3552,11 +3655,10 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
     """
     Main serializer for DeathRegister.
 
-    Date rules:
-    - Date of death cannot be in the future (backdating is allowed).
-    - Funeral date cannot be in the future.
-    - Funeral date CAN be before date of death (removed).
-    - Funeral date CAN be more than 4 days after date of death (removed).
+    Date rule:
+    - Funeral date cannot be before date of death.
+    - No upper bound on funeral date.
+    - No future-date restriction.
     """
 
     # ---------------------------------------------------------
@@ -3655,7 +3757,7 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
     )
 
     # ---------------------------------------------------------
-    # Diocese information (through church)
+    # Diocese information
     # ---------------------------------------------------------
 
     diocese_name = serializers.CharField(
@@ -3667,7 +3769,7 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
     )
 
     # ---------------------------------------------------------
-    # Vicar information (through church)
+    # Vicar information
     # ---------------------------------------------------------
 
     vicar_name = serializers.SerializerMethodField()
@@ -3678,8 +3780,8 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
     # ---------------------------------------------------------
 
     tomb_fee_details = TombFeeMiniSerializer(
-    source="tomb_fee",
-    read_only=True
+        source="tomb_fee",
+        read_only=True
     )
 
     # ---------------------------------------------------------
@@ -3866,7 +3968,6 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
         # -----------------------------------------------------
         # MEMBER
         # -----------------------------------------------------
-
         member = (
             data.get("member")
             or (instance.member if instance else None)
@@ -3877,10 +3978,6 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
                 "member": "Member is required."
             })
 
-        # -----------------------------------------------------
-        # ALREADY DECEASED (only on create, not on update)
-        # -----------------------------------------------------
-
         if member.expired and not is_update:
             raise serializers.ValidationError({
                 "member": "Member is already marked as deceased."
@@ -3889,7 +3986,6 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
         # -----------------------------------------------------
         # DATES
         # -----------------------------------------------------
-
         died_on = data.get("died_on") or (
             instance.died_on if instance else None
         )
@@ -3898,37 +3994,18 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
             instance.funeral_on if instance else None
         )
 
-        today = date.today()
-
-        # -----------------------------------------------------
-        # DATE OF DEATH
-        # Cannot be in the future.
-        # Backdating is allowed because records are often
-        # entered days or weeks after the actual death.
-        # -----------------------------------------------------
-
-        if died_on and died_on > today:
+        # ✅ SINGLE RULE: funeral cannot be before death.
+        # No upper bound. No future-date restriction.
+        if died_on and funeral_on and funeral_on < died_on:
             raise serializers.ValidationError({
-                "died_on": "Date of death cannot be in the future."
+                "funeral_on": (
+                    "Funeral date cannot be before the date of death."
+                )
             })
-
-        # -----------------------------------------------------
-        # FUNERAL DATE
-        # Cannot be in the future.
-        # -----------------------------------------------------
-
-        if funeral_on and funeral_on > today:
-            raise serializers.ValidationError({
-                "funeral_on": "Funeral date cannot be in the future."
-            })
-
-        # ✅ The checks for funeral < death and funeral > death + 4 days
-        # have been removed to allow flexible back-dating / registration.
 
         # -----------------------------------------------------
         # TOMB FEE
         # -----------------------------------------------------
-
         tomb_fee = data.get("tomb_fee") or (
             instance.tomb_fee if instance else None
         )
@@ -3942,39 +4019,25 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
                 "tomb_fee": "Tomb fee selection is required."
             })
 
-        # -----------------------------------------------------
-        # REASON OF DEATH
-        # -----------------------------------------------------
-
         if not reason_of_death or not str(reason_of_death).strip():
             raise serializers.ValidationError({
                 "reason_of_death": "Reason of death is required."
             })
 
         # -----------------------------------------------------
-        # CHURCH
+        # CHURCH / TOMB FEE CROSS-CHECK
         # -----------------------------------------------------
-
         church = (
             data.get("church")
             or (instance.church if instance else None)
         )
 
-        # -----------------------------------------------------
-        # VALIDATE TOMB FEE BELONGS TO CHURCH
-        # -----------------------------------------------------
-
         if tomb_fee and church and tomb_fee.church_id != church.id:
             raise serializers.ValidationError({
                 "tomb_fee": (
-                    "Selected tomb fee does not "
-                    "belong to this church."
+                    "Selected tomb fee does not belong to this church."
                 )
             })
-
-        # -----------------------------------------------------
-        # VALIDATE MEMBER BELONGS TO CHURCH
-        # -----------------------------------------------------
 
         if church and member.church_id != church.id:
             raise serializers.ValidationError({
@@ -3990,28 +4053,19 @@ class DeathRegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         member = validated_data.get("member")
 
-        # -----------------------------------------------------
-        # MARK MEMBER AS DECEASED
-        # -----------------------------------------------------
-
+        # Mark member as deceased
         member.expired = True
         member.is_active = False
         member.inactive_reason = "DECEASED"
         member.inactive_date = date.today()
         member.save()
 
-        # -----------------------------------------------------
-        # UPDATE SPOUSE STATUS
-        # -----------------------------------------------------
-
+        # Update spouse status
         if member.spouse:
             member.spouse.marital_status = "WIDOWED"
             member.spouse.save()
 
-        # -----------------------------------------------------
-        # CREATE DEATH REGISTER
-        # -----------------------------------------------------
-
+        # Create death register
         death = DeathRegister.objects.create(**validated_data)
 
         return death
@@ -4578,6 +4632,24 @@ class AccountLedgerMasterSerializer(serializers.ModelSerializer):
         if not value.strip():
             raise serializers.ValidationError("Ledger name cannot be empty")
         return value
+
+    # ========================================================
+    # LOCK OPENING BALANCE
+    # ========================================================
+    def update(self, instance, validated_data):
+        # Check if op_balance is being updated
+        if "op_balance" in validated_data:
+            new_balance = validated_data["op_balance"]
+            old_balance = instance.op_balance or 0.0
+
+            # If the old balance is greater than 0, block the edit
+            # unless it's just being sent back exactly as it was.
+            if old_balance > 0 and float(new_balance) != float(old_balance):
+                raise serializers.ValidationError({
+                    "op_balance": "Opening balance is already set and cannot be modified."
+                })
+
+        return super().update(instance, validated_data)
 
 class LedgerEntrySerializer(serializers.ModelSerializer):
     ledger_name = serializers.CharField(

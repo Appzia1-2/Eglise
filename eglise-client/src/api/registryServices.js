@@ -1147,3 +1147,13 @@ export const getSubscriptionDueReport = (params = {}) =>
 
 export const getSubscriptionPaidReport = (params = {}) =>
   apiClient.get("/api/registry/reports/subscription-paid/", { params });
+
+export const getReceiptPaymentReport = (params = {}) =>
+  apiClient.get("/api/registry/reports/receipt-payment/", { params });
+
+
+// ============================================================
+// DASHBOARD METRICS
+// ============================================================
+export const getDashboardMetrics = () =>
+  apiClient.get("/api/registry/church/dashboard-metrics/");

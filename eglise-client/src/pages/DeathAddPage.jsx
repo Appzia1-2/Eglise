@@ -308,7 +308,9 @@ const DeathAddPage = () => {
   };
 
   // ==========================================================
-  // VALIDATION (Date conditions removed)
+  // VALIDATION
+  // Only rule: funeral cannot be before death.
+  // No future-date restriction.
   // ==========================================================
 
   const validateForm = () => {
@@ -330,7 +332,15 @@ const DeathAddPage = () => {
       errors.funeral_on = "Date of funeral is required.";
     }
 
-    // ❌ REMOVED: Check for funeral_on < died_on
+    // ✅ Only rule: funeral cannot be before death
+    if (
+      formData.died_on &&
+      formData.funeral_on &&
+      formData.funeral_on < formData.died_on
+    ) {
+      errors.funeral_on =
+        "Funeral date cannot be before the date of death.";
+    }
 
     if (!formData.tomb_type) {
       errors.tomb_type = "Tomb type is required.";
@@ -417,6 +427,10 @@ const DeathAddPage = () => {
 
       console.error("HTTP status:", error?.response?.status);
       console.error("Backend response:", responseData);
+      console.error(
+        "Backend JSON:",
+        JSON.stringify(responseData, null, 2)
+      );
 
       if (responseData && typeof responseData === "object") {
         const normalizedErrors = {};

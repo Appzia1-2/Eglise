@@ -180,17 +180,53 @@ const formatDateForInput = (date) => {
 
 
 // ============================================================
-// ACTIVE STATUS
+// PRIEST STATUS — derived from dates, not from is_active alone
 // ============================================================
 
-const isActivePriest = (priest) => {
-  return (
-    priest?.is_active === true ||
-    priest?.is_active === 1 ||
-    priest?.is_active === "true" ||
-    priest?.is_active === "1"
-  );
+const getPriestStatus = (priest) => {
+  if (!priest) {
+    return "PREVIOUS";
+  }
+
+  // Manually archived / disabled
+  if (
+    priest.is_active === false ||
+    priest.is_active === 0 ||
+    priest.is_active === "false" ||
+    priest.is_active === "0"
+  ) {
+    return "PREVIOUS";
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const parse = (value) => {
+    if (!value) {
+      return null;
+    }
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+
+  const from = parse(priest.date_from || priest.serving_from);
+  const to = parse(priest.date_to || priest.serving_to);
+
+  if (from && from > today) {
+    return "UPCOMING";
+  }
+
+  if (from && from <= today && (!to || to >= today)) {
+    return "CURRENT";
+  }
+
+  return "PREVIOUS";
 };
+
+// NOTE: this file historically uses the name `isActivePriest`.
+// Keep it — the call site below depends on it.
+const isActivePriest = (priest) =>
+  getPriestStatus(priest) === "CURRENT";
 
 
 // ============================================================
@@ -685,7 +721,6 @@ const EditPriestPage = () => {
     ) {
       newErrors.date_to =
         "Serving to date cannot be before serving from date.";
-      // don't push to `missing` — it's a rule error, not a missing field
     }
 
     if (!form.address_line1.trim()) {
@@ -728,7 +763,6 @@ const EditPriestPage = () => {
     const { errors: validationErrors, missing, valid } = validate();
 
     if (!valid) {
-      // Prefer explicit rule errors over missing-fields list
       const explicitMessages = Object.entries(validationErrors)
         .filter(([key]) => !missing.includes(FIELD_LABELS[key]))
         .map(([, msg]) => msg);

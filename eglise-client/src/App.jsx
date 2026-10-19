@@ -30,20 +30,18 @@ import RelationshipAddPage from "./pages/RelationshipAddPage";
 import RelationshipViewPage from "./pages/RelationshipViewPage";
 import RelationshipEditPage from "./pages/RelationshipEditPage";
 
-// import MembersPage from "./pages/MembersPage";
-// import MemberDetailsPage from "./pages/MemberDetailsPage";
 import FamilyHeadDashboard from "./pages/FamilyHeadDashboard";
 
 // Family Head Pages
-import RegisterFamilyHeadPage from "./pages/RegisterFamilyHeadPage"; // 2-step form
-import FamilyHeadDetailsPage from "./pages/FamilyHeadDetailsPage"; // View + Edit button
-import EditFamilyHeadPage from "./pages/Editfamilyheadpage"; // Full edit form
+import RegisterFamilyHeadPage from "./pages/RegisterFamilyHeadPage";
+import FamilyHeadDetailsPage from "./pages/FamilyHeadDetailsPage";
+import EditFamilyHeadPage from "./pages/Editfamilyheadpage";
 
 // Member Pages
-import MemberListUnderHeadPage from "./pages/MemberListUnderHeadPage"; // List members of a head
-import AddMemberPage from "./pages/AddMemberPage"; // Create member under head
-import EditMemberPage from "./pages/EditMemberPage"; // Edit member
-import MemberDetailPage from "./pages/MemberDetailPage"; // View member details
+import MemberListUnderHeadPage from "./pages/MemberListUnderHeadPage";
+import AddMemberPage from "./pages/AddMemberPage";
+import EditMemberPage from "./pages/EditMemberPage";
+import MemberDetailPage from "./pages/MemberDetailPage";
 import FamilyHeadPrintPreviewPage from "./pages/FamilyHeadPrintPreviewPage";
 
 import HeadlessHouseMembersPage from "./pages/HeadlessHouseMembersPage";
@@ -94,7 +92,6 @@ import EventsPage from "./pages/EventsPage";
 import EventsAddPage from "./pages/EventsAddPage";
 import EventsEditPage from "./pages/EventsEditPage";
 
-// import DiocesePage from "./pages/DiocesePage";
 import OfferingPage from "./pages/OfferingPage";
 import OfferingAddPage from "./pages/OfferingAddPage";
 import OfferingEditPage from "./pages/OfferingEditPage";
@@ -121,7 +118,6 @@ import AccountLedgerPage from "./pages/AccountLedgerPage";
 import AccountLedgerAddPage from "./pages/Accountledgeraddpage";
 import AccountLedgerEditPage from "./pages/Accountledgereditpage";
 import AccountLedgerViewPage from "./pages/Accountledgerviewpage";
-// import AccountLedgerTransactionsPage from "./pages/AccountLedgerTransactionsPage";
 
 // =========================================================
 // PAYMENT ROUTES — redesigned (List + Add + Edit)
@@ -129,7 +125,6 @@ import AccountLedgerViewPage from "./pages/Accountledgerviewpage";
 import PaymentListPage from "./pages/PaymentListPage";
 import AddPaymentPage from "./pages/AddPaymentPage";
 import PaymentDetailPage from "./pages/PaymentDetailPage";
-// import PaymentPage from "./pages/PaymentPage"; // legacy — kept for rollback
 
 import QurbanaReceiptsPage from "./pages/QurbanaReceiptsPage";
 import CommitteePage from "./pages/CommitteePage";
@@ -138,7 +133,6 @@ import CommitteeEditPage from "./pages/CommitteeEditPage";
 import CommitteeViewPage from "./pages/CommitteeViewPage";
 import CommitteePrintPage from "./pages/CommitteePrintPage";
 
-// import CommitteeMemberPage from "./pages/CommitteeMemberPage";
 import CommitteeListReportPage from "./pages/CommitteeListReportPage";
 import MemberDirectoryPage from "./pages/MemberDirectoryPage";
 import MemberAgeWisePage from "./pages/MemberAgeWisePage";
@@ -177,6 +171,7 @@ import IncomeExpenditurePage from "./pages/reports/IncomeExpenditurePage";
 import SubscriptionDueListPage from "./pages/reports/SubscriptionDueListPage";
 import SubscriptionPaidListPage from "./pages/reports/SubscriptionPaidListPage";
 import DonationRegisterPage from "./pages/reports/DonationRegisterPage";
+import ReceiptPaymentPage from "./pages/reports/ReceiptPaymentPage"; // ✅ New Import
 
 import ForcePasswordChange from "./components/ForcePasswordChange";
 
@@ -199,7 +194,6 @@ function App() {
             CHURCH/USER ROUTES
         ========================================================= */}
         <Route path="/" element={<LoginPage />} />
-        {/* Old /login links still work, but the URL goes back to the clean root */}
         <Route path="/login" element={<Navigate to="/" replace />} />
         <Route
           path="/change-password"
@@ -366,7 +360,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* IMPORTANT: Headless routes MUST come BEFORE the :headId route */}
         <Route
           path="/family-heads/headless"
           element={
@@ -419,7 +412,6 @@ function App() {
         {/* =========================================================
             MEMBERS UNDER FAMILY HEAD
         ========================================================= */}
-        {/* List members under a head */}
         <Route
           path="/family-heads/:headId/members"
           element={
@@ -428,7 +420,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* Create new member under a head */}
         <Route
           path="/family-heads/:headId/members/create"
           element={
@@ -437,7 +428,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* View member details */}
         <Route
           path="/family-heads/:headId/members/:memberId"
           element={
@@ -446,7 +436,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* Edit member */}
         <Route
           path="/family-heads/:headId/members/:memberId/edit"
           element={
@@ -743,14 +732,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* <Route
-          path="/dioceses"
-          element={
-            <ProtectedRoute>
-              <DiocesePage />
-            </ProtectedRoute>
-          }
-        /> */}
 
         {/* =========================================================
             OFFERINGS
@@ -815,7 +796,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* Keep old singular path working (redirect) */}
         <Route path="/visitor" element={<Navigate to="/visitors" replace />} />
 
         {/* =========================================================
@@ -917,14 +897,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* <Route
-          path="/account-ledgers/:id/transactions"
-          element={
-            <ProtectedRoute>
-              <AccountLedgerTransactionsPage />
-            </ProtectedRoute>
-          }
-        /> */}
 
         {/* =========================================================
             PAYMENTS — redesigned
@@ -1013,14 +985,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* <Route
-          path="/committee-members"
-          element={
-            <ProtectedRoute>
-              <CommitteeMemberPage />
-            </ProtectedRoute>
-          }
-        /> */}
         <Route
           path="/member-directory"
           element={
@@ -1370,10 +1334,19 @@ function App() {
           }
         />
 
+        {/* ✅ NEW: Receipts & Payments Combined Report */}
+        <Route
+          path="/reports/receipts-payments"
+          element={
+            <ProtectedRoute>
+              <ReceiptPaymentPage />
+            </ProtectedRoute>
+          }
+        />
+
         {/* =========================================================
             FALLBACK
         ========================================================= */}
-        {/* Unknown URLs go to the login page at the root */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 

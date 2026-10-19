@@ -2,6 +2,7 @@ from datetime import date
 from decimal import Decimal
 from .models import Member, Package
 from django.db import transaction
+from django.db.models import Q
 
 # =====================================================
 # CONSTANTS
@@ -43,7 +44,6 @@ def get_rate(package, billing_cycle, *, upgrade=False):
     return Decimal(rate)
 
 
-
 def get_capacity(subscription_or_package, custom_capacity=None) -> Decimal:
     """
     Resolves member capacity safely
@@ -83,9 +83,6 @@ def calculate_new_bill_amount(package, billing_cycle, capacity) -> Decimal:
 # =====================================================
 # PRORATED UPGRADE
 # =====================================================
-from decimal import Decimal
-from datetime import date
-
 
 def calculate_prorated_upgrade_amount(
     subscription,
@@ -143,13 +140,13 @@ def calculate_prorated_upgrade_amount(
         old_rate = get_rate(
             subscription.package,
             subscription.billing_cycle,
-            upgrade=False,   # BASE rate
+            upgrade=False,
         )
     else:
         old_rate = get_rate(
             subscription.package,
             subscription.billing_cycle,
-            upgrade=True,    # UPGRADE rate
+            upgrade=True,
         )
 
     if old_rate is None:
@@ -194,7 +191,7 @@ def calculate_prorated_upgrade_amount(
                 "type": "UPGRADE",
                 "mode": "MONTH_BASED",
                 "months_used": months_used,
-                "members": int(new_capacity), 
+                "members": int(new_capacity),
                 "remaining_months": remaining_months,
                 "old_rate": float(old_rate),
                 "upgrade_rate": float(upgrade_rate),
@@ -225,7 +222,7 @@ def calculate_prorated_upgrade_amount(
             "type": "UPGRADE",
             "mode": "MONTH_BASED",
             "months_used": months_used,
-            "members": int(new_capacity), 
+            "members": int(new_capacity),
             "remaining_months": remaining_months,
             "old_rate": float(old_rate),
             "upgrade_rate": float(upgrade_rate),
@@ -238,8 +235,6 @@ def calculate_prorated_upgrade_amount(
             ),
         },
     }
-
-
 
 
 def calculate_package_pricing(package, billing_cycle):
@@ -277,7 +272,6 @@ def calculate_package_pricing(package, billing_cycle):
     }
 
 
-
 # =====================================================
 # SUBSCRIPTION CHECKS
 # =====================================================
@@ -289,11 +283,6 @@ def can_add_member(church):
     Returns
     -------
     (allowed: bool, message: str | None, info: dict)
-
-    info keys:
-        current   -> int   (active family heads)
-        limit     -> int   (package slot limit)
-        remaining -> int
     """
     subscription = getattr(church, "subscription", None)
 
@@ -325,11 +314,6 @@ def can_add_member(church):
 
     # --------------------------------------------------
     # Count only ACTIVE FAMILY HEADS
-    #
-    # Package capacity limits the number of HOUSEHOLDS
-    # (family heads), not the total number of individual
-    # members. Dependents, spouses, and children are
-    # free — they don't consume package slots.
     # --------------------------------------------------
     current_count = church.members.filter(
         is_family_head=True,
@@ -353,6 +337,7 @@ def can_add_member(church):
         {"current": current_count, "limit": limit, "remaining": remaining},
     )
 
+
 # =====================================================
 # UPGRADE SUGGESTIONS
 # =====================================================
@@ -365,14 +350,6 @@ def get_next_subscription_action(church):
 
     package = subscription.package
 
-    # --------------------------------------------------
-    # Count only ACTIVE FAMILY HEADS
-    #
-    # Package capacity limits the number of HOUSEHOLDS
-    # (family heads), not the total number of individual
-    # members. Dependents, spouses, and children are free
-    # and do not consume package slots.
-    # --------------------------------------------------
     members = church.members.filter(
         is_family_head=True,
         is_active=True,
@@ -415,18 +392,15 @@ def get_next_subscription_action(church):
     }
 
 
-
-
-#death
-from django.db.models import Q
+# =====================================================
+# DEATH
+# =====================================================
 
 @transaction.atomic
 def handle_member_death(member):
-
     if member.expired:
         return
 
-    # 🔥 If head → remove head
     if member.is_family_head:
         member.is_family_head = False
 
@@ -434,19 +408,16 @@ def handle_member_death(member):
             member.user.is_active = False
             member.user.save(update_fields=["is_active"])
 
-    # 🔥 Find spouse from BOTH sides (IMPORTANT FIX)
     spouse = Member.objects.filter(
         Q(spouse=member) | Q(pk=member.spouse_id)
     ).first()
 
-    # 2️⃣ Mark member dead
     member.expired = True
     member.is_active = False
     member.inactive_reason = "DECEASED"
     member.inactive_date = date.today()
     member.save()
 
-    # 3️⃣ Handle spouse correctly
     if spouse:
         spouse.marital_status = "WIDOWED"
         spouse.spouse = None
@@ -455,54 +426,147 @@ def handle_member_death(member):
         member.spouse = None
         member.save(update_fields=["spouse"])
 
-#Reo settings
-from django.db import transaction
-from .models import RegisterSetting
+
+# =====================================================
+# REGISTER / FOLIO NUMBERING
+# =====================================================
+#
+# ✅ FIXES APPLIED
+#
+# 1. Padding fallbacks (`or 4`) — prevents TypeError when
+#    RegisterSetting was created with padding=None.
+#
+# 2. Prefix / suffix defaulted to "" (never None) so the
+#    generated number never contains the literal string "None".
+#
+# 3. select_for_update() is used, and the get_or_create
+#    fallback seeds a sensible default setting so a fresh
+#    church never produces a bare "0001" with no prefix.
+#
+# 4. Both functions are wrapped in transaction.atomic() so
+#    the counter bump commits together with whatever the
+#    caller inserts afterwards — PROVIDED the caller also
+#    wraps its own create() in transaction.atomic() (this
+#    is enforced in the views).
+# =====================================================
+
+# Default prefix / padding per register type, used when
+# get_or_create has to create a RegisterSetting from scratch.
+DEFAULT_REGISTER_FORMATS = {
+    "HEAD":        {"prefix": "FH-",  "padding": 4},
+    "BAPTISM":     {"prefix": "BAP-", "padding": 4},
+    "MARRIAGE":    {"prefix": "MAR-", "padding": 4},
+    "DEATH":       {"prefix": "DEA-", "padding": 4},
+    "CERTIFICATE": {"prefix": "CERT-", "padding": 4},
+}
 
 
 def generate_register_number(church, register_type):
+    from .models import RegisterSetting
+
+    defaults = DEFAULT_REGISTER_FORMATS.get(
+        register_type,
+        {"prefix": "", "padding": 4},
+    )
 
     with transaction.atomic():
 
-        setting, created = RegisterSetting.objects.select_for_update().get_or_create(
-            church=church,
-            register_type=register_type
+        setting, _created = (
+            RegisterSetting.objects
+            .select_for_update()
+            .get_or_create(
+                church=church,
+                register_type=register_type,
+                defaults={
+                    "register_prefix": defaults["prefix"],
+                    "register_padding": defaults["padding"],
+                    "next_register_number": 1,
+                },
+            )
         )
 
-        number = setting.next_register_number
-
+        number = setting.next_register_number or 1
         prefix = setting.register_prefix or ""
         suffix = setting.register_suffix or ""
+        padding = setting.register_padding or 4
 
-        padded_number = str(number).zfill(setting.register_padding)
-
+        padded_number = str(number).zfill(padding)
         reg_no = f"{prefix}{padded_number}{suffix}"
 
-        setting.next_register_number += 1
+        setting.next_register_number = number + 1
         setting.save(update_fields=["next_register_number"])
 
         return reg_no
-    
+
+
 def generate_folio_number(church):
+    from .models import RegisterSetting
 
     with transaction.atomic():
 
-        setting = RegisterSetting.objects.select_for_update().get(
-            church=church,
-            register_type="HEAD"
+        setting, _created = (
+            RegisterSetting.objects
+            .select_for_update()
+            .get_or_create(
+                church=church,
+                register_type="HEAD",
+                defaults={
+                    "register_prefix": "FH-",
+                    "register_padding": 4,
+                    "folio_prefix": "FO-",
+                    "folio_padding": 4,
+                    "next_register_number": 1,
+                    "next_folio_number": 1,
+                },
+            )
         )
 
-        number = setting.next_folio_number
-
+        number = setting.next_folio_number or 1
         prefix = setting.folio_prefix or ""
         suffix = setting.folio_suffix or ""
+        padding = setting.folio_padding or 4
 
-        padded_number = str(number).zfill(setting.folio_padding)
-
+        padded_number = str(number).zfill(padding)
         folio_no = f"{prefix}{padded_number}{suffix}"
 
-        setting.next_folio_number += 1
-
+        setting.next_folio_number = number + 1
         setting.save(update_fields=["next_folio_number"])
 
         return folio_no
+
+
+def reseal_vicar_windows(church):
+    from .models import Priest
+    from datetime import timedelta
+
+    mains = list(
+        Priest.objects.filter(
+            church=church,
+            designation="MAIN",
+            date_from__isnull=False,
+        ).order_by("date_from", "id")
+    )
+
+    if not mains:
+        return
+
+    updates = []
+
+    for i in range(len(mains) - 1):
+        current = mains[i]
+        next_vicar = mains[i + 1]
+
+        if current.date_to is not None:
+            continue
+
+        desired_end = next_vicar.date_from - timedelta(days=1)
+
+        if current.date_from and desired_end < current.date_from:
+            desired_end = current.date_from
+
+        current.date_to = desired_end
+        current.is_active = False
+        updates.append(current)
+
+    if updates:
+        Priest.objects.bulk_update(updates, ["date_to", "is_active"])
