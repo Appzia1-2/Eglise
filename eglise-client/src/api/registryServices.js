@@ -1157,3 +1157,22 @@ export const getReceiptPaymentReport = (params = {}) =>
 // ============================================================
 export const getDashboardMetrics = () =>
   apiClient.get("/api/registry/church/dashboard-metrics/");
+
+
+// ============================================================
+// CONTRA (Cash ↔ Bank transfers)
+// ============================================================
+export const listContra = (params = {}) =>
+  apiClient.get("/api/registry/contra/", { params });
+
+export const getContra = (id) =>
+  apiClient.get(`/api/registry/contra/${id}/`);
+
+export const createContra = (data) =>
+  apiClient.post("/api/registry/contra/", data);
+
+export const updateContra = (id, data) =>
+  apiClient.patch(`/api/registry/contra/${id}/`, data);
+
+export const cancelContra = (id, data) =>
+  apiClient.post(`/api/registry/contra/${id}/cancel/`, data);

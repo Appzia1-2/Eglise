@@ -1,7 +1,7 @@
 from datetime import date
 
 from rest_framework import serializers
-from .models import Baptism, Bill, Church, DeathRegister, Designation, DheshaKuri, Diocese, Events,ReceiptMaster, ReceiptLine, LedgerEntry,  Grade,BankAccount, Priest,  RegisterSetting, Relationship, TombFee, TombType, UpgradeRequest,  Ward, Family, Member, Offering, VisitorMaster, Subscription, AccountGroupMaster, AccountLedgerMaster, PaymentMaster,  QurbanaReceipts, CommitteeMaster, LegacyBaptism, LegacyMarriage, LegacyDeath
+from .models import Baptism, Bill, Church, DeathRegister, Designation, DheshaKuri, Diocese, Events,ReceiptMaster, ContraMaster,  ReceiptLine, LedgerEntry,  Grade,BankAccount, Priest,  RegisterSetting, Relationship, TombFee, TombType, UpgradeRequest,  Ward, Family, Member, Offering, VisitorMaster, Subscription, AccountGroupMaster, AccountLedgerMaster, PaymentMaster,  QurbanaReceipts, CommitteeMaster, LegacyBaptism, LegacyMarriage, LegacyDeath
 from .services import can_add_member, generate_folio_number, generate_register_number
 from rest_framework import serializers
 from .models import Package
@@ -4675,6 +4675,11 @@ class LedgerEntrySerializer(serializers.ModelSerializer):
         read_only=True,
         allow_null=True,
     )
+    contra_voucher = serializers.CharField(
+        source="contra.voucher_number",
+        read_only=True,
+        allow_null=True,
+    )
     running_balance = serializers.SerializerMethodField()
 
     class Meta:
@@ -4694,6 +4699,8 @@ class LedgerEntrySerializer(serializers.ModelSerializer):
             "payment_voucher",
             "receipt",
             "receipt_voucher",
+            "contra",                # ← ADD THIS
+            "contra_voucher",        # ← ADD THIS
             "is_cancelled",
             "is_reversal",
             "reversed_entry",
@@ -4704,6 +4711,7 @@ class LedgerEntrySerializer(serializers.ModelSerializer):
             "church",
             "payment",
             "receipt",
+            "contra",                # ← ADD THIS
             "is_cancelled",
             "is_reversal",
             "reversed_entry",
@@ -5703,4 +5711,100 @@ class ReceiptCancelSerializer(serializers.Serializer):
                 "in the audit history."
             )
         return value
-    
+
+
+# ----------------------------------------------------Contra--------------------------------------------------------------------
+
+
+class ContraMasterSerializer(serializers.ModelSerializer):
+    from_ledger_name = serializers.CharField(
+        source="from_ledger.ledger_name", read_only=True
+    )
+    to_ledger_name = serializers.CharField(
+        source="to_ledger.ledger_name", read_only=True
+    )
+    contra_type_label = serializers.CharField(
+        source="get_contra_type_display", read_only=True
+    )
+    cancel_reason_label = serializers.CharField(
+        source="get_cancel_reason_display", read_only=True, allow_null=True
+    )
+    status_label = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ContraMaster
+        fields = [
+            "id",
+            "voucher_number",
+            "contra_date",
+            "ref_no",
+            "contra_type",
+            "contra_type_label",
+            "from_ledger", "from_ledger_name",
+            "to_ledger", "to_ledger_name",
+            "from_bank_account", "to_bank_account",
+            "amount",
+            "narration",
+            "is_cancelled", "cancel_reason", "cancel_reason_label",
+            "cancel_remarks", "cancelled_at",
+            "status_label",
+            "created_at", "updated_at",
+        ]
+        read_only_fields = (
+            "voucher_number",
+            "is_cancelled", "cancel_reason", "cancel_remarks", "cancelled_at",
+            "created_at", "updated_at",
+        )
+
+    def get_status_label(self, obj):
+        return "Cancelled" if obj.is_cancelled else "Posted"
+
+    def validate_amount(self, value):
+        if value is None or value <= 0:
+            raise serializers.ValidationError("Amount must be greater than zero.")
+        return value
+
+    def validate(self, data):
+        church = self.context.get("church")
+
+        from_ledger = data.get("from_ledger")
+        to_ledger = data.get("to_ledger")
+
+        if from_ledger and to_ledger and from_ledger.id == to_ledger.id:
+            raise serializers.ValidationError(
+                {"to_ledger": "Source and destination ledgers must be different."}
+            )
+
+        # Both sides must be ASSET ledgers (cash/bank). This is what makes
+        # it a contra and not an income/expense transaction.
+        for ledger, field in ((from_ledger, "from_ledger"), (to_ledger, "to_ledger")):
+            if ledger and (ledger.ledger_nature or "").upper() != "ASSET":
+                raise serializers.ValidationError({
+                    field: "Contra is only allowed between Asset (Cash/Bank) ledgers."
+                })
+
+        if church:
+            for ledger, field in ((from_ledger, "from_ledger"), (to_ledger, "to_ledger")):
+                if ledger and ledger.church_id != church.id:
+                    raise serializers.ValidationError({
+                        field: "Ledger does not belong to this church."
+                    })
+
+        return data
+
+    def create(self, validated_data):
+        validated_data["church"] = self.context["church"]
+        return super().create(validated_data)
+
+
+class ContraCancelSerializer(serializers.Serializer):
+    cancel_reason = serializers.ChoiceField(choices=ContraMaster.CANCEL_REASON_CHOICES)
+    cancel_remarks = serializers.CharField(required=True, allow_blank=False)
+    acknowledge = serializers.BooleanField()
+
+    def validate_acknowledge(self, value):
+        if not value:
+            raise serializers.ValidationError(
+                "You must acknowledge that this record will remain in the audit history."
+            )
+        return value

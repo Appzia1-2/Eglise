@@ -26,7 +26,7 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import ReportFilterBar from "../components/ReportFilterBar";
 import ReportLedgerTable from "../components/ReportLedgerTable";
-import GeneralLedgerPrintView from "../components/GeneralLedgerPrintView";
+import ChurchPrintModal from "../components/ChurchPrintModal";
 
 import { toaster } from "../components/ui/toaster";
 import {
@@ -56,72 +56,39 @@ const toNumber = (v) => {
 };
 
 // ------------------------------------------------------------
-// Group flat LedgerEntry rows into one row per voucher.
+// Group LedgerEntry rows — now includes CONTRA support
 // ------------------------------------------------------------
 const groupLedgerEntries = (entries) => {
-  const groups = new Map();
+  return entries
+    .filter((e) => !e.is_cancelled)
+    .map((e) => {
+      const voucherNo =
+        e.receipt_voucher || e.payment_voucher || e.contra_voucher || null;
 
-  entries.forEach((e) => {
-    if (e.is_cancelled) return;
+      const voucherType = e.receipt_voucher
+        ? "Receipt"
+        : e.payment_voucher
+        ? "Payment"
+        : e.contra_voucher
+        ? "Contra"
+        : "Journal";
 
-    const voucherNo = e.receipt_voucher || e.payment_voucher || null;
-    const voucherType = e.receipt_voucher
-      ? "Receipt"
-      : e.payment_voucher
-      ? "Payment"
-      : "Journal";
+      const amt = toNumber(e.amount);
+      const isDebit = e.entry_type === "DEBIT";
 
-    const key = voucherNo
-      ? `${voucherType}|${voucherNo}|${e.entry_date}`
-      : `ORPHAN|${e.id}`;
-
-    if (!groups.has(key)) {
-      groups.set(key, {
-        key,
+      return {
+        key: e.id,
         date: e.entry_date,
         voucherNo: voucherNo || "—",
         voucherType,
-        particulars: "",
-        account: "",
-        narration: e.narration || "",
-        amount: 0,
-        direction: "DEBIT",
-        debit: 0,
-        credit: 0,
-        _entries: [],
-      });
-    }
-
-    const g = groups.get(key);
-    g._entries.push(e);
-
-    const amt = toNumber(e.amount);
-    if (e.entry_type === "DEBIT") {
-      g.debit += amt;
-      g.amount = g.debit;
-      g.direction = "DEBIT";
-    } else if (e.entry_type === "CREDIT") {
-      g.credit += amt;
-    }
-
-    if (!g.particulars && e.narration) g.particulars = e.narration;
-    if (!g.account && e.ledger_name) g.account = e.ledger_name;
-  });
-
-  return Array.from(groups.values()).map((g) => {
-    if (!g.particulars) g.particulars = g.account || "—";
-    delete g._entries;
-    return g;
-  });
+        particulars: e.narration || "—",
+        account: e.ledger_name,
+        amount: amt,
+        direction: isDebit ? "DEBIT" : "CREDIT",
+      };
+    });
 };
 
-// ------------------------------------------------------------
-// Searchable Ledger Picker
-//
-// Click the box → search input opens with a dropdown list.
-// Type to filter. Click a row to select. Esc / outside click
-// closes without changing the selection.
-// ------------------------------------------------------------
 const SearchableLedgerPicker = ({
   ledgers,
   value,
@@ -133,9 +100,7 @@ const SearchableLedgerPicker = ({
   const containerRef = useRef(null);
   const inputRef = useRef(null);
 
-  const selectedLedger = ledgers.find(
-    (l) => String(l.id) === String(value)
-  );
+  const selectedLedger = ledgers.find((l) => String(l.id) === String(value));
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -147,7 +112,6 @@ const SearchableLedgerPicker = ({
     });
   }, [ledgers, query]);
 
-  // Close on outside click
   useEffect(() => {
     const handler = (e) => {
       if (
@@ -162,7 +126,6 @@ const SearchableLedgerPicker = ({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Focus the input when opening
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 0);
@@ -291,8 +254,7 @@ const SearchableLedgerPicker = ({
             </Box>
           ) : (
             filtered.map((l) => {
-              const isSelected =
-                String(l.id) === String(value);
+              const isSelected = String(l.id) === String(value);
               return (
                 <Box
                   key={l.id}
@@ -334,6 +296,168 @@ const SummaryCell = ({ label, value, color }) => (
   </Box>
 );
 
+const GeneralLedgerPrintTable = ({
+  rows,
+  ledgerName,
+  openingBalance,
+  totals,
+  closingBalance,
+}) => {
+  const fmt = (n) =>
+    Number(n || 0).toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+  const thStyle = {
+    border: "1px solid #F0C2C2",
+    padding: "10px 8px",
+    background: "#FCEAEC",
+    color: "#8B1A1A",
+    fontWeight: "bold",
+    fontSize: "13px",
+    fontFamily: "'Georgia', serif",
+    textAlign: "left",
+  };
+
+  const tdStyle = {
+    border: "1px solid #F0C2C2",
+    padding: "10px 8px",
+    fontSize: "13px",
+    color: "#333",
+    fontFamily: "'Georgia', serif",
+    verticalAlign: "top",
+  };
+
+  const numStyle = { ...tdStyle, textAlign: "right" };
+
+  return (
+    <Box fontFamily="'Georgia', serif">
+      {ledgerName && (
+        <Box mb={4} textAlign="center">
+          <Text fontSize="16px" fontWeight="bold" color="#8B1A1A">
+            Ledger: {ledgerName}
+          </Text>
+        </Box>
+      )}
+
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead>
+          <tr>
+            <th style={thStyle}>Date</th>
+            <th style={thStyle}>Voucher Number</th>
+            <th style={thStyle}>Particulars</th>
+            <th style={{ ...thStyle, textAlign: "right" }}>Credit (₹)</th>
+            <th style={{ ...thStyle, textAlign: "right" }}>Debit (₹)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style={{ background: "#FFF5F5" }}>
+            <td
+              colSpan={3}
+              style={{ ...tdStyle, fontWeight: "bold", color: "#8B1A1A" }}
+            >
+              Opening Balance
+            </td>
+            <td
+              style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}
+            >
+              ₹{fmt(openingBalance)}
+            </td>
+            <td style={{ ...numStyle, color: "#8B1A1A" }}>—</td>
+          </tr>
+
+          {rows.length === 0 ? (
+            <tr>
+              <td
+                colSpan={5}
+                style={{
+                  ...tdStyle,
+                  textAlign: "center",
+                  fontStyle: "italic",
+                  color: "#A05050",
+                }}
+              >
+                No transactions for the selected period.
+              </td>
+            </tr>
+          ) : (
+            rows.map((r, i) => (
+              <tr
+                key={r.key}
+                style={{
+                  background: i % 2 === 0 ? "#FFFFFF" : "#FFF9F9",
+                }}
+              >
+                <td style={tdStyle}>{r.date}</td>
+                <td style={tdStyle}>{r.voucherNo}</td>
+                <td style={{ ...tdStyle, color: "#8B1A1A" }}>
+                  {r.particulars}
+                </td>
+                <td style={{ ...numStyle, color: "#8B1A1A" }}>
+                  {r.direction === "CREDIT" ? `₹${fmt(r.amount)}` : "—"}
+                </td>
+                <td style={{ ...numStyle, color: "#8B1A1A" }}>
+                  {r.direction === "DEBIT" ? `₹${fmt(r.amount)}` : "—"}
+                </td>
+              </tr>
+            ))
+          )}
+
+          <tr
+            style={{
+              background: "#FCEAEC",
+              borderTop: "1px solid #F0C2C2",
+            }}
+          >
+            <td
+              colSpan={3}
+              style={{
+                ...tdStyle,
+                textAlign: "right",
+                fontWeight: "bold",
+                color: "#8B1A1A",
+              }}
+            >
+              Total
+            </td>
+            <td
+              style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}
+            >
+              ₹{fmt(totals.credit)}
+            </td>
+            <td
+              style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}
+            >
+              ₹{fmt(totals.debit)}
+            </td>
+          </tr>
+
+          <tr style={{ background: "#FFF5F5" }}>
+            <td
+              colSpan={3}
+              style={{
+                ...tdStyle,
+                textAlign: "right",
+                fontWeight: "bold",
+                color: "#8B1A1A",
+              }}
+            >
+              Closing Balance
+            </td>
+            <td
+              style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}
+            >
+              ₹{fmt(closingBalance)}
+            </td>
+            <td style={{ ...numStyle, color: "#8B1A1A" }}>—</td>
+          </tr>
+        </tbody>
+      </table>
+    </Box>
+  );
+};
+
 const GeneralLedgerPage = () => {
   const navigate = useNavigate();
 
@@ -353,9 +477,8 @@ const GeneralLedgerPage = () => {
   const [closing, setClosing] = useState(0);
 
   const [church, setChurch] = useState({ name: "", address: "" });
-  const [showPrint, setShowPrint] = useState(false);
+  const [isPrintOpen, setIsPrintOpen] = useState(false);
 
-  /* Load church info once */
   useEffect(() => {
     const fetchChurch = async () => {
       try {
@@ -376,7 +499,6 @@ const GeneralLedgerPage = () => {
     fetchChurch();
   }, []);
 
-  /* Load ledger list */
   useEffect(() => {
     const loadLedgers = async () => {
       try {
@@ -393,7 +515,6 @@ const GeneralLedgerPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* Load entries when ledger or filters change */
   useEffect(() => {
     if (!ledgerId) return;
 
@@ -432,7 +553,6 @@ const GeneralLedgerPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ledgerId, dateFrom, dateTo]);
 
-  /* Rows */
   const rows = useMemo(() => {
     let grouped = groupLedgerEntries(rawEntries);
 
@@ -458,9 +578,10 @@ const GeneralLedgerPage = () => {
 
   const totals = useMemo(() => {
     return {
-      moneyIn: toNumber(totDebit),
-      moneyOut: toNumber(totCredit),
-      net: toNumber(totDebit) - toNumber(totCredit),
+      credit: toNumber(totCredit),
+      debit: toNumber(totDebit),
+      moneyIn: toNumber(totCredit),
+      moneyOut: toNumber(totDebit),
     };
   }, [totDebit, totCredit]);
 
@@ -486,21 +607,6 @@ const GeneralLedgerPage = () => {
 
   return (
     <>
-      <style>{`
-        @media print {
-          body * { visibility: hidden !important; }
-          .generalledger-print,
-          .generalledger-print * { visibility: visible !important; }
-          .generalledger-print {
-            position: absolute !important;
-            left: 0; top: 0;
-            width: 210mm;
-            min-height: 297mm;
-          }
-          @page { size: A4 portrait; margin: 0; }
-        }
-      `}</style>
-
       <Box minH="100vh" bg="white" display="flex" flexDirection="column">
         <Navbar />
 
@@ -528,11 +634,7 @@ const GeneralLedgerPage = () => {
               <Text fontSize="10px" fontWeight="700" color={RED} mb={1}>
                 GENERAL LEDGER REPORT
               </Text>
-              <Heading
-                color={DARK}
-                fontSize={{ base: "22px", md: "26px" }}
-                mb={1}
-              >
+              <Heading color={DARK} fontSize={{ base: "22px", md: "26px" }} mb={1}>
                 General Ledger
               </Heading>
               <Text color={MUTED} fontSize="11px">
@@ -550,13 +652,11 @@ const GeneralLedgerPage = () => {
                 px={4}
                 fontSize="12px"
                 borderRadius="6px"
-                onClick={() => navigate("/reports")}
+                onClick={() => setIsPrintOpen(true)}
                 _hover={{ bg: "#FFF0F4" }}
               >
-                <Icon as={LuArrowLeft} mr={2} boxSize={4} />
-                Back
+                <Icon as={LuPrinter} mr={2} boxSize={4} /> Print
               </Button>
-
               <Button
                 variant="outline"
                 borderColor="#FF5A7D"
@@ -566,27 +666,10 @@ const GeneralLedgerPage = () => {
                 px={4}
                 fontSize="12px"
                 borderRadius="6px"
-                onClick={() => setShowPrint(true)}
+                onClick={() => setIsPrintOpen(true)}
                 _hover={{ bg: "#FFF0F4" }}
               >
-                <Icon as={LuPrinter} mr={2} boxSize={4} />
-                Print
-              </Button>
-
-              <Button
-                variant="outline"
-                borderColor="#FF5A7D"
-                color={RED}
-                bg="white"
-                h="38px"
-                px={4}
-                fontSize="12px"
-                borderRadius="6px"
-                onClick={() => setShowPrint(true)}
-                _hover={{ bg: "#FFF0F4" }}
-              >
-                <Icon as={LuFileText} mr={2} boxSize={4} />
-                Generate PDF
+                <Icon as={LuFileText} mr={2} boxSize={4} /> Generate PDF
               </Button>
             </HStack>
           </Flex>
@@ -603,11 +686,7 @@ const GeneralLedgerPage = () => {
               onReset={reset}
             />
 
-            <SimpleGrid
-              columns={{ base: 1, sm: 2, md: 4 }}
-              gap={3}
-              mb={3}
-            >
+            <SimpleGrid columns={{ base: 1, sm: 2, md: 4 }} gap={3} mb={3}>
               <SummaryCell
                 label="Opening Balance"
                 value={formatAmount(opening)}
@@ -646,61 +725,31 @@ const GeneralLedgerPage = () => {
         <Footer />
       </Box>
 
-      {showPrint && (
-        <Box
-          position="fixed"
-          inset="0"
-          bg="rgba(0,0,0,0.5)"
-          zIndex="9999"
-          overflowY="auto"
-          p={{ base: 2, md: 6 }}
-        >
-          <Flex justify="flex-end" gap={3} mb={3} maxW="820px" mx="auto">
-            <Button
-              size="sm"
-              variant="outline"
-              borderColor="white"
-              color="white"
-              bg="transparent"
-              onClick={() => setShowPrint(false)}
-              _hover={{ bg: "rgba(255,255,255,0.1)" }}
-            >
-              Close
-            </Button>
-            <Button
-              size="sm"
-              bg="white"
-              color={RED}
-              fontWeight="600"
-              onClick={() => window.print()}
-              _hover={{ bg: "#FFF0F4" }}
-            >
-              Print
-            </Button>
-          </Flex>
-
-          <Box
-            maxW="820px"
-            mx="auto"
-            bg="white"
-            boxShadow="0 4px 24px rgba(0,0,0,0.3)"
-            className="generalledger-print"
-          >
-            <GeneralLedgerPrintView
-              rows={rows}
-              totals={totals}
-              date={dateTo || new Date().toISOString().split("T")[0]}
-              ledgerName={selectedLedger?.ledger_name || ""}
-              churchName={church.name}
-              churchAddress={church.address}
-              openingBalance={opening}
-              totalDebit={totDebit}
-              totalCredit={totCredit}
-              closingBalance={closing}
-            />
-          </Box>
-        </Box>
-      )}
+      <ChurchPrintModal
+        isOpen={isPrintOpen}
+        onClose={() => setIsPrintOpen(false)}
+        title="GENERAL LEDGER"
+        subtitle={
+          dateFrom && dateTo
+            ? `From ${dateFrom} to ${dateTo}`
+            : dateTo
+            ? `Up to ${dateTo}`
+            : ""
+        }
+        church={church}
+        pdfFileName={`GeneralLedger_${
+          selectedLedger?.ledger_name || "Report"
+        }.pdf`}
+        defaultOrientation="portrait"
+      >
+        <GeneralLedgerPrintTable
+          rows={rows}
+          ledgerName={selectedLedger?.ledger_name || ""}
+          openingBalance={opening}
+          totals={totals}
+          closingBalance={closing}
+        />
+      </ChurchPrintModal>
     </>
   );
 };

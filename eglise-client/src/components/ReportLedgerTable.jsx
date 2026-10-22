@@ -49,30 +49,32 @@ const ReportLedgerTable = ({
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
+  // ✅ FIXED: Credit = Money In, Debit = Money Out
   const computedTotals = useMemo(() => {
-    let moneyIn = 0;
-    let moneyOut = 0;
+    let credit = 0;
+    let debit = 0;
     rows.forEach((r) => {
       const amt = toNumber(r.amount);
-      if (r.direction === "DEBIT") moneyIn += amt;
-      else if (r.direction === "CREDIT") moneyOut += amt;
+      if (r.direction === "CREDIT") credit += amt;
+      else if (r.direction === "DEBIT") debit += amt;
     });
-    return { moneyIn, moneyOut };
+    return { credit, debit };
   }, [rows]);
 
-  const finalDebit =
-    totals?.moneyIn !== undefined
-      ? totals.moneyIn
-      : totalDebit !== undefined
-      ? totalDebit
-      : computedTotals.moneyIn;
-
+  // ✅ FIXED: Map the props correctly to their respective columns
   const finalCredit =
-    totals?.moneyOut !== undefined
-      ? totals.moneyOut
+    totals?.credit !== undefined
+      ? totals.credit
       : totalCredit !== undefined
       ? totalCredit
-      : computedTotals.moneyOut;
+      : computedTotals.credit;
+
+  const finalDebit =
+    totals?.debit !== undefined
+      ? totals.debit
+      : totalDebit !== undefined
+      ? totalDebit
+      : computedTotals.debit;
 
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const startIdx = (page - 1) * pageSize;
@@ -265,7 +267,7 @@ const ReportLedgerTable = ({
                           {r.cashBankAccount || r.cashBank || "—"}
                         </Box>
 
-                        {/* Credit column — money OUT */}
+                        {/* ✅ FIXED: Credit column */}
                         <Box
                           as="td"
                           px={4}
@@ -280,7 +282,7 @@ const ReportLedgerTable = ({
                           {isCredit && amt > 0 ? formatAmount(amt) : "—"}
                         </Box>
 
-                        {/* Debit column — money IN */}
+                        {/* ✅ FIXED: Debit column */}
                         <Box
                           as="td"
                           px={4}

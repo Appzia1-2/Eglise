@@ -375,7 +375,7 @@ const PaidTable = ({ wards, forPrint = false }) => {
             {[
               "Member Name",
               "Family",
-              "Monthly Subscription",
+              "Subscription", // ✅ Changed header
               "Charity Fund",
               "Diocese Fund",
               "Total Paid",
@@ -472,8 +472,16 @@ const PaidTable = ({ wards, forPrint = false }) => {
                     {member.family_name}
                   </Box>
 
+                  {/* ✅ Amount with Billing Cycle below */}
                   <Box as="td" px={3} py={2} textAlign="right" color={TEXT_COLOR} whiteSpace="nowrap">
-                    {fmt(member.monthly_subscription)}
+                    <Text fontSize={forPrint ? "11px" : "12px"}>
+                      {fmt(member.monthly_subscription)}
+                    </Text>
+                    {member.billing_cycle && (
+                      <Text fontSize="9px" color={SECONDARY_TEXT} textTransform="capitalize">
+                        {member.billing_cycle === "YEARLY" ? "Yearly" : "Monthly"}
+                      </Text>
+                    )}
                   </Box>
 
                   <Box as="td" px={3} py={2} textAlign="right" color={TEXT_COLOR} whiteSpace="nowrap">
@@ -687,7 +695,7 @@ const SubscriptionPaidListPage = () => {
           </Box>
 
           <HStack gap={3} flexWrap="wrap">
-            <Button
+            {/* <Button
               variant="outline"
               h="40px"
               px={5}
@@ -701,7 +709,7 @@ const SubscriptionPaidListPage = () => {
               leftIcon={<ArrowLeftIcon />}
             >
               Back
-            </Button>
+            </Button> */}
 
             <Button
               variant="outline"

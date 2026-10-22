@@ -2752,15 +2752,16 @@ class AccountLedgerMaster(models.Model):
 
     def get_current_balance(self):
         """
-        Opening balance + sum of DEBIT entries - sum of CREDIT entries.
+        Opening balance adjusted by the ledger's natural direction.
 
-        Sign convention:
-        - ASSET / EXPENSE  : DEBIT increases, CREDIT decreases
-        - LIABILITY / INCOME / EQUITY : CREDIT increases, DEBIT decreases
+        Sign convention (returns a positive number when the ledger is
+        on its natural side):
+          ASSET / EXPENSE            : opening + debits  − credits
+          LIABILITY / INCOME / EQUITY: opening + credits − debits
 
-        IMPORTANT: Both cancelled originals AND their reversal entries
-        are excluded. A cancelled voucher leaves zero net effect on the
-        balance.
+        Both cancelled originals AND their reversal entries are
+        excluded, so a cancelled voucher leaves zero net effect on
+        the balance.
         """
         from django.db.models import Sum, Q
 
@@ -2772,16 +2773,18 @@ class AccountLedgerMaster(models.Model):
             credits=Sum("amount", filter=Q(entry_type="CREDIT")),
         )
 
-        debits = agg["debits"] or 0
-        credits = agg["credits"] or 0
-        opening = self.op_balance or 0
+        debits = float(agg["debits"] or 0)
+        credits = float(agg["credits"] or 0)
+        opening = float(self.op_balance or 0)
 
-        return float(opening) + float(debits) - float(credits)
+        if self.ledger_nature in ("ASSET", "EXPENSE"):
+            return opening + debits - credits
+        return opening + credits - debits
 
     @property
     def current_balance(self):
         return self.get_current_balance()
-
+    
 class LedgerEntry(models.Model):
     """
     Single-entry ledger posting.
@@ -2842,6 +2845,13 @@ class LedgerEntry(models.Model):
         blank=True,
         related_name="ledger_entries"
     )
+    contra = models.ForeignKey(              # ← NEW
+        "ContraMaster",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ledger_entries",
+    )
 
     # ---------------- Cancel handling ----------------
     is_cancelled = models.BooleanField(default=False)
@@ -2884,9 +2894,12 @@ class LedgerEntry(models.Model):
 class ReceiptMaster(models.Model):
     """
     Receipt header. Money coming IN.
-    Posts TWO LedgerEntries per receipt:
-      1. DEBIT on each income ledger
-      2. DEBIT on the Cash / Bank ledger
+
+    Posting:
+      1. CREDIT on each income ledger     (income increases on credit)
+      2. DEBIT  on the Cash / Bank ledger (asset increases on debit)
+
+    Debits == Credits. Books balance.
     """
 
     PAYMENT_TYPE_CHOICES = (
@@ -2914,15 +2927,13 @@ class ReceiptMaster(models.Model):
     church = models.ForeignKey(
         "Church",
         on_delete=models.CASCADE,
-        related_name="receipts"
+        related_name="receipts",
     )
 
-    # ✅ unique=True removed — uniqueness is now enforced per-church
-    #    via Meta.unique_together below
     receipt_number = models.CharField(
         max_length=30,
         blank=True,
-        null=True
+        null=True,
     )
 
     receipt_date = models.DateField()
@@ -2930,26 +2941,26 @@ class ReceiptMaster(models.Model):
     ref_no = models.CharField(
         max_length=50,
         null=True,
-        blank=True
+        blank=True,
     )
 
     member = models.ForeignKey(
         "Member",
         on_delete=models.PROTECT,
-        related_name="receipts"
+        related_name="receipts",
     )
 
     payment_type = models.CharField(
         max_length=10,
         choices=PAYMENT_TYPE_CHOICES,
-        default="BANK"
+        default="BANK",
     )
 
     transaction_type = models.CharField(
         max_length=20,
         choices=TRANSACTION_TYPE_CHOICES,
         blank=True,
-        null=True
+        null=True,
     )
 
     bank_account = models.ForeignKey(
@@ -2957,18 +2968,18 @@ class ReceiptMaster(models.Model):
         on_delete=models.PROTECT,
         null=True,
         blank=True,
-        related_name="receipts"
+        related_name="receipts",
     )
 
     narration = models.TextField(
         blank=True,
-        null=True
+        null=True,
     )
 
     grand_total = models.DecimalField(
         max_digits=15,
         decimal_places=2,
-        default=0
+        default=0,
     )
 
     is_cancelled = models.BooleanField(default=False)
@@ -2976,7 +2987,7 @@ class ReceiptMaster(models.Model):
         max_length=30,
         choices=CANCEL_REASON_CHOICES,
         null=True,
-        blank=True
+        blank=True,
     )
     cancel_remarks = models.TextField(null=True, blank=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)
@@ -2988,50 +2999,68 @@ class ReceiptMaster(models.Model):
         ordering = ["-receipt_date", "-id"]
         verbose_name = "Receipt"
         verbose_name_plural = "Receipts"
-        # ✅ Per-church uniqueness: two churches can both have RCP-2026-00001
         unique_together = [("church", "receipt_number")]
 
     def __str__(self):
-        return f"{self.receipt_number} - {self.member.name if self.member else ''} ({self.grand_total})"
+        return (
+            f"{self.receipt_number} - "
+            f"{self.member.name if self.member else ''} "
+            f"({self.grand_total})"
+        )
 
     # ============================================================
-    # NUMBERING
+    # NUMBERING (race-safe)
     # ============================================================
 
     def save(self, *args, **kwargs):
         if not self.receipt_number:
-            year = timezone.now().year
-            last = (
-                ReceiptMaster.objects
-                .filter(
-                    church=self.church,
-                    receipt_number__startswith=f"RCP-{year}-"
+            from django.db import transaction
+
+            with transaction.atomic():
+                year = timezone.now().year
+                last = (
+                    ReceiptMaster.objects
+                    .select_for_update()
+                    .filter(
+                        church=self.church,
+                        receipt_number__startswith=f"RCP-{year}-",
+                    )
+                    .order_by("-id")
+                    .first()
                 )
-                .order_by("-id")
-                .first()
-            )
 
-            if last and last.receipt_number:
-                try:
-                    n = int(last.receipt_number.split("-")[-1]) + 1
-                except (ValueError, IndexError):
+                if last and last.receipt_number:
+                    try:
+                        n = int(last.receipt_number.split("-")[-1]) + 1
+                    except (ValueError, IndexError):
+                        n = 1
+                else:
                     n = 1
-            else:
-                n = 1
 
-            self.receipt_number = f"RCP-{year}-{str(n).zfill(5)}"
+                self.receipt_number = f"RCP-{year}-{str(n).zfill(5)}"
+
+                super().save(*args, **kwargs)
+                return
 
         super().save(*args, **kwargs)
 
     # ============================================================
-    # LEDGER POSTING
+    # LEDGER POSTING  — THE FIX
     # ============================================================
 
     def post_to_ledger(self):
         """
         Post TWO entries per receipt:
-          1. DEBIT on each income ledger (money in)
-          2. DEBIT on the Cash / Bank ledger (money in)
+
+          1. CREDIT on each income ledger     (income ↑ on credit)
+          2. DEBIT  on the Cash / Bank ledger (asset ↑ on debit)
+
+        Previously BOTH sides were posted as DEBIT, which made
+        total debits ≠ total credits and broke every income
+        ledger balance.
+
+        Raises ValidationError if no Cash / Bank ledger is configured —
+        never silently posts only one side.
 
         Idempotent.
         """
@@ -3040,42 +3069,60 @@ class ReceiptMaster(models.Model):
         ).exists():
             return
 
-        # 1. Income side — one entry per ReceiptLine
+        # ----- 1. Income side — CREDIT per line -----
         total = 0
         for line in self.lines.all():
             LedgerEntry.objects.create(
                 church=self.church,
                 ledger=line.ledger,
-                entry_type="DEBIT",
+                entry_type="CREDIT",              # ✅ FIXED (was DEBIT)
                 amount=line.amount,
                 entry_date=self.receipt_date,
-                narration=self.narration or f"Receipt {self.receipt_number}",
+                narration=(
+                    self.narration
+                    or f"Receipt {self.receipt_number}"
+                ),
                 receipt=self,
             )
             total += float(line.amount or 0)
 
-        # 2. Cash / Bank side — one entry for the whole receipt
-        if total > 0:
-            if self.payment_type == "CASH":
-                cash_bank_ledger = get_cash_ledger(self.church)
-            else:
-                cash_bank_ledger = get_bank_ledger(self.church)
+        if total <= 0:
+            return
 
-            if cash_bank_ledger:
-                LedgerEntry.objects.create(
-                    church=self.church,
-                    ledger=cash_bank_ledger,
-                    entry_type="DEBIT",   # money coming in
-                    amount=total,
-                    entry_date=self.receipt_date,
-                    narration=self.narration or f"Receipt {self.receipt_number}",
-                    receipt=self,
-                )
+        # ----- 2. Cash / Bank side — DEBIT -----
+        if self.payment_type == "CASH":
+            cash_bank_ledger = get_cash_ledger(self.church)
+        else:
+            cash_bank_ledger = get_bank_ledger(self.church)
+
+        if not cash_bank_ledger:
+            raise ValidationError(
+                "Cash / Bank ledger is not configured for this church. "
+                "Cannot post receipt."
+            )
+
+        LedgerEntry.objects.create(
+            church=self.church,
+            ledger=cash_bank_ledger,
+            entry_type="DEBIT",                   # money in
+            amount=total,
+            entry_date=self.receipt_date,
+            narration=(
+                self.narration
+                or f"Receipt {self.receipt_number}"
+            ),
+            receipt=self,
+        )
+
+    # ============================================================
+    # REVERSAL (unchanged — generic opposite-entry logic works)
+    # ============================================================
 
     def reverse_ledger_entry(self):
         """
-        Cancel: mark original entries cancelled and create opposite
-        reversal for each posted line.
+        On cancel: mark originals cancelled and create an opposite
+        reversal for each. A cancelled receipt leaves zero net
+        effect on any ledger.
         """
         originals = list(
             self.ledger_entries.filter(
@@ -3093,7 +3140,11 @@ class ReceiptMaster(models.Model):
             original.is_cancelled = True
             original.save(update_fields=["is_cancelled"])
 
-            opposite = "CREDIT" if original.entry_type == "DEBIT" else "DEBIT"
+            opposite = (
+                "CREDIT"
+                if original.entry_type == "DEBIT"
+                else "DEBIT"
+            )
 
             reversal = LedgerEntry.objects.create(
                 church=self.church,
@@ -3663,3 +3714,177 @@ class LegacyDeath(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.reg_no or 'no-reg'})"
+
+
+# ----------------------------------------------------Contra--------------------------------------------------------------------
+
+
+class ContraMaster(models.Model):
+    """
+    Contra voucher — money movement between two of the church's own
+    Cash / Bank ledgers. Not income, not expense.
+
+    Posting:
+      DEBIT  on the destination ledger (money in)
+      CREDIT on the source ledger      (money out)
+    """
+
+    CONTRA_TYPE_CHOICES = (
+        ("CASH_TO_BANK", "Cash Deposited to Bank"),
+        ("BANK_TO_CASH", "Cash Withdrawn from Bank"),
+        ("BANK_TO_BANK", "Bank to Bank Transfer"),
+    )
+
+    CANCEL_REASON_CHOICES = (
+        ("INCORRECT_ENTRY", "Incorrect contra entry"),
+        ("DUPLICATE", "Duplicate contra"),
+        ("WRONG_AMOUNT", "Wrong amount"),
+        ("WRONG_ACCOUNT", "Wrong bank / cash account"),
+        ("BANK_REJECTED", "Bank rejected"),
+        ("OTHER", "Other"),
+    )
+
+    church = models.ForeignKey(
+        Church, on_delete=models.CASCADE, related_name="contra_vouchers"
+    )
+
+    voucher_number = models.CharField(max_length=30, blank=True, null=True)
+
+    contra_date = models.DateField()
+    ref_no = models.CharField(max_length=50, null=True, blank=True)
+
+    contra_type = models.CharField(max_length=20, choices=CONTRA_TYPE_CHOICES)
+
+    # Source = where money comes FROM (will be CREDITED)
+    from_ledger = models.ForeignKey(
+        AccountLedgerMaster,
+        on_delete=models.PROTECT,
+        related_name="contra_from",
+    )
+
+    # Destination = where money goes TO (will be DEBITED)
+    to_ledger = models.ForeignKey(
+        AccountLedgerMaster,
+        on_delete=models.PROTECT,
+        related_name="contra_to",
+    )
+
+    # Optional bank account references for reporting / reconciliation
+    from_bank_account = models.ForeignKey(
+        BankAccount, on_delete=models.PROTECT,
+        null=True, blank=True, related_name="contra_from",
+    )
+    to_bank_account = models.ForeignKey(
+        BankAccount, on_delete=models.PROTECT,
+        null=True, blank=True, related_name="contra_to",
+    )
+
+    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    narration = models.CharField(max_length=300, null=True, blank=True)
+
+    is_cancelled = models.BooleanField(default=False)
+    cancel_reason = models.CharField(
+        max_length=30, choices=CANCEL_REASON_CHOICES, null=True, blank=True
+    )
+    cancel_remarks = models.TextField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-contra_date", "-id"]
+        unique_together = [("church", "voucher_number")]
+
+    def __str__(self):
+        return f"{self.voucher_number} - {self.amount}"
+
+    # ---- numbering (same pattern as PaymentMaster) ----
+    def save(self, *args, **kwargs):
+        if not self.voucher_number:
+            year = timezone.now().year
+            last = ContraMaster.objects.filter(
+                church=self.church,
+                voucher_number__startswith=f"CON-{year}-",
+            ).order_by("-id").first()
+
+            if last and last.voucher_number:
+                try:
+                    n = int(last.voucher_number.split("-")[-1]) + 1
+                except (ValueError, IndexError):
+                    n = 1
+            else:
+                n = 1
+
+            self.voucher_number = f"CON-{year}-{str(n).zfill(5)}"
+
+        super().save(*args, **kwargs)
+
+    # ---- posting ----
+    def post_to_ledger(self):
+        """
+        DEBIT  destination ledger (money in)
+        CREDIT source ledger      (money out)
+        Idempotent.
+        """
+        if self.ledger_entries.filter(
+            is_cancelled=False, is_reversal=False
+        ).exists():
+            return
+
+        narration = self.narration or f"Contra {self.voucher_number}"
+
+        # Destination — money comes in (DEBIT asset)
+        LedgerEntry.objects.create(
+            church=self.church,
+            ledger=self.to_ledger,
+            entry_type="DEBIT",
+            amount=self.amount,
+            entry_date=self.contra_date,
+            narration=narration,
+            contra=self,
+        )
+
+        # Source — money goes out (CREDIT asset)
+        LedgerEntry.objects.create(
+            church=self.church,
+            ledger=self.from_ledger,
+            entry_type="CREDIT",
+            amount=self.amount,
+            entry_date=self.contra_date,
+            narration=narration,
+            contra=self,
+        )
+
+    # ---- reversal (same pattern as PaymentMaster) ----
+    def reverse_ledger_entry(self):
+        originals = list(
+            self.ledger_entries.filter(
+                is_cancelled=False, is_reversal=False
+            )
+        )
+        if not originals:
+            return
+
+        for original in originals:
+            if getattr(original, "reversed_by", None):
+                continue
+
+            original.is_cancelled = True
+            original.save(update_fields=["is_cancelled"])
+
+            opposite = "CREDIT" if original.entry_type == "DEBIT" else "DEBIT"
+
+            reversal = LedgerEntry.objects.create(
+                church=self.church,
+                ledger=original.ledger,
+                entry_type=opposite,
+                amount=original.amount,
+                entry_date=timezone.now().date(),
+                narration=f"Reversal of {self.voucher_number}",
+                contra=self,
+                is_reversal=True,
+            )
+
+            original.reversed_entry = reversal
+            original.save(update_fields=["reversed_entry"])

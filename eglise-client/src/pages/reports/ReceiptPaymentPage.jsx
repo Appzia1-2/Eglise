@@ -9,11 +9,8 @@ import {
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import ChurchPrintModal from "../../components/ChurchPrintModal";
-import { getReceiptPaymentReport } from "../../api/registryServices";
+import { getReceiptPaymentReport, getMyChurch } from "../../api/registryServices";
 
-// ============================================================
-// COLORS & CONSTANTS
-// ============================================================
 const PRIMARY_RED = "#D7193F";
 const DARK_RED = "#A50F2E";
 const TEXT_COLOR = "#182338";
@@ -76,9 +73,7 @@ const RowGroup = ({ item, side, depth = 0, openMap, toggle, isDetailed }) => {
   const hasSubGroups = item.sub_groups && item.sub_groups.length > 0;
   const hasLedgers = item.ledgers && item.ledgers.length > 0;
   
-  // In Summary mode, we hide individual ledgers unless they have no sub-groups
   const showLedgers = hasLedgers && (isDetailed || !hasSubGroups);
-
   const isExpandable = hasSubGroups || showLedgers;
 
   return (
@@ -97,16 +92,14 @@ const RowGroup = ({ item, side, depth = 0, openMap, toggle, isDetailed }) => {
           </HStack>
         </Box>
         <Box as="td" px={3} py={2.5} textAlign="right">
-          <Text fontSize="12px" fontWeight="700" color={TEXT_COLOR}>
-            {formatAmount(item.amount)}
-          </Text>
+          <Text fontSize="12px" fontWeight="700" color={TEXT_COLOR}>{formatAmount(item.amount)}</Text>
         </Box>
       </Box>
 
       {isOpen && (
         <>
-          {hasSubGroups && item.sub_groups.map(sg => (
-            <RowGroup key={sg.name} item={sg} side={side} depth={depth + 1} openMap={openMap} toggle={toggle} isDetailed={isDetailed} />
+          {hasSubGroups && item.sub_groups.map((sg, i) => (
+            <RowGroup key={i} item={sg} side={side} depth={depth + 1} openMap={openMap} toggle={toggle} isDetailed={isDetailed} />
           ))}
           {showLedgers && item.ledgers.map((led, i) => (
             <Box as="tr" key={i} bg="#FAFBFC" borderBottom={`1px solid ${BORDER_COLOR}`}>
@@ -140,14 +133,10 @@ const PrintRows = ({ item, depth = 0, isDetailed }) => {
     <>
       <tr style={{ borderBottom: `1px solid ${BORDER_COLOR}` }}>
         <td style={{ padding: "6px 8px", paddingLeft: `${indent}px` }}>
-          <span style={{ fontSize, fontWeight: "700", color, fontFamily: "Georgia, serif" }}>
-            {item.name.toUpperCase()}
-          </span>
+          <span style={{ fontSize, fontWeight: "700", color, fontFamily: "Georgia, serif" }}>{item.name.toUpperCase()}</span>
         </td>
         <td style={{ padding: "6px 8px", textAlign: "right" }}>
-          <span style={{ fontSize, fontWeight: "700", color: TEXT_COLOR, fontFamily: "Georgia, serif" }}>
-            {formatAmount(item.amount)}
-          </span>
+          <span style={{ fontSize, fontWeight: "700", color: TEXT_COLOR, fontFamily: "Georgia, serif" }}>{formatAmount(item.amount)}</span>
         </td>
       </tr>
       {hasSubGroups && item.sub_groups.map((sg, i) => <PrintRows key={i} item={sg} depth={depth + 1} isDetailed={isDetailed} />)}
@@ -175,6 +164,7 @@ const PrintGrandRow = ({ label, amount, bold = false }) => (
 const PrintContent = ({ receipts, payments, summary, isDetailed }) => (
   <div style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>
     <div style={{ display: "flex", gap: "0", border: `1px solid ${BORDER_COLOR}` }}>
+      {/* LEFT: RECEIPTS */}
       <div style={{ flex: 1, borderRight: `1px solid ${BORDER_COLOR}` }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
@@ -183,10 +173,22 @@ const PrintContent = ({ receipts, payments, summary, isDetailed }) => (
               <th style={{ padding: "8px", textAlign: "right", width: "120px", fontSize: "11px", fontWeight: "700", color: TEXT_COLOR }}>Amount (₹)</th>
             </tr>
           </thead>
-          <tbody>{receipts.map((g, i) => <PrintRows key={i} item={g} depth={0} isDetailed={isDetailed} />)}</tbody>
-          <tfoot><PrintGrandRow label="TOTAL RECEIPTS" amount={summary.total_income} /></tfoot>
+          <tbody>
+            {/* ✅ OPENING BALANCE ADDED */}
+            <tr style={{ borderBottom: `1px solid ${BORDER_COLOR}`, background: "#F8FAFC" }}>
+              <td style={{ padding: "6px 8px" }}><span style={{ fontSize: "10.5px", fontWeight: "700", color: DARK_RED }}>I. OPENING BALANCES (CASH & BANK)</span></td>
+              <td style={{ padding: "6px 8px", textAlign: "right" }}><span style={{ fontSize: "10.5px", fontWeight: "700", color: TEXT_COLOR }}>{formatAmount(summary.opening_balance)}</span></td>
+            </tr>
+            
+            {receipts.map((g, i) => <PrintRows key={i} item={g} depth={0} isDetailed={isDetailed} />)}
+          </tbody>
+          <tfoot>
+            <PrintGrandRow label="TOTAL RECEIPTS" amount={summary.total_receipts} bold />
+          </tfoot>
         </table>
       </div>
+      
+      {/* RIGHT: PAYMENTS */}
       <div style={{ flex: 1 }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
@@ -195,15 +197,20 @@ const PrintContent = ({ receipts, payments, summary, isDetailed }) => (
               <th style={{ padding: "8px", textAlign: "right", width: "120px", fontSize: "11px", fontWeight: "700", color: TEXT_COLOR }}>Amount (₹)</th>
             </tr>
           </thead>
-          <tbody>{payments.map((g, i) => <PrintRows key={i} item={g} depth={0} isDetailed={isDetailed} />)}</tbody>
-          <tfoot><PrintGrandRow label="TOTAL PAYMENTS" amount={summary.total_expense} /></tfoot>
+          <tbody>
+            {payments.map((g, i) => <PrintRows key={i} item={g} depth={0} isDetailed={isDetailed} />)}
+            
+            {/* ✅ CLOSING BALANCE ADDED */}
+            <tr style={{ borderBottom: `1px solid ${BORDER_COLOR}`, background: "#F8FAFC" }}>
+              <td style={{ padding: "6px 8px" }}><span style={{ fontSize: "10.5px", fontWeight: "700", color: DARK_RED }}>VIII. CLOSING BALANCES (CASH & BANK)</span></td>
+              <td style={{ padding: "6px 8px", textAlign: "right" }}><span style={{ fontSize: "10.5px", fontWeight: "700", color: TEXT_COLOR }}>{formatAmount(summary.closing_balance)}</span></td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <PrintGrandRow label="TOTAL PAYMENTS" amount={summary.total_payments} bold />
+          </tfoot>
         </table>
       </div>
-    </div>
-    <div style={{ marginTop: "16px", padding: "10px", border: `1px solid ${BORDER_COLOR}`, background: "#F8FAFC", textAlign: "center" }}>
-      <span style={{ fontSize: "11px", fontWeight: "600", color: TEXT_COLOR }}>Difference: </span>
-      <span style={{ fontSize: "12px", fontWeight: "700", color: PRIMARY_RED }}>{formatAmount(Math.abs(summary.net_balance))}</span>
-      {summary.is_balanced && <span style={{ fontSize: "11px", color: SECONDARY_TEXT }}> — Receipts and Payments are balanced</span>}
     </div>
   </div>
 );
@@ -216,15 +223,31 @@ const ReceiptPaymentPage = () => {
 
   const [dateFrom, setDateFrom] = useState(monthStart());
   const [dateTo, setDateTo] = useState(today());
-  const [displayMode, setDisplayMode] = useState("Summary"); // "Summary" | "Detailed"
+  const [displayMode, setDisplayMode] = useState("Summary");
   
   const [openMap, setOpenMap] = useState({});
   const [data, setData] = useState({ receipts: [], payments: [], summary: {} });
   const [loading, setLoading] = useState(false);
   const [pageError, setPageError] = useState("");
   const [isPrintOpen, setIsPrintOpen] = useState(false);
+  
+  const [church, setChurch] = useState({ name: "", address: "" });
 
-  const church = { name: "St. George Orthodox Church", address: "123 Church Street", city: "Bathery", state: "Kerala", postal_code: "673592" };
+  useEffect(() => {
+    const fetchChurch = async () => {
+      try {
+        const res = await getMyChurch();
+        const c = res?.data ?? res ?? {};
+        setChurch({
+          name: c.name || "Church",
+          address: c.full_address || c.address || [c.city, c.state, c.country].filter(Boolean).join(", ") || "",
+        });
+      } catch (err) {
+        console.error("Failed to fetch church info", err);
+      }
+    };
+    fetchChurch();
+  }, []);
 
   const toggle = (key) => setOpenMap((p) => ({ ...p, [key]: p[key] === false ? true : false }));
 
@@ -249,7 +272,7 @@ const ReceiptPaymentPage = () => {
 
   const receipts = data?.receipts || [];
   const payments = data?.payments || [];
-  const summary = data?.summary || { total_income: 0, total_expense: 0, net_balance: 0, is_balanced: true };
+  const summary = data?.summary || { opening_balance: 0, total_income: 0, total_receipts: 0, total_expense: 0, closing_balance: 0, total_payments: 0 };
   const hasData = receipts.length > 0 || payments.length > 0;
   const isDetailed = displayMode === "Detailed";
 
@@ -260,8 +283,6 @@ const ReceiptPaymentPage = () => {
       <Navbar />
 
       <Container maxW="1400px" px={{ base: 4, md: 5 }} py={4} flex="1">
-        
-        {/* HEADER */}
         <HStack gap={2} mb={2} fontSize="12px">
           <Text color={BLUE} cursor="pointer" onClick={() => navigate("/reports")}>Reports</Text>
           <Text color="#A2ACBB">/</Text>
@@ -275,13 +296,12 @@ const ReceiptPaymentPage = () => {
             <Text color={SECONDARY_TEXT} fontSize="12px">View cash receipts and payments grouped by ledger group.</Text>
           </Box>
           <HStack gap={3} flexWrap="wrap">
-            <Button variant="outline" h="40px" px={5} borderColor={PRIMARY_RED} color={PRIMARY_RED} borderRadius="6px" fontSize="12px" fontWeight="600" onClick={() => navigate(-1)} _hover={{ bg: "#FFF5F7" }} leftIcon={<ArrowLeftIcon />}>Back</Button>
+            {/* <Button variant="outline" h="40px" px={5} borderColor={PRIMARY_RED} color={PRIMARY_RED} borderRadius="6px" fontSize="12px" fontWeight="600" onClick={() => navigate(-1)} _hover={{ bg: "#FFF5F7" }} leftIcon={<ArrowLeftIcon />}>Back</Button> */}
             <Button variant="outline" h="40px" px={5} borderColor={PRIMARY_RED} color={PRIMARY_RED} borderRadius="6px" fontSize="12px" fontWeight="600" onClick={handleOpenPrint} isDisabled={!hasData} _hover={{ bg: "#FFF5F7" }} leftIcon={<PrinterIcon />}>Print</Button>
             <Button variant="outline" h="40px" px={5} borderColor={PRIMARY_RED} color={PRIMARY_RED} borderRadius="6px" fontSize="12px" fontWeight="600" onClick={handleOpenPrint} isDisabled={!hasData} _hover={{ bg: "#FFF5F7" }} leftIcon={<FilePdfIcon />}>Generate PDF</Button>
           </HStack>
         </Flex>
 
-        {/* FILTERS */}
         <Box border={`1px solid ${BORDER_COLOR}`} borderRadius="10px" px={{ base: 4, md: 5 }} py={4} mb={4} bg="white">
           <Flex gap={4} direction={{ base: "column", lg: "row" }} align={{ base: "stretch", lg: "flex-end" }} wrap="wrap">
             <Box flex="1" minW="170px">
@@ -314,7 +334,6 @@ const ReceiptPaymentPage = () => {
           </Flex>
         </Box>
 
-        {/* TABLE BODY */}
         {loading ? (
           <Box border={`1px solid ${BORDER_COLOR}`} borderRadius="10px" py={14} textAlign="center"><Text color={SECONDARY_TEXT} fontSize="12px">Loading…</Text></Box>
         ) : !hasData ? (
@@ -341,12 +360,22 @@ const ReceiptPaymentPage = () => {
                     </Box>
                   </Box>
                   <Box as="tbody">
+                    {/* ✅ OPENING BALANCE ADDED */}
+                    <Box as="tr" bg="#F8FAFC" borderBottom={`1px solid ${BORDER_COLOR}`}>
+                      <Box as="td" px={3} py={2.5}>
+                        <Text fontSize="12px" fontWeight="700" color={DARK_RED} textTransform="uppercase">I. Opening Balances (Cash & Bank)</Text>
+                      </Box>
+                      <Box as="td" px={3} py={2.5} textAlign="right">
+                        <Text fontSize="12px" fontWeight="700" color={TEXT_COLOR}>{formatAmount(summary.opening_balance)}</Text>
+                      </Box>
+                    </Box>
+
                     {receipts.map((item, i) => <RowGroup key={i} item={item} side="rec" depth={0} openMap={openMap} toggle={toggle} isDetailed={isDetailed} />)}
                   </Box>
                 </Box>
                 <Box borderTop={`1px solid ${BORDER_COLOR}`}>
                   <Box as="table" width="100%" borderCollapse="collapse"><Box as="tbody">
-                    <tr bg="#F0F4FA"><td style={{ padding: '12px', fontWeight: '700', color: LINK_BLUE, fontSize: '12px' }}>TOTAL RECEIPTS</td><td style={{ padding: '12px', textAlign: 'right', fontWeight: '700', color: TEXT_COLOR, fontSize: '12px' }}>{formatAmount(summary.total_income)}</td></tr>
+                    <tr bg="#F0F4FA"><td style={{ padding: '12px', fontWeight: '700', color: LINK_BLUE, fontSize: '12px' }}>TOTAL RECEIPTS</td><td style={{ padding: '12px', textAlign: 'right', fontWeight: '700', color: TEXT_COLOR, fontSize: '12px' }}>{formatAmount(summary.total_receipts)}</td></tr>
                   </Box></Box>
                 </Box>
               </Box>
@@ -362,11 +391,21 @@ const ReceiptPaymentPage = () => {
                   </Box>
                   <Box as="tbody">
                     {payments.map((item, i) => <RowGroup key={i} item={item} side="pay" depth={0} openMap={openMap} toggle={toggle} isDetailed={isDetailed} />)}
+                    
+                    {/* ✅ CLOSING BALANCE ADDED */}
+                    <Box as="tr" bg="#F8FAFC" borderBottom={`1px solid ${BORDER_COLOR}`}>
+                      <Box as="td" px={3} py={2.5}>
+                        <Text fontSize="12px" fontWeight="700" color={DARK_RED} textTransform="uppercase">VIII. Closing Balances (Cash & Bank)</Text>
+                      </Box>
+                      <Box as="td" px={3} py={2.5} textAlign="right">
+                        <Text fontSize="12px" fontWeight="700" color={TEXT_COLOR}>{formatAmount(summary.closing_balance)}</Text>
+                      </Box>
+                    </Box>
                   </Box>
                 </Box>
                 <Box borderTop={`1px solid ${BORDER_COLOR}`}>
                   <Box as="table" width="100%" borderCollapse="collapse"><Box as="tbody">
-                    <tr bg="#F0F4FA"><td style={{ padding: '12px', fontWeight: '700', color: LINK_BLUE, fontSize: '12px' }}>TOTAL PAYMENTS</td><td style={{ padding: '12px', textAlign: 'right', fontWeight: '700', color: TEXT_COLOR, fontSize: '12px' }}>{formatAmount(summary.total_expense)}</td></tr>
+                    <tr bg="#F0F4FA"><td style={{ padding: '12px', fontWeight: '700', color: LINK_BLUE, fontSize: '12px' }}>TOTAL PAYMENTS</td><td style={{ padding: '12px', textAlign: 'right', fontWeight: '700', color: TEXT_COLOR, fontSize: '12px' }}>{formatAmount(summary.total_payments)}</td></tr>
                   </Box></Box>
                 </Box>
               </Box>
@@ -374,10 +413,9 @@ const ReceiptPaymentPage = () => {
           </Box>
         )}
 
-        {/* NET SUMMARY BAR */}
         <Flex mt={4} px={5} py={3} border={`1px solid ${BORDER_COLOR}`} borderRadius="8px" bg="#F8FAFC" align="center" justify="center" gap={3} wrap="wrap">
           <Text fontSize="12px" color={TEXT_COLOR} fontWeight="600">Difference:</Text>
-          <Text fontSize="13px" color={PRIMARY_RED} fontWeight="700">{formatAmount(Math.abs(summary.net_balance))}</Text>
+          <Text fontSize="13px" color={PRIMARY_RED} fontWeight="700">{formatAmount(Math.abs(summary.total_receipts - summary.total_payments))}</Text>
           {summary.is_balanced && (
             <>
               <Box width="5px" height="5px" borderRadius="50%" bg={SECONDARY_TEXT} />
@@ -385,18 +423,9 @@ const ReceiptPaymentPage = () => {
             </>
           )}
         </Flex>
-
-        <Flex mt={4} justify="space-between" align="center" direction={{ base: "column", md: "row" }} gap={2}>
-          <Text color={SECONDARY_TEXT} fontSize="12px">
-            Showing 1–{receipts.length + payments.length} of {receipts.length + payments.length} ledger groups
-          </Text>
-          <HStack gap={2}>
-            <Button size="sm" variant="ghost" color={LINK_BLUE} isDisabled fontSize="12px">Previous</Button>
-            <Button size="sm" bg={PRIMARY_RED} color="white" _hover={{ bg: DARK_RED }} fontSize="12px" px={3}>1</Button>
-            <Button size="sm" variant="ghost" color={LINK_BLUE} isDisabled fontSize="12px">Next</Button>
-          </HStack>
-        </Flex>
       </Container>
+
+      <Footer />
 
       <ChurchPrintModal
         isOpen={isPrintOpen}
@@ -409,8 +438,6 @@ const ReceiptPaymentPage = () => {
       >
         <PrintContent receipts={receipts} payments={payments} summary={summary} isDetailed={isDetailed} />
       </ChurchPrintModal>
-
-      <Footer />
     </Box>
   );
 };

@@ -1,9 +1,7 @@
 // src/admin/pages/AccountGroupAddPage.jsx
 
-import React, { useEffect, useState } from "react";
-
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-
 import {
   Box,
   Heading,
@@ -17,17 +15,17 @@ import {
   GridItem,
   Icon,
 } from "@chakra-ui/react";
-
 import {
   LuNetwork,
   LuFolderTree,
+  LuChevronDown,
+  LuSearch,
+  LuX,
 } from "react-icons/lu";
 
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-
 import { toaster } from "../components/ui/toaster";
-
 import {
   createAccountGroup,
   listAccountGroups,
@@ -36,7 +34,6 @@ import {
 /* =========================================================
    COLORS
 ========================================================= */
-
 const primaryMaroon = "#ae2050";
 const dark = "#182338";
 const muted = "#60708C";
@@ -46,7 +43,6 @@ const red = "#D7193F";
 /* =========================================================
    TOAST HELPER
 ========================================================= */
-
 const showToast = ({
   title,
   description,
@@ -65,7 +61,6 @@ const showToast = ({
 /* =========================================================
    FIELD LABELS
 ========================================================= */
-
 const FIELD_LABELS = {
   group_name: "Group Name",
   group_code: "Group Code",
@@ -76,22 +71,11 @@ const FIELD_LABELS = {
 /* =========================================================
    FIELD LABEL
 ========================================================= */
-
 const FieldLabel = ({ children, required }) => (
-  <Text
-    fontSize="12px"
-    fontWeight="700"
-    color={dark}
-    mb={1.5}
-  >
+  <Text fontSize="12px" fontWeight="700" color={dark} mb={1.5}>
     {children}
-
     {required && (
-      <Text
-        as="span"
-        color="red.500"
-        ml={1}
-      >
+      <Text as="span" color="red.500" ml={1}>
         *
       </Text>
     )}
@@ -99,9 +83,8 @@ const FieldLabel = ({ children, required }) => (
 );
 
 /* =========================================================
-   TEXT FIELD — no inline error text
+   TEXT FIELD
 ========================================================= */
-
 const TextField = ({ error, ...props }) => (
   <Input
     height="40px"
@@ -117,77 +100,203 @@ const TextField = ({ error, ...props }) => (
 );
 
 /* =========================================================
-   ACCOUNT GROUP SELECT — no inline error text
+   SEARCHABLE ACCOUNT GROUP SELECT
 ========================================================= */
+const SearchableAccountGroupSelect = ({ value, onChange, groups, error, isLoading }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef(null);
+  const inputRef = useRef(null);
 
-const AccountGroupSelect = ({
-  value,
-  onChange,
-  groups,
-  error,
-}) => (
-  <Box position="relative">
-    <Icon
-      as={LuNetwork}
-      boxSize={4}
-      color="gray.400"
-      position="absolute"
-      left="12px"
-      top="50%"
-      transform="translateY(-50%)"
-      zIndex={1}
-      pointerEvents="none"
-    />
+  const selectedGroup = groups.find((g) => String(g.id) === String(value));
 
-    <Box
-      as="select"
-      value={value}
-      onChange={onChange}
-      style={{
-        width: "100%",
-        padding: "0 12px 0 36px",
-        borderRadius: "6px",
-        border: `1px solid ${
-          error ? "#e53e3e" : border
-        }`,
-        fontSize: "12px",
-        height: "40px",
-        background: "white",
-        outline: "none",
-        color: value ? dark : "#a0aec0",
-        cursor: "pointer",
-      }}
-    >
-      <option value="">
-        Select parent group
-      </option>
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return groups;
+    return groups.filter((g) =>
+      String(g.group_name || "").toLowerCase().includes(q)
+    );
+  }, [groups, query]);
 
-      {groups.map((group) => (
-        <option
-          key={group.id}
-          value={group.id}
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+        setQuery("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // Focus the input when opening
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  }, [isOpen]);
+
+  const handleSelect = (group) => {
+    onChange({ target: { value: String(group.id) } });
+    setIsOpen(false);
+    setQuery("");
+  };
+
+  const handleClear = (e) => {
+    e.stopPropagation();
+    onChange({ target: { value: "" } });
+    setQuery("");
+  };
+
+  return (
+    <Box ref={containerRef} position="relative" w="100%">
+      {isOpen ? (
+        <Box position="relative">
+          <Icon
+            as={LuSearch}
+            position="absolute"
+            left="11px"
+            top="50%"
+            transform="translateY(-50%)"
+            color={muted}
+            boxSize={4}
+            pointerEvents="none"
+            zIndex={1}
+          />
+          <Input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search parent group..."
+            pl="34px"
+            pr="34px"
+            h="40px"
+            fontSize="12px"
+            borderColor={primaryMaroon}
+            borderRadius="6px"
+            bg="white"
+            _focus={{ borderColor: primaryMaroon, boxShadow: `0 0 0 1px ${primaryMaroon}` }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setIsOpen(false);
+                setQuery("");
+              } else if (e.key === "Enter" && filtered.length > 0) {
+                e.preventDefault();
+                handleSelect(filtered[0]);
+              }
+            }}
+          />
+          <Icon
+            as={LuX}
+            position="absolute"
+            right="11px"
+            top="50%"
+            transform="translateY(-50%)"
+            color={muted}
+            boxSize={4}
+            cursor="pointer"
+            onClick={() => {
+              setIsOpen(false);
+              setQuery("");
+            }}
+            zIndex={1}
+          />
+        </Box>
+      ) : (
+        <Flex
+          onClick={() => setIsOpen(true)}
+          h="40px"
+          border={`1px solid ${error ? "red.500" : border}`}
+          borderRadius="6px"
+          px="11px"
+          align="center"
+          justify="space-between"
+          cursor="pointer"
+          bg="white"
+          _hover={{ borderColor: muted }}
         >
-          {group.group_name}
-        </option>
-      ))}
+          <HStack gap={2}>
+            <Icon as={LuNetwork} boxSize={4} color="gray.400" />
+            <Text fontSize="12px" color={selectedGroup ? dark : "#a0aec0"} noOfLines={1}>
+              {selectedGroup?.group_name || "Select parent group (optional)"}
+            </Text>
+          </HStack>
+          <HStack gap={1} flexShrink={0}>
+            {selectedGroup && (
+              <Icon
+                as={LuX}
+                boxSize={3.5}
+                color={muted}
+                onClick={handleClear}
+                _hover={{ color: red }}
+              />
+            )}
+            <Icon as={LuChevronDown} boxSize={4} color={dark} />
+          </HStack>
+        </Flex>
+      )}
+
+      {isOpen && (
+        <Box
+          position="absolute"
+          top="calc(100% + 4px)"
+          left={0}
+          right={0}
+          bg="white"
+          border={`1px solid ${border}`}
+          borderRadius="6px"
+          boxShadow="0 6px 20px rgba(0,0,0,0.12)"
+          maxH="220px"
+          overflowY="auto"
+          zIndex={30}
+        >
+          {isLoading ? (
+            <Box px={3} py={3}>
+              <Text fontSize="12px" color={muted}>Loading groups...</Text>
+            </Box>
+          ) : filtered.length === 0 ? (
+            <Box px={3} py={3}>
+              <Text fontSize="12px" color={muted}>No groups found</Text>
+            </Box>
+          ) : (
+            filtered.map((g) => {
+              const isSelected = String(g.id) === String(value);
+              return (
+                <Box
+                  key={g.id}
+                  px={3}
+                  py={2}
+                  fontSize="12px"
+                  color={dark}
+                  cursor="pointer"
+                  bg={isSelected ? "#FDF2F5" : "white"}
+                  _hover={{ bg: "#F7F9FB" }}
+                  onClick={() => handleSelect(g)}
+                >
+                  <Text fontWeight={isSelected ? "600" : "500"}>{g.group_name}</Text>
+                  {g.group_code && (
+                    <Text fontSize="10px" color={muted}>{g.group_code}</Text>
+                  )}
+                </Box>
+              );
+            })
+          )}
+        </Box>
+      )}
     </Box>
-  </Box>
-);
+  );
+};
 
 /* =========================================================
    MAIN PAGE
 ========================================================= */
-
 const AccountGroupAddPage = () => {
   const navigate = useNavigate();
 
   const [groups, setGroups] = useState([]);
-
-  const [isLoadingGroups, setIsLoadingGroups] =
-    useState(true);
-
-  const [isSubmitting, setIsSubmitting] =
-    useState(false);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
     group_name: "",
@@ -201,28 +310,15 @@ const AccountGroupAddPage = () => {
   /* =======================================================
      LOAD ACCOUNT GROUPS
   ======================================================= */
-
   useEffect(() => {
     const fetchGroups = async () => {
       setIsLoadingGroups(true);
-
       try {
         const response = await listAccountGroups();
-
-        const data =
-          response?.data?.results ||
-          response?.data ||
-          [];
-
-        setGroups(
-          Array.isArray(data) ? data : []
-        );
+        const data = response?.data?.results || response?.data || [];
+        setGroups(Array.isArray(data) ? data : []);
       } catch (error) {
-        console.error(
-          "Error fetching account groups:",
-          error
-        );
-
+        console.error("Error fetching account groups:", error);
         showToast({
           title: "Failed to load data",
           description:
@@ -235,42 +331,29 @@ const AccountGroupAddPage = () => {
         setIsLoadingGroups(false);
       }
     };
-
     fetchGroups();
   }, []);
 
   /* =======================================================
      HANDLE CHANGE
   ======================================================= */
-
-  const handleChange =
-    (field) =>
-    (event) => {
-      const value = event.target.value;
-
-      setFormData((previous) => ({
-        ...previous,
-        [field]: value,
-      }));
-
-      setFieldErrors((previous) =>
-        previous[field]
-          ? { ...previous, [field]: "" }
-          : previous
-      );
-    };
+  const handleChange = (field) => (event) => {
+    const value = event.target.value;
+    setFormData((previous) => ({ ...previous, [field]: value }));
+    setFieldErrors((previous) =>
+      previous[field] ? { ...previous, [field]: "" } : previous
+    );
+  };
 
   /* =======================================================
      VALIDATE
   ======================================================= */
-
   const validate = () => {
     const newErrors = {};
     const missing = [];
 
     if (!formData.group_name.trim()) {
-      newErrors.group_name =
-        "Group name is required.";
+      newErrors.group_name = "Group name is required.";
       missing.push(FIELD_LABELS.group_name);
     }
 
@@ -279,15 +362,13 @@ const AccountGroupAddPage = () => {
     return {
       errors: newErrors,
       missing,
-      valid:
-        Object.keys(newErrors).length === 0,
+      valid: Object.keys(newErrors).length === 0,
     };
   };
 
   /* =======================================================
      HANDLE SUBMIT
   ======================================================= */
-
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -310,26 +391,20 @@ const AccountGroupAddPage = () => {
     setFieldErrors({});
 
     const payload = {
-      group_name:
-        formData.group_name.trim(),
-
+      group_name: formData.group_name.trim(),
       status: true,
     };
 
     if (formData.group_code.trim()) {
-      payload.group_code =
-        formData.group_code.trim();
+      payload.group_code = formData.group_code.trim();
     }
 
     if (formData.alias.trim()) {
-      payload.alias =
-        formData.alias.trim();
+      payload.alias = formData.alias.trim();
     }
 
     if (formData.under_group) {
-      payload.under_group = Number(
-        formData.under_group
-      );
+      payload.under_group = Number(formData.under_group);
     }
 
     try {
@@ -337,83 +412,52 @@ const AccountGroupAddPage = () => {
 
       showToast({
         title: "Account group created",
-        description:
-          "The account group was created successfully.",
+        description: "The account group was created successfully.",
         type: "success",
         duration: 4000,
       });
 
       navigate("/account-groups");
     } catch (error) {
-      console.error(
-        "Error creating account group:",
-        error
-      );
+      console.error("Error creating account group:", error);
 
-      const backendData =
-        error?.response?.data;
+      const backendData = error?.response?.data;
 
-      if (
-        backendData &&
-        typeof backendData === "object" &&
-        !Array.isArray(backendData)
-      ) {
+      if (backendData && typeof backendData === "object" && !Array.isArray(backendData)) {
         const backendErrors = {};
 
-        Object.entries(
-          backendData
-        ).forEach(([field, message]) => {
+        Object.entries(backendData).forEach(([field, message]) => {
           if (Array.isArray(message)) {
-            backendErrors[field] =
-              message.join(", ");
-          } else if (
-            typeof message === "string"
-          ) {
-            backendErrors[field] =
-              message;
+            backendErrors[field] = message.join(", ");
+          } else if (typeof message === "string") {
+            backendErrors[field] = message;
           }
         });
 
         setFieldErrors(backendErrors);
 
         const generalError =
-          backendData.error ||
-          backendData.detail ||
-          backendData.non_field_errors?.[0];
+          backendData.error || backendData.detail || backendData.non_field_errors?.[0];
 
-        const fieldMessages =
-          Object.values(backendErrors).filter(
-            Boolean
-          );
-
-        const onlyOneFieldError =
-          fieldMessages.length === 1 &&
-          !generalError;
+        const fieldMessages = Object.values(backendErrors).filter(Boolean);
+        const onlyOneFieldError = fieldMessages.length === 1 && !generalError;
 
         showToast({
-          title:
-            "Could not create account group",
+          title: "Could not create account group",
           description:
             generalError ||
             (onlyOneFieldError
               ? fieldMessages[0]
               : Object.entries(backendErrors)
-                  .map(
-                    ([field, message]) =>
-                      `${
-                        FIELD_LABELS[field] || field
-                      }: ${message}`
-                  )
+                  .map(([field, message]) => `${FIELD_LABELS[field] || field}: ${message}`)
                   .join(" | ")),
           type: "error",
           duration: 7000,
         });
       } else {
         showToast({
-          title:
-            "Could not create account group",
-          description:
-            "Unable to create account group. Please try again.",
+          title: "Could not create account group",
+          description: "Unable to create account group. Please try again.",
           type: "error",
           duration: 7000,
         });
@@ -426,69 +470,29 @@ const AccountGroupAddPage = () => {
   /* =======================================================
      RENDER
   ======================================================= */
-
   return (
-    <Box
-      minH="100vh"
-      bg="white"
-      display="flex"
-      flexDirection="column"
-    >
+    <Box minH="100vh" bg="white" display="flex" flexDirection="column">
       <Navbar />
 
-      <Box
-        flex="1"
-        w="100%"
-        px={{ base: 3, md: 4 }}
-        py={{ base: 3, md: 4 }}
-      >
+      <Box flex="1" w="100%" px={{ base: 3, md: 4 }} py={{ base: 3, md: 4 }}>
         {/* BREADCRUMB */}
-
-        <HStack
-          gap={2}
-          fontSize="11px"
-          color={muted}
-          mb={2}
-        >
-          <Text
-            color={primaryMaroon}
-            cursor="pointer"
-            onClick={() =>
-              navigate("/admin/masters")
-            }
-          >
+        <HStack gap={2} fontSize="11px" color={muted} mb={2}>
+          <Text color={primaryMaroon} cursor="pointer" onClick={() => navigate("/admin/masters")}>
             Masters
           </Text>
-
           <Text>/</Text>
-
-          <Text
-            color={primaryMaroon}
-            cursor="pointer"
-            onClick={() =>
-              navigate("/account-groups")
-            }
-          >
+          <Text color={primaryMaroon} cursor="pointer" onClick={() => navigate("/account-groups")}>
             Account Groups
           </Text>
-
           <Text>/</Text>
-
           <Text>Add Account Group</Text>
         </HStack>
 
         {/* PAGE HEADER */}
-
         <Flex
           justify="space-between"
-          align={{
-            base: "flex-start",
-            md: "center",
-          }}
-          direction={{
-            base: "column",
-            md: "row",
-          }}
+          align={{ base: "flex-start", md: "center" }}
+          direction={{ base: "column", md: "row" }}
           gap={3}
           mb={4}
         >
@@ -503,223 +507,105 @@ const AccountGroupAddPage = () => {
             >
               ACCOUNT GROUPS
             </Text>
-
-            <Heading
-              fontSize={{
-                base: "22px",
-                md: "26px",
-              }}
-              fontWeight="800"
-              color={dark}
-              lineHeight="1.15"
-            >
+            <Heading fontSize={{ base: "22px", md: "26px" }} fontWeight="800" color={dark} lineHeight="1.15">
               Add Account Group
             </Heading>
-
-            <Text
-              color={muted}
-              fontSize="11px"
-              mt={1}
-            >
-              Create an account group and
-              define its hierarchy.
+            <Text color={muted} fontSize="11px" mt={1}>
+              Create an account group and define its hierarchy.
             </Text>
           </Box>
         </Flex>
 
         {/* FORM */}
-
         <form onSubmit={handleSubmit}>
           <Box
             bg="white"
             border={`1px solid ${border}`}
             borderRadius="8px"
-            overflow="hidden"
+            overflow="visible" // 👈 FIXED: Changed from hidden to visible so the dropdown isn't cut off
             width="100%"
+            position="relative"
+            zIndex={10}
           >
             {/* SECTION HEADER */}
-
-            <Box
-              px={{ base: 4, md: 5 }}
-              pt={4}
-              pb={3}
-            >
-              <Text
-                fontSize="14px"
-                fontWeight="800"
-                color={dark}
-              >
+            <Box px={{ base: 4, md: 5 }} pt={4} pb={3}>
+              <Text fontSize="14px" fontWeight="800" color={dark}>
                 Account Group Details
               </Text>
-
-              <Box
-                mt={2}
-                height="3px"
-                width="55px"
-                bg={primaryMaroon}
-                borderRadius="full"
-              />
+              <Box mt={2} height="3px" width="55px" bg={primaryMaroon} borderRadius="full" />
             </Box>
 
-            <Box
-              borderBottom={`1px solid ${border}`}
-            />
+            <Box borderBottom={`1px solid ${border}`} />
 
             {/* GROUP INFORMATION */}
-
-            <Box
-              px={{ base: 4, md: 5 }}
-              py={5}
-            >
-              <VStack
-                align="stretch"
-                gap={5}
-              >
+            <Box px={{ base: 4, md: 5 }} py={5}>
+              <VStack align="stretch" gap={5}>
                 <Box>
-                  <Text
-                    fontSize="13px"
-                    fontWeight="800"
-                    color={dark}
-                    mb={3}
-                  >
+                  <Text fontSize="13px" fontWeight="800" color={dark} mb={3}>
                     Group Information
                   </Text>
 
-                  <Grid
-                    templateColumns={{
-                      base: "1fr",
-                      md: "1fr 1fr",
-                    }}
-                    gap={4}
-                  >
+                  <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={4}>
                     {/* GROUP NAME */}
-
                     <GridItem>
-                      <FieldLabel required>
-                        Group Name
-                      </FieldLabel>
-
+                      <FieldLabel required>Group Name</FieldLabel>
                       <TextField
                         placeholder="Enter group name"
                         value={formData.group_name}
-                        onChange={handleChange(
-                          "group_name"
-                        )}
-                        error={
-                          fieldErrors.group_name
-                        }
+                        onChange={handleChange("group_name")}
+                        error={fieldErrors.group_name}
                       />
                     </GridItem>
 
                     {/* GROUP CODE */}
-
                     <GridItem>
-                      <FieldLabel>
-                        Group Code
-                      </FieldLabel>
-
+                      <FieldLabel>Group Code</FieldLabel>
                       <TextField
                         placeholder="Enter group code (optional)"
                         value={formData.group_code}
-                        onChange={handleChange(
-                          "group_code"
-                        )}
-                        error={
-                          fieldErrors.group_code
-                        }
+                        onChange={handleChange("group_code")}
+                        error={fieldErrors.group_code}
                       />
                     </GridItem>
 
                     {/* ALIAS */}
-
                     <GridItem>
-                      <FieldLabel>
-                        Alias
-                      </FieldLabel>
-
+                      <FieldLabel>Alias</FieldLabel>
                       <TextField
                         placeholder="Enter alias (optional)"
                         value={formData.alias}
-                        onChange={handleChange(
-                          "alias"
-                        )}
+                        onChange={handleChange("alias")}
                         error={fieldErrors.alias}
                       />
                     </GridItem>
 
-                    {/* UNDER GROUP */}
-
+                    {/* UNDER GROUP (Searchable) */}
                     <GridItem>
-                      <FieldLabel>
-                        Under Group
-                      </FieldLabel>
-
-                      <AccountGroupSelect
+                      <FieldLabel>Under Group</FieldLabel>
+                      <SearchableAccountGroupSelect
                         value={formData.under_group}
-                        onChange={handleChange(
-                          "under_group"
-                        )}
+                        onChange={handleChange("under_group")}
                         groups={groups}
-                        error={
-                          fieldErrors.under_group
-                        }
+                        error={fieldErrors.under_group}
+                        isLoading={isLoadingGroups}
                       />
-
-                      {isLoadingGroups && (
-                        <Text
-                          fontSize="10px"
-                          color={muted}
-                          mt={1}
-                        >
-                          Loading account groups...
-                        </Text>
-                      )}
                     </GridItem>
                   </Grid>
                 </Box>
 
                 <Box borderBottom="1px solid #EEF1F5" />
 
-                {/* GROUP HIERARCHY */}
-
+                {/* GROUP HIERARCHY INFO */}
                 <Box>
-                  <HStack
-                    gap={2}
-                    mb={3}
-                    align="center"
-                  >
-                    <Icon
-                      as={LuFolderTree}
-                      boxSize={4}
-                      color={primaryMaroon}
-                    />
-
-                    <Text
-                      fontSize="13px"
-                      fontWeight="800"
-                      color={dark}
-                    >
+                  <HStack gap={2} mb={3} align="center">
+                    <Icon as={LuFolderTree} boxSize={4} color={primaryMaroon} />
+                    <Text fontSize="13px" fontWeight="800" color={dark}>
                       Group Hierarchy
                     </Text>
                   </HStack>
-
-                  <Box
-                    bg="#FAFBFC"
-                    border="1px solid #EEF1F5"
-                    borderRadius="6px"
-                    px={4}
-                    py={3}
-                  >
-                    <Text
-                      fontSize="11px"
-                      color={muted}
-                      lineHeight="1.6"
-                    >
-                      Select an existing account
-                      group under which this group
-                      should be created. Leave it
-                      empty to create a top-level
-                      account group.
+                  <Box bg="#FAFBFC" border="1px solid #EEF1F5" borderRadius="6px" px={4} py={3}>
+                    <Text fontSize="11px" color={muted} lineHeight="1.6">
+                      Select an existing account group under which this group should be created. Leave it empty to create a top-level account group.
                     </Text>
                   </Box>
                 </Box>
@@ -728,8 +614,7 @@ const AccountGroupAddPage = () => {
           </Box>
 
           {/* BUTTONS */}
-
-          <Flex justify="flex-end" gap={2} mt={4}>
+          <Flex justify="flex-end" gap={2} mt={4} position="relative" zIndex={5}>
             <Button
               type="button"
               variant="outline"
@@ -740,13 +625,9 @@ const AccountGroupAddPage = () => {
               height="36px"
               fontSize="11px"
               px={6}
-              onClick={() =>
-                navigate("/account-groups")
-              }
+              onClick={() => navigate("/account-groups")}
               disabled={isSubmitting}
-              _hover={{
-                bg: "rgba(174,32,80,0.05)",
-              }}
+              _hover={{ bg: "rgba(174,32,80,0.05)" }}
             >
               Cancel
             </Button>

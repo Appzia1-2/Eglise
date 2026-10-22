@@ -48,9 +48,10 @@ const ROUTE_MAP = {
   "Account Ledger": "/account-ledgers",
   Receipts: "/receipts",
   Payments: "/payments",
+  Contra: "/contra",              // ✅ NEW
   "Qurbana Receipts": "/qurbana-receipts",
   Committee: "/committees",
-  "Committee Members": "/committees", 
+  "Committee Members": "/committees",
   "List of Committee": "/committee-list-report",
   "Member List": "/member-directory",
   "Age Wise List": "/age-wise-list",
@@ -65,7 +66,7 @@ const ROUTE_MAP = {
   // ✅ Report routes (Accounts) — new report pages
   "Member Ledger": "/reports/member-ledger",
   "Income Expenditure": "/reports/income-expenditure",
-  "Receipt & Payments": "/reports/receipts-payments", // ✅ NEW ROUTE
+  "Receipt & Payments": "/reports/receipts-payments",
   "Subscription Due List": "/reports/subscription-due",
   "Donations Register": "/reports/donation-register",
   "Subscription Paid List": "/reports/subscription-paid",
@@ -141,7 +142,8 @@ const MENU_DATA = {
     },
     {
       title: "Accounts",
-      items: ["Receipts", "Payments", "Qurbana Receipts"],
+      // ✅ NEW: Contra inserted between Payments and Qurbana Receipts
+      items: ["Receipts", "Payments", "Contra", "Qurbana Receipts"],
     },
     {
       title: "Miscellaneous",
@@ -189,7 +191,7 @@ const MENU_DATA = {
         "General Ledger",
         "Member Ledger",
         "Income Expenditure",
-        "Receipt & Payments", // ✅ ADDED TO THE MENU LIST
+        "Receipt & Payments",
         "Subscription Due List",
         "Donations Register",
         "Subscription Paid List",

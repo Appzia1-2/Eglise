@@ -45,8 +45,39 @@ const DARK = "#182338";
 const MUTED = "#60708C";
 const BORDER = "#DCE2EA";
 
-// ✅ Only these natures are shown for a RECEIPT
-const RECEIPT_LEDGER_NATURES = ["INCOME", "ASSET"];
+// ============================================================
+// LEDGER FILTER FOR RECEIPTS
+// ============================================================
+//
+// A receipt posts TWO sides:
+//   1. CREDIT on an income ledger (the line the user picks)
+//   2. DEBIT  on the Cash / Bank ledger (auto-selected by the
+//      backend from payment_type)
+//
+// Therefore, only INCOME-nature ledgers are valid line targets.
+// Cash / Bank ledgers must NEVER appear here — the backend posts
+// them automatically. If they are selectable, the receipt posts
+// twice on Cash/Bank with no income side, breaking the books
+// (this is the RCP-2026-00005 bug we fixed).
+
+const RECEIPT_LEDGER_NATURES = ["INCOME"];
+
+const RECEIPT_EXCLUDE_LEDGER_NAMES = [
+  "cash in hand",
+  "balance in savings account",
+  "balance in deposit account",
+  "balance in other accounts",
+];
+
+const isReceiptLedger = (l) => {
+  const name = String(l.ledger_name || "").trim().toLowerCase();
+  const nature = String(l.ledger_nature || "").toUpperCase();
+
+  if (!RECEIPT_LEDGER_NATURES.includes(nature)) return false;
+  if (RECEIPT_EXCLUDE_LEDGER_NAMES.includes(name)) return false;
+  if (name.includes("closing")) return false;
+  return true;
+};
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -61,7 +92,6 @@ const SearchableLedgerSelect = ({ value, onChange, ledgers, placeholder }) => {
   const containerRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Find selected ledger label
   const selectedLedger = ledgers.find((l) => String(l.id) === String(value));
   const selectedLabel = selectedLedger
     ? selectedLedger.account_group_name
@@ -69,7 +99,6 @@ const SearchableLedgerSelect = ({ value, onChange, ledgers, placeholder }) => {
       : selectedLedger.ledger_name
     : "";
 
-  // Filtered list
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return ledgers;
@@ -81,7 +110,6 @@ const SearchableLedgerSelect = ({ value, onChange, ledgers, placeholder }) => {
     });
   }, [ledgers, query]);
 
-  // Close on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (containerRef.current && !containerRef.current.contains(e.target)) {
@@ -107,7 +135,6 @@ const SearchableLedgerSelect = ({ value, onChange, ledgers, placeholder }) => {
 
   return (
     <Box ref={containerRef} position="relative" w="100%">
-      {/* Trigger / Search Input */}
       {isOpen ? (
         <Box position="relative">
           <Icon
@@ -187,7 +214,6 @@ const SearchableLedgerSelect = ({ value, onChange, ledgers, placeholder }) => {
         </Box>
       )}
 
-      {/* Dropdown */}
       {isOpen && (
         <Box
           position="absolute"
@@ -257,10 +283,6 @@ const ReceiptCreatePage = () => {
     lines: [emptyLine()],
   });
 
-  /* -------------------------------------------------------
-     LOAD dropdown data
-  ------------------------------------------------------- */
-
   useEffect(() => {
     const load = async () => {
       try {
@@ -278,12 +300,9 @@ const ReceiptCreatePage = () => {
         const allLedgers = toArray(lRes);
 
         // ✅ Filter + sort ledgers for a RECEIPT
+        //    INCOME only, cash/bank excluded, closing excluded.
         const receiptLedgers = allLedgers
-          .filter((l) =>
-            RECEIPT_LEDGER_NATURES.includes(
-              String(l.ledger_nature || "").toUpperCase()
-            )
-          )
+          .filter(isReceiptLedger)
           .sort((a, b) => {
             const ga = (a.account_group_name || "").toLowerCase();
             const gb = (b.account_group_name || "").toLowerCase();
@@ -306,10 +325,6 @@ const ReceiptCreatePage = () => {
     load();
   }, []);
 
-  /* -------------------------------------------------------
-     LINE HANDLERS
-  ------------------------------------------------------- */
-
   const updateLine = (idx, patch) => {
     setForm((f) => {
       const lines = [...f.lines];
@@ -329,19 +344,11 @@ const ReceiptCreatePage = () => {
     });
   };
 
-  /* -------------------------------------------------------
-     GRAND TOTAL
-  ------------------------------------------------------- */
-
   const grandTotal = useMemo(
     () =>
       form.lines.reduce((sum, l) => sum + (Number(l.amount) || 0), 0),
     [form.lines]
   );
-
-  /* -------------------------------------------------------
-     SAVE
-  ------------------------------------------------------- */
 
   const handleSave = async () => {
     if (!form.member) {
@@ -416,16 +423,11 @@ const ReceiptCreatePage = () => {
     }
   };
 
-  /* -------------------------------------------------------
-     RENDER
-  ------------------------------------------------------- */
-
   return (
     <Box minH="100vh" bg="white" display="flex" flexDirection="column">
       <Navbar />
 
       <Box flex="1" w="100%" px={{ base: 3, md: 6 }} py={{ base: 3, md: 4 }}>
-        {/* BREADCRUMB */}
         <HStack gap={2} mb={2} color={MUTED} fontSize="11px">
           <Text
             color={PRIMARY_MAROON}
@@ -446,7 +448,6 @@ const ReceiptCreatePage = () => {
           <Text>Create Receipt</Text>
         </HStack>
 
-        {/* HEADER */}
         <Box mb={4}>
           <Text fontSize="10px" fontWeight="700" color={RED} mb={1}>
             RECEIPTS
@@ -464,7 +465,6 @@ const ReceiptCreatePage = () => {
           </Text>
         </Box>
 
-        {/* FORM CARD */}
         <Box
           border={`1px solid ${BORDER}`}
           borderRadius="8px"
@@ -905,7 +905,6 @@ const ReceiptCreatePage = () => {
             />
           </Box>
 
-          {/* SAVE BUTTON */}
           <Flex justify="flex-end">
             <Button
               bg={RED}

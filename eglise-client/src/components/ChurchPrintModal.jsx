@@ -1,85 +1,191 @@
 // src/components/ChurchPrintModal.jsx
-//
-// Shared church-headed print preview used by every report.
-// Renders an A4-styled printable sheet on screen + triggers
-// the browser print dialog when "Print" is clicked.
-//
-// Usage:
-//   <ChurchPrintModal
-//     isOpen={isOpen}
-//     onClose={() => setOpen(false)}
-//     title="MEMBER LEDGER"
-//     church={church}          // { name, address, city, state, postal_code }
-//     subtitle={<>Member Name: {name} • Period: {from} – {to}</>}
-//   >
-//     <table>...</table>
-//   </ChurchPrintModal>
 
-import React, { useEffect, useRef, useState } from "react";
-import { Box, Button, Flex, Text } from "@chakra-ui/react";
+import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import {
+  Box,
+  Button,
+  Flex,
+  HStack,
+  Text,
+  Dialog,
+  Portal,
+} from "@chakra-ui/react";
+import { LuPrinter, LuX, LuDownload } from "react-icons/lu";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
+// ============================================================
+// THEME COLORS
+// ============================================================
+const RED = "#8B1A1A";
+const RED_TABLE = "#C25A5A";
+const RED_FRAME = "#B01818";
+const RED_RIBBON_DARK = "#6B0F0F";
+const RED_RIBBON_LIGHT = "#A01818";
+const CREAM = "#FFFBF3";
+const BROWN = "#4A2A1E";
 const PRIMARY_RED = "#D7193F";
 const DARK_RED = "#A50F2E";
-const TEXT_COLOR = "#182338";
-const SECONDARY_TEXT = "#60708C";
-const BORDER_COLOR = "#DCE2EA";
 
-// Inline SVG church icon (avoids react-icons version issues)
-const ChurchIcon = ({ size = 56, color = DARK_RED }) => (
-  <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
-    <path
-      d="M32 6 L32 20 M26 12 L38 12"
-      stroke={color}
-      strokeWidth="2.5"
-      strokeLinecap="round"
-    />
-    <path
-      d="M20 20 L32 14 L44 20 L44 28 L20 28 Z"
-      stroke={color}
-      strokeWidth="2"
-      strokeLinejoin="round"
-      fill="#FFF"
-    />
-    <path
-      d="M16 60 L16 34 L48 34 L48 60 Z"
-      stroke={color}
-      strokeWidth="2"
-      fill="#FFF"
-    />
-    <path
-      d="M28 60 L28 44 L36 44 L36 60"
-      stroke={color}
-      strokeWidth="2"
-      fill="none"
-    />
-    <path
-      d="M10 60 L54 60"
-      stroke={color}
-      strokeWidth="2.5"
-      strokeLinecap="round"
-    />
-    <circle cx="32" cy="24" r="2" fill={color} />
+// ============================================================
+// ORNAMENTS & ICONS
+// ============================================================
+const ChurchIcon = () => (
+  <svg width="100" height="100" viewBox="0 0 120 120" fill="none" style={{ marginTop: "-10px" }}>
+    <path d="M60 5 V25 M50 15 H70" stroke={RED} strokeWidth="2" strokeLinecap="round" />
+    <path d="M60 25 L75 45 L45 45 Z" stroke={RED} strokeWidth="1.5" fill={CREAM} />
+    <path d="M50 45 V35 A3 3 0 0 1 56 35 V45" stroke={RED} strokeWidth="1.5" fill={CREAM} />
+    <path d="M64 45 V35 A3 3 0 0 1 70 35 V45" stroke={RED} strokeWidth="1.5" fill={CREAM} />
+    <path d="M45 45 V95 M75 45 V95" stroke={RED} strokeWidth="1.5" />
+    <path d="M45 55 L25 70 V95 M75 55 L95 70 V95" stroke={RED} strokeWidth="1.5" />
+    <path d="M25 95 V70 M95 95 V70" stroke={RED} strokeWidth="1.5" />
+    <path d="M32 95 V75 A4 4 0 0 1 38 75 V95 Z" stroke={RED} strokeWidth="1.2" fill={CREAM} />
+    <path d="M82 95 V75 A4 4 0 0 1 88 75 V95 Z" stroke={RED} strokeWidth="1.2" fill={CREAM} />
+    <path d="M52 95 V70 A8 8 0 0 1 68 70 V95 Z" stroke={RED} strokeWidth="1.5" fill={CREAM} />
+    <path d="M60 62 V95" stroke={RED} strokeWidth="1" />
+    <path d="M55 70 A5 5 0 0 1 65 70" stroke={RED} strokeWidth="1" fill="none" />
+    <path d="M15 95 H105" stroke={RED} strokeWidth="2" strokeLinecap="round" />
+    <path d="M20 98 H100" stroke={RED} strokeWidth="1" strokeLinecap="round" />
+    <path d="M60 95 V100" stroke={RED} strokeWidth="1.5" />
+    <circle cx="60" cy="55" r="4" stroke={RED} strokeWidth="1.2" fill={CREAM} />
+    <circle cx="60" cy="55" r="1.5" fill={RED} />
   </svg>
 );
 
-// Decorative corner flourish
-const CornerFlourish = ({ rotate = 0, color = DARK_RED }) => (
-  <svg
-    width="46"
-    height="46"
-    viewBox="0 0 46 46"
-    style={{ transform: `rotate(${rotate}deg)` }}
-  >
-    <path
-      d="M6 6 C 6 22, 22 6, 40 6 M6 6 C 6 22, 6 40, 6 40
-         M14 14 C 20 14, 26 20, 26 26 M20 20 C 26 20, 32 26, 32 32"
-      stroke={color}
-      strokeWidth="1.2"
-      fill="none"
-      strokeLinecap="round"
-    />
-  </svg>
+const CornerFlourish = ({ flip }) => {
+  const transform =
+    flip === "xy" ? "scale(-1, -1)" :
+    flip === "x" ? "scale(-1, 1)" :
+    flip === "y" ? "scale(1, -1)" : "none";
+  return (
+    <svg width="70" height="70" viewBox="0 0 90 90" style={{ transform, display: "block" }}>
+      <g stroke={RED} strokeWidth="1.6" fill="none" strokeLinecap="round">
+        <path d="M6 40 Q6 18 18 12 Q30 6 40 14 Q48 22 36 30 Q26 34 26 24 Q26 16 34 16" />
+        <path d="M14 6 Q38 6 40 26" />
+        <path d="M6 20 Q20 20 22 34" />
+        <path d="M46 12 Q52 8 54 14 Q50 18 46 16 Z" fill={RED} stroke="none" />
+        <path d="M12 46 Q8 52 14 54 Q18 50 16 46 Z" fill={RED} stroke="none" />
+        <circle cx="34" cy="10" r="1.8" fill={RED} stroke="none" />
+        <circle cx="10" cy="34" r="1.8" fill={RED} stroke="none" />
+        <path d="M22 22 Q30 22 30 30 Q30 38 22 38" />
+      </g>
+    </svg>
+  );
+};
+
+const RibbonTitle = ({ children }) => (
+  <Box position="relative" display="inline-block">
+    <Box position="absolute" left="-42px" top="50%" transform="translateY(-50%)" w="46px" h="46px" zIndex={1}>
+      <svg viewBox="0 0 50 50" width="46" height="46">
+        <path d="M48 25 Q38 12 28 14 Q18 16 18 25 Q18 34 28 36 Q38 38 48 25 Z M12 14 Q4 19 4 25 Q4 31 12 36 Q7 31 7 25 Q7 19 12 14 Z" fill={RED_RIBBON_DARK} stroke={RED} strokeWidth="1.2" />
+      </svg>
+    </Box>
+    <Box position="absolute" right="-42px" top="50%" transform="translateY(-50%)" w="46px" h="46px" zIndex={1}>
+      <svg viewBox="0 0 50 50" width="46" height="46">
+        <path d="M2 25 Q12 12 22 14 Q32 16 32 25 Q32 34 22 36 Q12 38 2 25 Z M38 14 Q46 19 46 25 Q46 31 38 36 Q43 31 43 25 Q43 19 38 14 Z" fill={RED_RIBBON_DARK} stroke={RED} strokeWidth="1.2" />
+      </svg>
+    </Box>
+    <Box
+      position="relative" zIndex={2} px={14} py="6px"
+      bg={`linear-gradient(to bottom, ${RED_RIBBON_LIGHT}, ${RED_RIBBON_DARK})`}
+      color="white" fontSize={{ base: "20px", md: "26px" }} fontWeight="700" letterSpacing="2px"
+      fontFamily="'Georgia', serif"
+      style={{ clipPath: "polygon(16px 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 16px 100%, 0 50%)" }}
+    >
+      {children}
+    </Box>
+  </Box>
 );
+
+const ChurchDivider = () => (
+  <Flex align="center" justify="center" w="100%" my={4} px={10}>
+    <Box flex="1" h="1px" bg={`linear-gradient(to right, transparent, ${RED_TABLE})`} />
+    <Box mx={3} color={RED} fontSize="20px" lineHeight="1">✠</Box>
+    <Box flex="1" h="1px" bg={`linear-gradient(to left, transparent, ${RED_TABLE})`} />
+  </Flex>
+);
+
+// ============================================================
+// SHARED SHEET PARTS
+// ============================================================
+const SheetHeader = ({ church, title, subtitle }) => (
+  <Box>
+    <Flex align="center" justify="center" gap={5} mt="10px" mb={1}>
+      <ChurchIcon />
+      <Box textAlign="center">
+        <Text fontSize="28px" fontWeight="700" color={RED} lineHeight="1.1" fontFamily="'Georgia', serif">
+          {church.name || "Church Name"}
+        </Text>
+        {church.address && (
+          <Text fontSize="13px" color={BROWN} fontWeight="500" mt={1} fontFamily="'Georgia', serif">
+            {church.address}
+          </Text>
+        )}
+      </Box>
+    </Flex>
+
+    <ChurchDivider />
+
+    <Box textAlign="center" my="10px" position="relative">
+      <RibbonTitle>{title}</RibbonTitle>
+    </Box>
+
+    {subtitle && (
+      <Text textAlign="center" fontSize="15px" fontWeight="700" color={RED} mb={4} fontFamily="'Georgia', serif">
+        {subtitle}
+      </Text>
+    )}
+  </Box>
+);
+
+const SheetFooter = () => (
+  <Box mt={6} mb={2} textAlign="center" fontFamily="'Georgia', serif" style={{ breakInside: "avoid" }}>
+    <ChurchDivider />
+    <Text fontSize="11px" color={BROWN} fontStyle="italic" letterSpacing="0.5px">
+      "For where two or three are gathered in my name, there am I among them." — Matthew 18:20
+    </Text>
+    <Text fontSize="9px" color={RED_TABLE} mt={2} textTransform="uppercase" letterSpacing="1px" fontWeight="bold">
+      Official Document • Malankara Orthodox Syrian Church
+    </Text>
+  </Box>
+);
+
+// ============================================================
+// PRINT-ONLY COPY
+// ============================================================
+const PrintSheet = ({ church, title, subtitle, variant, children }) => {
+  const isVoucher = variant === "voucher";
+
+  return createPortal(
+    <div id="church-print-root" style={{ background: isVoucher ? "#fff" : CREAM }}>
+      {!isVoucher && (
+        <div className="print-frame">
+          <div className="print-frame-inner" />
+          <div className="print-corner" style={{ top: -6, left: -6 }}><CornerFlourish /></div>
+          <div className="print-corner" style={{ top: -6, right: -6 }}><CornerFlourish flip="x" /></div>
+          <div className="print-corner" style={{ bottom: -6, left: -6 }}><CornerFlourish flip="y" /></div>
+          <div className="print-corner" style={{ bottom: -6, right: -6 }}><CornerFlourish flip="xy" /></div>
+        </div>
+      )}
+
+      <table className="print-table">
+        <thead><tr><td><div className="print-spacer" /></td></tr></thead>
+        <tfoot><tr><td><div className="print-spacer" /></td></tr></tfoot>
+        <tbody>
+          <tr>
+            <td className="print-body">
+              {!isVoucher && <SheetHeader church={church} title={title} subtitle={subtitle} />}
+              {children}
+              {!isVoucher && <SheetFooter />}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>,
+    document.body
+  );
+};
 
 // ============================================================
 // MAIN COMPONENT
@@ -87,331 +193,213 @@ const CornerFlourish = ({ rotate = 0, color = DARK_RED }) => (
 const ChurchPrintModal = ({
   isOpen,
   onClose,
-  title,                     // e.g. "MEMBER LEDGER"
-  subtitle,                  // JSX node — e.g. "Member Name: George • Period: ..."
-  church = {},               // { name, address, city, state, postal_code }
-  children,                  // the <table> or content to render inside
-  onDownloadPDF,             // optional custom handler; if absent, uses html2pdf
-  pdfFileName,               // optional filename for downloaded PDF
-  orientation = "portrait",  // "portrait" | "landscape" — for the sheet size hint
-  showPdfButton = true,      // hide the Download PDF button if needed
+  title,
+  church = {},
+  subtitle,
+  children,
+  pdfFileName = "report.pdf",
+  defaultOrientation = "portrait",
+  variant = "ornate", // ✅ Added variant prop ("ornate" | "voucher")
 }) => {
-  const sheetRef = useRef(null);
+  const [orientation, setOrientation] = useState(defaultOrientation);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const printRef = useRef(null);
 
-  // Lock body scroll while open
   useEffect(() => {
-    if (!isOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev || "";
-    };
-  }, [isOpen]);
+    if (isOpen) setOrientation(defaultOrientation);
+  }, [isOpen, defaultOrientation]);
 
-  if (!isOpen) return null;
+  const handlePrint = () => window.print();
 
-  const handlePrint = () => {
-    window.print();
-  };
-
-  // ------------------------------------------------------------
-  // Default PDF generator using html2pdf.js
-  // Falls back to window.print() if html2pdf isn't available
-  // ------------------------------------------------------------
-  const handleDownloadPDF = async () => {
-    if (onDownloadPDF) {
-      onDownloadPDF();
-      return;
-    }
-
-    const element = sheetRef.current;
-    if (!element) {
-      handlePrint();
-      return;
-    }
-
+  const handleDownloadPdf = async () => {
+    if (!printRef.current) return;
     try {
       setIsGeneratingPdf(true);
 
-      // Dynamic import so the bundle only loads html2pdf when needed
-      const html2pdf = (await import("html2pdf.js")).default;
+      const clone = printRef.current.cloneNode(true);
+      clone.style.width = orientation === "portrait" ? "210mm" : "297mm";
+      clone.style.height = "auto";
 
-      const safeTitle = String(title || "report")
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "");
+      const wrapper = document.createElement("div");
+      wrapper.style.position = "fixed";
+      wrapper.style.left = "-9999px";
+      wrapper.style.top = "0";
+      wrapper.appendChild(clone);
+      document.body.appendChild(wrapper);
 
-      const fileName =
-        pdfFileName || `${safeTitle || "report"}.pdf`;
+      const canvas = await html2canvas(clone, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: variant === "voucher" ? "#ffffff" : CREAM,
+        logging: false,
+      });
 
-      await html2pdf()
-        .set({
-          margin: 0,
-          filename: fileName,
-          image: { type: "jpeg", quality: 0.98 },
-          html2canvas: {
-            scale: 2,
-            useCORS: true,
-            backgroundColor: "#ffffff",
-            logging: false,
-            allowTaint: true,
-            imageTimeout: 5000,
-            scrollX: 0,
-            scrollY: 0,
-            windowWidth: element.scrollWidth,
-          },
-          jsPDF: {
-            orientation: orientation === "landscape" ? "l" : "p",
-            unit: "mm",
-            format: "a4",
-            compress: true,
-          },
-          pagebreak: { mode: ["avoid-all", "css", "legacy"] },
-        })
-        .from(element)
-        .save();
-    } catch (error) {
-      console.error("PDF generation error:", error);
-      // Last-resort fallback: open the system print dialog
-      handlePrint();
+      document.body.removeChild(wrapper);
+
+      const imgData = canvas.toDataURL("image/jpeg", 0.98);
+
+      const pdf = new jsPDF(orientation, "mm", "a4");
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight - pdfHeight;
+      let position = 0;
+      pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+
+      while (heightLeft > 1) {
+        position -= pdfHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      pdf.save(pdfFileName);
+    } catch (err) {
+      console.error("PDF generation failed", err);
+      alert("Failed to generate PDF. Please use the Print button and save as PDF instead.");
     } finally {
       setIsGeneratingPdf(false);
     }
   };
 
-  const churchName = church.name || "Church Name";
-  const churchAddress = [
-    church.address,
-    church.city,
-    church.state,
-    church.postal_code,
-  ]
-    .filter(Boolean)
-    .join(", ");
-
-  const sheetWidth = orientation === "landscape" ? "297mm" : "210mm";
-  const sheetMinHeight = orientation === "landscape" ? "200mm" : "280mm";
+  const isVoucher = variant === "voucher";
 
   return (
-    <Box
-      position="fixed"
-      inset={0}
-      zIndex={2000}
-      bg="rgba(15,23,42,0.55)"
-      overflowY="auto"
-      className="print-modal-root"
-    >
-      {/* TOP TOOLBAR (hidden on print) */}
-      <Flex
-        justify="center"
-        align="center"
-        gap={3}
-        py={4}
-        px={4}
-        className="no-print"
-      >
-        <Button
-          variant="outline"
-          h="40px"
-          px={5}
-          bg="white"
-          borderColor={PRIMARY_RED}
-          color={PRIMARY_RED}
-          borderRadius="6px"
-          fontSize="12px"
-          fontWeight="600"
-          onClick={onClose}
-          _hover={{ bg: "#FFF5F7" }}
-        >
-          ✕ Close
-        </Button>
+    <Dialog.Root open={isOpen} onOpenChange={(e) => !e.open && onClose()} size="full">
+      <Portal>
+        <Dialog.Backdrop bg="rgba(0,0,0,0.8)" />
+        <Dialog.Positioner>
+          <Dialog.Content bg="transparent" boxShadow="none" maxW="100%" m={0} h="100vh" display="flex" flexDirection="column">
 
-        {showPdfButton && (
-          <Button
-            variant="outline"
-            h="40px"
-            px={5}
-            bg="white"
-            borderColor={PRIMARY_RED}
-            color={PRIMARY_RED}
-            borderRadius="6px"
-            fontSize="12px"
-            fontWeight="600"
-            onClick={handleDownloadPDF}
-            isLoading={isGeneratingPdf}
-            loadingText="Generating…"
-            _hover={{ bg: "#FFF5F7" }}
-          >
-            📄 Download PDF
-          </Button>
-        )}
+            {/* TOP CONTROLS */}
+            <Flex bg="white" p={3} justify="space-between" align="center" boxShadow="md" position="sticky" top={0} zIndex={10} flexShrink={0}>
+              <Button variant="outline" size="sm" onClick={onClose}><LuX style={{ marginRight: "6px" }} /> Close</Button>
 
-        <Button
-          h="40px"
-          px={6}
-          bg={PRIMARY_RED}
-          color="white"
-          borderRadius="6px"
-          fontSize="12px"
-          fontWeight="600"
-          onClick={handlePrint}
-          _hover={{ bg: DARK_RED }}
-        >
-          🖨 Print
-        </Button>
-      </Flex>
+              <HStack>
+                <Button size="sm" variant={orientation === "portrait" ? "solid" : "outline"} bg={orientation === "portrait" ? PRIMARY_RED : "white"} color={orientation === "portrait" ? "white" : PRIMARY_RED} borderColor={PRIMARY_RED} onClick={() => setOrientation("portrait")}>Portrait</Button>
+                <Button size="sm" variant={orientation === "landscape" ? "solid" : "outline"} bg={orientation === "landscape" ? PRIMARY_RED : "white"} color={orientation === "landscape" ? "white" : PRIMARY_RED} borderColor={PRIMARY_RED} onClick={() => setOrientation("landscape")}>Landscape</Button>
+              </HStack>
 
-      {/* A4 SHEET */}
-      <Flex justify="center" pb={8} px={3} className="print-scroll-wrap">
-        <Box
-          ref={sheetRef}
-          className="print-sheet"
-          bg="white"
-          width={sheetWidth}
-          minH={sheetMinHeight}
-          px="14mm"
-          py="12mm"
-          boxShadow="0 10px 40px rgba(0,0,0,0.25)"
-          position="relative"
-          fontFamily="Georgia, 'Times New Roman', serif"
-        >
-          {/* Inner double border */}
-          <Box
-            position="absolute"
-            inset="6mm"
-            border={`1px solid ${DARK_RED}`}
-            pointerEvents="none"
-          />
-          <Box
-            position="absolute"
-            inset="7.5mm"
-            border={`2px solid ${DARK_RED}`}
-            pointerEvents="none"
-          />
+              <HStack>
+                <Button size="sm" variant="outline" onClick={handleDownloadPdf} loading={isGeneratingPdf}><LuDownload style={{ marginRight: "6px" }} /> Download PDF</Button>
+                <Button size="sm" bg={PRIMARY_RED} color="white" onClick={handlePrint} _hover={{ bg: DARK_RED }}><LuPrinter style={{ marginRight: "6px" }} /> Print</Button>
+              </HStack>
+            </Flex>
 
-          {/* Corner flourishes */}
-          <Box position="absolute" top="10mm" left="10mm" pointerEvents="none">
-            <CornerFlourish rotate={0} />
-          </Box>
-          <Box position="absolute" top="10mm" right="10mm" pointerEvents="none">
-            <CornerFlourish rotate={90} />
-          </Box>
-          <Box
-            position="absolute"
-            bottom="10mm"
-            left="10mm"
-            pointerEvents="none"
-          >
-            <CornerFlourish rotate={-90} />
-          </Box>
-          <Box
-            position="absolute"
-            bottom="10mm"
-            right="10mm"
-            pointerEvents="none"
-          >
-            <CornerFlourish rotate={180} />
-          </Box>
+            {/* PAPER PREVIEW (screen only) */}
+            <Box
+              p={{ base: 2, md: 8 }}
+              bg="#525659"
+              display="flex"
+              justifyContent="center"
+              alignItems="flex-start"
+              overflowY="auto"
+              flex="1"
+              minH="0"
+            >
+              <Box
+                ref={printRef}
+                bg={isVoucher ? "#ffffff" : CREAM} // White for voucher, Cream for ornate
+                p={isVoucher ? "0" : "4mm"}        // No padding for voucher
+                fontFamily="'Georgia', 'Times New Roman', serif"
+                color={RED}
+                style={{
+                  width: orientation === "portrait" ? "210mm" : "297mm",
+                  minHeight: orientation === "portrait" ? "297mm" : "210mm",
+                  margin: "0 auto",
+                  transition: "width 0.3s ease",
+                  flexShrink: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                }}
+              >
+                {isVoucher ? (
+                  // VOUCHER: Render just the child without borders/headers
+                  <Box flex="1" display="flex" alignItems="center" justifyContent="center" p={6}>
+                    {children}
+                  </Box>
+                ) : (
+                  // ORNATE: Standard decorative layout
+                  <Box position="relative" border={`1.5px solid ${RED_FRAME}`} p="14px" bg={CREAM} display="flex" flexDirection="column" flex="1">
+                    <Box position="absolute" top="5px" left="5px" right="5px" bottom="5px" border={`1px solid ${RED_FRAME}`} pointerEvents="none" />
 
-          {/* INNER CONTENT */}
-          <Box position="relative" zIndex={1}>
-            {/* CHURCH HEADER */}
-            <Flex align="center" gap={5} mb={5}>
-              <Box flexShrink={0}>
-                <ChurchIcon size={64} color={DARK_RED} />
-              </Box>
-              <Box flex="1" textAlign="center">
-                <Text
-                  fontSize="22px"
-                  fontWeight="700"
-                  color={DARK_RED}
-                  lineHeight="1.15"
-                  fontFamily="Georgia, serif"
-                >
-                  {churchName}
-                </Text>
-                {churchAddress && (
-                  <Text
-                    fontSize="11px"
-                    color={TEXT_COLOR}
-                    mt={1}
-                    fontFamily="Georgia, serif"
-                  >
-                    {churchAddress}
-                  </Text>
+                    <Box position="absolute" top="-6px" left="-6px" zIndex={5}><CornerFlourish /></Box>
+                    <Box position="absolute" top="-6px" right="-6px" zIndex={5}><CornerFlourish flip="x" /></Box>
+                    <Box position="absolute" bottom="-6px" left="-6px" zIndex={5}><CornerFlourish flip="y" /></Box>
+                    <Box position="absolute" bottom="-6px" right="-6px" zIndex={5}><CornerFlourish flip="xy" /></Box>
+
+                    <SheetHeader church={church} title={title} subtitle={subtitle} />
+
+                    <Box position="relative" zIndex={2} flex="1">
+                      {children}
+                    </Box>
+
+                    <SheetFooter />
+                  </Box>
                 )}
               </Box>
-              <Box width="64px" flexShrink={0} />
-            </Flex>
+            </Box>
 
-            {/* BANNER TITLE */}
-            <Flex justify="center" mb={5}>
-              <Box
-                borderTop={`2px solid ${DARK_RED}`}
-                borderBottom={`2px solid ${DARK_RED}`}
-                px={7}
-                py={1.5}
-                bg="#FFF6F8"
-              >
-                <Text
-                  fontSize="16px"
-                  fontWeight="700"
-                  color={DARK_RED}
-                  letterSpacing="2.5px"
-                  fontFamily="Georgia, serif"
-                >
-                  {title}
-                </Text>
-              </Box>
-            </Flex>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Portal>
 
-            {/* SUBTITLE (Member / Period etc.) */}
-            {subtitle && (
-              <Box mb={4} textAlign="center">
-                <Text
-                  fontSize="12px"
-                  color={TEXT_COLOR}
-                  fontFamily="Georgia, serif"
-                >
-                  {subtitle}
-                </Text>
-              </Box>
-            )}
+      {/* Real print output lives outside the dialog */}
+      {isOpen && (
+        <PrintSheet church={church} title={title} subtitle={subtitle} variant={variant}>
+          {children}
+        </PrintSheet>
+      )}
 
-            {/* MAIN CONTENT — the table */}
-            <Box className="print-content">{children}</Box>
-          </Box>
-        </Box>
-      </Flex>
-
-      {/* GLOBAL PRINT CSS — only applies when printing */}
       <style>{`
+        @page { size: A4 ${orientation}; margin: 0; }
+
+        #church-print-root { display: none; }
+
         @media print {
-          body * { visibility: hidden !important; }
-          .print-modal-root,
-          .print-modal-root * { visibility: visible !important; }
-          .print-modal-root {
-            position: absolute !important;
-            inset: 0 !important;
-            background: white !important;
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            height: auto !important;
+            overflow: visible !important;
+            background: ${isVoucher ? "#ffffff" : CREAM} !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
           }
-          .no-print { display: none !important; }
-          .print-scroll-wrap { padding: 0 !important; }
-          .print-sheet {
-            box-shadow: none !important;
-            width: ${sheetWidth} !important;
-            min-height: auto !important;
-            margin: 0 auto !important;
-            padding: 10mm 12mm !important;
-          }
-          @page {
-            size: A4 ${orientation};
-            margin: 6mm;
-          }
+
+          body > *:not(#church-print-root) { display: none !important; }
+          #church-print-root { display: block !important; width: 100%; }
+
+          ${!isVoucher ? `
+            .print-frame {
+              position: fixed;
+              top: 4mm; left: 4mm; right: 4mm; bottom: 4mm;
+              border: 1.5px solid ${RED_FRAME};
+              pointer-events: none;
+            }
+            .print-frame-inner {
+              position: absolute;
+              top: 5px; left: 5px; right: 5px; bottom: 5px;
+              border: 1px solid ${RED_FRAME};
+            }
+            .print-corner { position: absolute; line-height: 0; }
+            .print-spacer { height: 14mm; }
+            .print-body { padding: 0 12mm !important; }
+            .print-body tr { break-inside: avoid; page-break-inside: avoid; }
+            .print-body thead { display: table-header-group; }
+          ` : `
+            .print-spacer { height: 10mm; }
+            .print-body { padding: 10mm !important; }
+            .print-body tr { break-inside: avoid; }
+          `}
+
+          .print-table { width: 100%; border-collapse: collapse; }
+          .print-table td { padding: 0; }
         }
       `}</style>
-    </Box>
+    </Dialog.Root>
   );
 };
 

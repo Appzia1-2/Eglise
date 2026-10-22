@@ -4,9 +4,20 @@ import React from "react";
 import { amountInWords } from "../utils/amountInWords";
 
 /* =========================================================
+   PALETTE
+========================================================= */
+const RED = "#9B1230";
+const RED_DARK = "#6E0B20";
+const RED_LINE = "#C9475F";
+const GOLD = "#D99A2B";
+const GOLD_LIGHT = "#F3C96B";
+const PAPER = "#FFFAF2";
+const LABEL_BG = "#FFF3E4";
+const INK = "#2A1310";
+
+/* =========================================================
    FORMATTERS
 ========================================================= */
-
 const formatMoney = (v) =>
   Number(v || 0).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
@@ -25,342 +36,323 @@ const formatDate = (s) => {
 };
 
 /* =========================================================
-   ORNAMENT
+   CORNER ORNAMENT  (sx / sy = mirror on X / Y)
 ========================================================= */
-
-const CornerFlourish = ({ flip = false, rotate = 0 }) => (
+const Corner = ({ sx = 1, sy = 1, style }) => (
   <svg
-    viewBox="0 0 60 60"
-    width="42"
-    height="42"
+    viewBox="0 0 64 64"
+    width="46"
+    height="46"
     style={{
       position: "absolute",
-      transform: `scaleX(${flip ? -1 : 1}) rotate(${rotate}deg)`,
       pointerEvents: "none",
+      transform: `scale(${sx}, ${sy})`,
+      zIndex: 5,
+      ...style,
     }}
   >
-    <path
-      d="M4 4 C 24 4, 30 12, 30 24 C 30 12, 40 4, 56 4"
-      fill="none"
-      stroke="#8B0E22"
-      strokeWidth="1.4"
-    />
-    <path
-      d="M8 8 C 22 8, 26 14, 26 22"
-      fill="none"
-      stroke="#8B0E22"
-      strokeWidth="1"
-    />
-    <circle cx="6" cy="6" r="2.4" fill="#C8A44C" stroke="#8B0E22" strokeWidth="0.8" />
-    <circle cx="54" cy="6" r="2.4" fill="#C8A44C" stroke="#8B0E22" strokeWidth="0.8" />
+    <g fill="none" stroke={RED} strokeWidth="1.6" strokeLinecap="round">
+      <path d="M4 58 V22 Q4 6 20 6 H58" />
+      <path d="M12 58 V26 Q12 14 24 14 H58" strokeWidth="1" />
+      <path d="M18 40 Q18 26 32 26 Q40 26 40 32 Q40 38 34 36" />
+      <path d="M26 18 Q36 10 46 16" />
+      <path d="M10 28 Q16 38 8 46" />
+    </g>
+    <circle cx="9" cy="11" r="3.2" fill={RED} />
+    <circle cx="44" cy="19" r="2" fill={RED} />
+    <circle cx="16" cy="44" r="2" fill={RED} />
+    <path d="M30 30 l3 -4 l3 4 l-3 4 z" fill={RED} />
   </svg>
 );
 
 /* =========================================================
-   CHURCH ILLUSTRATION
+   CHURCH ILLUSTRATION (gold + red line art)
 ========================================================= */
-
-const ChurchIllustration = () => (
-  <svg viewBox="0 0 100 110" width="70" height="80">
-    <rect x="30" y="50" width="40" height="55" fill="#FBE9C8" stroke="#8B0E22" strokeWidth="1.2" />
-    <path d="M44 105 L44 82 Q50 74 56 82 L56 105 Z" fill="#8B0E22" opacity="0.75" />
-    <polygon points="26,52 50,32 74,52" fill="#FBE9C8" stroke="#8B0E22" strokeWidth="1.2" />
-    <rect x="44" y="18" width="12" height="24" fill="#FBE9C8" stroke="#8B0E22" strokeWidth="1.2" />
-    <polygon points="42,18 50,4 58,18" fill="#FBE9C8" stroke="#8B0E22" strokeWidth="1.2" />
-    <line x1="50" y1="-4" x2="50" y2="4" stroke="#8B0E22" strokeWidth="1.6" />
-    <line x1="46" y1="0" x2="54" y2="0" stroke="#8B0E22" strokeWidth="1.6" />
-    <rect x="36" y="70" width="5" height="12" fill="#8B0E22" opacity="0.5" />
-    <rect x="59" y="70" width="5" height="12" fill="#8B0E22" opacity="0.5" />
-    <rect x="20" y="105" width="60" height="3" fill="#8B0E22" />
+const ChurchIllustration = ({ size = 120, opacity = 1 }) => (
+  <svg viewBox="0 0 140 150" width={size} height={size * (150 / 140)} style={{ opacity }}>
+    {/* cross */}
+    <path d="M70 2 V26 M61 11 H79" stroke={RED} strokeWidth="3" strokeLinecap="round" />
+    {/* tower roof */}
+    <path d="M52 44 Q70 26 88 44 Z" fill={GOLD} stroke={RED} strokeWidth="2" />
+    {/* tower */}
+    <rect x="54" y="44" width="32" height="34" fill={PAPER} stroke={RED} strokeWidth="2" />
+    <path d="M64 70 V56 Q70 49 76 56 V70 Z" fill={RED} />
+    <circle cx="70" cy="52" r="0" />
+    {/* nave roof */}
+    <path d="M36 82 L70 58 L104 82 Z" fill={GOLD} stroke={RED} strokeWidth="2" />
+    {/* nave */}
+    <rect x="42" y="82" width="56" height="52" fill={PAPER} stroke={RED} strokeWidth="2" />
+    <circle cx="70" cy="92" r="5" fill={GOLD_LIGHT} stroke={RED} strokeWidth="1.6" />
+    {/* door */}
+    <path d="M58 134 V108 Q58 97 70 97 Q82 97 82 108 V134 Z" fill={RED} stroke={RED_DARK} strokeWidth="1.5" />
+    <path d="M70 97 V134" stroke={GOLD_LIGHT} strokeWidth="1" />
+    {/* wings */}
+    <path d="M42 96 L22 108 V134 H42" fill={PAPER} stroke={RED} strokeWidth="2" />
+    <path d="M98 96 L118 108 V134 H98" fill={PAPER} stroke={RED} strokeWidth="2" />
+    <path d="M28 134 V118 Q28 112 33 112 Q38 112 38 118 V134 Z" fill={GOLD} stroke={RED} strokeWidth="1.4" />
+    <path d="M102 134 V118 Q102 112 107 112 Q112 112 112 118 V134 Z" fill={GOLD} stroke={RED} strokeWidth="1.4" />
+    {/* steps */}
+    <rect x="16" y="134" width="108" height="5" fill={RED} />
+    <rect x="10" y="139" width="120" height="5" fill={RED_DARK} />
   </svg>
 );
 
 /* =========================================================
-   STYLES
+   SMALL PIECES
 ========================================================= */
+const Label = ({ children, ...rest }) => (
+  <td
+    {...rest}
+    style={{
+      border: `1px solid ${RED_LINE}`,
+      background: LABEL_BG,
+      padding: "7px 12px",
+      fontSize: 13,
+      fontWeight: 500,
+      color: INK,
+      whiteSpace: "nowrap",
+    }}
+  >
+    {children}
+  </td>
+);
 
-const cellLabel = {
-  border: "1px solid #8B0E22",
-  padding: "6px 10px",
-  background: "#FDF3E0",
-  fontWeight: 600,
-  fontSize: 12,
-  color: "#5A2418",
-  whiteSpace: "nowrap",
-  width: "18%",
-};
+const Value = ({ children, style, ...rest }) => (
+  <td
+    {...rest}
+    style={{
+      border: `1px solid ${RED_LINE}`,
+      padding: "7px 12px",
+      fontSize: 13.5,
+      color: INK,
+      ...style,
+    }}
+  >
+    {children}
+  </td>
+);
 
-const cellValue = {
-  border: "1px solid #8B0E22",
-  padding: "6px 10px",
-  fontSize: 12.5,
-  color: "#2A1310",
-};
-
-const SignatureBlock = ({ label }) => (
-  <div style={{ textAlign: "center", flex: 1 }}>
-    <div
-      style={{
-        borderTop: "1px solid #4A2019",
-        width: "80%",
-        margin: "0 auto 4px",
-      }}
-    />
-    <div style={{ fontSize: 11, color: "#4A2019" }}>{label}</div>
+const Signature = ({ label }) => (
+  <div style={{ flex: 1, textAlign: "center" }}>
+    <div style={{ borderTop: `1.5px solid ${INK}`, width: "78%", margin: "0 auto 5px" }} />
+    <div style={{ fontSize: 12.5, color: INK }}>{label}</div>
   </div>
 );
 
 /* =========================================================
    MAIN VOUCHER
 ========================================================= */
-
 const PaymentVoucher = ({ payment, church }) => {
   const total = payment?.amount ?? 0;
-
   const churchName = church?.name || "Parish Name";
-  const churchAddress = [church?.city, church?.state]
-    .filter(Boolean)
-    .join(", ");
+  const churchAddress =
+    church?.full_address ||
+    church?.address ||
+    [church?.city, church?.state].filter(Boolean).join(", ");
 
   return (
     <div
       className="payment-voucher"
       style={{
         width: "100%",
-        maxWidth: "1000px",
+        maxWidth: 1000,
         margin: "0 auto",
-        background: "#FFFDF6",
-        border: "1.5px solid #8B0E22",
-        padding: "20px 26px",
-        position: "relative",
-        fontFamily: "'Georgia', 'Times New Roman', serif",
-        color: "#2A1310",
+        background: PAPER,
+        padding: 10,
         boxSizing: "border-box",
+        fontFamily: "'Georgia', 'Times New Roman', serif",
+        color: INK,
+        position: "relative",
+        WebkitPrintColorAdjust: "exact",
+        printColorAdjust: "exact",
+        breakInside: "avoid",
       }}
     >
-      {/* ORNATE CORNERS */}
-      <div style={{ position: "absolute", top: 6, left: 6 }}>
-        <CornerFlourish />
-      </div>
-      <div style={{ position: "absolute", top: 6, right: 6 }}>
-        <CornerFlourish flip />
-      </div>
-      <div style={{ position: "absolute", bottom: 6, left: 6 }}>
-        <CornerFlourish rotate={90} />
-      </div>
-      <div style={{ position: "absolute", bottom: 6, right: 6 }}>
-        <CornerFlourish flip rotate={90} />
-      </div>
-
-      {/* INNER BORDER */}
+      {/* DOUBLE FRAME */}
       <div
         style={{
-          border: "1px solid #D4B16A",
-          padding: "14px 18px",
+          position: "relative",
+          border: `2px solid ${RED}`,
+          padding: 6,
+          boxSizing: "border-box",
         }}
       >
-        {/* HEADER */}
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 14,
-            marginBottom: 8,
+            position: "relative",
+            border: `1px solid ${RED}`,
+            padding: "18px 26px 22px",
+            boxSizing: "border-box",
+            overflow: "hidden",
           }}
         >
-          <div style={{ flexShrink: 0 }}>
-            <ChurchIllustration />
+          {/* WATERMARK */}
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              pointerEvents: "none",
+              zIndex: 0,
+            }}
+          >
+            <ChurchIllustration size={230} opacity={0.045} />
           </div>
 
-          <div style={{ flex: 1, textAlign: "center" }}>
-            <div
+          <div style={{ position: "relative", zIndex: 2 }}>
+            {/* HEADER */}
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
+              {/* left: church */}
+              <div style={{ width: 150, flexShrink: 0, display: "flex", justifyContent: "center" }}>
+                <ChurchIllustration size={118} />
+              </div>
+
+              {/* center: name, address, banner */}
+              <div style={{ flex: 1, textAlign: "center", minWidth: 0 }}>
+                <div
+                  style={{
+                    fontFamily:
+                      "'UnifrakturCook', 'UnifrakturMaguntia', 'Old English Text MT', 'Blackadder ITC', 'Georgia', serif",
+                    fontSize: 42,
+                    fontWeight: 700,
+                    color: RED_DARK,
+                    lineHeight: 1.05,
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  {churchName}
+                </div>
+                {churchAddress && (
+                  <div style={{ fontSize: 16, color: INK, marginTop: 4 }}>{churchAddress}</div>
+                )}
+
+                {/* RIBBON BANNER */}
+                <div style={{ display: "flex", justifyContent: "center", marginTop: 12 }}>
+                  <div
+                    style={{
+                      padding: 3,
+                      background: `linear-gradient(180deg, ${GOLD_LIGHT}, ${GOLD})`,
+                      clipPath:
+                        "polygon(0 50%, 16px 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 16px 100%)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        background: `linear-gradient(180deg, ${RED} 0%, ${RED_DARK} 100%)`,
+                        color: "#FFF4D6",
+                        padding: "6px 64px",
+                        fontSize: 24,
+                        fontWeight: 700,
+                        letterSpacing: 3,
+                        whiteSpace: "nowrap",
+                        clipPath:
+                          "polygon(0 50%, 14px 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 14px 100%)",
+                      }}
+                    >
+                      PAYMENT VOUCHER
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* right: voucher no / date */}
+              <div style={{ width: 200, flexShrink: 0, textAlign: "right", fontSize: 13.5, lineHeight: 1.9, paddingTop: 34 }}>
+                <div>
+                  Voucher No.{" "}
+                  <span style={{ fontWeight: 600 }}>{payment?.voucher_number || "—"}</span>
+                </div>
+                <div>
+                  Date <span style={{ fontWeight: 600 }}>{formatDate(payment?.payment_date)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* DETAILS TABLE */}
+            <table
               style={{
-                fontSize: 30,
-                fontWeight: 700,
-                color: "#8B0E22",
-                letterSpacing: 1,
-                lineHeight: 1.1,
+                width: "100%",
+                borderCollapse: "collapse",
+                tableLayout: "fixed",
+                marginTop: 14,
+                border: `1px solid ${RED_LINE}`,
+                background: "rgba(255,250,242,0.85)",
               }}
             >
-              {churchName}
-            </div>
-            {churchAddress && (
-              <div
-                style={{
-                  fontSize: 13,
-                  color: "#4A2019",
-                  marginTop: 2,
-                }}
-              >
-                {churchAddress}
-              </div>
-            )}
-          </div>
+              <colgroup>
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "17%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "22%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "19%" }} />
+              </colgroup>
+              <tbody>
+                <tr>
+                  <Label>Party Name</Label>
+                  <Value colSpan={5}>{payment?.party_name || "—"}</Value>
+                </tr>
 
-          <div
-            style={{
-              textAlign: "right",
-              fontSize: 12,
-              lineHeight: 1.6,
-              minWidth: 190,
-            }}
-          >
-            <div>
-              <strong>Voucher No.</strong>{" "}
-              <span style={{ fontFamily: "monospace" }}>
-                {payment?.voucher_number || "—"}
-              </span>
-            </div>
-            <div>
-              <strong>Date</strong>{" "}
-              <span>{formatDate(payment?.payment_date)}</span>
-            </div>
-          </div>
-        </div>
+                <tr>
+                  <Label>Ref Number</Label>
+                  <Value colSpan={2}>{payment?.ref_no || "—"}</Value>
+                  <Label>Payment Type</Label>
+                  <Value colSpan={2}>
+                    {payment?.payment_type_label || payment?.payment_type || "—"}
+                  </Value>
+                </tr>
 
-        {/* TITLE BANNER */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            margin: "12px 0 14px",
-          }}
-        >
-          <div
-            style={{
-              background:
-                "linear-gradient(180deg, #A3122B 0%, #8B0E22 100%)",
-              color: "#FFF4D6",
-              padding: "8px 44px",
-              fontSize: 18,
-              fontWeight: 700,
-              letterSpacing: 3,
-              clipPath:
-                "polygon(0 50%, 10px 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 10px 100%)",
-              boxShadow: "0 2px 4px rgba(139,14,34,0.25)",
-            }}
-          >
-            PAYMENT VOUCHER
-          </div>
-        </div>
+                <tr>
+                  <Label>Transaction Type</Label>
+                  <Value>{payment?.payment_mode_label || payment?.payment_mode || "—"}</Value>
+                  <Label>Bank Account</Label>
+                  <Value>{payment?.bank_account_display || "—"}</Value>
+                  <Label>Account Ledger</Label>
+                  <Value>{payment?.account_ledger_name || "—"}</Value>
+                </tr>
 
-        {/* DETAILS TABLE */}
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            fontSize: 13,
-            border: "1px solid #8B0E22",
-          }}
-        >
-          <tbody>
-            <tr>
-              <td style={cellLabel}>Party Name</td>
-              <td style={cellValue} colSpan={5}>
-                {payment?.party_name || "—"}
-              </td>
-            </tr>
+                <tr>
+                  <Label>Amount</Label>
+                  <Value colSpan={5} style={{ fontSize: 19, fontWeight: 700, color: RED }}>
+                    ₹{formatMoney(total)}
+                  </Value>
+                </tr>
 
-            <tr>
-              <td style={cellLabel}>Ref Number</td>
-              <td style={cellValue} colSpan={2}>
-                {payment?.ref_no || "—"}
-              </td>
-              <td style={cellLabel}>Payment Type</td>
-              <td style={cellValue} colSpan={2}>
-                {payment?.payment_type_label ||
-                  payment?.payment_type ||
-                  "—"}
-              </td>
-            </tr>
+                <tr>
+                  <Label>Amount in Words</Label>
+                  <Value colSpan={5}>{amountInWords(total)}</Value>
+                </tr>
 
-            <tr>
-              <td style={cellLabel}>Transaction Type</td>
-              <td style={cellValue}>
-                {payment?.payment_mode_label ||
-                  payment?.payment_mode ||
-                  "—"}
-              </td>
-              <td style={cellLabel}>Bank Account</td>
-              <td style={cellValue} colSpan={3}>
-                {payment?.bank_account_display || "—"}
-              </td>
-            </tr>
+                <tr>
+                  <Label>Narration</Label>
+                  <Value colSpan={5}>{payment?.narration || "—"}</Value>
+                </tr>
+              </tbody>
+            </table>
 
-            <tr>
-              <td style={cellLabel}>Account Ledger</td>
-              <td style={cellValue} colSpan={5}>
-                {payment?.account_ledger_name || "—"}
-              </td>
-            </tr>
-
-            <tr>
-              <td style={cellLabel}>Amount</td>
-              <td
-                style={{
-                  ...cellValue,
-                  fontSize: 16,
-                  fontWeight: 700,
-                  color: "#8B0E22",
-                }}
-                colSpan={5}
-              >
-                ₹ {formatMoney(total)}
-              </td>
-            </tr>
-
-            <tr>
-              <td style={cellLabel}>Amount in Words</td>
-              <td
-                style={{ ...cellValue, fontStyle: "italic" }}
-                colSpan={5}
-              >
-                {amountInWords(total)}
-              </td>
-            </tr>
-
-            <tr>
-              <td style={cellLabel}>Narration</td>
-              <td style={cellValue} colSpan={5}>
-                {payment?.narration || "—"}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        {/* SIGNATURES */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-end",
-            marginTop: 40,
-            gap: 20,
-          }}
-        >
-          <SignatureBlock label="Prepared By" />
-          <SignatureBlock label="Receiver's Signature" />
-          <SignatureBlock label="Vicar / Authorized Signatory" />
-          <div
-            style={{
-              fontSize: 11,
-              color: "#4A2019",
-              textAlign: "center",
-              minWidth: 60,
-            }}
-          >
+            {/* SIGNATURES */}
             <div
               style={{
-                width: 60,
-                height: 36,
-                border: "1px dashed #8B0E22",
-                borderRadius: 4,
-                marginBottom: 4,
+                display: "flex",
+                alignItems: "flex-end",
+                gap: 28,
+                marginTop: 46,
+                padding: "0 10px",
               }}
-            />
-            SEAL
+            >
+              <Signature label="Prepared By" />
+              <Signature label="Receiver's Signature" />
+              <Signature label="Vicar / Authorized Signatory" />
+              <div style={{ minWidth: 70, textAlign: "center", fontSize: 12.5, letterSpacing: 1 }}>SEAL</div>
+            </div>
           </div>
         </div>
+
+        {/* CORNER ORNAMENTS (sit on the outer frame) */}
+        <Corner sx={1} sy={1} style={{ top: -3, left: -3 }} />
+        <Corner sx={-1} sy={1} style={{ top: -3, right: -3 }} />
+        <Corner sx={1} sy={-1} style={{ bottom: -3, left: -3 }} />
+        <Corner sx={-1} sy={-1} style={{ bottom: -3, right: -3 }} />
       </div>
     </div>
   );

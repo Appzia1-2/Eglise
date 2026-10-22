@@ -81,7 +81,7 @@ from .views import (
     LedgerBalanceAPIView,MemberLedgerReportAPIView,
     IncomeExpenditureReportAPIView,
     DonationRegisterReportAPIView,SubscriptionDueListAPIView,
-    SubscriptionPaidListAPIView,ChurchDashboardMetricsAPIView,ReceiptPaymentCombinedAPIView,
+    SubscriptionPaidListAPIView,ChurchDashboardMetricsAPIView,ReceiptPaymentCombinedAPIView,ContraMasterListCreateView, ContraMasterDetailView,ContraCancelAPIView 
 )
 
 urlpatterns = [
@@ -324,4 +324,12 @@ path(
 
 # registry/urls.py
 path("reports/receipt-payment/", ReceiptPaymentCombinedAPIView.as_view(), name="report-receipt-payment"),
+
+
+
+
+path("contra/", ContraMasterListCreateView.as_view(), name="contra-list"),
+path("contra/<int:pk>/", ContraMasterDetailView.as_view(), name="contra-detail"),
+path("contra/<int:pk>/cancel/", ContraCancelAPIView.as_view(), name="contra-cancel"),
+
 ]

@@ -1,9 +1,7 @@
 // src/admin/pages/AccountLedgerAddPage.jsx
 
-import React, { useEffect, useState } from "react";
-
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-
 import {
   Box,
   Heading,
@@ -17,14 +15,18 @@ import {
   GridItem,
   Icon,
 } from "@chakra-ui/react";
-
-import { LuNetwork, LuCalendar, LuIndianRupee } from "react-icons/lu";
+import {
+  LuNetwork,
+  LuCalendar,
+  LuIndianRupee,
+  LuChevronDown,
+  LuSearch,
+  LuX,
+} from "react-icons/lu";
 
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-
 import { toaster } from "../components/ui/toaster";
-
 import {
   createAccountLedger,
   listAccountGroups,
@@ -33,7 +35,6 @@ import {
 /* =========================================================
    COLORS
 ========================================================= */
-
 const primaryMaroon = "#ae2050";
 const dark = "#182338";
 const muted = "#60708C";
@@ -43,7 +44,6 @@ const red = "#D7193F";
 /* =========================================================
    TOAST HELPER
 ========================================================= */
-
 const showToast = ({
   title,
   description,
@@ -62,7 +62,6 @@ const showToast = ({
 /* =========================================================
    FIELD LABELS
 ========================================================= */
-
 const FIELD_LABELS = {
   ledger_name: "Ledger Name",
   ledger_code: "Ledger Code",
@@ -74,7 +73,6 @@ const FIELD_LABELS = {
 /* =========================================================
    HELPERS
 ========================================================= */
-
 const todayDisplay = () =>
   new Date().toLocaleDateString("en-GB", {
     day: "2-digit",
@@ -88,11 +86,9 @@ const todayISO = () => new Date().toLocaleDateString("en-CA");
 /* =========================================================
    FIELD LABEL
 ========================================================= */
-
 const FieldLabel = ({ children, required }) => (
   <Text fontSize="12px" fontWeight="700" color={dark} mb={1.5}>
     {children}
-
     {required && (
       <Text as="span" color="red.500" ml={1}>
         *
@@ -102,9 +98,8 @@ const FieldLabel = ({ children, required }) => (
 );
 
 /* =========================================================
-   TEXT FIELD — no inline error text
+   TEXT FIELD
 ========================================================= */
-
 const TextField = ({ error, ...props }) => (
   <Input
     height="40px"
@@ -120,62 +115,202 @@ const TextField = ({ error, ...props }) => (
 );
 
 /* =========================================================
-   ACCOUNT GROUP SELECT — no inline error text
+   SEARCHABLE ACCOUNT GROUP SELECT
 ========================================================= */
+const SearchableAccountGroupSelect = ({ value, onChange, groups, error, isLoading }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef(null);
+  const inputRef = useRef(null);
 
-const AccountGroupSelect = ({ value, onChange, groups, error }) => (
-  <Box position="relative">
-    <Icon
-      as={LuNetwork}
-      boxSize={4}
-      color="gray.400"
-      position="absolute"
-      left="12px"
-      top="50%"
-      transform="translateY(-50%)"
-      zIndex={1}
-      pointerEvents="none"
-    />
+  const selectedGroup = groups.find((g) => String(g.id) === String(value));
 
-    <Box
-      as="select"
-      value={value}
-      onChange={onChange}
-      style={{
-        width: "100%",
-        padding: "0 12px 0 36px",
-        borderRadius: "6px",
-        border: `1px solid ${error ? "#e53e3e" : border}`,
-        fontSize: "12px",
-        height: "40px",
-        background: "white",
-        outline: "none",
-        color: value ? dark : "#a0aec0",
-        cursor: "pointer",
-      }}
-    >
-      <option value="">Select account group</option>
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return groups;
+    return groups.filter((g) =>
+      String(g.group_name || "").toLowerCase().includes(q)
+    );
+  }, [groups, query]);
 
-      {groups.map((group) => (
-        <option key={group.id} value={group.id}>
-          {group.group_name}
-        </option>
-      ))}
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+        setQuery("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // Focus the input when opening
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  }, [isOpen]);
+
+  const handleSelect = (group) => {
+    onChange({ target: { value: String(group.id) } });
+    setIsOpen(false);
+    setQuery("");
+  };
+
+  const handleClear = (e) => {
+    e.stopPropagation();
+    onChange({ target: { value: "" } });
+    setQuery("");
+  };
+
+  return (
+    <Box ref={containerRef} position="relative" w="100%">
+      {isOpen ? (
+        <Box position="relative">
+          <Icon
+            as={LuSearch}
+            position="absolute"
+            left="11px"
+            top="50%"
+            transform="translateY(-50%)"
+            color={muted}
+            boxSize={4}
+            pointerEvents="none"
+            zIndex={1}
+          />
+          <Input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search account group..."
+            pl="34px"
+            pr="34px"
+            h="40px"
+            fontSize="12px"
+            borderColor={primaryMaroon}
+            borderRadius="6px"
+            bg="white"
+            _focus={{ borderColor: primaryMaroon, boxShadow: `0 0 0 1px ${primaryMaroon}` }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setIsOpen(false);
+                setQuery("");
+              } else if (e.key === "Enter" && filtered.length > 0) {
+                e.preventDefault();
+                handleSelect(filtered[0]);
+              }
+            }}
+          />
+          <Icon
+            as={LuX}
+            position="absolute"
+            right="11px"
+            top="50%"
+            transform="translateY(-50%)"
+            color={muted}
+            boxSize={4}
+            cursor="pointer"
+            onClick={() => {
+              setIsOpen(false);
+              setQuery("");
+            }}
+            zIndex={1}
+          />
+        </Box>
+      ) : (
+        <Flex
+          onClick={() => setIsOpen(true)}
+          h="40px"
+          border={`1px solid ${error ? "red.500" : border}`}
+          borderRadius="6px"
+          px="11px"
+          align="center"
+          justify="space-between"
+          cursor="pointer"
+          bg="white"
+          _hover={{ borderColor: muted }}
+        >
+          <HStack gap={2}>
+            <Icon as={LuNetwork} boxSize={4} color="gray.400" />
+            <Text fontSize="12px" color={selectedGroup ? dark : "#a0aec0"} noOfLines={1}>
+              {selectedGroup?.group_name || "Select account group"}
+            </Text>
+          </HStack>
+          <HStack gap={1} flexShrink={0}>
+            {selectedGroup && (
+              <Icon
+                as={LuX}
+                boxSize={3.5}
+                color={muted}
+                onClick={handleClear}
+                _hover={{ color: red }}
+              />
+            )}
+            <Icon as={LuChevronDown} boxSize={4} color={dark} />
+          </HStack>
+        </Flex>
+      )}
+
+      {isOpen && (
+        <Box
+          position="absolute"
+          top="calc(100% + 4px)"
+          left={0}
+          right={0}
+          bg="white"
+          border={`1px solid ${border}`}
+          borderRadius="6px"
+          boxShadow="0 6px 20px rgba(0,0,0,0.12)"
+          maxH="220px"
+          overflowY="auto"
+          zIndex={30}
+        >
+          {isLoading ? (
+            <Box px={3} py={3}>
+              <Text fontSize="12px" color={muted}>Loading groups...</Text>
+            </Box>
+          ) : filtered.length === 0 ? (
+            <Box px={3} py={3}>
+              <Text fontSize="12px" color={muted}>No groups found</Text>
+            </Box>
+          ) : (
+            filtered.map((g) => {
+              const isSelected = String(g.id) === String(value);
+              return (
+                <Box
+                  key={g.id}
+                  px={3}
+                  py={2}
+                  fontSize="12px"
+                  color={dark}
+                  cursor="pointer"
+                  bg={isSelected ? "#FDF2F5" : "white"}
+                  _hover={{ bg: "#F7F9FB" }}
+                  onClick={() => handleSelect(g)}
+                >
+                  <Text fontWeight={isSelected ? "600" : "500"}>{g.group_name}</Text>
+                  {g.group_code && (
+                    <Text fontSize="10px" color={muted}>{g.group_code}</Text>
+                  )}
+                </Box>
+              );
+            })
+          )}
+        </Box>
+      )}
     </Box>
-  </Box>
-);
+  );
+};
 
 /* =========================================================
    MAIN PAGE
 ========================================================= */
-
 const AccountLedgerAddPage = () => {
   const navigate = useNavigate();
 
   const [groups, setGroups] = useState([]);
-
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
-
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -192,20 +327,15 @@ const AccountLedgerAddPage = () => {
   /* =======================================================
      LOAD ACCOUNT GROUPS
   ======================================================= */
-
   useEffect(() => {
     const fetchGroups = async () => {
       setIsLoadingGroups(true);
-
       try {
         const response = await listAccountGroups();
-
         const data = response?.data?.results || response?.data || [];
-
         setGroups(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error("Error fetching account groups:", error);
-
         showToast({
           title: "Failed to load data",
           description:
@@ -217,22 +347,15 @@ const AccountLedgerAddPage = () => {
         setIsLoadingGroups(false);
       }
     };
-
     fetchGroups();
   }, []);
 
   /* =======================================================
      HANDLE CHANGE
   ======================================================= */
-
   const handleChange = (field) => (event) => {
     const value = event.target.value;
-
-    setFormData((previous) => ({
-      ...previous,
-      [field]: value,
-    }));
-
+    setFormData((previous) => ({ ...previous, [field]: value }));
     setFieldErrors((previous) =>
       previous[field] ? { ...previous, [field]: "" } : previous
     );
@@ -241,7 +364,6 @@ const AccountLedgerAddPage = () => {
   /* =======================================================
      VALIDATE
   ======================================================= */
-
   const validate = () => {
     const newErrors = {};
     const missing = [];
@@ -275,7 +397,6 @@ const AccountLedgerAddPage = () => {
   /* =======================================================
      HANDLE SUBMIT
   ======================================================= */
-
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -310,14 +431,9 @@ const AccountLedgerAddPage = () => {
 
     const payload = {
       ledger_name: formData.ledger_name.trim(),
-
       account_group: Number(formData.account_group),
-
-      op_balance:
-        formData.op_balance === "" ? 0 : Number(formData.op_balance),
-
+      op_balance: formData.op_balance === "" ? 0 : Number(formData.op_balance),
       opening_balance_date: formData.opening_balance_date,
-
       status: true,
     };
 
@@ -368,8 +484,7 @@ const AccountLedgerAddPage = () => {
           backendData.non_field_errors?.[0];
 
         const fieldMessages = Object.values(backendErrors).filter(Boolean);
-        const onlyOneFieldError =
-          fieldMessages.length === 1 && !generalError;
+        const onlyOneFieldError = fieldMessages.length === 1 && !generalError;
 
         showToast({
           title: "Could not create ledger",
@@ -378,10 +493,7 @@ const AccountLedgerAddPage = () => {
             (onlyOneFieldError
               ? fieldMessages[0]
               : Object.entries(backendErrors)
-                  .map(
-                    ([field, message]) =>
-                      `${FIELD_LABELS[field] || field}: ${message}`
-                  )
+                  .map(([field, message]) => `${FIELD_LABELS[field] || field}: ${message}`)
                   .join(" | ")),
           type: "error",
           duration: 7000,
@@ -389,8 +501,7 @@ const AccountLedgerAddPage = () => {
       } else {
         showToast({
           title: "Could not create ledger",
-          description:
-            "Unable to create account ledger. Please try again.",
+          description: "Unable to create account ledger. Please try again.",
           type: "error",
           duration: 7000,
         });
@@ -403,19 +514,12 @@ const AccountLedgerAddPage = () => {
   /* =======================================================
      RENDER
   ======================================================= */
-
   return (
     <Box minH="100vh" bg="white" display="flex" flexDirection="column">
       <Navbar />
 
-      <Box
-        flex="1"
-        w="100%"
-        px={{ base: 3, md: 4 }}
-        py={{ base: 3, md: 4 }}
-      >
+      <Box flex="1" w="100%" px={{ base: 3, md: 4 }} py={{ base: 3, md: 4 }}>
         {/* BREADCRUMB */}
-
         <HStack gap={2} fontSize="11px" color={muted} mb={2}>
           <Text
             color={primaryMaroon}
@@ -424,9 +528,7 @@ const AccountLedgerAddPage = () => {
           >
             Masters
           </Text>
-
           <Text>/</Text>
-
           <Text
             color={primaryMaroon}
             cursor="pointer"
@@ -434,14 +536,11 @@ const AccountLedgerAddPage = () => {
           >
             Account Ledgers
           </Text>
-
           <Text>/</Text>
-
           <Text>Add Account Ledger</Text>
         </HStack>
 
         {/* PAGE HEADER */}
-
         <Flex
           justify="space-between"
           align={{ base: "flex-start", md: "center" }}
@@ -460,7 +559,6 @@ const AccountLedgerAddPage = () => {
             >
               ACCOUNT LEDGERS
             </Text>
-
             <Heading
               fontSize={{ base: "22px", md: "26px" }}
               fontWeight="800"
@@ -469,7 +567,6 @@ const AccountLedgerAddPage = () => {
             >
               Add Account Ledger
             </Heading>
-
             <Text color={muted} fontSize="11px" mt={1}>
               Create a ledger account and define its opening balance.
             </Text>
@@ -477,35 +574,27 @@ const AccountLedgerAddPage = () => {
         </Flex>
 
         {/* FORM */}
-
         <form onSubmit={handleSubmit}>
           <Box
             bg="white"
             border={`1px solid ${border}`}
             borderRadius="8px"
-            overflow="hidden"
+            overflow="visible" // 👈 FIXED: Changed from hidden to visible so the dropdown isn't cut off
             width="100%"
+            position="relative"
+            zIndex={10}
           >
             {/* SECTION HEADER */}
-
             <Box px={{ base: 4, md: 5 }} pt={4} pb={3}>
               <Text fontSize="14px" fontWeight="800" color={dark}>
                 Account Ledger Details
               </Text>
-
-              <Box
-                mt={2}
-                height="3px"
-                width="55px"
-                bg={primaryMaroon}
-                borderRadius="full"
-              />
+              <Box mt={2} height="3px" width="55px" bg={primaryMaroon} borderRadius="full" />
             </Box>
 
             <Box borderBottom={`1px solid ${border}`} />
 
             {/* LEDGER INFORMATION */}
-
             <Box px={{ base: 4, md: 5 }} py={5}>
               <VStack align="stretch" gap={5}>
                 <Box>
@@ -513,13 +602,9 @@ const AccountLedgerAddPage = () => {
                     Ledger Information
                   </Text>
 
-                  <Grid
-                    templateColumns={{ base: "1fr", md: "1fr 1fr" }}
-                    gap={4}
-                  >
+                  <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={4}>
                     <GridItem>
                       <FieldLabel required>Ledger Name</FieldLabel>
-
                       <TextField
                         placeholder="Enter ledger name"
                         maxLength={100}
@@ -531,7 +616,6 @@ const AccountLedgerAddPage = () => {
 
                     <GridItem>
                       <FieldLabel>Ledger Code</FieldLabel>
-
                       <TextField
                         placeholder="Enter ledger code (optional)"
                         value={formData.ledger_code}
@@ -542,7 +626,6 @@ const AccountLedgerAddPage = () => {
 
                     <GridItem>
                       <FieldLabel>Alias</FieldLabel>
-
                       <TextField
                         placeholder="Enter alias (optional)"
                         value={formData.alias}
@@ -553,19 +636,13 @@ const AccountLedgerAddPage = () => {
 
                     <GridItem>
                       <FieldLabel required>Account Group</FieldLabel>
-
-                      <AccountGroupSelect
+                      <SearchableAccountGroupSelect
                         value={formData.account_group}
                         onChange={handleChange("account_group")}
                         groups={groups}
                         error={fieldErrors.account_group}
+                        isLoading={isLoadingGroups}
                       />
-
-                      {isLoadingGroups && (
-                        <Text fontSize="10px" color={muted} mt={1}>
-                          Loading account groups...
-                        </Text>
-                      )}
                     </GridItem>
                   </Grid>
                 </Box>
@@ -573,16 +650,13 @@ const AccountLedgerAddPage = () => {
                 <Box borderBottom="1px solid #EEF1F5" />
 
                 {/* OPENING BALANCE */}
-
                 <Box>
                   <HStack gap={2} mb={3} align="center">
                     <Text fontSize="13px" fontWeight="800" color={dark}>
                       Opening Balance
                     </Text>
-
                     <HStack gap={1} color={muted}>
                       <Icon as={LuCalendar} boxSize={3.5} />
-
                       <Text fontSize="10px">
                         Balance as on {todayDisplay()}
                       </Text>
@@ -595,22 +669,15 @@ const AccountLedgerAddPage = () => {
 
                   <Flex
                     border="1px solid"
-                    borderColor={
-                      fieldErrors.op_balance ? "red.500" : border
-                    }
+                    borderColor={fieldErrors.op_balance ? "red.500" : border}
                     borderRadius="6px"
                     overflow="hidden"
                     align="stretch"
                     height="40px"
                   >
                     <Flex align="center" px={3} bg="white">
-                      <Icon
-                        as={LuIndianRupee}
-                        boxSize={3.5}
-                        color="gray.400"
-                      />
+                      <Icon as={LuIndianRupee} boxSize={3.5} color="gray.400" />
                     </Flex>
-
                     <Input
                       type="number"
                       step="0.01"
@@ -635,8 +702,7 @@ const AccountLedgerAddPage = () => {
           </Box>
 
           {/* BUTTONS */}
-
-          <Flex justify="flex-end" gap={2} mt={4}>
+          <Flex justify="flex-end" gap={2} mt={4} position="relative" zIndex={5}>
             <Button
               type="button"
               variant="outline"
@@ -653,7 +719,6 @@ const AccountLedgerAddPage = () => {
             >
               Cancel
             </Button>
-
             <Button
               type="submit"
               bg={primaryMaroon}

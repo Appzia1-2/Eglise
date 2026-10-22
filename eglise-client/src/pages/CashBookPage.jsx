@@ -17,13 +17,10 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import ReportFilterBar from "../components/ReportFilterBar";
 import ReportLedgerTable from "../components/ReportLedgerTable";
-import CashBookPrintView from "../components/CashBookPrintView";
+import ChurchPrintModal from "../components/ChurchPrintModal";
 
 import { toaster } from "../components/ui/toaster";
-import {
-  listLedgerEntries,
-  getMyChurch,
-} from "../api/registryServices";
+import { listLedgerEntries, getMyChurch } from "../api/registryServices";
 
 const PRIMARY_MAROON = "var(--primary-maroon)";
 const RED = "#D7193F";
@@ -31,19 +28,20 @@ const DARK = "#182338";
 const MUTED = "#60708C";
 const BORDER = "#DCE2EA";
 
+const todayISO = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
 const toNumber = (v) => {
   if (v === null || v === undefined || v === "") return 0;
   const n = Number(String(v).replace(/[₹,\s]/g, ""));
   return isNaN(n) ? 0 : n;
 };
 
-// ------------------------------------------------------------
-// Cash / Bank ledger detection (exact match)
-//
-// For the Cash Book we only care about the "Cash in Hand"
-// ledger, since the backend filters by book=cash. But we still
-// recognise the bank ledger name in case a row slips through.
-// ------------------------------------------------------------
 const CASH_BANK_EXACT_NAMES = [
   "cash in hand",
   "balance in savings account",
@@ -55,23 +53,21 @@ const isCashOrBankLedger = (ledgerName) => {
   return CASH_BANK_EXACT_NAMES.some((exact) => n === exact);
 };
 
-// ------------------------------------------------------------
-// Group flat LedgerEntry rows into one row per voucher.
-//
-// Amount  = cash / bank side amount
-// Direction = that row's entry_type (DEBIT = in, CREDIT = out)
-// ------------------------------------------------------------
 const groupLedgerEntries = (entries) => {
   const groups = new Map();
 
   entries.forEach((e) => {
     if (e.is_cancelled) return;
 
-    const voucherNo = e.receipt_voucher || e.payment_voucher || null;
+    const voucherNo =
+      e.receipt_voucher || e.payment_voucher || e.contra_voucher || null;
+
     const voucherType = e.receipt_voucher
       ? "Receipt"
       : e.payment_voucher
       ? "Payment"
+      : e.contra_voucher
+      ? "Contra"
       : "Journal";
 
     const key = voucherNo
@@ -101,7 +97,14 @@ const groupLedgerEntries = (entries) => {
     if (isCashOrBankLedger(e.ledger_name)) {
       g.cashBankAccount = e.ledger_name || "";
       g.amount = amt;
-      g.direction = e.entry_type;
+
+      if (voucherType === "Receipt") {
+        g.direction = "CREDIT";
+      } else if (voucherType === "Payment") {
+        g.direction = "DEBIT";
+      } else {
+        g.direction = e.entry_type;
+      }
     } else {
       if (!g.particulars) {
         g.particulars = e.ledger_name || "";
@@ -111,7 +114,6 @@ const groupLedgerEntries = (entries) => {
     if (!g.narration && e.narration) g.narration = e.narration;
   });
 
-  // Fallbacks for older data or orphan rows
   return Array.from(groups.values()).map((g) => {
     if (!g.cashBankAccount) {
       const anyLedger = g._entries.find((x) => x.ledger_name);
@@ -119,7 +121,10 @@ const groupLedgerEntries = (entries) => {
 
       if (g.amount === 0 && g._entries[0]) {
         g.amount = toNumber(g._entries[0].amount);
-        g.direction = g._entries[0].entry_type;
+
+        if (g.voucherType === "Receipt") g.direction = "CREDIT";
+        else if (g.voucherType === "Payment") g.direction = "DEBIT";
+        else g.direction = g._entries[0].entry_type;
       }
     }
 
@@ -137,6 +142,109 @@ const groupLedgerEntries = (entries) => {
   });
 };
 
+const CashBookPrintTable = ({ rows, totals, openingBalance }) => {
+  const fmt = (n) =>
+    Number(n || 0).toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+  const thStyle = {
+    border: "1px solid #F0C2C2",
+    padding: "10px 8px",
+    background: "#FCEAEC",
+    color: "#8B1A1A",
+    fontWeight: "bold",
+    fontSize: "13px",
+    fontFamily: "'Georgia', serif",
+    textAlign: "left",
+  };
+
+  const tdStyle = {
+    border: "1px solid #F0C2C2",
+    padding: "10px 8px",
+    fontSize: "13px",
+    color: "#333",
+    fontFamily: "'Georgia', serif",
+    verticalAlign: "top",
+  };
+
+  const numStyle = { ...tdStyle, textAlign: "right" };
+
+  return (
+    <Box fontFamily="'Georgia', serif">
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead>
+          <tr>
+            <th style={thStyle}>Date</th>
+            <th style={thStyle}>Voucher Number</th>
+            <th style={thStyle}>Account Ledger</th>
+            <th style={thStyle}>Cash / Bank Account</th>
+            <th style={{ ...thStyle, textAlign: "right" }}>Credit (₹)</th>
+            <th style={{ ...thStyle, textAlign: "right" }}>Debit (₹)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style={{ background: "#FFF5F5" }}>
+            <td colSpan={4} style={{ ...tdStyle, fontWeight: "bold", color: "#8B1A1A" }}>
+              Opening Balance
+            </td>
+            <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>
+              ₹{fmt(openingBalance)}
+            </td>
+            <td style={{ ...numStyle, color: "#8B1A1A" }}>—</td>
+          </tr>
+
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={6} style={{ ...tdStyle, textAlign: "center", fontStyle: "italic", color: "#A05050" }}>
+                No transactions for the selected period.
+              </td>
+            </tr>
+          ) : (
+            rows.map((r, i) => (
+              <tr key={r.key} style={{ background: i % 2 === 0 ? "#FFFFFF" : "#FFF9F9" }}>
+                <td style={tdStyle}>{r.date}</td>
+                <td style={tdStyle}>{r.voucherNo}</td>
+                <td style={{ ...tdStyle, color: "#8B1A1A" }}>{r.particulars}</td>
+                <td style={tdStyle}>{r.cashBankAccount}</td>
+                <td style={{ ...numStyle, color: "#8B1A1A" }}>
+                  {r.direction === "CREDIT" ? `₹${fmt(r.amount)}` : "—"}
+                </td>
+                <td style={{ ...numStyle, color: "#8B1A1A" }}>
+                  {r.direction === "DEBIT" ? `₹${fmt(r.amount)}` : "—"}
+                </td>
+              </tr>
+            ))
+          )}
+
+          <tr style={{ background: "#FCEAEC", borderTop: "1px solid #F0C2C2" }}>
+            <td colSpan={4} style={{ ...tdStyle, textAlign: "right", fontWeight: "bold", color: "#8B1A1A" }}>
+              Total
+            </td>
+            <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>
+              ₹{fmt(totals.credit)}
+            </td>
+            <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>
+              ₹{fmt(totals.debit)}
+            </td>
+          </tr>
+
+          <tr style={{ background: "#FFF5F5" }}>
+            <td colSpan={4} style={{ ...tdStyle, textAlign: "right", fontWeight: "bold", color: "#8B1A1A" }}>
+              Closing Balance
+            </td>
+            <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>
+              ₹{fmt((openingBalance || 0) + totals.credit - totals.debit)}
+            </td>
+            <td style={{ ...numStyle, color: "#8B1A1A" }}>—</td>
+          </tr>
+        </tbody>
+      </table>
+    </Box>
+  );
+};
+
 const CashBookPage = () => {
   const navigate = useNavigate();
 
@@ -144,17 +252,14 @@ const CashBookPage = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   const [search, setSearch] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [dateFrom, setDateFrom] = useState(todayISO());
+  const [dateTo, setDateTo] = useState(todayISO());
 
   const [openingBalance, setOpeningBalance] = useState(undefined);
 
-  const [church, setChurch] = useState({
-    name: "",
-    address: "",
-  });
+  const [church, setChurch] = useState({ name: "", address: "" });
 
-  const [showPrint, setShowPrint] = useState(false);
+  const [isPrintOpen, setIsPrintOpen] = useState(false);
 
   useEffect(() => {
     const fetchChurch = async () => {
@@ -237,56 +342,38 @@ const CashBookPage = () => {
     return grouped;
   }, [rawEntries, search]);
 
-  // -------- Totals --------
   const totals = useMemo(() => {
-    let moneyIn = 0;   // DEBIT  = cash in
-    let moneyOut = 0;  // CREDIT = cash out
+    let credit = 0;
+    let debit = 0;
 
     rows.forEach((r) => {
-      if (r.direction === "DEBIT") moneyIn += r.amount;
-      else if (r.direction === "CREDIT") moneyOut += r.amount;
+      if (r.direction === "CREDIT") credit += r.amount;
+      else if (r.direction === "DEBIT") debit += r.amount;
     });
 
     return {
-      moneyIn,
-      moneyOut,
-      net: moneyIn - moneyOut,
+      credit,
+      debit,
+      moneyIn: credit,
+      moneyOut: debit,
+      net: credit - debit,
     };
   }, [rows]);
 
   const reset = () => {
     setSearch("");
-    setDateFrom("");
-    setDateTo("");
+    setDateFrom(todayISO());
+    setDateTo(todayISO());
   };
 
   return (
     <>
-      <style>{`
-        @media print {
-          body * { visibility: hidden !important; }
-          .cashbook-print,
-          .cashbook-print * { visibility: visible !important; }
-          .cashbook-print {
-            position: absolute !important;
-            left: 0; top: 0;
-            width: 210mm;
-            min-height: 297mm;
-          }
-          @page { size: A4 portrait; margin: 0; }
-        }
-      `}</style>
-
       <Box minH="100vh" bg="white" display="flex" flexDirection="column">
         <Navbar />
 
         <Box flex="1" w="100%" px={{ base: 3, md: 4 }} py={{ base: 3, md: 4 }}>
           <HStack gap={2} mb={2} color={MUTED} fontSize="11px">
-            <Text
-              color={PRIMARY_MAROON}
-              cursor="pointer"
-              onClick={() => navigate("/reports")}
-            >
+            <Text color={PRIMARY_MAROON} cursor="pointer" onClick={() => navigate("/reports")}>
               Reports
             </Text>
             <Text>/</Text>
@@ -304,11 +391,7 @@ const CashBookPage = () => {
               <Text fontSize="10px" fontWeight="700" color={RED} mb={1}>
                 CASH BOOK REPORT
               </Text>
-              <Heading
-                color={DARK}
-                fontSize={{ base: "22px", md: "26px" }}
-                mb={1}
-              >
+              <Heading color={DARK} fontSize={{ base: "22px", md: "26px" }} mb={1}>
                 Cash Book
               </Heading>
               <Text color={MUTED} fontSize="11px">
@@ -326,23 +409,7 @@ const CashBookPage = () => {
                 px={4}
                 fontSize="12px"
                 borderRadius="6px"
-                onClick={() => navigate("/reports")}
-                _hover={{ bg: "#FFF0F4" }}
-              >
-                <Icon as={LuArrowLeft} mr={2} boxSize={4} />
-                Back
-              </Button>
-
-              <Button
-                variant="outline"
-                borderColor="#FF5A7D"
-                color={RED}
-                bg="white"
-                h="38px"
-                px={4}
-                fontSize="12px"
-                borderRadius="6px"
-                onClick={() => setShowPrint(true)}
+                onClick={() => setIsPrintOpen(true)}
                 _hover={{ bg: "#FFF0F4" }}
               >
                 <Icon as={LuPrinter} mr={2} boxSize={4} />
@@ -358,7 +425,7 @@ const CashBookPage = () => {
                 px={4}
                 fontSize="12px"
                 borderRadius="6px"
-                onClick={() => setShowPrint(true)}
+                onClick={() => setIsPrintOpen(true)}
                 _hover={{ bg: "#FFF0F4" }}
               >
                 <Icon as={LuFileText} mr={2} boxSize={4} />
@@ -394,57 +461,25 @@ const CashBookPage = () => {
         <Footer />
       </Box>
 
-      {showPrint && (
-        <Box
-          position="fixed"
-          inset="0"
-          bg="rgba(0,0,0,0.5)"
-          zIndex="9999"
-          overflowY="auto"
-          p={{ base: 2, md: 6 }}
-        >
-          <Flex justify="flex-end" gap={3} mb={3} maxW="820px" mx="auto">
-            <Button
-              size="sm"
-              variant="outline"
-              borderColor="white"
-              color="white"
-              bg="transparent"
-              onClick={() => setShowPrint(false)}
-              _hover={{ bg: "rgba(255,255,255,0.1)" }}
-            >
-              Close
-            </Button>
-            <Button
-              size="sm"
-              bg="white"
-              color={RED}
-              fontWeight="600"
-              onClick={() => window.print()}
-              _hover={{ bg: "#FFF0F4" }}
-            >
-              Print
-            </Button>
-          </Flex>
-
-          <Box
-            maxW="820px"
-            mx="auto"
-            bg="white"
-            boxShadow="0 4px 24px rgba(0,0,0,0.3)"
-            className="cashbook-print"
-          >
-            <CashBookPrintView
-              rows={rows}
-              totals={totals}
-              date={dateFrom || new Date().toISOString().split("T")[0]}
-              churchName={church.name}
-              churchAddress={church.address}
-              openingBalance={openingBalance}
-            />
-          </Box>
-        </Box>
-      )}
+      <ChurchPrintModal
+        isOpen={isPrintOpen}
+        onClose={() => setIsPrintOpen(false)}
+        title="CASH BOOK"
+        subtitle={
+          dateFrom === dateTo
+            ? `For the day ${dateFrom}`
+            : `From ${dateFrom || "—"} to ${dateTo || "—"}`
+        }
+        church={church}
+        pdfFileName={`CashBook_${dateFrom || "from"}_${dateTo || "to"}.pdf`}
+        defaultOrientation="portrait"
+      >
+        <CashBookPrintTable
+          rows={rows}
+          totals={totals}
+          openingBalance={openingBalance}
+        />
+      </ChurchPrintModal>
     </>
   );
 };

@@ -19,7 +19,6 @@ import {
 import {
   LuSearch,
   LuDownload,
-  LuPrinter,
   LuPlus,
   LuRotateCw,
   LuChevronDown,
@@ -39,7 +38,6 @@ import Footer from "../components/Footer";
 
 import { toaster } from "../components/ui/toaster";
 
-// ✅ NEW: import the cancel modal
 import CancelReceiptModal from "../components/CancelReceiptModal";
 
 import { listReceipts, cancelReceipt } from "../api/registryServices";
@@ -73,6 +71,31 @@ const formatDate = (s) => {
     month: "short",
     year: "numeric",
   });
+};
+
+/* ---------- CSV EXPORT HELPERS ---------- */
+
+// Quote every cell, escape quotes, and neutralise spreadsheet formulas
+// (a text cell starting with = + - @ would be executed by Excel).
+const csvCell = (value) => {
+  let s = value === null || value === undefined ? "" : String(value);
+  s = s.replace(/\r?\n/g, " ");
+  if (/^[=+\-@]/.test(s)) s = `'${s}`;
+  return `"${s.replace(/"/g, '""')}"`;
+};
+
+const downloadCsv = (filename, rows) => {
+  const csv = rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
+  // BOM so Excel opens UTF-8 (₹, Malayalam names, etc.) correctly
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 };
 
 /* =========================================================
@@ -141,7 +164,6 @@ const ReceiptsPage = () => {
 
   const [currentPage, setCurrentPage] = useState(1);
 
-  // ✅ NEW: cancel modal state
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelSaving, setCancelSaving] = useState(false);
@@ -197,6 +219,61 @@ const ReceiptsPage = () => {
   }, [receipts]);
 
   /* -------------------------------------------------------
+     EXPORT (CSV of all receipts matching the current filters)
+  ------------------------------------------------------- */
+
+  const handleExport = () => {
+    if (receipts.length === 0) {
+      toaster.create({
+        title: "Nothing to export",
+        description: "No receipts match the current filters.",
+        type: "warning",
+      });
+      return;
+    }
+
+    try {
+      const header = [
+        "Receipt No.",
+        "Date",
+        "Member Name",
+        "Ref No.",
+        "Payment Details",
+        "Particulars",
+        "Grand Total (INR)",
+        "Status",
+      ];
+
+      const body = receipts.map((r) => [
+        r.receipt_number,
+        r.receipt_date ? r.receipt_date.slice(0, 10) : "",
+        r.member_name,
+        r.ref_no,
+        r.payment_details,
+        r.particulars,
+        Number(r.grand_total || 0).toFixed(2),
+        r.is_cancelled ? "Cancelled" : "Posted",
+      ]);
+
+      const stamp = new Date().toISOString().slice(0, 10);
+      downloadCsv(`receipts-${stamp}.csv`, [header, ...body]);
+
+      toaster.create({
+        title: "Export complete",
+        description: `${receipts.length} receipt${receipts.length === 1 ? "" : "s"} exported.`,
+        type: "success",
+      });
+    } catch (err) {
+      console.error("Export error:", err);
+      toaster.create({
+        title: "Export failed",
+        description: "Unable to export receipts.",
+        type: "error",
+      });
+    }
+  };
+
+  /* -------------------------------------------------------
      PAGINATION
   ------------------------------------------------------- */
 
@@ -208,10 +285,6 @@ const ReceiptsPage = () => {
 
   const rangeStart = total === 0 ? 0 : startIndex + 1;
   const rangeEnd = Math.min(startIndex + paginated.length, total);
-
-  /* -------------------------------------------------------
-     PAGE NUMBERS
-  ------------------------------------------------------- */
 
   const renderPages = () => {
     const pages = [];
@@ -230,7 +303,7 @@ const ReceiptsPage = () => {
   };
 
   /* -------------------------------------------------------
-     CANCEL — now uses modal (replaces window.prompt)
+     CANCEL
   ------------------------------------------------------- */
 
   const openCancel = (receipt) => {
@@ -358,25 +431,12 @@ const ReceiptsPage = () => {
                 px={4}
                 fontSize="12px"
                 borderRadius="6px"
+                onClick={handleExport}
+                disabled={isLoading || receipts.length === 0}
                 _hover={{ bg: "#FFF0F4" }}
               >
                 <Icon as={LuDownload} mr={2} boxSize={4} />
                 Export
-              </Button>
-
-              <Button
-                variant="outline"
-                borderColor="#FF5A7D"
-                color={RED}
-                bg="white"
-                h="38px"
-                px={4}
-                fontSize="12px"
-                borderRadius="6px"
-                _hover={{ bg: "#FFF0F4" }}
-              >
-                <Icon as={LuPrinter} mr={2} boxSize={4} />
-                Print
               </Button>
 
               <Button
@@ -397,21 +457,9 @@ const ReceiptsPage = () => {
 
           {/* STAT CARDS */}
           <SimpleGrid columns={{ base: 1, md: 2, xl: 4 }} gap={3} mb={3}>
-            <StatCard
-              icon={LuReceipt}
-              title="Total Receipts"
-              value={stats.total}
-            />
-            <StatCard
-              icon={LuCircleCheck}
-              title="Posted"
-              value={stats.posted}
-            />
-            <StatCard
-              icon={LuCircleX}
-              title="Cancelled"
-              value={stats.cancelled}
-            />
+            <StatCard icon={LuReceipt} title="Total Receipts" value={stats.total} />
+            <StatCard icon={LuCircleCheck} title="Posted" value={stats.posted} />
+            <StatCard icon={LuCircleX} title="Cancelled" value={stats.cancelled} />
             <StatCard
               icon={LuIndianRupee}
               title="Total Received"
@@ -596,12 +644,7 @@ const ReceiptsPage = () => {
               borderRadius="6px"
               width="100%"
             >
-              <Box
-                as="table"
-                width="100%"
-                minW="1180px"
-                borderCollapse="collapse"
-              >
+              <Box as="table" width="100%" minW="1180px" borderCollapse="collapse">
                 <Box as="thead">
                   <Box as="tr" height="42px" bg="#F7F9FB">
                     {columns.map((heading) => (
@@ -657,12 +700,7 @@ const ReceiptsPage = () => {
                     </Box>
                   ) : (
                     paginated.map((r) => (
-                      <Box
-                        as="tr"
-                        key={r.id}
-                        height="52px"
-                        _hover={{ bg: "#FFFBFC" }}
-                      >
+                      <Box as="tr" key={r.id} height="52px" _hover={{ bg: "#FFFBFC" }}>
                         <Box
                           as="td"
                           px={4}
@@ -749,12 +787,7 @@ const ReceiptsPage = () => {
                           {formatAmount(r.grand_total)}
                         </Box>
 
-                        <Box
-                          as="td"
-                          px={4}
-                          py={2}
-                          borderBottom="1px solid #E6EAF0"
-                        >
+                        <Box as="td" px={4} py={2} borderBottom="1px solid #E6EAF0">
                           <Badge
                             bg={r.is_cancelled ? "#FFF1F3" : "#ECFDF3"}
                             color={r.is_cancelled ? "#D7193F" : "#16804A"}
@@ -769,12 +802,7 @@ const ReceiptsPage = () => {
                         </Box>
 
                         {/* ACTIONS */}
-                        <Box
-                          as="td"
-                          px={4}
-                          py={2}
-                          borderBottom="1px solid #E6EAF0"
-                        >
+                        <Box as="td" px={4} py={2} borderBottom="1px solid #E6EAF0">
                           <HStack gap={1} justify="flex-end">
                             <IconButton
                               aria-label="View"
@@ -800,7 +828,7 @@ const ReceiptsPage = () => {
                                 variant="ghost"
                                 color={RED}
                                 _hover={{ bg: "#FFF0F4" }}
-                                onClick={() => openCancel(r)}   // ✅ changed
+                                onClick={() => openCancel(r)}
                               >
                                 <LuCircleX />
                               </IconButton>
@@ -844,12 +872,7 @@ const ReceiptsPage = () => {
 
                 {renderPages().map((page, index) =>
                   page === "..." ? (
-                    <Text
-                      key={`dots-${index}`}
-                      px={1.5}
-                      fontSize="11px"
-                      color={MUTED}
-                    >
+                    <Text key={`dots-${index}`} px={1.5} fontSize="11px" color={MUTED}>
                       ...
                     </Text>
                   ) : (
@@ -879,9 +902,7 @@ const ReceiptsPage = () => {
                   borderColor="#FF5A7D"
                   color={RED}
                   disabled={safePage === totalPages}
-                  onClick={() =>
-                    setCurrentPage(Math.min(totalPages, safePage + 1))
-                  }
+                  onClick={() => setCurrentPage(Math.min(totalPages, safePage + 1))}
                 >
                   Next
                   <Icon as={LuChevronRight} ml={1} boxSize={3.5} />
@@ -894,7 +915,6 @@ const ReceiptsPage = () => {
 
       <Footer />
 
-      {/* ✅ NEW: Cancel modal */}
       <CancelReceiptModal
         isOpen={cancelOpen}
         onClose={closeCancel}

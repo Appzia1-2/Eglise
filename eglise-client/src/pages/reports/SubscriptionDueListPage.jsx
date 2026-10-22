@@ -352,7 +352,7 @@ const DueTable = ({ wards, forPrint = false }) => {
             {[
               "Member Name",
               "Family",
-              "Monthly Subscription",
+              "Subscription", // ✅ Changed from "Monthly Subscription"
               "Charity Fund",
               "Diocese Fund",
               "Total Due",
@@ -433,9 +433,19 @@ const DueTable = ({ wards, forPrint = false }) => {
                   <Box as="td" px={3} py={2} color={TEXT_COLOR}>
                     {m.family_name}
                   </Box>
+                  
+                  {/* ✅ Amount with Billing Cycle below */}
                   <Box as="td" px={3} py={2} textAlign="right" color={TEXT_COLOR}>
-                    {fmt(m.monthly_subscription)}
+                    <Text fontSize={forPrint ? "11px" : "12px"}>
+                      {fmt(m.monthly_subscription)}
+                    </Text>
+                    {m.billing_cycle && (
+                      <Text fontSize="9px" color={SECONDARY_TEXT} textTransform="capitalize">
+                        {m.billing_cycle === "YEARLY" ? "Yearly" : "Monthly"}
+                      </Text>
+                    )}
                   </Box>
+
                   <Box as="td" px={3} py={2} textAlign="right" color={TEXT_COLOR}>
                     {fmt(m.charity_fund)}
                   </Box>
@@ -635,7 +645,7 @@ const SubscriptionDueListPage = () => {
           </Box>
 
           <HStack gap={3} flexWrap="wrap">
-            <Button
+            {/* <Button
               variant="outline"
               h="40px"
               px={5}
@@ -649,7 +659,7 @@ const SubscriptionDueListPage = () => {
               leftIcon={<ArrowLeftIcon />}
             >
               Back
-            </Button>
+            </Button> */}
             <Button
               variant="outline"
               h="40px"

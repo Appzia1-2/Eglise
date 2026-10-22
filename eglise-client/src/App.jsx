@@ -173,6 +173,13 @@ import SubscriptionPaidListPage from "./pages/reports/SubscriptionPaidListPage";
 import DonationRegisterPage from "./pages/reports/DonationRegisterPage";
 import ReceiptPaymentPage from "./pages/reports/ReceiptPaymentPage"; // ✅ New Import
 
+
+// =========================================================
+// CONTRA ROUTES
+// =========================================================
+import ContraListPage from "./pages/ContraListPage";
+import ContraFormPage from "./pages/ContraFormPage";
+
 import ForcePasswordChange from "./components/ForcePasswordChange";
 
 import { Toaster } from "./components/ui/toaster";
@@ -1343,6 +1350,33 @@ function App() {
             </ProtectedRoute>
           }
         />
+        {/* =========================================================
+    CONTRA (Cash ↔ Bank transfers)
+========================================================= */}
+<Route
+  path="/contra"
+  element={
+    <ProtectedRoute>
+      <ContraListPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/contra/add"
+  element={
+    <ProtectedRoute>
+      <ContraFormPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/contra/:id/edit"
+  element={
+    <ProtectedRoute>
+      <ContraFormPage />
+    </ProtectedRoute>
+  }
+/>
 
         {/* =========================================================
             FALLBACK
