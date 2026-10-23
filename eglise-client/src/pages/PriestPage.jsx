@@ -102,7 +102,7 @@ const getFullAddress = (priest) => {
 };
 
 // ============================================================
-// PRIEST STATUS — derived from dates, not from is_active
+// PRIEST STATUS — derived from dates safely
 // ============================================================
 
 const getPriestStatus = (priest) => {
@@ -120,25 +120,27 @@ const getPriestStatus = (priest) => {
     return "PREVIOUS";
   }
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const parse = (value) => {
-    if (!value) {
-      return null;
-    }
+  // ✅ Safe local date string (avoids UTC timezone bugs)
+  const getLocalDateString = (value) => {
+    if (!value) return null;
     const d = new Date(value);
-    return Number.isNaN(d.getTime()) ? null : d;
+    if (Number.isNaN(d.getTime())) return null;
+    
+    // Adjust for timezone offset so we get the exact calendar date
+    const offset = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - offset).toISOString().split('T')[0];
   };
 
-  const from = parse(priest.date_from || priest.serving_from);
-  const to = parse(priest.date_to || priest.serving_to);
+  const todayStr = getLocalDateString(new Date());
+  const fromStr = getLocalDateString(priest.date_from || priest.serving_from);
+  const toStr = getLocalDateString(priest.date_to || priest.serving_to);
 
-  if (from && from > today) {
+  // Compare string dates (e.g., "2026-10-23" > "2026-10-22")
+  if (fromStr && fromStr > todayStr) {
     return "UPCOMING";
   }
 
-  if (from && from <= today && (!to || to >= today)) {
+  if (fromStr && fromStr <= todayStr && (!toStr || toStr >= todayStr)) {
     return "CURRENT";
   }
 

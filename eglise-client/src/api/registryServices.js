@@ -1128,6 +1128,9 @@ export const cancelReceipt = (id, data) =>
 export const getMyChurch = () =>
   apiClient.get("/api/registry/my-church/");
 
+export const updateMyChurch = (data) =>
+  apiClient.patch("/api/registry/my-church/", data);
+
 // ============================================================
 // REPORTS
 // ============================================================

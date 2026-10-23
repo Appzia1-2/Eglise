@@ -172,6 +172,16 @@ class ChurchListSerializer(serializers.ModelSerializer):
             "created_at",
         ]
 
+class ChurchSelfUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Church
+        fields = [
+            "name", "established_year", "registration_number", "currency",
+            "address", "address_line1", "city", "state",
+            "country", "postal_code",
+            "email", "phone_number", "alternate_phone", "website", "logo",
+        ]
+
 
 # registry/serializers.py - Update ChurchDetailSerializer
 class ChurchDetailSerializer(serializers.ModelSerializer):
@@ -1035,34 +1045,22 @@ class MemberSerializer(serializers.ModelSerializer):
     # ========================================================
 
     def validate_email(self, value):
-
         if not value:
             return value
 
-        qs = Member.objects.filter(
-            email=value
-        )
-
+        # If updating the same member, exclude them from the check
+        qs = Member.objects.filter(email=value)
         if self.instance:
-            qs = qs.exclude(
-                pk=self.instance.pk
-            )
+            qs = qs.exclude(pk=self.instance.pk)
 
         if qs.exists():
             raise serializers.ValidationError(
                 "This email is already used by another member in the system."
             )
 
-        if User.objects.filter(
-            username=value
-        ).exists():
-
-            if (
-                self.instance
-                and self.instance.email == value
-            ):
-                pass
-            else:
+        # Ensure the User login username doesn't conflict
+        if User.objects.filter(username=value).exists():
+            if not (self.instance and self.instance.email == value):
                 raise serializers.ValidationError(
                     "This email is already used as a login username."
                 )
@@ -4680,6 +4678,11 @@ class LedgerEntrySerializer(serializers.ModelSerializer):
         read_only=True,
         allow_null=True,
     )
+    
+    # ✅ NEW FIELDS: Extract from related voucher
+    member_name = serializers.SerializerMethodField()
+    party_name = serializers.SerializerMethodField()
+    
     running_balance = serializers.SerializerMethodField()
 
     class Meta:
@@ -4699,19 +4702,22 @@ class LedgerEntrySerializer(serializers.ModelSerializer):
             "payment_voucher",
             "receipt",
             "receipt_voucher",
-            "contra",                # ← ADD THIS
-            "contra_voucher",        # ← ADD THIS
+            "contra",
+            "contra_voucher",
             "is_cancelled",
             "is_reversal",
             "reversed_entry",
             "running_balance",
             "created_at",
+            # ✅ NEW
+            "member_name",
+            "party_name",
         ]
         read_only_fields = (
             "church",
             "payment",
             "receipt",
-            "contra",                # ← ADD THIS
+            "contra",
             "is_cancelled",
             "is_reversal",
             "reversed_entry",
@@ -4724,6 +4730,18 @@ class LedgerEntrySerializer(serializers.ModelSerializer):
         if not ctx:
             return None
         return ctx.get(obj.id)
+
+    def get_member_name(self, obj):
+        """Return the member name from the linked Receipt"""
+        if obj.receipt and obj.receipt.member:
+            return obj.receipt.member.name
+        return None
+
+    def get_party_name(self, obj):
+        """Return the party name from the linked Payment"""
+        if obj.payment:
+            return obj.payment.party_name
+        return None
     
 # ============================================================
 # BANK ACCOUNT SERIALIZER

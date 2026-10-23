@@ -48,17 +48,6 @@ const BORDER = "#DCE2EA";
 // ============================================================
 // LEDGER FILTER FOR RECEIPTS
 // ============================================================
-//
-// A receipt posts TWO sides:
-//   1. CREDIT on an income ledger (the line the user picks)
-//   2. DEBIT  on the Cash / Bank ledger (auto-selected by the
-//      backend from payment_type)
-//
-// Therefore, only INCOME-nature ledgers are valid line targets.
-// Cash / Bank ledgers must NEVER appear here — the backend posts
-// them automatically. If they are selectable, the receipt posts
-// twice on Cash/Bank with no income side, breaking the books
-// (this is the RCP-2026-00005 bug we fixed).
 
 const RECEIPT_LEDGER_NATURES = ["INCOME"];
 
@@ -298,6 +287,7 @@ const ReceiptCreatePage = () => {
         };
 
         const allLedgers = toArray(lRes);
+        const allMembers = toArray(mRes);
 
         // ✅ Filter + sort ledgers for a RECEIPT
         //    INCOME only, cash/bank excluded, closing excluded.
@@ -310,7 +300,12 @@ const ReceiptCreatePage = () => {
             return (a.ledger_name || "").localeCompare(b.ledger_name || "");
           });
 
-        setMembers(toArray(mRes));
+        // ✅ NEW: Filter out dead/expired/inactive members
+        const activeMembers = allMembers.filter(
+          (m) => m.is_active && !m.expired
+        );
+
+        setMembers(activeMembers);
         setLedgers(receiptLedgers);
         setBankAccounts(toArray(bRes));
       } catch (err) {

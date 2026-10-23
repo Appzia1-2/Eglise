@@ -42,6 +42,12 @@ const toNumber = (v) => {
   return isNaN(n) ? 0 : n;
 };
 
+const fmt = (n) =>
+  Number(n || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
 const CASH_BANK_EXACT_NAMES = [
   "cash in hand",
   "balance in savings account",
@@ -54,8 +60,32 @@ const isCashOrBankLedger = (ledgerName) => {
 };
 
 // ------------------------------------------------------------
+// Helper: extract member / party name from a ledger entry
+// ------------------------------------------------------------
+const extractMemberName = (entry) => {
+  if (!entry) return "";
+  return (
+    entry.member_name ||
+    entry.memberName ||
+    entry.member?.name ||
+    entry.member?.full_name ||
+    entry.party_name ||
+    entry.partyName ||
+    entry.party?.name ||
+    entry.donor_name ||
+    entry.donorName ||
+    entry.contact_name ||
+    entry.contactName ||
+    entry.person_name ||
+    entry.personName ||
+    entry.name_of_member ||
+    entry.nameOfMember ||
+    ""
+  );
+};
+
+// ------------------------------------------------------------
 // Group flat LedgerEntry rows into one row per voucher.
-// Includes CONTRA support.
 // ------------------------------------------------------------
 const groupLedgerEntries = (entries) => {
   const groups = new Map();
@@ -89,12 +119,19 @@ const groupLedgerEntries = (entries) => {
         narration: e.narration || "",
         amount: 0,
         direction: "DEBIT",
+        memberName: "",
         _entries: [],
       });
     }
 
     const g = groups.get(key);
     g._entries.push(e);
+
+    // ✅ Capture member / party name from any entry that has it
+    if (!g.memberName) {
+      const name = extractMemberName(e);
+      if (name) g.memberName = name;
+    }
 
     const amt = toNumber(e.amount);
 
@@ -141,18 +178,26 @@ const groupLedgerEntries = (entries) => {
         : g._entries[0]?.ledger_name || "—";
     }
 
+    // ✅ Fallback: if no memberName yet, scan all entries in the voucher
+    if (!g.memberName) {
+      for (const entry of g._entries) {
+        const name = extractMemberName(entry);
+        if (name) {
+          g.memberName = name;
+          break;
+        }
+      }
+    }
+
     delete g._entries;
     return g;
   });
 };
 
-const DayBookPrintTable = ({ rows, totals, openingBalance }) => {
-  const fmt = (n) =>
-    Number(n || 0).toLocaleString("en-IN", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-
+// ------------------------------------------------------------
+// Print Table
+// ------------------------------------------------------------
+const DayBookPrintTable = ({ rows, totals, openingBalance, closingBalance }) => {
   const thStyle = {
     border: "1px solid #F0C2C2",
     padding: "10px 8px",
@@ -201,16 +246,34 @@ const DayBookPrintTable = ({ rows, totals, openingBalance }) => {
 
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={6} style={{ ...tdStyle, textAlign: "center", fontStyle: "italic", color: "#A05050" }}>
+              <td
+                colSpan={6}
+                style={{
+                  ...tdStyle,
+                  textAlign: "center",
+                  fontStyle: "italic",
+                  color: "#A05050",
+                }}
+              >
                 No transactions for the selected period.
               </td>
             </tr>
           ) : (
             rows.map((r, i) => (
-              <tr key={r.key} style={{ background: i % 2 === 0 ? "#FFFFFF" : "#FFF9F9" }}>
+              <tr
+                key={r.key}
+                style={{ background: i % 2 === 0 ? "#FFFFFF" : "#FFF9F9" }}
+              >
                 <td style={tdStyle}>{r.date}</td>
                 <td style={tdStyle}>{r.voucherNo}</td>
-                <td style={{ ...tdStyle, color: "#8B1A1A" }}>{r.particulars}</td>
+                <td style={{ ...tdStyle, color: "#8B1A1A" }}>
+                  <div>{r.particulars}</div>
+                  {r.memberName && (
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>
+                      {r.memberName}
+                    </div>
+                  )}
+                </td>
                 <td style={tdStyle}>{r.cashBankAccount}</td>
                 <td style={{ ...numStyle, color: "#8B1A1A" }}>
                   {r.direction === "CREDIT" ? `₹${fmt(r.amount)}` : "—"}
@@ -223,7 +286,10 @@ const DayBookPrintTable = ({ rows, totals, openingBalance }) => {
           )}
 
           <tr style={{ background: "#FCEAEC", borderTop: "1px solid #F0C2C2" }}>
-            <td colSpan={4} style={{ ...tdStyle, textAlign: "right", fontWeight: "bold", color: "#8B1A1A" }}>
+            <td
+              colSpan={4}
+              style={{ ...tdStyle, textAlign: "right", fontWeight: "bold", color: "#8B1A1A" }}
+            >
               Total
             </td>
             <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>
@@ -235,11 +301,14 @@ const DayBookPrintTable = ({ rows, totals, openingBalance }) => {
           </tr>
 
           <tr style={{ background: "#FFF5F5" }}>
-            <td colSpan={4} style={{ ...tdStyle, textAlign: "right", fontWeight: "bold", color: "#8B1A1A" }}>
+            <td
+              colSpan={4}
+              style={{ ...tdStyle, textAlign: "right", fontWeight: "bold", color: "#8B1A1A" }}
+            >
               Closing Balance
             </td>
             <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>
-              ₹{fmt((openingBalance || 0) + totals.credit - totals.debit)}
+              ₹{fmt(closingBalance)}
             </td>
             <td style={{ ...numStyle, color: "#8B1A1A" }}>—</td>
           </tr>
@@ -249,6 +318,9 @@ const DayBookPrintTable = ({ rows, totals, openingBalance }) => {
   );
 };
 
+// ------------------------------------------------------------
+// Page
+// ------------------------------------------------------------
 const DayBookPage = () => {
   const navigate = useNavigate();
 
@@ -260,7 +332,8 @@ const DayBookPage = () => {
   const [dateFrom, setDateFrom] = useState(todayISO());
   const [dateTo, setDateTo] = useState(todayISO());
 
-  const [openingBalance, setOpeningBalance] = useState(undefined);
+  const [openingBalance, setOpeningBalance] = useState(0);
+  const [closingBalance, setClosingBalance] = useState(0);
 
   const [church, setChurch] = useState({ name: "", address: "" });
 
@@ -299,11 +372,8 @@ const DayBookPage = () => {
       let data = body.results ?? body ?? [];
       if (!Array.isArray(data)) data = [];
 
-      if (typeof body.opening_balance === "number") {
-        setOpeningBalance(body.opening_balance);
-      } else {
-        setOpeningBalance(undefined);
-      }
+      setOpeningBalance(Number(body.opening_balance ?? 0));
+      setClosingBalance(Number(body.closing_balance ?? 0));
 
       setRawEntries(data);
     } catch (err) {
@@ -314,6 +384,8 @@ const DayBookPage = () => {
         type: "error",
       });
       setRawEntries([]);
+      setOpeningBalance(0);
+      setClosingBalance(0);
     } finally {
       setIsLoading(false);
     }
@@ -335,7 +407,8 @@ const DayBookPage = () => {
           String(r.voucherNo || "").toLowerCase().includes(kw) ||
           String(r.cashBankAccount || "").toLowerCase().includes(kw) ||
           String(r.voucherType || "").toLowerCase().includes(kw) ||
-          String(r.narration || "").toLowerCase().includes(kw)
+          String(r.narration || "").toLowerCase().includes(kw) ||
+          String(r.memberName || "").toLowerCase().includes(kw)
       );
     }
 
@@ -399,10 +472,21 @@ const DayBookPage = () => {
             direction={{ base: "column", md: "row" }}
           >
             <Box>
-              <Text fontSize="11px" fontWeight="700" color={RED} mb={1} letterSpacing="0.4px">
+              <Text
+                fontSize="11px"
+                fontWeight="700"
+                color={RED}
+                mb={1}
+                letterSpacing="0.4px"
+              >
                 DAY BOOK REPORT
               </Text>
-              <Heading color={DARK} fontSize={{ base: "26px", md: "30px" }} mb={1} fontWeight="700">
+              <Heading
+                color={DARK}
+                fontSize={{ base: "26px", md: "30px" }}
+                mb={1}
+                fontWeight="700"
+              >
                 Day Book
               </Heading>
               <Text color={MUTED} fontSize="13px">
@@ -464,6 +548,31 @@ const DayBookPage = () => {
               totals={totals}
               showTotals
             />
+
+            {/* ✅ CLOSING BALANCE FOOTER (At the bottom of the table) */}
+            {!isLoading && rows.length > 0 && (
+              <Flex
+                justify="flex-end"
+                align="center"
+                mt={5}
+                pt={3}
+                borderTop={`2px solid ${BORDER}`}
+              >
+                <HStack gap={4}>
+                  <Text
+                    fontSize="13px"
+                    fontWeight="700"
+                    color={MUTED}
+                    letterSpacing="0.4px"
+                  >
+                    CLOSING BALANCE
+                  </Text>
+                  <Text fontSize="18px" fontWeight="800" color={DARK}>
+                    ₹{fmt(closingBalance)}
+                  </Text>
+                </HStack>
+              </Flex>
+            )}
           </Box>
         </Box>
 
@@ -487,6 +596,7 @@ const DayBookPage = () => {
           rows={rows}
           totals={totals}
           openingBalance={openingBalance}
+          closingBalance={closingBalance}
         />
       </ChurchPrintModal>
     </>

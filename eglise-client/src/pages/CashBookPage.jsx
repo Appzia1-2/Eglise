@@ -36,11 +36,24 @@ const todayISO = () => {
   return `${y}-${m}-${day}`;
 };
 
+const startOfMonthISO = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}-01`;
+};
+
 const toNumber = (v) => {
   if (v === null || v === undefined || v === "") return 0;
   const n = Number(String(v).replace(/[₹,\s]/g, ""));
   return isNaN(n) ? 0 : n;
 };
+
+const fmt = (n) =>
+  Number(n || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
 const CASH_BANK_EXACT_NAMES = [
   "cash in hand",
@@ -53,6 +66,9 @@ const isCashOrBankLedger = (ledgerName) => {
   return CASH_BANK_EXACT_NAMES.some((exact) => n === exact);
 };
 
+// ------------------------------------------------------------
+// Group ledger entries into one row per voucher.
+// ------------------------------------------------------------
 const groupLedgerEntries = (entries) => {
   const groups = new Map();
 
@@ -81,6 +97,7 @@ const groupLedgerEntries = (entries) => {
         voucherNo: voucherNo || "—",
         voucherType,
         particulars: "",
+        memberName: "",
         cashBankAccount: "",
         narration: e.narration || "",
         amount: 0,
@@ -91,6 +108,15 @@ const groupLedgerEntries = (entries) => {
 
     const g = groups.get(key);
     g._entries.push(e);
+
+    // Extract Member / Party Name
+    if (!g.memberName) {
+      if (e.member_name) {
+        g.memberName = e.member_name;
+      } else if (e.party_name) {
+        g.memberName = e.party_name;
+      }
+    }
 
     const amt = toNumber(e.amount);
 
@@ -142,13 +168,15 @@ const groupLedgerEntries = (entries) => {
   });
 };
 
-const CashBookPrintTable = ({ rows, totals, openingBalance }) => {
-  const fmt = (n) =>
-    Number(n || 0).toLocaleString("en-IN", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-
+// ------------------------------------------------------------
+// Print Table
+// ------------------------------------------------------------
+const CashBookPrintTable = ({
+  rows,
+  totals,
+  openingBalance,
+  closingBalance,
+}) => {
   const thStyle = {
     border: "1px solid #F0C2C2",
     padding: "10px 8px",
@@ -186,7 +214,10 @@ const CashBookPrintTable = ({ rows, totals, openingBalance }) => {
         </thead>
         <tbody>
           <tr style={{ background: "#FFF5F5" }}>
-            <td colSpan={4} style={{ ...tdStyle, fontWeight: "bold", color: "#8B1A1A" }}>
+            <td
+              colSpan={4}
+              style={{ ...tdStyle, fontWeight: "bold", color: "#8B1A1A" }}
+            >
               Opening Balance
             </td>
             <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>
@@ -197,16 +228,34 @@ const CashBookPrintTable = ({ rows, totals, openingBalance }) => {
 
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={6} style={{ ...tdStyle, textAlign: "center", fontStyle: "italic", color: "#A05050" }}>
+              <td
+                colSpan={6}
+                style={{
+                  ...tdStyle,
+                  textAlign: "center",
+                  fontStyle: "italic",
+                  color: "#A05050",
+                }}
+              >
                 No transactions for the selected period.
               </td>
             </tr>
           ) : (
             rows.map((r, i) => (
-              <tr key={r.key} style={{ background: i % 2 === 0 ? "#FFFFFF" : "#FFF9F9" }}>
+              <tr
+                key={r.key}
+                style={{ background: i % 2 === 0 ? "#FFFFFF" : "#FFF9F9" }}
+              >
                 <td style={tdStyle}>{r.date}</td>
                 <td style={tdStyle}>{r.voucherNo}</td>
-                <td style={{ ...tdStyle, color: "#8B1A1A" }}>{r.particulars}</td>
+                <td style={{ ...tdStyle, color: "#8B1A1A" }}>
+                  <div>{r.particulars}</div>
+                  {r.memberName && (
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: 2 }}>
+                      {r.memberName}
+                    </div>
+                  )}
+                </td>
                 <td style={tdStyle}>{r.cashBankAccount}</td>
                 <td style={{ ...numStyle, color: "#8B1A1A" }}>
                   {r.direction === "CREDIT" ? `₹${fmt(r.amount)}` : "—"}
@@ -219,7 +268,15 @@ const CashBookPrintTable = ({ rows, totals, openingBalance }) => {
           )}
 
           <tr style={{ background: "#FCEAEC", borderTop: "1px solid #F0C2C2" }}>
-            <td colSpan={4} style={{ ...tdStyle, textAlign: "right", fontWeight: "bold", color: "#8B1A1A" }}>
+            <td
+              colSpan={4}
+              style={{
+                ...tdStyle,
+                textAlign: "right",
+                fontWeight: "bold",
+                color: "#8B1A1A",
+              }}
+            >
               Total
             </td>
             <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>
@@ -231,11 +288,19 @@ const CashBookPrintTable = ({ rows, totals, openingBalance }) => {
           </tr>
 
           <tr style={{ background: "#FFF5F5" }}>
-            <td colSpan={4} style={{ ...tdStyle, textAlign: "right", fontWeight: "bold", color: "#8B1A1A" }}>
+            <td
+              colSpan={4}
+              style={{
+                ...tdStyle,
+                textAlign: "right",
+                fontWeight: "bold",
+                color: "#8B1A1A",
+              }}
+            >
               Closing Balance
             </td>
             <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>
-              ₹{fmt((openingBalance || 0) + totals.credit - totals.debit)}
+              ₹{fmt(closingBalance)}
             </td>
             <td style={{ ...numStyle, color: "#8B1A1A" }}>—</td>
           </tr>
@@ -245,6 +310,9 @@ const CashBookPrintTable = ({ rows, totals, openingBalance }) => {
   );
 };
 
+// ------------------------------------------------------------
+// Page
+// ------------------------------------------------------------
 const CashBookPage = () => {
   const navigate = useNavigate();
 
@@ -252,10 +320,13 @@ const CashBookPage = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   const [search, setSearch] = useState("");
-  const [dateFrom, setDateFrom] = useState(todayISO());
+
+  // ✅ Defaults to current month
+  const [dateFrom, setDateFrom] = useState(startOfMonthISO());
   const [dateTo, setDateTo] = useState(todayISO());
 
-  const [openingBalance, setOpeningBalance] = useState(undefined);
+  const [openingBalance, setOpeningBalance] = useState(0);
+  const [closingBalance, setClosingBalance] = useState(0);
 
   const [church, setChurch] = useState({ name: "", address: "" });
 
@@ -293,11 +364,8 @@ const CashBookPage = () => {
       let data = body.results ?? body ?? [];
       if (!Array.isArray(data)) data = [];
 
-      if (typeof body.opening_balance === "number") {
-        setOpeningBalance(body.opening_balance);
-      } else {
-        setOpeningBalance(undefined);
-      }
+      setOpeningBalance(Number(body.opening_balance ?? 0));
+      setClosingBalance(Number(body.closing_balance ?? 0));
 
       setRawEntries(data);
     } catch (err) {
@@ -308,6 +376,8 @@ const CashBookPage = () => {
         type: "error",
       });
       setRawEntries([]);
+      setOpeningBalance(0);
+      setClosingBalance(0);
     } finally {
       setIsLoading(false);
     }
@@ -326,6 +396,7 @@ const CashBookPage = () => {
       grouped = grouped.filter(
         (r) =>
           String(r.particulars || "").toLowerCase().includes(kw) ||
+          String(r.memberName || "").toLowerCase().includes(kw) ||
           String(r.voucherNo || "").toLowerCase().includes(kw) ||
           String(r.cashBankAccount || "").toLowerCase().includes(kw) ||
           String(r.voucherType || "").toLowerCase().includes(kw) ||
@@ -362,7 +433,7 @@ const CashBookPage = () => {
 
   const reset = () => {
     setSearch("");
-    setDateFrom(todayISO());
+    setDateFrom(startOfMonthISO());
     setDateTo(todayISO());
   };
 
@@ -373,7 +444,11 @@ const CashBookPage = () => {
 
         <Box flex="1" w="100%" px={{ base: 3, md: 4 }} py={{ base: 3, md: 4 }}>
           <HStack gap={2} mb={2} color={MUTED} fontSize="11px">
-            <Text color={PRIMARY_MAROON} cursor="pointer" onClick={() => navigate("/reports")}>
+            <Text
+              color={PRIMARY_MAROON}
+              cursor="pointer"
+              onClick={() => navigate("/reports")}
+            >
               Reports
             </Text>
             <Text>/</Text>
@@ -391,7 +466,11 @@ const CashBookPage = () => {
               <Text fontSize="10px" fontWeight="700" color={RED} mb={1}>
                 CASH BOOK REPORT
               </Text>
-              <Heading color={DARK} fontSize={{ base: "22px", md: "26px" }} mb={1}>
+              <Heading
+                color={DARK}
+                fontSize={{ base: "22px", md: "26px" }}
+                mb={1}
+              >
                 Cash Book
               </Heading>
               <Text color={MUTED} fontSize="11px">
@@ -434,7 +513,12 @@ const CashBookPage = () => {
             </HStack>
           </Flex>
 
-          <Box border={`1px solid ${BORDER}`} borderRadius="8px" p={3} bg="white">
+          <Box
+            border={`1px solid ${BORDER}`}
+            borderRadius="8px"
+            p={3}
+            bg="white"
+          >
             <ReportFilterBar
               search={search}
               setSearch={setSearch}
@@ -451,6 +535,31 @@ const CashBookPage = () => {
               totals={totals}
               showTotals
             />
+
+            {/* ✅ CLOSING BALANCE FOOTER */}
+            {!isLoading && rows.length > 0 && (
+              <Flex
+                justify="flex-end"
+                align="center"
+                mt={5}
+                pt={3}
+                borderTop={`2px solid ${BORDER}`}
+              >
+                <HStack gap={4}>
+                  <Text
+                    fontSize="13px"
+                    fontWeight="700"
+                    color={MUTED}
+                    letterSpacing="0.4px"
+                  >
+                    CLOSING BALANCE
+                  </Text>
+                  <Text fontSize="18px" fontWeight="800" color={DARK}>
+                    ₹{fmt(closingBalance)}
+                  </Text>
+                </HStack>
+              </Flex>
+            )}
 
             <Text fontSize="11px" color={MUTED} mt={2} textAlign="right">
               Showing {rows.length} entries
@@ -478,6 +587,7 @@ const CashBookPage = () => {
           rows={rows}
           totals={totals}
           openingBalance={openingBalance}
+          closingBalance={closingBalance}
         />
       </ChurchPrintModal>
     </>

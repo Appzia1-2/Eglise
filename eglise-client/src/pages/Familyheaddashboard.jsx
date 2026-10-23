@@ -120,7 +120,6 @@ const FamilyHeadDashboard = () => {
     onClose: onDetailClose,
   } = useDisclosure();
 
-  // ✅ NEW: Upgrade prompt dialog
   const {
     open: isUpgradeOpen,
     onOpen: onUpgradeOpen,
@@ -218,12 +217,15 @@ const FamilyHeadDashboard = () => {
 
       /* ======================================================
          FAMILY HEADS
+         ✅ Only ACTIVE heads are shown in the main grid.
+         Married-off / inactive heads are hidden here.
       ====================================================== */
 
       const familyHeads = membersList
         .filter(
           (member) =>
             member.is_family_head &&
+            member.is_active &&
             !member.expired
         )
         .map((head) => {
@@ -662,12 +664,6 @@ const FamilyHeadDashboard = () => {
     houseName,
     houseSequence
   ) => {
-    // If limit is reached, show upgrade prompt instead of navigating
-    if (limitReached) {
-      onUpgradeOpen();
-      return;
-    }
-
     onClose();
 
     navigate(
@@ -698,8 +694,6 @@ const FamilyHeadDashboard = () => {
 
   /* ==========================================================
      ADD FAMILY HEAD
-     - Always clickable now.
-     - If limit reached, open upgrade dialog instead of navigating.
   ========================================================== */
 
   const handleAddFamilyHead = () => {
@@ -712,12 +706,11 @@ const FamilyHeadDashboard = () => {
   };
 
   /* ==========================================================
-     UPGRADE (placeholder — wired later)
+     UPGRADE
   ========================================================== */
 
   const handleGoToUpgrade = () => {
-    // TODO: wire this to the subscription / upgrade page once built.
-    // e.g. navigate("/subscription/upgrade");
+    // TODO: wire this to the subscription / upgrade page.
   };
 
   /* ==========================================================
@@ -755,7 +748,6 @@ const FamilyHeadDashboard = () => {
         overflow="hidden"
       >
         {/* BREADCRUMB */}
-
         <HStack
           gap="10px"
           mb="13px"
@@ -768,11 +760,7 @@ const FamilyHeadDashboard = () => {
           >
             Masters
           </Text>
-
-          <Text color="var(--muted-border)">
-            /
-          </Text>
-
+          <Text color="var(--muted-border)">/</Text>
           <Text
             color="var(--light-gray)"
             fontWeight="500"
@@ -782,7 +770,6 @@ const FamilyHeadDashboard = () => {
         </HStack>
 
         {/* HEADER */}
-
         <Flex
           justify="space-between"
           align={{
@@ -838,7 +825,6 @@ const FamilyHeadDashboard = () => {
           </Box>
 
           {/* HEADER ACTIONS */}
-
           <HStack
             gap="12px"
             flexShrink={0}
@@ -874,9 +860,8 @@ const FamilyHeadDashboard = () => {
               position="relative"
             >
               <LuCircleAlert size={17} />
-
               <Text ml="7px">
-                Headless Families
+                Unassigned Families
               </Text>
 
               {headlessFamilies.length >
@@ -899,7 +884,6 @@ const FamilyHeadDashboard = () => {
               )}
             </Button>
 
-            {/* ✅ Add Family Head — always clickable */}
             <Button
               flex={{
                 base: 1,
@@ -923,7 +907,6 @@ const FamilyHeadDashboard = () => {
               }}
             >
               <LuPlus size={17} />
-
               <Text ml="7px">
                 Add Family Head
               </Text>
@@ -932,7 +915,6 @@ const FamilyHeadDashboard = () => {
         </Flex>
 
         {/* FILTER BAR */}
-
         <Box
           width="100%"
           minW="0"
@@ -940,7 +922,7 @@ const FamilyHeadDashboard = () => {
           gridTemplateColumns={{
             base: "1fr",
             sm: "1.5fr 1fr",
-            lg: "minmax(0, 1.55fr) minmax(130px, .85fr) minmax(130px, .85fr) minmax(130px, .85fr) 105px",
+            lg: "minmax(0, 1.55fr) minmax(130px, .85fr) minmax(130px, .85fr) 105px",
           }}
           gap={{
             base: "9px",
@@ -995,7 +977,6 @@ const FamilyHeadDashboard = () => {
           </Box>
 
           {/* WARD */}
-
           <Box minW="0">
             <select
               value={filterWard}
@@ -1022,7 +1003,6 @@ const FamilyHeadDashboard = () => {
               <option value="">
                 All Wards
               </option>
-
               {wards.map((ward) => (
                 <option
                   key={ward.id}
@@ -1035,7 +1015,6 @@ const FamilyHeadDashboard = () => {
           </Box>
 
           {/* GRADE */}
-
           <Box minW="0">
             <select
               value={filterGrade}
@@ -1062,7 +1041,6 @@ const FamilyHeadDashboard = () => {
               <option value="">
                 All Grades
               </option>
-
               {grades.map((grade) => (
                 <option
                   key={grade.id}
@@ -1074,47 +1052,7 @@ const FamilyHeadDashboard = () => {
             </select>
           </Box>
 
-          {/* STATUS */}
-
-          <Box minW="0">
-            <select
-              value={filterStatus}
-              onChange={(e) =>
-                setFilterStatus(
-                  e.target.value
-                )
-              }
-              style={{
-                width: "100%",
-                height: "38px",
-                padding: "0 9px",
-                border:
-                  "1px solid var(--border-color)",
-                borderRadius: "5px",
-                fontSize: "11px",
-                color:
-                  "var(--light-gray)",
-                background:
-                  "var(--white)",
-                outline: "none",
-              }}
-            >
-              <option value="">
-                All Status
-              </option>
-
-              <option value="ACTIVE">
-                Active
-              </option>
-
-              <option value="INACTIVE">
-                Inactive
-              </option>
-            </select>
-          </Box>
-
           {/* CLEAR */}
-
           <Button
             width="100%"
             minW="0"
@@ -1144,7 +1082,6 @@ const FamilyHeadDashboard = () => {
             }}
           >
             <LuFilter size={15} />
-
             <Text ml="6px">
               {search ||
               filterWard ||
@@ -1157,7 +1094,6 @@ const FamilyHeadDashboard = () => {
         </Box>
 
         {/* DIRECTORY HEADER */}
-
         <Flex
           justify="space-between"
           align="flex-end"
@@ -1189,7 +1125,6 @@ const FamilyHeadDashboard = () => {
         </Flex>
 
         {/* ERROR */}
-
         {error && (
           <Box
             mb="14px"
@@ -1209,7 +1144,6 @@ const FamilyHeadDashboard = () => {
         )}
 
         {/* LOADING / EMPTY / CARDS */}
-
         {loading ? (
           <Box
             border="1px solid"
@@ -1300,7 +1234,6 @@ const FamilyHeadDashboard = () => {
                   }}
                 >
                   {/* CARD MAIN */}
-
                   <Box
                     px={{
                       base: "14px",
@@ -1320,7 +1253,6 @@ const FamilyHeadDashboard = () => {
                       minW="0"
                     >
                       {/* AVATAR */}
-
                       <Avatar.Root
                         width={{
                           base: "88px",
@@ -1368,14 +1300,12 @@ const FamilyHeadDashboard = () => {
                       </Avatar.Root>
 
                       {/* CARD CONTENT */}
-
                       <Box
                         flex="1"
                         minW="0"
                         overflow="hidden"
                       >
                         {/* NAME + STATUS */}
-
                         <Flex
                           justify="space-between"
                           align="flex-start"
@@ -1440,36 +1370,24 @@ const FamilyHeadDashboard = () => {
                           </Box>
 
                           {/* STATUS */}
-
                           <Box
                             flexShrink={0}
                             px="8px"
                             py="4px"
                             borderRadius="4px"
                             bg="var(--light-bg)"
-                            color={
-                              head.is_active
-                                ? "var(--success)"
-                                : "var(--light-gray)"
-                            }
+                            color="var(--success)"
                             border="1px solid"
-                            borderColor={
-                              head.is_active
-                                ? "var(--success)"
-                                : "var(--muted-border)"
-                            }
+                            borderColor="var(--success)"
                             fontSize="10.5px"
                             fontWeight="500"
                             lineHeight="1"
                           >
-                            {head.is_active
-                              ? "Active"
-                              : "Inactive"}
+                            Active
                           </Box>
                         </Flex>
 
                         {/* DETAILS */}
-
                         <VStack
                           align="stretch"
                           gap="5px"
@@ -1479,7 +1397,6 @@ const FamilyHeadDashboard = () => {
                             <Box color="var(--dark-text)" flexShrink={0}>
                               <LuMapPin size={14} />
                             </Box>
-
                             <Text
                               fontSize="10.5px"
                               color="var(--dark-text)"
@@ -1494,7 +1411,6 @@ const FamilyHeadDashboard = () => {
                             <Box color="var(--dark-text)" flexShrink={0}>
                               <LuGraduationCap size={14} />
                             </Box>
-
                             <Text
                               fontSize="10.5px"
                               color="var(--dark-text)"
@@ -1509,7 +1425,6 @@ const FamilyHeadDashboard = () => {
                             <Box color="var(--dark-text)" flexShrink={0}>
                               <LuPhone size={14} />
                             </Box>
-
                             <Text
                               fontSize="10.5px"
                               color="var(--dark-text)"
@@ -1527,7 +1442,6 @@ const FamilyHeadDashboard = () => {
                             <Box color="var(--dark-text)" flexShrink={0}>
                               <LuUsers size={14} />
                             </Box>
-
                             <Text
                               fontSize="10.5px"
                               color="var(--dark-text)"
@@ -1546,7 +1460,6 @@ const FamilyHeadDashboard = () => {
                   </Box>
 
                   {/* ACTION BAR */}
-
                   <Box
                     borderTop="1px solid"
                     borderColor="var(--divider-color)"
@@ -1561,7 +1474,6 @@ const FamilyHeadDashboard = () => {
                       height="100%"
                     >
                       <HStack gap="6px">
-                        {/* MEMBERS */}
                         <Button
                           variant="ghost"
                           h="27px"
@@ -1582,7 +1494,6 @@ const FamilyHeadDashboard = () => {
                           <LuUserPlus size={17} />
                         </Button>
 
-                        {/* VIEW */}
                         <Button
                           variant="ghost"
                           h="27px"
@@ -1603,7 +1514,6 @@ const FamilyHeadDashboard = () => {
                           <LuEye size={17} />
                         </Button>
 
-                        {/* EDIT */}
                         <Button
                           variant="ghost"
                           h="27px"
@@ -1633,7 +1543,6 @@ const FamilyHeadDashboard = () => {
         )}
 
         {/* PAGINATION */}
-
         <Flex
           mt="13px"
           align="center"
@@ -1804,13 +1713,14 @@ const FamilyHeadDashboard = () => {
                 </Box>
 
                 <Box>
-                  <Dialog.Title>
-                    <Heading
-                      size="md"
-                      color="var(--dark-text)"
-                    >
-                      Headless Families
-                    </Heading>
+                  {/* ✅ FIX: Dialog.Title is already an h2 —
+                      do NOT nest a <Heading> inside it. */}
+                  <Dialog.Title
+                    fontSize="md"
+                    fontWeight="700"
+                    color="var(--dark-text)"
+                  >
+                    Headless Families
                   </Dialog.Title>
 
                   <Text
@@ -2219,14 +2129,14 @@ const FamilyHeadDashboard = () => {
                 </Box>
 
                 <Box>
-                  <Dialog.Title>
-                    <Heading
-                      size="md"
-                      color="var(--dark-text)"
-                    >
-                      {selectedHousehold?.family_name ||
-                        "Family Details"}
-                    </Heading>
+                  {/* ✅ FIX: Dialog.Title is already an h2. */}
+                  <Dialog.Title
+                    fontSize="md"
+                    fontWeight="700"
+                    color="var(--dark-text)"
+                  >
+                    {selectedHousehold?.family_name ||
+                      "Family Details"}
                   </Dialog.Title>
 
                   <Text
@@ -2328,7 +2238,6 @@ const FamilyHeadDashboard = () => {
                   </SimpleGrid>
 
                   {/* MEMBERS TABLE */}
-
                   <Box>
                     <Text
                       fontSize="13px"
@@ -2399,7 +2308,6 @@ const FamilyHeadDashboard = () => {
                               Status
                             </Table.ColumnHeader>
 
-                            {/* ✅ NEW: Actions Column */}
                             <Table.ColumnHeader
                               fontSize="10px"
                               textTransform="uppercase"
@@ -2493,7 +2401,6 @@ const FamilyHeadDashboard = () => {
                                   </Badge>
                                 </Table.Cell>
 
-                                {/* ✅ NEW: Eye Button to View Member Details */}
                                 <Table.Cell textAlign="center">
                                   <Button
                                     variant="ghost"
@@ -2504,7 +2411,6 @@ const FamilyHeadDashboard = () => {
                                     title="View Member Details"
                                     onClick={() => {
                                       onDetailClose(); 
-                                      // Route to the dependent page using the family_id
                                       navigate(`/family-heads/${selectedHousehold.family_id}/members/${member.id}`); 
                                     }}
                                     _hover={{ bg: "var(--light-maroon-bg)" }}
@@ -2587,10 +2493,6 @@ const FamilyHeadDashboard = () => {
 
       {/* =========================================================
           UPGRADE PROMPT DIALOG
-          Shown when the user tries to add a family head /
-          promote a head while the subscription limit is full.
-          The "Go to Upgrade" button is intentionally inactive
-          for now — to be wired up in a future iteration.
       ========================================================== */}
 
       <Dialog.Root
@@ -2624,10 +2526,13 @@ const FamilyHeadDashboard = () => {
                 </Box>
 
                 <Box>
-                  <Dialog.Title>
-                    <Heading size="sm" color="var(--dark-text)">
-                      Member limit reached
-                    </Heading>
+                  {/* ✅ FIX: Dialog.Title is already an h2. */}
+                  <Dialog.Title
+                    fontSize="sm"
+                    fontWeight="700"
+                    color="var(--dark-text)"
+                  >
+                    Member limit reached
                   </Dialog.Title>
 
                   <Text
@@ -2770,7 +2675,6 @@ const FamilyHeadDashboard = () => {
                   </Button>
                 </Dialog.CloseTrigger>
 
-                {/* ✅ Upgrade CTA — inactive for now, wired later */}
                 <Button
                   bg="var(--primary-maroon)"
                   color="var(--white)"

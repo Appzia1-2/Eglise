@@ -106,7 +106,15 @@ const CommitteeAddPage = () => {
           listMembers(),
           listDesignations(),
         ]);
-        setMembers(getArrayData(mRes));
+
+        const allMembers = getArrayData(mRes);
+
+        // ✅ NEW: Filter out dead / inactive / expired members
+        const activeMembers = allMembers.filter(
+          (m) => m.is_active && !m.expired
+        );
+
+        setMembers(activeMembers);
         setDesignations(getArrayData(dRes));
       } catch (err) {
         console.error(err);
@@ -258,7 +266,7 @@ const CommitteeAddPage = () => {
         members: validRows.map((r) => ({
           member: Number(r.member),
           designation: Number(r.designation),
-          phone: String(r.phone).trim(), // ✅ phone now sent to backend
+          phone: String(r.phone).trim(),
         })),
       });
 

@@ -230,6 +230,8 @@ const ReportLedgerTable = ({
                         >
                           {r.voucherNo || "—"}
                         </Box>
+                        
+                        {/* ✅ UPDATED: Render Member/Party Name below the ledger name */}
                         <Box
                           as="td"
                           px={4}
@@ -239,8 +241,14 @@ const ReportLedgerTable = ({
                           fontWeight="500"
                           borderBottom={`1px solid ${BORDER}`}
                         >
-                          {r.particulars || r.account || "—"}
+                          <Text>{r.particulars || r.account || "—"}</Text>
+                          {r.memberName && (
+                            <Text fontSize="11px" color={MUTED} mt={0.5}>
+                              {r.memberName}
+                            </Text>
+                          )}
                         </Box>
+
                         <Box
                           as="td"
                           px={4}

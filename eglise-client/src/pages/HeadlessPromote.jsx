@@ -16,6 +16,8 @@ import {
   RadioGroup,
   Spinner,
   IconButton,
+  Input,
+  Field,
 } from "@chakra-ui/react";
 
 import { useNavigate, useLocation } from "react-router-dom";
@@ -34,6 +36,7 @@ import Footer from "../components/Footer";
 import {
   listMembers,
   promoteToHead,
+  updateMember,
 } from "../api/registryServices";
 
 /* ============================================================
@@ -72,10 +75,11 @@ const HeadlessPromote = () => {
 
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState([]);
-  const [selectedMember, setSelectedMember] =
-    useState(null);
-  const [submitting, setSubmitting] =
-    useState(false);
+  const [selectedMember, setSelectedMember] = useState(null);
+  
+  // Form state
+  const [emailInput, setEmailInput] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   /* ==========================================================
@@ -98,70 +102,42 @@ const HeadlessPromote = () => {
       setError("");
 
       const response = await listMembers();
+      const allMembers = getArrayData(response);
 
-      const allMembers =
-        getArrayData(response);
-
-      const normalizedFamilyId =
-        Number(family_id);
-
-      const normalizedHouseName =
-        String(house_name || "")
-          .trim()
-          .toLowerCase();
-
-      const normalizedHouseSequence =
-        Number(house_sequence ?? 1);
+      const normalizedFamilyId = Number(family_id);
+      const normalizedHouseName = String(house_name || "").trim().toLowerCase();
+      const normalizedHouseSequence = Number(house_sequence ?? 1);
 
       /* ======================================================
          FILTER MEMBERS BELONGING TO HOUSEHOLD
       ====================================================== */
 
-      const householdMembers =
-        allMembers.filter((member) => {
-          const memberFamilyId =
-            Number(getId(member.family));
+      const householdMembers = allMembers.filter((member) => {
+        const memberFamilyId = Number(getId(member.family));
+        const memberHouseName = String(member.house_name || "").trim().toLowerCase();
+        const memberHouseSequence = Number(member.house_sequence ?? 1);
 
-          const memberHouseName =
-            String(member.house_name || "")
-              .trim()
-              .toLowerCase();
-
-          const memberHouseSequence =
-            Number(
-              member.house_sequence ?? 1
-            );
-
-          return (
-            memberFamilyId ===
-              normalizedFamilyId &&
-            memberHouseName ===
-              normalizedHouseName &&
-            memberHouseSequence ===
-              normalizedHouseSequence &&
-            Boolean(member.is_active) &&
-            !member.expired
-          );
-        });
+        return (
+          memberFamilyId === normalizedFamilyId &&
+          memberHouseName === normalizedHouseName &&
+          memberHouseSequence === normalizedHouseSequence &&
+          Boolean(member.is_active) &&
+          !member.expired
+        );
+      });
 
       /* ======================================================
          ONLY NON-HEAD MEMBERS ARE ELIGIBLE
       ====================================================== */
 
-      const eligibleMembers =
-        householdMembers.filter(
-          (member) =>
-            !member.is_family_head
-        );
+      const eligibleMembers = householdMembers.filter(
+        (member) => !member.is_family_head
+      );
 
       setMembers(eligibleMembers);
       setSelectedMember(null);
     } catch (err) {
-      console.error(
-        "Error loading household members:",
-        err
-      );
-
+      console.error("Error loading household members:", err);
       setError(
         err?.response?.data?.detail ||
           err?.response?.data?.message ||
@@ -178,21 +154,13 @@ const HeadlessPromote = () => {
 
   useEffect(() => {
     if (!family_id || !house_name) {
-      setError(
-        "Missing family or house information."
-      );
-
+      setError("Missing family or house information.");
       setLoading(false);
-
       return;
     }
 
     loadHouseholdMembers();
-  }, [
-    family_id,
-    house_name,
-    house_sequence,
-  ]);
+  }, [family_id, house_name, house_sequence]);
 
   /* ==========================================================
      SELECT MEMBER
@@ -200,15 +168,17 @@ const HeadlessPromote = () => {
 
   const handleSelectMember = (value) => {
     const selectedId = Number(value);
-
-    const member = members.find(
-      (item) =>
-        Number(item.id) === selectedId
-    );
-
-    setSelectedMember(
-      member || null
-    );
+    const member = members.find((item) => Number(item.id) === selectedId);
+    
+    setSelectedMember(member || null);
+    
+    // Auto-fill email if they already have one
+    if (member?.email) {
+      setEmailInput(member.email);
+    } else {
+      setEmailInput("");
+    }
+    setError(""); // clear errors on change
   };
 
   /* ==========================================================
@@ -217,10 +187,14 @@ const HeadlessPromote = () => {
 
   const handlePromote = async () => {
     if (!selectedMember) {
-      setError(
-        "Please select a member to promote to family head."
-      );
+      setError("Please select a member to promote to family head.");
+      return;
+    }
 
+    // If the member doesn't have an email, we REQUIRE it here 
+    // to prevent the backend 400 error.
+    if (!emailInput || !emailInput.trim()) {
+      setError("An email address is required for the new family head to create their login.");
       return;
     }
 
@@ -228,32 +202,27 @@ const HeadlessPromote = () => {
       setSubmitting(true);
       setError("");
 
-      await promoteToHead(
-        selectedMember.id
-      );
+      // 1. If the email is new or changed, update the member first
+      if (selectedMember.email !== emailInput.trim()) {
+        await updateMember(selectedMember.id, { email: emailInput.trim() });
+      }
 
-      /*
-       * Return to Family Head Dashboard.
-       *
-       * The dashboard can read this state and
-       * optionally show a success message.
-       */
+      // 2. Call the promote endpoint
+      await promoteToHead(selectedMember.id);
 
+      // 3. Success! Return to dashboard
       navigate("/family-heads", {
         state: {
           successMessage: `${selectedMember.name} has been promoted to family head.`,
         },
       });
     } catch (err) {
-      console.error(
-        "Promotion error:",
-        err
-      );
-
+      console.error("Promotion error:", err);
       setError(
+        err?.response?.data?.error ||
         err?.response?.data?.detail ||
-          err?.response?.data?.message ||
-          "Failed to promote member."
+        err?.response?.data?.non_field_errors?.[0] ||
+        "Failed to promote member. Please check the details and try again."
       );
     } finally {
       setSubmitting(false);
@@ -266,41 +235,18 @@ const HeadlessPromote = () => {
 
   if (loading) {
     return (
-      <Box
-        minH="100vh"
-        bg="var(--white)"
-        display="flex"
-        flexDirection="column"
-        overflowX="hidden"
-      >
+      <Box minH="100vh" bg="var(--white)" display="flex" flexDirection="column" overflowX="hidden">
         <Navbar />
-
-        <Container
-          maxW="container.md"
-          flex="1"
-          py="40px"
-        >
-          <Flex
-            justify="center"
-            align="center"
-            minH="300px"
-          >
+        <Container maxW="container.md" flex="1" py="40px">
+          <Flex justify="center" align="center" minH="300px">
             <VStack gap="12px">
-              <Spinner
-                size="xl"
-                color="var(--primary-maroon)"
-              />
-
-              <Text
-                fontSize="13px"
-                color="var(--light-gray)"
-              >
+              <Spinner size="xl" color="var(--primary-maroon)" />
+              <Text fontSize="13px" color="var(--light-gray)">
                 Loading household members...
               </Text>
             </VStack>
           </Flex>
         </Container>
-
         <Footer />
       </Box>
     );
@@ -311,66 +257,32 @@ const HeadlessPromote = () => {
   ========================================================== */
 
   return (
-    <Box
-      minH="100vh"
-      bg="var(--white)"
-      display="flex"
-      flexDirection="column"
-      overflowX="hidden"
-    >
-      {/* ======================================================
-          NAVBAR
-      ====================================================== */}
-
+    <Box minH="100vh" bg="var(--white)" display="flex" flexDirection="column" overflowX="hidden">
       <Navbar />
-
-      {/* ======================================================
-          CONTENT
-      ====================================================== */}
 
       <Container
         maxW="container.md"
         flex="1"
-        py={{
-          base: "20px",
-          md: "30px",
-        }}
-        px={{
-          base: "16px",
-          sm: "20px",
-          md: "24px",
-        }}
+        py={{ base: "20px", md: "30px" }}
+        px={{ base: "16px", sm: "20px", md: "24px" }}
       >
-        {/* ====================================================
-            BACK BUTTON
-        ===================================================== */}
-
+        {/* BACK BUTTON */}
         <Button
           variant="ghost"
-          onClick={() =>
-            navigate("/family-heads")
-          }
+          onClick={() => navigate("/family-heads")}
           mb="20px"
           color="var(--primary-maroon)"
           fontSize="12px"
           fontWeight="500"
           h="36px"
           px="10px"
-          _hover={{
-            bg: "var(--light-maroon-bg)",
-          }}
+          _hover={{ bg: "var(--light-maroon-bg)" }}
         >
           <LuArrowLeft size={17} />
-
-          <Text ml="7px">
-            Back to Family Heads
-          </Text>
+          <Text ml="7px">Back to Family Heads</Text>
         </Button>
 
-        {/* ====================================================
-            ERROR MESSAGE
-        ===================================================== */}
-
+        {/* ERROR MESSAGE */}
         {error && (
           <Box
             mb="16px"
@@ -380,20 +292,13 @@ const HeadlessPromote = () => {
             bg="var(--light-bg)"
             borderRadius="7px"
           >
-            <Text
-              color="var(--danger)"
-              fontSize="12px"
-              fontWeight="500"
-            >
+            <Text color="var(--danger)" fontSize="12px" fontWeight="500">
               {error}
             </Text>
           </Box>
         )}
 
-        {/* ====================================================
-            MAIN CARD
-        ===================================================== */}
-
+        {/* MAIN CARD */}
         <Card.Root
           width="100%"
           border="1px solid"
@@ -403,31 +308,16 @@ const HeadlessPromote = () => {
           bg="var(--white)"
           boxShadow="none"
         >
-          {/* ==================================================
-              CARD HEADER
-          ================================================== */}
-
+          {/* CARD HEADER */}
           <Card.Header
-            px={{
-              base: "16px",
-              md: "22px",
-            }}
-            pt={{
-              base: "18px",
-              md: "22px",
-            }}
+            px={{ base: "16px", md: "22px" }}
+            pt={{ base: "18px", md: "22px" }}
             pb="12px"
           >
             <Flex
               justify="space-between"
-              align={{
-                base: "flex-start",
-                md: "center",
-              }}
-              direction={{
-                base: "column",
-                md: "row",
-              }}
+              align={{ base: "flex-start", md: "center" }}
+              direction={{ base: "column", md: "row" }}
               gap="14px"
             >
               <Box minW="0">
@@ -440,27 +330,16 @@ const HeadlessPromote = () => {
                 >
                   FAMILY HEAD MASTER
                 </Text>
-
                 <Heading
-                  fontSize={{
-                    base: "21px",
-                    md: "25px",
-                  }}
+                  fontSize={{ base: "21px", md: "25px" }}
                   color="var(--dark-text)"
                   fontWeight="700"
                   lineHeight="1.2"
                 >
                   Promote Family Head
                 </Heading>
-
-                <Text
-                  color="var(--light-gray)"
-                  fontSize="12px"
-                  mt="5px"
-                >
-                  This household has no active
-                  family head. Select a member
-                  to promote.
+                <Text color="var(--light-gray)" fontSize="12px" mt="5px">
+                  This household has no active family head. Select a member to promote.
                 </Text>
               </Box>
 
@@ -479,492 +358,229 @@ const HeadlessPromote = () => {
             </Flex>
           </Card.Header>
 
-          {/* ==================================================
-              CARD BODY
-          ================================================== */}
-
-          <Card.Body
-            px={{
-              base: "16px",
-              md: "22px",
-            }}
-            pb={{
-              base: "18px",
-              md: "22px",
-            }}
-          >
-            {/* ================================================
-                HOUSEHOLD INFORMATION
-            ================================================= */}
-
+          {/* CARD BODY */}
+          <Card.Body px={{ base: "16px", md: "22px" }} pb={{ base: "18px", md: "22px" }}>
+            
+            {/* HOUSEHOLD INFO */}
             <Box
               bg="var(--light-bg)"
-              p={{
-                base: "13px",
-                md: "16px",
-              }}
+              p={{ base: "13px", md: "16px" }}
               borderRadius="7px"
               mb="24px"
               border="1px solid"
               borderColor="var(--border-color)"
             >
-              <Flex
-                gap={{
-                  base: "17px",
-                  md: "28px",
-                }}
-                wrap="wrap"
-              >
+              <Flex gap={{ base: "17px", md: "28px" }} wrap="wrap">
                 {/* FAMILY */}
-
-                <HStack
-                  gap="9px"
-                  minW="150px"
-                >
-                  <Box
-                    color="var(--primary-maroon)"
-                    flexShrink={0}
-                  >
+                <HStack gap="9px" minW="150px">
+                  <Box color="var(--primary-maroon)" flexShrink={0}>
                     <LuUsers size={18} />
                   </Box>
-
                   <Box minW="0">
-                    <Text
-                      fontSize="9px"
-                      color="var(--light-gray)"
-                      textTransform="uppercase"
-                      letterSpacing="0.4px"
-                    >
+                    <Text fontSize="9px" color="var(--light-gray)" textTransform="uppercase" letterSpacing="0.4px">
                       Family
                     </Text>
-
-                    <Text
-                      fontSize="13px"
-                      fontWeight="600"
-                      color="var(--dark-text)"
-                      mt="2px"
-                      lineClamp={1}
-                    >
-                      {members[0]
-                        ?.family_name ||
-                        "Unknown Family"}
+                    <Text fontSize="13px" fontWeight="600" color="var(--dark-text)" mt="2px" lineClamp={1}>
+                      {members[0]?.family_name || "Unknown Family"}
                     </Text>
                   </Box>
                 </HStack>
 
                 {/* HOUSE */}
-
-                <HStack
-                  gap="9px"
-                  minW="150px"
-                >
-                  <Box
-                    color="var(--primary-maroon)"
-                    flexShrink={0}
-                  >
+                <HStack gap="9px" minW="150px">
+                  <Box color="var(--primary-maroon)" flexShrink={0}>
                     <LuMapPin size={18} />
                   </Box>
-
                   <Box minW="0">
-                    <Text
-                      fontSize="9px"
-                      color="var(--light-gray)"
-                      textTransform="uppercase"
-                      letterSpacing="0.4px"
-                    >
+                    <Text fontSize="9px" color="var(--light-gray)" textTransform="uppercase" letterSpacing="0.4px">
                       House
                     </Text>
-
-                    <Text
-                      fontSize="13px"
-                      fontWeight="600"
-                      color="var(--dark-text)"
-                      mt="2px"
-                      lineClamp={1}
-                    >
-                      {house_name ||
-                        "Unnamed House"}
+                    <Text fontSize="13px" fontWeight="600" color="var(--dark-text)" mt="2px" lineClamp={1}>
+                      {house_name || "Unnamed House"}
                     </Text>
                   </Box>
                 </HStack>
 
                 {/* MEMBERS */}
-
-                <HStack
-                  gap="9px"
-                  minW="150px"
-                >
-                  <Box
-                    color="var(--primary-maroon)"
-                    flexShrink={0}
-                  >
+                <HStack gap="9px" minW="150px">
+                  <Box color="var(--primary-maroon)" flexShrink={0}>
                     <LuUsers size={18} />
                   </Box>
-
                   <Box minW="0">
-                    <Text
-                      fontSize="9px"
-                      color="var(--light-gray)"
-                      textTransform="uppercase"
-                      letterSpacing="0.4px"
-                    >
+                    <Text fontSize="9px" color="var(--light-gray)" textTransform="uppercase" letterSpacing="0.4px">
                       Members
                     </Text>
-
-                    <Text
-                      fontSize="13px"
-                      fontWeight="600"
-                      color="var(--dark-text)"
-                      mt="2px"
-                    >
-                      {members.length} eligible{" "}
-                      {members.length === 1
-                        ? "member"
-                        : "members"}
+                    <Text fontSize="13px" fontWeight="600" color="var(--dark-text)" mt="2px">
+                      {members.length} eligible {members.length === 1 ? "member" : "members"}
                     </Text>
                   </Box>
                 </HStack>
               </Flex>
             </Box>
 
-            {/* ================================================
-                NO ELIGIBLE MEMBERS
-            ================================================= */}
-
+            {/* NO ELIGIBLE MEMBERS */}
             {members.length === 0 ? (
-              <Box
-                textAlign="center"
-                py="45px"
-              >
+              <Box textAlign="center" py="45px">
                 <Box
-                  width="54px"
-                  height="54px"
-                  borderRadius="50%"
-                  bg="var(--light-maroon-bg)"
-                  color="var(--primary-maroon)"
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  mx="auto"
-                  mb="14px"
+                  width="54px" height="54px" borderRadius="50%"
+                  bg="var(--light-maroon-bg)" color="var(--primary-maroon)"
+                  display="flex" alignItems="center" justifyContent="center"
+                  mx="auto" mb="14px"
                 >
                   <LuUsers size={24} />
                 </Box>
-
-                <Text
-                  color="var(--dark-text)"
-                  fontSize="14px"
-                  fontWeight="600"
-                >
+                <Text color="var(--dark-text)" fontSize="14px" fontWeight="600">
                   No eligible members found
                 </Text>
-
-                <Text
-                  fontSize="12px"
-                  color="var(--light-gray)"
-                  mt="5px"
-                >
-                  All members may already be
-                  heads or inactive.
+                <Text fontSize="12px" color="var(--light-gray)" mt="5px">
+                  All members may already be heads or inactive.
                 </Text>
-
                 <Button
-                  mt="18px"
-                  bg="var(--primary-maroon)"
-                  color="var(--white)"
-                  fontSize="12px"
-                  h="36px"
-                  px="16px"
-                  onClick={() =>
-                    navigate(
-                      "/family-heads"
-                    )
-                  }
-                  _hover={{
-                    bg:
-                      "var(--primary-maroon)",
-                    opacity: 0.9,
-                  }}
+                  mt="18px" bg="var(--primary-maroon)" color="var(--white)"
+                  fontSize="12px" h="36px" px="16px"
+                  onClick={() => navigate("/family-heads")}
+                  _hover={{ bg: "var(--primary-maroon)", opacity: 0.9 }}
                 >
                   Return to Dashboard
                 </Button>
               </Box>
             ) : (
               <>
-                {/* ============================================
-                    SELECT MEMBER
-                ============================================= */}
-
-                <Text
-                  fontWeight="600"
-                  color="var(--dark-text)"
-                  fontSize="13px"
-                  mb="12px"
-                >
+                {/* SELECT MEMBER */}
+                <Text fontWeight="600" color="var(--dark-text)" fontSize="13px" mb="12px">
                   Select a member to promote:
                 </Text>
 
-                {/* ============================================
-                    CHAKRA V3 RADIO GROUP
-                ============================================= */}
-
                 <RadioGroup.Root
-                  value={
-                    selectedMember
-                      ? String(
-                          selectedMember.id
-                        )
-                      : ""
-                  }
-                  onValueChange={(details) =>
-                    handleSelectMember(
-                      details.value
-                    )
-                  }
+                  value={selectedMember ? String(selectedMember.id) : ""}
+                  onValueChange={(details) => handleSelectMember(details.value)}
                 >
-                  <VStack
-                    align="stretch"
-                    gap="9px"
-                  >
-                    {members.map(
-                      (member) => {
-                        const isSelected =
-                          Number(
-                            selectedMember?.id
-                          ) ===
-                          Number(member.id);
+                  <VStack align="stretch" gap="9px">
+                    {members.map((member) => {
+                      const isSelected = Number(selectedMember?.id) === Number(member.id);
 
-                        return (
-                          <Box
-                            key={member.id}
-                            p="13px"
-                            border="2px solid"
-                            borderColor={
-                              isSelected
-                                ? "var(--primary-maroon)"
-                                : "var(--border-color)"
-                            }
-                            borderRadius="8px"
-                            bg={
-                              isSelected
-                                ? "var(--light-maroon-bg)"
-                                : "var(--white)"
-                            }
-                            cursor="pointer"
-                            transition="all 0.18s ease"
-                            _hover={{
-                              borderColor:
-                                "var(--primary-maroon)",
-                              bg:
-                                "var(--light-maroon-bg)",
-                            }}
-                            onClick={() =>
-                              setSelectedMember(
-                                member
-                              )
-                            }
-                          >
-                            <Flex align="center" justify="space-between">
-                              <RadioGroup.Item
-                                value={String(
-                                  member.id
-                                )}
-                              >
-                                <RadioGroup.ItemHiddenInput />
-
-                                <RadioGroup.ItemIndicator />
-
-                                <RadioGroup.ItemText>
-                                  <Box
-                                    ml="6px"
-                                    minW="0"
-                                  >
-                                    {/* NAME */}
-
-                                    <Flex
-                                      align="center"
-                                      gap="8px"
-                                      flexWrap="wrap"
-                                    >
-                                      <Text
-                                        fontWeight="600"
-                                        color="var(--dark-text)"
-                                        fontSize="13px"
-                                      >
-                                        {member.name ||
-                                          "Unnamed Member"}
+                      return (
+                        <Box
+                          key={member.id}
+                          p="13px"
+                          border="2px solid"
+                          borderColor={isSelected ? "var(--primary-maroon)" : "var(--border-color)"}
+                          borderRadius="8px"
+                          bg={isSelected ? "var(--light-maroon-bg)" : "var(--white)"}
+                          cursor="pointer"
+                          transition="all 0.18s ease"
+                          _hover={{ borderColor: "var(--primary-maroon)", bg: "var(--light-maroon-bg)" }}
+                          onClick={() => setSelectedMember(member)}
+                        >
+                          <Flex align="center" justify="space-between">
+                            <RadioGroup.Item value={String(member.id)}>
+                              <RadioGroup.ItemHiddenInput />
+                              <RadioGroup.ItemIndicator />
+                              <RadioGroup.ItemText>
+                                <Box ml="6px" minW="0">
+                                  <Flex align="center" gap="8px" flexWrap="wrap">
+                                    <Text fontWeight="600" color="var(--dark-text)" fontSize="13px">
+                                      {member.name || "Unnamed Member"}
+                                    </Text>
+                                    {member.is_active && (
+                                      <Badge bg="var(--success-bg)" color="var(--success)" fontSize="8px" px="5px" py="2px" borderRadius="4px">
+                                        Active
+                                      </Badge>
+                                    )}
+                                  </Flex>
+                                  <HStack gap="12px" mt="4px" flexWrap="wrap">
+                                    <Text fontSize="11px" color="var(--light-gray)">
+                                      {member.gender || "N/A"}
+                                    </Text>
+                                    {member.age && (
+                                      <Text fontSize="11px" color="var(--light-gray)">
+                                        Age: {member.age}
                                       </Text>
-
-                                      {member.is_active && (
-                                        <Badge
-                                          bg="var(--success-bg)"
-                                          color="var(--success)"
-                                          fontSize="8px"
-                                          px="5px"
-                                          py="2px"
-                                          borderRadius="4px"
-                                        >
-                                          Active
-                                        </Badge>
-                                      )}
-                                    </Flex>
-
-                                    {/* MEMBER DETAILS */}
-
-                                    <HStack
-                                      gap="12px"
-                                      mt="4px"
-                                      flexWrap="wrap"
-                                    >
-                                      <Text
-                                        fontSize="11px"
-                                        color="var(--light-gray)"
-                                      >
-                                        {member.gender ||
-                                          "N/A"}
+                                    )}
+                                    {member.relationship?.name && (
+                                      <Text fontSize="11px" color="var(--light-gray)">
+                                        Relation: {member.relationship.name}
                                       </Text>
+                                    )}
+                                    {(member.mobile_no || member.phone) && (
+                                      <Text fontSize="11px" color="var(--light-gray)">
+                                        📱 {member.mobile_no || member.phone}
+                                      </Text>
+                                    )}
+                                  </HStack>
+                                </Box>
+                              </RadioGroup.ItemText>
+                            </RadioGroup.Item>
 
-                                      {member.age && (
-                                        <Text
-                                          fontSize="11px"
-                                          color="var(--light-gray)"
-                                        >
-                                          Age:{" "}
-                                          {
-                                            member.age
-                                          }
-                                        </Text>
-                                      )}
-
-                                      {member.relationship
-                                        ?.name && (
-                                        <Text
-                                          fontSize="11px"
-                                          color="var(--light-gray)"
-                                        >
-                                          Relation:{" "}
-                                          {
-                                            member
-                                              .relationship
-                                              .name
-                                          }
-                                        </Text>
-                                      )}
-
-                                      {(member.mobile_no ||
-                                        member.phone) && (
-                                        <Text
-                                          fontSize="11px"
-                                          color="var(--light-gray)"
-                                        >
-                                          📱{" "}
-                                          {member.mobile_no ||
-                                            member.phone}
-                                        </Text>
-                                      )}
-                                    </HStack>
-                                  </Box>
-                                </RadioGroup.ItemText>
-                              </RadioGroup.Item>
-
-                              {/* ✅ NEW: Eye Button to View Member Details */}
-                              <IconButton
-                                aria-label="View Member Details"
-                                variant="ghost"
-                                h="28px"
-                                minW="28px"
-                                p="0"
-                                color="var(--primary-maroon)"
-                                title="View Member Details"
-                                onClick={(e) => {
-                                  e.stopPropagation(); // Prevents selecting the radio button
-                                  navigate(`/family-heads/${family_id}/members/${member.id}`);
-                                }}
-                                _hover={{ bg: "var(--light-maroon-bg)" }}
-                                flexShrink={0}
-                              >
-                                <LuEye size={18} />
-                              </IconButton>
-                            </Flex>
-                          </Box>
-                        );
-                      }
-                    )}
+                            <IconButton
+                              aria-label="View Member Details"
+                              variant="ghost" h="28px" minW="28px" p="0"
+                              color="var(--primary-maroon)" title="View Member Details"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/family-heads/${family_id}/members/${member.id}`);
+                              }}
+                              _hover={{ bg: "var(--light-maroon-bg)" }}
+                              flexShrink={0}
+                            >
+                              <LuEye size={18} />
+                            </IconButton>
+                          </Flex>
+                        </Box>
+                      );
+                    })}
                   </VStack>
                 </RadioGroup.Root>
 
-                {/* ============================================
-                    DIVIDER
-                    Chakra v3 does not use Divider export
-                ============================================= */}
+                {/* EMAIL INPUT - PREVENTS 400 ERROR */}
+                {selectedMember && (
+                  <Box mt="20px" p="16px" bg="var(--light-bg)" borderRadius="8px" border="1px solid var(--border-color)">
+                    <Field.Root required>
+                      <Field.Label fontWeight="600" color="var(--dark-text)" fontSize="13px">
+                        Email Address for Login
+                      </Field.Label>
+                      <Input
+                        type="email"
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        placeholder="Enter email for the new family head"
+                        bg="var(--white)"
+                        h="40px"
+                        fontSize="13px"
+                        borderColor="var(--border-color)"
+                      />
+                      <Field.HelperText fontSize="11px" color="var(--light-gray)" mt="6px">
+                        An email is required to create the family head login. If the member's email is already on file, it will appear here automatically.
+                      </Field.HelperText>
+                    </Field.Root>
+                  </Box>
+                )}
 
-                <Box
-                  borderTop="1px solid"
-                  borderColor="var(--divider-color)"
-                  my="24px"
-                  width="100%"
-                />
+                {/* ACTION BUTTONS */}
+                <Box borderTop="1px solid" borderColor="var(--divider-color)" my="24px" width="100%" />
 
-                {/* ============================================
-                    ACTION BUTTONS
-                ============================================= */}
-
-                <Flex
-                  justify="flex-end"
-                  gap="10px"
-                  direction={{
-                    base: "column-reverse",
-                    sm: "row",
-                  }}
-                >
-                  {/* CANCEL */}
-
+                <Flex justify="flex-end" gap="10px" direction={{ base: "column-reverse", sm: "row" }}>
                   <Button
-                    variant="outline"
-                    borderColor="var(--border-color)"
-                    color="var(--dark-text)"
-                    h="36px"
-                    px="16px"
-                    fontSize="12px"
-                    onClick={() =>
-                      navigate(
-                        "/family-heads"
-                      )
-                    }
+                    variant="outline" borderColor="var(--border-color)" color="var(--dark-text)"
+                    h="36px" px="16px" fontSize="12px"
+                    onClick={() => navigate("/family-heads")}
                     disabled={submitting}
-                    _hover={{
-                      bg: "var(--light-bg)",
-                    }}
+                    _hover={{ bg: "var(--light-bg)" }}
                   >
                     Cancel
                   </Button>
 
-                  {/* PROMOTE */}
-
                   <Button
-                    bg="var(--primary-maroon)"
-                    color="var(--white)"
-                    h="36px"
-                    px="17px"
-                    fontSize="12px"
+                    bg="var(--primary-maroon)" color="var(--white)"
+                    h="36px" px="17px" fontSize="12px"
                     onClick={handlePromote}
                     loading={submitting}
-                    disabled={
-                      !selectedMember ||
-                      submitting
-                    }
-                    _hover={{
-                      bg:
-                        "var(--primary-maroon)",
-                      opacity: 0.9,
-                    }}
+                    disabled={!selectedMember || !emailInput || submitting}
+                    _hover={{ bg: "var(--primary-maroon)", opacity: 0.9 }}
                   >
                     <LuUserPlus size={15} />
-
                     <Text ml="7px">
-                      {submitting
-                        ? "Promoting..."
-                        : "Promote to Head"}
+                      {submitting ? "Promoting..." : "Promote to Head"}
                     </Text>
                   </Button>
                 </Flex>
@@ -974,34 +590,13 @@ const HeadlessPromote = () => {
         </Card.Root>
       </Container>
 
-      {/* ======================================================
-          FOOTER
-      ====================================================== */}
-
       <Footer />
-
-      {/* ======================================================
-          RESPONSIVE CSS
-      ====================================================== */}
 
       <style>
         {`
-          html,
-          body,
-          #root {
-            max-width: 100%;
-            overflow-x: hidden !important;
-          }
-
-          * {
-            box-sizing: border-box;
-          }
-
-          @media (max-width: 600px) {
-            body {
-              overflow-x: hidden !important;
-            }
-          }
+          html, body, #root { max-width: 100%; overflow-x: hidden !important; }
+          * { box-sizing: border-box; }
+          @media (max-width: 600px) { body { overflow-x: hidden !important; } }
         `}
       </style>
     </Box>

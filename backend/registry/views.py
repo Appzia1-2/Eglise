@@ -265,12 +265,25 @@ class ChurchList(ListAPIView):
     serializer_class = ChurchListSerializer
     queryset = Church.objects.all().order_by("-created_at")
 
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+
 class MyChurchAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsChurchUser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request):
         church = request.user.church
-        serializer = ChurchDetailSerializer(church)
+        serializer = ChurchDetailSerializer(church, context={"request": request})
+        return Response(serializer.data)
+
+    def patch(self, request):
+        church = request.user.church
+        serializer = ChurchDetailSerializer(
+            church, data=request.data, partial=True,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
         return Response(serializer.data)
 
 
@@ -2090,7 +2103,8 @@ class DeathRegisterFinalizeView(APIView):
         )
  
     
-#promote to head
+# registry/views.py
+
 class PromoteFamilyHeadAPIView(APIView):
     permission_classes = [IsAuthenticated, IsChurchUser]
 
@@ -2127,17 +2141,6 @@ class PromoteFamilyHeadAPIView(APIView):
 
         # -----------------------------------------------------
         # Check household
-        #
-        # `existing_head` — any member currently flagged as
-        #                   is_family_head=True in this household
-        #                   (may be expired/inactive)
-        #
-        # `household_ever_had_head` — was there ever a head in
-        #                            this household besides `member`?
-        #                            Includes EXPIRED heads.
-        #
-        # If yes  → promoting is a REPLACEMENT → skip capacity.
-        # If no   → new household slot → enforce capacity.
         # -----------------------------------------------------
 
         existing_head = Member.objects.filter(
@@ -2147,8 +2150,10 @@ class PromoteFamilyHeadAPIView(APIView):
             is_family_head=True,
         ).exclude(pk=member.pk).first()
 
-        # Block if there's still an ACTIVE (not expired) head
-        if existing_head and not existing_head.expired:
+        # ✅ FIXED: Block ONLY if there is an ACTIVE head (alive AND not expired).
+        # If the old head is married off (inactive), the household is effectively
+        # headless, and we should allow the replacement.
+        if existing_head and existing_head.is_active and not existing_head.expired:
             return Response(
                 {
                     "error": (
@@ -2160,21 +2165,20 @@ class PromoteFamilyHeadAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Did this household EVER have a head? (includes expired)
+        # ✅ Check if ANY member in this household has a register_number.
+        # register_number is only ever assigned to a family head and is NEVER deleted.
+        # So even if the old head became inactive or lost the `is_family_head` flag,
+        # their register_number remains, proving this household is a REPLACEMENT.
         household_ever_had_head = Member.objects.filter(
             family=member.family,
             house_name=member.house_name,
             house_sequence=member.house_sequence,
-            is_family_head=True,
-        ).exclude(pk=member.pk).exists()
+        ).exclude(pk=member.pk).filter(
+            Q(is_family_head=True) | Q(register_number__isnull=False)
+        ).exists()
 
         # -----------------------------------------------------
         # SUBSCRIPTION CAPACITY CHECK
-        #
-        # Only enforce capacity when this is a BRAND NEW household
-        # that has never had a head. If the household is being
-        # re-headed after the previous head died/was demoted,
-        # promoting is a REPLACEMENT and does not consume a slot.
         # -----------------------------------------------------
         if not household_ever_had_head:
             from .services import can_add_member
@@ -2195,8 +2199,7 @@ class PromoteFamilyHeadAPIView(APIView):
                     church=request.user.church
                 ).first()
 
-                # If a previous head exists (even if expired),
-                # demote them cleanly and deactivate their login.
+                # If a previous head exists, demote them cleanly
                 if existing_head:
                     existing_head.is_family_head = False
                     existing_head.save(update_fields=["is_family_head"])
@@ -2217,8 +2220,10 @@ class PromoteFamilyHeadAPIView(APIView):
                     member.folio_number = generate_folio_number(member.church)
 
                 member.is_family_head = True
+                member.is_active = True  # ✅ Ensure they are active
                 member.save(update_fields=[
                     "is_family_head",
+                    "is_active",
                     "relationship",
                     "register_number",
                     "folio_number",
@@ -2252,6 +2257,8 @@ class PromoteFamilyHeadAPIView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+# registry/views.py
 
 class TransferAndPromoteHeadAPIView(APIView):
     permission_classes = [IsAuthenticated, IsChurchUser]
@@ -2309,32 +2316,49 @@ class TransferAndPromoteHeadAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # -----------------------------------------------------
-        # SUBSCRIPTION CAPACITY CHECK
-        # -----------------------------------------------------
-        from .services import can_add_member
-
-        allowed, message, _info = can_add_member(request.user.church)
-        if not allowed:
-            return Response(
-                {"error": message},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         cleaned_house_name = new_house_name.strip()
+
+        # -----------------------------------------------------
+        # Determine if this is a REPLACEMENT or NEW SLOT
+        # -----------------------------------------------------
+        household_ever_had_head = (
+            Member.objects.filter(
+                family=new_family,
+                house_name__iexact=cleaned_house_name,
+            )
+            .exclude(pk=member.pk)
+            .filter(
+                Q(is_family_head=True) | Q(register_number__isnull=False)
+            )
+            .exists()
+        )
+
+        # -----------------------------------------------------
+        # SUBSCRIPTION CAPACITY CHECK (Only for new households)
+        # -----------------------------------------------------
+        if not household_ever_had_head:
+            from .services import can_add_member
+
+            allowed, message, _info = can_add_member(request.user.church)
+            if not allowed:
+                return Response(
+                    {"error": message},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         try:
             with transaction.atomic():
 
-                # Re-lock the subscription inside the transaction
+                # Re-lock subscription inside transaction
                 from .models import ChurchSubscription
                 ChurchSubscription.objects.select_for_update().filter(
                     church=request.user.church
                 ).first()
 
-                # Auto-assign next house_sequence for (family, house_name)
+                # Auto-assign next house_sequence safely
                 last_sequence = (
-                    Member.objects.filter(
+                    Member.objects.select_for_update()
+                    .filter(
                         family=new_family,
                         house_name__iexact=cleaned_house_name,
                     )
@@ -2344,6 +2368,31 @@ class TransferAndPromoteHeadAPIView(APIView):
                 )
 
                 next_sequence = (last_sequence or 0) + 1
+
+                # -----------------------------------------------------
+                # Block if target house already has an ACTIVE head
+                # -----------------------------------------------------
+                existing_target_head = Member.objects.filter(
+                    family=new_family,
+                    house_name__iexact=cleaned_house_name,
+                    house_sequence=next_sequence,
+                    is_family_head=True,
+                    is_active=True,
+                    expired=False,
+                ).exclude(pk=member.pk).first()
+
+                if existing_target_head:
+                    return Response(
+                        {
+                            "error": (
+                                f"This house already has an active head "
+                                f"({existing_target_head.name}). Demote or "
+                                f"mark them inactive before transferring "
+                                f"a new head here."
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
                 member.family = new_family
                 member.house_name = cleaned_house_name
@@ -2358,9 +2407,15 @@ class TransferAndPromoteHeadAPIView(APIView):
                     member.folio_number = generate_folio_number(member.church)
 
                 member.is_family_head = True
-                member.save()
+                member.is_active = True  # Ensure active
 
-                if hasattr(member, "user"):
+                member.save(update_fields=[
+                    "family", "house_name", "house_sequence",
+                    "relationship", "register_number", "folio_number",
+                    "is_family_head", "is_active",
+                ])
+
+                if hasattr(member, "user") and member.user:
                     member.user.is_active = True
                     member.user.save(update_fields=["is_active"])
                 else:
@@ -2386,6 +2441,7 @@ class TransferAndPromoteHeadAPIView(APIView):
                 "member_id": member.id,
                 "register_number": member.register_number,
                 "folio_number": member.folio_number,
+                "is_replacement": household_ever_had_head,
             },
             status=status.HTTP_200_OK,
         )
@@ -3392,26 +3448,22 @@ class MembersUnderHeadAPIView(ListAPIView):
                 pk=head_id,
                 church=church,
                 is_family_head=True,
-                is_active=True,
+                # ✅ REMOVED: is_active=True, (so inactive heads don't throw 404)
                 expired=False
             )
         except Member.DoesNotExist:
-            raise NotFound("Active family head not found.")
+            raise NotFound("Family head not found.")
 
-        # 🔥 REMOVE the is_active filter to show ALL members
         return Member.objects.filter(
             church=church,
             family=head.family,
             house_name__iexact=head.house_name,
             house_sequence=head.house_sequence,
-            expired=False  # Keep expired filter
+            expired=False
         ).exclude(
             pk=head.id
         ).select_related(
-            "family",
-            "relationship",
-            "ward",
-            "grade"
+            "family", "relationship", "ward", "grade"
         ).order_by("name")
 
 class OfferingListCreateView(generics.ListCreateAPIView):
@@ -3678,6 +3730,7 @@ class PaymentCancelAPIView(APIView):
 
 from decimal import Decimal
 from django.db.models import Count, Sum, Q, F
+from datetime import datetime, timedelta
 
 class LedgerEntryListAPIView(ListAPIView):
     """
@@ -3712,8 +3765,6 @@ class LedgerEntryListAPIView(ListAPIView):
             qs = qs.filter(ledger_id=ledger_id)
 
         # ---------- book filter (cash / bank) ----------
-        # ✅ FIX: If filtering by cash/bank book, we must return BOTH sides
-        # of the voucher so the frontend can display the Account Ledger.
         book = (self.request.query_params.get("book") or "").lower().strip()
 
         if book in ("cash", "bank"):
@@ -3732,7 +3783,6 @@ class LedgerEntryListAPIView(ListAPIView):
             
             target_ledgers = cash_ledgers if book == "cash" else bank_ledgers
             
-            # 1. Find all vouchers that used this book
             matching_entries = LedgerEntry.objects.filter(
                 church=church,
                 ledger__ledger_name__in=target_ledgers
@@ -3741,8 +3791,6 @@ class LedgerEntryListAPIView(ListAPIView):
             receipt_ids = matching_entries.exclude(receipt_id__isnull=True).values_list('receipt_id', flat=True)
             payment_ids = matching_entries.exclude(payment_id__isnull=True).values_list('payment_id', flat=True)
 
-            # 2. Fetch ALL entries (both income/expense side AND cash/bank side)
-            # for those specific vouchers
             qs = qs.filter(
                 Q(receipt_id__in=receipt_ids) | Q(payment_id__in=payment_ids)
             )
@@ -3759,7 +3807,6 @@ class LedgerEntryListAPIView(ListAPIView):
         # ---------- cancelled / reversals ----------
         include_cancelled = self.request.query_params.get("include_cancelled")
         if include_cancelled not in ("true", "1", "yes"):
-            # Exclude both cancelled originals AND reversal entries.
             qs = qs.filter(is_cancelled=False, is_reversal=False)
 
         # Chronological order (oldest first) — required for running balance
@@ -3771,14 +3818,19 @@ class LedgerEntryListAPIView(ListAPIView):
         # Build running balance map from the SAME queryset (already ordered asc)
         running_map = self._compute_running_balances(queryset)
 
-        # If a single ledger is selected, also compute totals
         opening = 0.0
         total_debit = 0.0
         total_credit = 0.0
         closing = 0.0
 
         ledger_id = self.request.query_params.get("ledger")
+        date_from = self.request.query_params.get("from")
+        date_to = self.request.query_params.get("to")
+
         if ledger_id:
+            # ==========================================
+            # SINGLE LEDGER MODE (e.g. General Ledger)
+            # ==========================================
             try:
                 from .models import AccountLedgerMaster
                 ledger = AccountLedgerMaster.objects.get(
@@ -3786,7 +3838,6 @@ class LedgerEntryListAPIView(ListAPIView):
                 )
                 opening = float(ledger.op_balance or 0)
 
-                # ✅ FIXED: Use the nature-aware balance calculation
                 agg = queryset.aggregate(
                     debits=Sum("amount", filter=Q(entry_type="DEBIT")),
                     credits=Sum("amount", filter=Q(entry_type="CREDIT")),
@@ -3801,6 +3852,74 @@ class LedgerEntryListAPIView(ListAPIView):
                     closing = opening + total_credit - total_debit
             except Exception:
                 pass
+        else:
+            # ==========================================
+            # MULTI-LEDGER MODE (e.g. Day Book, Cash Book)
+            #
+            # Calculate combined Cash + Bank balance for the day
+            # before `date_from` as opening, and for `date_to` as closing.
+            # ==========================================
+            CASH_BANK_LEDGERS = [
+                "Cash in Hand",
+                "Balance in Savings Account",
+                "Balance in Deposit Account",
+                "Balance in Other Accounts",
+            ]
+
+            from .models import AccountLedgerMaster
+
+            # Opening balances of the ledgers themselves
+            ledger_opening_total = sum(
+                float(l.op_balance or 0)
+                for l in AccountLedgerMaster.objects.filter(
+                    church=request.user.church,
+                    ledger_name__in=CASH_BANK_LEDGERS,
+                )
+            )
+
+            def get_cash_bank_balance(as_of_date):
+                """Returns Combined Cash + Bank balance up to (and including) as_of_date."""
+                if not as_of_date:
+                    return ledger_opening_total
+                
+                agg = LedgerEntry.objects.filter(
+                    church=request.user.church,
+                    ledger__ledger_name__in=CASH_BANK_LEDGERS,
+                    entry_date__lte=as_of_date,
+                    is_cancelled=False,
+                    is_reversal=False,
+                ).aggregate(
+                    debits=Sum("amount", filter=Q(entry_type="DEBIT")),
+                    credits=Sum("amount", filter=Q(entry_type="CREDIT")),
+                )
+                
+                debits = float(agg["debits"] or 0)
+                credits = float(agg["credits"] or 0)
+
+                # Cash and Bank are ASSETs: Balance = Opening + Debits - Credits
+                return ledger_opening_total + debits - credits
+
+            # Opening: as of the day BEFORE date_from
+            if date_from:
+                try:
+                    dt_from = datetime.strptime(date_from, "%Y-%m-%d").date()
+                    day_before = dt_from - timedelta(days=1)
+                    opening = get_cash_bank_balance(day_before)
+                except (ValueError, TypeError):
+                    opening = ledger_opening_total
+            else:
+                opening = ledger_opening_total
+
+            # Closing: as of date_to (or today if no date_to)
+            closing = get_cash_bank_balance(date_to or datetime.now().date())
+
+            # Total In / Out for the selected window
+            agg = queryset.aggregate(
+                debits=Sum("amount", filter=Q(entry_type="DEBIT")),
+                credits=Sum("amount", filter=Q(entry_type="CREDIT")),
+            )
+            total_debit = float(agg["debits"] or 0)
+            total_credit = float(agg["credits"] or 0)
 
         serializer = self.get_serializer(
             queryset,
@@ -3816,7 +3935,7 @@ class LedgerEntryListAPIView(ListAPIView):
 
         return Response({
             "count": len(data),
-            "opening_balance": opening,
+            "opening_balance": round(opening, 2),
             "total_debit": round(total_debit, 2),
             "total_credit": round(total_credit, 2),
             "closing_balance": round(closing, 2),
@@ -3863,6 +3982,7 @@ class LedgerEntryListAPIView(ListAPIView):
             result[entry.id] = round(balances[lid], 2)
 
         return result
+
 
 class LedgerBalanceAPIView(APIView):
     """

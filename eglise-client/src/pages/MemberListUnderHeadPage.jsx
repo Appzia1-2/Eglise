@@ -32,6 +32,8 @@ import {
   Spinner,
   Text,
   Dialog,
+  RadioGroup,
+  VStack,
 } from "@chakra-ui/react";
 
 import {
@@ -40,6 +42,7 @@ import {
   listMembersByHead,
   listRelationships,
   transferAndPromoteHead,
+  promoteToHead,
 } from "../api/registryServices";
 
 import Navbar from "../components/Navbar";
@@ -115,11 +118,6 @@ const FIELD_LABELS = {
 
 /* ============================================================
    EXTRACT BACKEND ERROR MESSAGES
-   Handles all the shapes DRF can return:
-     { "detail": "..." }
-     { "error": "..." }
-     { "field": ["..."] }
-     { "non_field_errors": ["..."] }
 ============================================================ */
 
 const extractBackendErrors = (responseData) => {
@@ -197,6 +195,7 @@ const MemberListUnderHeadPage = () => {
   // ✅ Promote modal state
   const [promoteModalOpen, setPromoteModalOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState(null);
+  const [promoteMode, setPromoteMode] = useState("CURRENT"); // "CURRENT" | "NEW"
   const [newHouseName, setNewHouseName] = useState("");
   const [promoting, setPromoting] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -215,19 +214,24 @@ const MemberListUnderHeadPage = () => {
       setLoading(true);
       setError("");
 
-      const [
-        headResponse,
-        membersResponse,
-        relationshipsResponse,
-      ] = await Promise.all([
-        getMember(headId),
+      // 1. Load the members list and relationships first (critical for page render)
+      const [membersResponse, relationshipsResponse] = await Promise.all([
         listMembersByHead(headId),
         listRelationships(),
       ]);
 
-      setHead(headResponse?.data || headResponse || null);
       setMembers(getArrayData(membersResponse));
       setRelationships(getArrayData(relationshipsResponse));
+
+      // 2. Load the head separately (optional — if it fails, dependents still show)
+      try {
+        const headResponse = await getMember(headId);
+        setHead(headResponse?.data || headResponse || null);
+      } catch (headErr) {
+        console.warn("Could not load head details:", headErr);
+        setHead(null);
+      }
+
     } catch (err) {
       console.error("Unable to load dependent page:", err);
 
@@ -271,9 +275,6 @@ const MemberListUnderHeadPage = () => {
 
   /* ==========================================================
      FAMILY NAME
-     Handles BOTH:
-       - MemberSerializer (flat; family = id, family_name may exist)
-       - MemberDetailSerializer (nested; family = { id, family_name })
   ========================================================== */
 
   const getFamilyName = (member) => {
@@ -376,10 +377,14 @@ const MemberListUnderHeadPage = () => {
   const openPromoteModal = async (member) => {
     setPromoteFieldErrors({});
     setSelectedMember(member);
+    
+    // Default to "CURRENT" if the house has no active head, otherwise "NEW"
+    // Since we only show promote button for active dependents, we default to "CURRENT"
+    setPromoteMode("CURRENT");
     setNewHouseName(`${member.name}'s House`);
     setPromoteModalOpen(true);
 
-    // ✅ Fetch full detail so we reliably get family_name + house info
+    // Fetch full detail so we reliably get family_name + house info
     try {
       setDetailLoading(true);
       const res = await getMemberDetail(member.id);
@@ -397,6 +402,7 @@ const MemberListUnderHeadPage = () => {
     setPromoteModalOpen(false);
     setSelectedMember(null);
     setNewHouseName("");
+    setPromoteMode("CURRENT");
     setDetailLoading(false);
     setPromoteFieldErrors({});
   };
@@ -404,7 +410,7 @@ const MemberListUnderHeadPage = () => {
   const submitPromote = async () => {
     if (!selectedMember) return;
 
-    if (!newHouseName.trim()) {
+    if (promoteMode === "NEW" && !newHouseName.trim()) {
       alert("House name is required to promote to a new house.");
       return;
     }
@@ -414,39 +420,55 @@ const MemberListUnderHeadPage = () => {
       setError("");
       setPromoteFieldErrors({});
 
-      const familyId =
-        selectedMember?.family?.id ||
-        selectedMember?.family ||
-        head?.family?.id ||
-        head?.family_id;
+      let isReplacement = true;
 
-      if (!familyId) {
-        throw new Error(
-          "Family ID not found. Please make sure the family head is properly set."
-        );
+      if (promoteMode === "CURRENT") {
+        // Promote in the current house (Replacement flow)
+        await promoteToHead(selectedMember.id);
+        isReplacement = true;
+      } else {
+        // Create a new household (New Slot flow)
+        const familyId =
+          selectedMember?.family?.id ||
+          selectedMember?.family ||
+          head?.family?.id ||
+          head?.family_id;
+
+        if (!familyId) {
+          throw new Error(
+            "Family ID not found. Please make sure the family head is properly set."
+          );
+        }
+
+        const result = await transferAndPromoteHead(selectedMember.id, {
+          family: familyId,
+          house_name: newHouseName.trim(),
+        });
+
+        isReplacement = result?.data?.is_replacement ?? false;
       }
-
-      await transferAndPromoteHead(selectedMember.id, {
-        family: familyId,
-        house_name: newHouseName.trim(),
-      });
 
       await loadPageData();
 
       const promotedName = selectedMember.name;
-
       closePromoteModal();
 
-      alert(
-        `✅ "${promotedName}" has been promoted to Family Head of "${newHouseName.trim()}" successfully!\n\n` +
-          `They now have their own household.`
-      );
+      if (isReplacement) {
+        alert(
+          `✅ "${promotedName}" has been promoted to Family Head successfully!\n\n` +
+            `This was a replacement — no new subscription slot was consumed.`
+        );
+      } else {
+        alert(
+          `✅ "${promotedName}" has been promoted to Family Head of "${newHouseName.trim()}"!\n\n` +
+            `A new subscription slot has been used (this is a new household).`
+        );
+      }
     } catch (err) {
       console.error("Promotion failed:", err);
 
       const responseData = err?.response?.data;
 
-      // ✅ Same extraction pattern as OfferingAddPage
       const { fieldErrors: backendFieldErrors, messages } =
         extractBackendErrors(responseData);
 
@@ -461,7 +483,6 @@ const MemberListUnderHeadPage = () => {
       setError(errorMessage);
       alert(`❌ Promotion Failed:\n\n${errorMessage}`);
 
-      // Keep the modal open and surface field errors inline if any
       if (Object.keys(backendFieldErrors).length > 0) {
         setPromoteFieldErrors(backendFieldErrors);
       }
@@ -491,11 +512,9 @@ const MemberListUnderHeadPage = () => {
       const status = getStatus(member);
       const isOldMember = status === "Old Member";
 
-      // 1. Filter by View Mode (Active vs Old)
       if (viewMode === "ACTIVE" && isOldMember) return false;
       if (viewMode === "OLD" && !isOldMember) return false;
 
-      // 2. Apply Search & Dropdowns
       const name = String(member?.name || "").toLowerCase();
       const family = String(getFamilyName(member)).toLowerCase();
       const familyHead = String(getFamilyHeadName(member)).toLowerCase();
@@ -1156,7 +1175,7 @@ const MemberListUnderHeadPage = () => {
 
                       {canPromote && (
                         <IconButton
-                          aria-label="Promote to Family Head (New House)"
+                          aria-label="Promote to Family Head"
                           variant="ghost"
                           w="28px"
                           h="28px"
@@ -1165,7 +1184,7 @@ const MemberListUnderHeadPage = () => {
                           borderRadius="4px"
                           onClick={() => openPromoteModal(member)}
                           _hover={{ bg: "#FFF2F3" }}
-                          title="Promote to Family Head (Create New House)"
+                          title="Promote to Family Head"
                         >
                           <LuUserCog size={17} />
                         </IconButton>
@@ -1314,7 +1333,7 @@ const MemberListUnderHeadPage = () => {
       >
         <Dialog.Backdrop />
         <Dialog.Positioner>
-          <Dialog.Content maxW="400px" borderRadius="8px">
+          <Dialog.Content maxW="440px" borderRadius="8px">
             <Dialog.Header
               borderBottom="1px solid"
               borderColor="#E5EAF1"
@@ -1326,7 +1345,7 @@ const MemberListUnderHeadPage = () => {
                     Promote to Family Head
                   </Dialog.Title>
                   <Text fontSize="11px" color={MUTED} mt={1}>
-                    Create a new household for this dependent.
+                    Choose how you want to promote this dependent.
                   </Text>
                 </Box>
                 <IconButton
@@ -1384,48 +1403,108 @@ const MemberListUnderHeadPage = () => {
                 )}
               </Box>
 
-              <Text fontSize="12px" fontWeight="600" color={DARK} mb={2}>
-                New House Name{" "}
-                <Text as="span" color={RED}>
-                  *
-                </Text>
-              </Text>
-              <Input
-                value={newHouseName}
-                onChange={(e) => {
-                  setNewHouseName(e.target.value);
-                  if (promoteFieldErrors.house_name) {
-                    setPromoteFieldErrors((prev) => ({
-                      ...prev,
-                      house_name: "",
-                    }));
-                  }
-                }}
-                placeholder="e.g. Kunnath Cottage, Kunnath Villa"
-                h="40px"
-                fontSize="13px"
-                borderColor={
-                  promoteFieldErrors.house_name ? "#F3C4C4" : BORDER
-                }
-                borderRadius="6px"
-                color={TEXT}
-                _focus={{ borderColor: RED, boxShadow: `0 0 0 1px ${RED}` }}
-                autoFocus
-              />
-              {promoteFieldErrors.house_name && (
-                <Text color="#B42318" fontSize="11px" mt="6px">
-                  {promoteFieldErrors.house_name}
-                </Text>
+              {/* PROMOTE MODE SELECTION */}
+              <RadioGroup.Root
+                value={promoteMode}
+                onValueChange={(d) => setPromoteMode(d.value)}
+                mb={4}
+              >
+                <VStack align="stretch" gap={3}>
+                  <Box
+                    p={3}
+                    border="1px solid"
+                    borderRadius="6px"
+                    borderColor={promoteMode === "CURRENT" ? RED : BORDER}
+                    bg={promoteMode === "CURRENT" ? "#FFF8F8" : "white"}
+                    cursor="pointer"
+                    onClick={() => setPromoteMode("CURRENT")}
+                  >
+                    <RadioGroup.Item value="CURRENT">
+                      <RadioGroup.ItemHiddenInput />
+                      <RadioGroup.ItemIndicator />
+                      <RadioGroup.ItemText>
+                        <Text fontWeight="600" fontSize="12px">
+                          Promote in current house
+                        </Text>
+                        <Text fontSize="11px" color={MUTED}>
+                          Use {selectedMember?.house_name || "current house"} — no new slot needed.
+                        </Text>
+                      </RadioGroup.ItemText>
+                    </RadioGroup.Item>
+                  </Box>
+
+                  <Box
+                    p={3}
+                    border="1px solid"
+                    borderRadius="6px"
+                    borderColor={promoteMode === "NEW" ? RED : BORDER}
+                    bg={promoteMode === "NEW" ? "#FFF8F8" : "white"}
+                    cursor="pointer"
+                    onClick={() => setPromoteMode("NEW")}
+                  >
+                    <RadioGroup.Item value="NEW">
+                      <RadioGroup.ItemHiddenInput />
+                      <RadioGroup.ItemIndicator />
+                      <RadioGroup.ItemText>
+                        <Text fontWeight="600" fontSize="12px">
+                          Create a new household
+                        </Text>
+                        <Text fontSize="11px" color={MUTED}>
+                          Uses 1 subscription slot.
+                        </Text>
+                      </RadioGroup.ItemText>
+                    </RadioGroup.Item>
+                  </Box>
+                </VStack>
+              </RadioGroup.Root>
+
+              {/* NEW HOUSE NAME INPUT */}
+              {promoteMode === "NEW" && (
+                <>
+                  <Text fontSize="12px" fontWeight="600" color={DARK} mb={2}>
+                    New House Name{" "}
+                    <Text as="span" color={RED}>
+                      *
+                    </Text>
+                  </Text>
+                  <Input
+                    value={newHouseName}
+                    onChange={(e) => {
+                      setNewHouseName(e.target.value);
+                      if (promoteFieldErrors.house_name) {
+                        setPromoteFieldErrors((prev) => ({
+                          ...prev,
+                          house_name: "",
+                        }));
+                      }
+                    }}
+                    placeholder="e.g. Kunnath Cottage, Kunnath Villa"
+                    h="40px"
+                    fontSize="13px"
+                    borderColor={
+                      promoteFieldErrors.house_name ? "#F3C4C4" : BORDER
+                    }
+                    borderRadius="6px"
+                    color={TEXT}
+                    _focus={{ borderColor: RED, boxShadow: `0 0 0 1px ${RED}` }}
+                    autoFocus
+                  />
+                  {promoteFieldErrors.house_name && (
+                    <Text color="#B42318" fontSize="11px" mt="6px">
+                      {promoteFieldErrors.house_name}
+                    </Text>
+                  )}
+                  {promoteFieldErrors.family && (
+                    <Text color="#B42318" fontSize="11px" mt="6px">
+                      {promoteFieldErrors.family}
+                    </Text>
+                  )}
+                  <Text fontSize="10px" color={MUTED} mt={2}>
+                    This will create a new household under the same family name. The
+                    member will become the Family Head of this new house.
+                  </Text>
+                </>
               )}
-              {promoteFieldErrors.family && (
-                <Text color="#B42318" fontSize="11px" mt="6px">
-                  {promoteFieldErrors.family}
-                </Text>
-              )}
-              <Text fontSize="10px" color={MUTED} mt={2}>
-                This will create a new household under the same family name. The
-                member will become the Family Head of this new house.
-              </Text>
             </Dialog.Body>
 
             <Dialog.Footer borderTop="1px solid" borderColor="#E5EAF1" pt={4}>
