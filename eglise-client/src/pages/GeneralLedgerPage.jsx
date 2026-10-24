@@ -14,7 +14,6 @@ import {
   Input,
 } from "@chakra-ui/react";
 import {
-  LuArrowLeft,
   LuPrinter,
   LuFileText,
   LuChevronDown,
@@ -41,6 +40,10 @@ const DARK = "#182338";
 const MUTED = "#60708C";
 const BORDER = "#DCE2EA";
 
+// ============================================================
+// FORMAT HELPERS
+// ============================================================
+
 const formatMoney = (v) =>
   Number(v || 0).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
@@ -55,16 +58,54 @@ const toNumber = (v) => {
   return isNaN(n) ? 0 : n;
 };
 
-// ------------------------------------------------------------
-// Group LedgerEntry rows — now includes CONTRA support
-// ------------------------------------------------------------
-const groupLedgerEntries = (entries) => {
+// ✅ Dr / Cr label based on nature + sign
+//   ASSET / EXPENSE  → +ve = Dr, -ve = Cr
+//   LIABILITY / INCOME / EQUITY → +ve = Cr, -ve = Dr
+const isDebitNature = (nature) =>
+  nature === "ASSET" || nature === "EXPENSE";
+
+const balanceOnDebitSide = (amount, nature) => {
+  const dn = isDebitNature(nature);
+  const positive = amount >= 0;
+  return (dn && positive) || (!dn && !positive);
+};
+
+const formatBalanceWithSide = (amount, nature) => {
+  const onDebit = balanceOnDebitSide(amount, nature);
+  const abs = Math.abs(amount || 0);
+  const side = onDebit ? "Dr" : "Cr";
+  return `₹ ${formatMoney(abs)} ${side}`;
+};
+
+// ============================================================
+// BUILD ROWS WITH COUNTER-LEDGER PARTICULARS
+// ============================================================
+
+const buildRowsWithParticulars = (entries) => {
+  const byVoucher = new Map();
+  entries.forEach((e) => {
+    const voucherNo =
+      e.receipt_voucher || e.payment_voucher || e.contra_voucher || null;
+    const key = voucherNo
+      ? `${
+          e.receipt_voucher
+            ? "R"
+            : e.payment_voucher
+            ? "P"
+            : e.contra_voucher
+            ? "C"
+            : "J"
+        }|${voucherNo}|${e.entry_date}`
+      : `ORPHAN|${e.id}`;
+    if (!byVoucher.has(key)) byVoucher.set(key, []);
+    byVoucher.get(key).push(e);
+  });
+
   return entries
     .filter((e) => !e.is_cancelled)
     .map((e) => {
       const voucherNo =
         e.receipt_voucher || e.payment_voucher || e.contra_voucher || null;
-
       const voucherType = e.receipt_voucher
         ? "Receipt"
         : e.payment_voucher
@@ -72,22 +113,43 @@ const groupLedgerEntries = (entries) => {
         : e.contra_voucher
         ? "Contra"
         : "Journal";
+      const key = voucherNo
+        ? `${
+            e.receipt_voucher
+              ? "R"
+              : e.payment_voucher
+              ? "P"
+              : e.contra_voucher
+              ? "C"
+              : "J"
+          }|${voucherNo}|${e.entry_date}`
+        : `ORPHAN|${e.id}`;
+      const siblings = byVoucher.get(key) || [];
 
-      const amt = toNumber(e.amount);
-      const isDebit = e.entry_type === "DEBIT";
+      const counterLeg = siblings.find(
+        (s) =>
+          String(s.ledger) !== String(e.ledger) &&
+          s.ledger_name &&
+          !s.is_cancelled
+      );
 
       return {
         key: e.id,
         date: e.entry_date,
         voucherNo: voucherNo || "—",
         voucherType,
-        particulars: e.narration || "—",
+        particulars:
+          counterLeg?.ledger_name || e.narration || e.ledger_name || "—",
         account: e.ledger_name,
-        amount: amt,
-        direction: isDebit ? "DEBIT" : "CREDIT",
+        amount: toNumber(e.amount),
+        direction: e.entry_type === "DEBIT" ? "DEBIT" : "CREDIT",
       };
     });
 };
+
+// ============================================================
+// SEARCHABLE LEDGER PICKER
+// ============================================================
 
 const SearchableLedgerPicker = ({
   ledgers,
@@ -114,10 +176,7 @@ const SearchableLedgerPicker = ({
 
   useEffect(() => {
     const handler = (e) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target)
-      ) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
         setIsOpen(false);
         setQuery("");
       }
@@ -127,9 +186,7 @@ const SearchableLedgerPicker = ({
   }, []);
 
   useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 0);
-    }
+    if (isOpen) setTimeout(() => inputRef.current?.focus(), 0);
   }, [isOpen]);
 
   const handleSelect = (ledger) => {
@@ -285,6 +342,10 @@ const SearchableLedgerPicker = ({
   );
 };
 
+// ============================================================
+// SUMMARY CELL
+// ============================================================
+
 const SummaryCell = ({ label, value, color }) => (
   <Box border={`1px solid ${BORDER}`} borderRadius="8px" p={3} bg="white">
     <Text fontSize="10px" color={MUTED} mb={1}>
@@ -296,19 +357,18 @@ const SummaryCell = ({ label, value, color }) => (
   </Box>
 );
 
+// ============================================================
+// PRINT TABLE
+// ============================================================
+
 const GeneralLedgerPrintTable = ({
   rows,
   ledgerName,
+  ledgerNature,
   openingBalance,
   totals,
   closingBalance,
 }) => {
-  const fmt = (n) =>
-    Number(n || 0).toLocaleString("en-IN", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-
   const thStyle = {
     border: "1px solid #F0C2C2",
     padding: "10px 8px",
@@ -331,6 +391,12 @@ const GeneralLedgerPrintTable = ({
 
   const numStyle = { ...tdStyle, textAlign: "right" };
 
+  const openingOnDebit = balanceOnDebitSide(openingBalance, ledgerNature);
+  const openingAmount = Math.abs(openingBalance || 0);
+
+  const closingOnDebit = balanceOnDebitSide(closingBalance, ledgerNature);
+  const closingAmount = Math.abs(closingBalance || 0);
+
   return (
     <Box fontFamily="'Georgia', serif">
       {ledgerName && (
@@ -338,6 +404,11 @@ const GeneralLedgerPrintTable = ({
           <Text fontSize="16px" fontWeight="bold" color="#8B1A1A">
             Ledger: {ledgerName}
           </Text>
+          {ledgerNature && (
+            <Text fontSize="11px" color="#777" mt={1}>
+              Nature: {ledgerNature}
+            </Text>
+          )}
         </Box>
       )}
 
@@ -345,10 +416,10 @@ const GeneralLedgerPrintTable = ({
         <thead>
           <tr>
             <th style={thStyle}>Date</th>
-            <th style={thStyle}>Voucher Number</th>
+            <th style={thStyle}>Voucher</th>
             <th style={thStyle}>Particulars</th>
-            <th style={{ ...thStyle, textAlign: "right" }}>Credit (₹)</th>
             <th style={{ ...thStyle, textAlign: "right" }}>Debit (₹)</th>
+            <th style={{ ...thStyle, textAlign: "right" }}>Credit (₹)</th>
           </tr>
         </thead>
         <tbody>
@@ -359,12 +430,12 @@ const GeneralLedgerPrintTable = ({
             >
               Opening Balance
             </td>
-            <td
-              style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}
-            >
-              ₹{fmt(openingBalance)}
+            <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>
+              {openingOnDebit ? `₹${formatMoney(openingAmount)}` : "—"}
             </td>
-            <td style={{ ...numStyle, color: "#8B1A1A" }}>—</td>
+            <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>
+              {openingOnDebit ? "—" : `₹${formatMoney(openingAmount)}`}
+            </td>
           </tr>
 
           {rows.length === 0 ? (
@@ -390,15 +461,24 @@ const GeneralLedgerPrintTable = ({
                 }}
               >
                 <td style={tdStyle}>{r.date}</td>
-                <td style={tdStyle}>{r.voucherNo}</td>
+                <td style={tdStyle}>
+                  <div>{r.voucherNo}</div>
+                  <div style={{ fontSize: "11px", color: "#888" }}>
+                    {r.voucherType}
+                  </div>
+                </td>
                 <td style={{ ...tdStyle, color: "#8B1A1A" }}>
                   {r.particulars}
                 </td>
-                <td style={{ ...numStyle, color: "#8B1A1A" }}>
-                  {r.direction === "CREDIT" ? `₹${fmt(r.amount)}` : "—"}
+                <td style={{ ...numStyle, color: "#B71C1C" }}>
+                  {r.direction === "DEBIT"
+                    ? `₹${formatMoney(r.amount)}`
+                    : "—"}
                 </td>
-                <td style={{ ...numStyle, color: "#8B1A1A" }}>
-                  {r.direction === "DEBIT" ? `₹${fmt(r.amount)}` : "—"}
+                <td style={{ ...numStyle, color: "#2E7D32" }}>
+                  {r.direction === "CREDIT"
+                    ? `₹${formatMoney(r.amount)}`
+                    : "—"}
                 </td>
               </tr>
             ))
@@ -421,15 +501,11 @@ const GeneralLedgerPrintTable = ({
             >
               Total
             </td>
-            <td
-              style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}
-            >
-              ₹{fmt(totals.credit)}
+            <td style={{ ...numStyle, fontWeight: "bold", color: "#B71C1C" }}>
+              ₹{formatMoney(totals.debit)}
             </td>
-            <td
-              style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}
-            >
-              ₹{fmt(totals.debit)}
+            <td style={{ ...numStyle, fontWeight: "bold", color: "#2E7D32" }}>
+              ₹{formatMoney(totals.credit)}
             </td>
           </tr>
 
@@ -445,18 +521,22 @@ const GeneralLedgerPrintTable = ({
             >
               Closing Balance
             </td>
-            <td
-              style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}
-            >
-              ₹{fmt(closingBalance)}
+            <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>
+              {closingOnDebit ? `₹${formatMoney(closingAmount)}` : "—"}
             </td>
-            <td style={{ ...numStyle, color: "#8B1A1A" }}>—</td>
+            <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>
+              {closingOnDebit ? "—" : `₹${formatMoney(closingAmount)}`}
+            </td>
           </tr>
         </tbody>
       </table>
     </Box>
   );
 };
+
+// ============================================================
+// PAGE
+// ============================================================
 
 const GeneralLedgerPage = () => {
   const navigate = useNavigate();
@@ -554,7 +634,7 @@ const GeneralLedgerPage = () => {
   }, [ledgerId, dateFrom, dateTo]);
 
   const rows = useMemo(() => {
-    let grouped = groupLedgerEntries(rawEntries);
+    let grouped = buildRowsWithParticulars(rawEntries);
 
     if (search) {
       const kw = search.toLowerCase();
@@ -576,14 +656,15 @@ const GeneralLedgerPage = () => {
     return grouped;
   }, [rawEntries, search]);
 
-  const totals = useMemo(() => {
-    return {
+  const totals = useMemo(
+    () => ({
       credit: toNumber(totCredit),
       debit: toNumber(totDebit),
       moneyIn: toNumber(totCredit),
       moneyOut: toNumber(totDebit),
-    };
-  }, [totDebit, totCredit]);
+    }),
+    [totDebit, totCredit]
+  );
 
   const selectedLedger = useMemo(
     () => ledgers.find((l) => String(l.id) === String(ledgerId)),
@@ -604,6 +685,8 @@ const GeneralLedgerPage = () => {
       placeholder="Select ledger"
     />
   );
+
+  const nature = selectedLedger?.ledger_nature || "ASSET";
 
   return (
     <>
@@ -634,7 +717,11 @@ const GeneralLedgerPage = () => {
               <Text fontSize="10px" fontWeight="700" color={RED} mb={1}>
                 GENERAL LEDGER REPORT
               </Text>
-              <Heading color={DARK} fontSize={{ base: "22px", md: "26px" }} mb={1}>
+              <Heading
+                color={DARK}
+                fontSize={{ base: "22px", md: "26px" }}
+                mb={1}
+              >
                 General Ledger
               </Heading>
               <Text color={MUTED} fontSize="11px">
@@ -674,7 +761,12 @@ const GeneralLedgerPage = () => {
             </HStack>
           </Flex>
 
-          <Box border={`1px solid ${BORDER}`} borderRadius="8px" p={3} bg="white">
+          <Box
+            border={`1px solid ${BORDER}`}
+            borderRadius="8px"
+            p={3}
+            bg="white"
+          >
             <ReportFilterBar
               search={search}
               setSearch={setSearch}
@@ -686,24 +778,28 @@ const GeneralLedgerPage = () => {
               onReset={reset}
             />
 
-            <SimpleGrid columns={{ base: 1, sm: 2, md: 4 }} gap={3} mb={3}>
+            <SimpleGrid
+              columns={{ base: 1, sm: 2, md: 4 }}
+              gap={3}
+              mb={3}
+            >
               <SummaryCell
                 label="Opening Balance"
-                value={formatAmount(opening)}
+                value={formatBalanceWithSide(opening, nature)}
               />
               <SummaryCell
                 label="Total Debit"
                 value={formatAmount(totDebit)}
-                color="#16804A"
+                color="#B71C1C"
               />
               <SummaryCell
                 label="Total Credit"
                 value={formatAmount(totCredit)}
-                color={RED}
+                color="#2E7D32"
               />
               <SummaryCell
                 label="Closing Balance"
-                value={formatAmount(closing)}
+                value={formatBalanceWithSide(closing, nature)}
                 color={closing < 0 ? RED : DARK}
               />
             </SimpleGrid>
@@ -712,6 +808,7 @@ const GeneralLedgerPage = () => {
               rows={rows}
               isLoading={isLoading}
               openingBalance={opening}
+              ledgerNature={nature}
               totals={totals}
               showTotals
             />
@@ -737,14 +834,13 @@ const GeneralLedgerPage = () => {
             : ""
         }
         church={church}
-        pdfFileName={`GeneralLedger_${
-          selectedLedger?.ledger_name || "Report"
-        }.pdf`}
+        pdfFileName={`GeneralLedger_${selectedLedger?.ledger_name || "Report"}.pdf`}
         defaultOrientation="portrait"
       >
         <GeneralLedgerPrintTable
           rows={rows}
           ledgerName={selectedLedger?.ledger_name || ""}
+          ledgerNature={nature}
           openingBalance={opening}
           totals={totals}
           closingBalance={closing}

@@ -11,7 +11,7 @@ import {
   Icon,
   Text,
 } from "@chakra-ui/react";
-import { LuArrowLeft, LuPrinter, LuFileText } from "react-icons/lu";
+import { LuPrinter, LuFileText } from "react-icons/lu";
 
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -28,6 +28,10 @@ const DARK = "#182338";
 const MUTED = "#60708C";
 const BORDER = "#DCE2EA";
 
+// ============================================================
+// DATE HELPERS
+// ============================================================
+
 const todayISO = () => {
   const d = new Date();
   const y = d.getFullYear();
@@ -36,24 +40,61 @@ const todayISO = () => {
   return `${y}-${m}-${day}`;
 };
 
+const firstDayOfMonthISO = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}-01`;
+};
+
 const toNumber = (v) => {
   if (v === null || v === undefined || v === "") return 0;
   const n = Number(String(v).replace(/[₹,\s]/g, ""));
   return isNaN(n) ? 0 : n;
 };
 
+// ============================================================
+// CASH / BANK LEDGER WHITELIST
+// ============================================================
+
 const CASH_BANK_EXACT_NAMES = [
   "cash in hand",
   "balance in savings account",
+  "balance in deposit account",
+  "balance in other accounts",
 ];
+
+const isCashLedger = (ledgerName) => {
+  const n = String(ledgerName || "").trim().toLowerCase();
+  return n === "cash in hand";
+};
+
+const isBankLedger = (ledgerName) => {
+  const n = String(ledgerName || "").trim().toLowerCase();
+  return (
+    n === "balance in savings account" ||
+    n === "balance in deposit account" ||
+    n === "balance in other accounts"
+  );
+};
 
 const isCashOrBankLedger = (ledgerName) => {
   const n = String(ledgerName || "").trim().toLowerCase();
   if (!n) return false;
-  return CASH_BANK_EXACT_NAMES.some((exact) => n === exact);
+  return CASH_BANK_EXACT_NAMES.includes(n);
 };
 
-const groupLedgerEntries = (entries) => {
+// ============================================================
+// GROUP LEDGER ENTRIES BY VOUCHER
+// ============================================================
+//
+// Money-in convention: Credit = money in, Debit = money out.
+//   - Receipt → Credit
+//   - Payment → Debit
+//   - Contra  → Debit to cash/bank = money IN, Credit = money OUT
+// ============================================================
+
+const groupLedgerEntries = (entries, book = "bank") => {
   const groups = new Map();
 
   entries.forEach((e) => {
@@ -95,15 +136,23 @@ const groupLedgerEntries = (entries) => {
     const amt = toNumber(e.amount);
 
     if (isCashOrBankLedger(e.ledger_name)) {
-      g.cashBankAccount = e.ledger_name || "";
-      g.amount = amt;
+      const matchesBook =
+        (book === "bank" && isBankLedger(e.ledger_name)) ||
+        (book === "cash" && isCashLedger(e.ledger_name));
 
-      if (voucherType === "Receipt") {
-        g.direction = "CREDIT";
-      } else if (voucherType === "Payment") {
-        g.direction = "DEBIT";
-      } else {
-        g.direction = e.entry_type;
+      if (matchesBook || !g.cashBankAccount) {
+        g.cashBankAccount = e.ledger_name || "";
+        g.amount = amt;
+
+        if (voucherType === "Receipt") {
+          g.direction = "CREDIT"; // money in
+        } else if (voucherType === "Payment") {
+          g.direction = "DEBIT"; // money out
+        } else {
+          // Contra: apply the same money-in/money-out convention.
+          // DEBIT to cash/bank ledger = money IN, CREDIT = money OUT.
+          g.direction = e.entry_type === "DEBIT" ? "CREDIT" : "DEBIT";
+        }
       }
     } else {
       if (!g.particulars) {
@@ -121,10 +170,11 @@ const groupLedgerEntries = (entries) => {
 
       if (g.amount === 0 && g._entries[0]) {
         g.amount = toNumber(g._entries[0].amount);
-
         if (g.voucherType === "Receipt") g.direction = "CREDIT";
         else if (g.voucherType === "Payment") g.direction = "DEBIT";
-        else g.direction = g._entries[0].entry_type;
+        else
+          g.direction =
+            g._entries[0].entry_type === "DEBIT" ? "CREDIT" : "DEBIT";
       }
     }
 
@@ -141,6 +191,27 @@ const groupLedgerEntries = (entries) => {
     return g;
   });
 };
+
+// ============================================================
+// COMPUTE RUNNING BALANCES
+// ============================================================
+
+const computeRunningBalances = (rowsAscending, openingBalance) => {
+  let balance = toNumber(openingBalance);
+  return rowsAscending.map((r) => {
+    const amt = toNumber(r.amount);
+    if (r.direction === "CREDIT") {
+      balance += amt;
+    } else if (r.direction === "DEBIT") {
+      balance -= amt;
+    }
+    return { ...r, running_balance: balance };
+  });
+};
+
+// ============================================================
+// PRINT TABLE
+// ============================================================
 
 const BankBookPrintTable = ({ rows, totals, openingBalance }) => {
   const fmt = (n) =>
@@ -171,6 +242,11 @@ const BankBookPrintTable = ({ rows, totals, openingBalance }) => {
 
   const numStyle = { ...tdStyle, textAlign: "right" };
 
+  const closingBalance =
+    rows.length > 0 && rows[0].running_balance !== undefined
+      ? rows[0].running_balance
+      : toNumber(openingBalance) + totals.credit - totals.debit;
+
   return (
     <Box fontFamily="'Georgia', serif">
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -178,66 +254,102 @@ const BankBookPrintTable = ({ rows, totals, openingBalance }) => {
           <tr>
             <th style={thStyle}>Date</th>
             <th style={thStyle}>Voucher Number</th>
-            <th style={thStyle}>Account Ledger</th>
+            <th style={thStyle}>Particulars</th>
             <th style={thStyle}>Cash / Bank Account</th>
             <th style={{ ...thStyle, textAlign: "right" }}>Credit (₹)</th>
             <th style={{ ...thStyle, textAlign: "right" }}>Debit (₹)</th>
+            <th style={{ ...thStyle, textAlign: "right" }}>Balance (₹)</th>
           </tr>
         </thead>
         <tbody>
           <tr style={{ background: "#FFF5F5" }}>
-            <td colSpan={4} style={{ ...tdStyle, fontWeight: "bold", color: "#8B1A1A" }}>
+            <td
+              colSpan={5}
+              style={{ ...tdStyle, fontWeight: "bold", color: "#8B1A1A" }}
+            >
               Opening Balance
             </td>
+            <td style={{ ...numStyle, color: "#8B1A1A" }}>—</td>
             <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>
               ₹{fmt(openingBalance)}
             </td>
-            <td style={{ ...numStyle, color: "#8B1A1A" }}>—</td>
           </tr>
 
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={6} style={{ ...tdStyle, textAlign: "center", fontStyle: "italic", color: "#A05050" }}>
+              <td
+                colSpan={7}
+                style={{
+                  ...tdStyle,
+                  textAlign: "center",
+                  fontStyle: "italic",
+                  color: "#A05050",
+                }}
+              >
                 No transactions for the selected period.
               </td>
             </tr>
           ) : (
             rows.map((r, i) => (
-              <tr key={r.key} style={{ background: i % 2 === 0 ? "#FFFFFF" : "#FFF9F9" }}>
+              <tr
+                key={r.key}
+                style={{ background: i % 2 === 0 ? "#FFFFFF" : "#FFF9F9" }}
+              >
                 <td style={tdStyle}>{r.date}</td>
                 <td style={tdStyle}>{r.voucherNo}</td>
-                <td style={{ ...tdStyle, color: "#8B1A1A" }}>{r.particulars}</td>
+                <td style={{ ...tdStyle, color: "#8B1A1A" }}>
+                  {r.particulars}
+                </td>
                 <td style={tdStyle}>{r.cashBankAccount}</td>
-                <td style={{ ...numStyle, color: "#8B1A1A" }}>
+                <td style={{ ...numStyle, color: "#2E7D32" }}>
                   {r.direction === "CREDIT" ? `₹${fmt(r.amount)}` : "—"}
                 </td>
-                <td style={{ ...numStyle, color: "#8B1A1A" }}>
+                <td style={{ ...numStyle, color: "#B71C1C" }}>
                   {r.direction === "DEBIT" ? `₹${fmt(r.amount)}` : "—"}
+                </td>
+                <td style={{ ...numStyle, fontWeight: "600" }}>
+                  ₹{fmt(r.running_balance)}
                 </td>
               </tr>
             ))
           )}
 
           <tr style={{ background: "#FCEAEC", borderTop: "1px solid #F0C2C2" }}>
-            <td colSpan={4} style={{ ...tdStyle, textAlign: "right", fontWeight: "bold", color: "#8B1A1A" }}>
+            <td
+              colSpan={4}
+              style={{
+                ...tdStyle,
+                textAlign: "right",
+                fontWeight: "bold",
+                color: "#8B1A1A",
+              }}
+            >
               Total
             </td>
-            <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>
+            <td style={{ ...numStyle, fontWeight: "bold", color: "#2E7D32" }}>
               ₹{fmt(totals.credit)}
             </td>
-            <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>
+            <td style={{ ...numStyle, fontWeight: "bold", color: "#B71C1C" }}>
               ₹{fmt(totals.debit)}
             </td>
+            <td style={numStyle}>—</td>
           </tr>
 
           <tr style={{ background: "#FFF5F5" }}>
-            <td colSpan={4} style={{ ...tdStyle, textAlign: "right", fontWeight: "bold", color: "#8B1A1A" }}>
+            <td
+              colSpan={6}
+              style={{
+                ...tdStyle,
+                textAlign: "right",
+                fontWeight: "bold",
+                color: "#8B1A1A",
+              }}
+            >
               Closing Balance
             </td>
             <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>
-              ₹{fmt((openingBalance || 0) + totals.credit - totals.debit)}
+              ₹{fmt(closingBalance)}
             </td>
-            <td style={{ ...numStyle, color: "#8B1A1A" }}>—</td>
           </tr>
         </tbody>
       </table>
@@ -245,14 +357,20 @@ const BankBookPrintTable = ({ rows, totals, openingBalance }) => {
   );
 };
 
+// ============================================================
+// PAGE
+// ============================================================
+
 const BankBookPage = () => {
   const navigate = useNavigate();
 
   const [rawEntries, setRawEntries] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [dateFrom, setDateFrom] = useState(todayISO());
+
+  const [dateFrom, setDateFrom] = useState(firstDayOfMonthISO());
   const [dateTo, setDateTo] = useState(todayISO());
+
   const [openingBalance, setOpeningBalance] = useState(undefined);
   const [church, setChurch] = useState({ name: "", address: "" });
   const [isPrintOpen, setIsPrintOpen] = useState(false);
@@ -315,7 +433,7 @@ const BankBookPage = () => {
   }, [dateFrom, dateTo]);
 
   const rows = useMemo(() => {
-    let grouped = groupLedgerEntries(rawEntries);
+    let grouped = groupLedgerEntries(rawEntries, "bank");
 
     if (search) {
       const kw = search.toLowerCase();
@@ -332,19 +450,24 @@ const BankBookPage = () => {
     grouped.sort((a, b) => {
       const da = new Date(a.date).getTime();
       const db = new Date(b.date).getTime();
-      return db - da;
+      if (da !== db) return da - db;
+      return String(a.key).localeCompare(String(b.key));
     });
 
-    return grouped;
-  }, [rawEntries, search]);
+    const withBalance = computeRunningBalances(grouped, openingBalance ?? 0);
+
+    withBalance.reverse();
+
+    return withBalance;
+  }, [rawEntries, search, openingBalance]);
 
   const totals = useMemo(() => {
     let credit = 0;
     let debit = 0;
 
     rows.forEach((r) => {
-      if (r.direction === "CREDIT") credit += r.amount;
-      else if (r.direction === "DEBIT") debit += r.amount;
+      if (r.direction === "CREDIT") credit += toNumber(r.amount);
+      else if (r.direction === "DEBIT") debit += toNumber(r.amount);
     });
 
     return {
@@ -358,7 +481,7 @@ const BankBookPage = () => {
 
   const reset = () => {
     setSearch("");
-    setDateFrom(todayISO());
+    setDateFrom(firstDayOfMonthISO());
     setDateTo(todayISO());
   };
 
@@ -369,34 +492,87 @@ const BankBookPage = () => {
 
         <Box flex="1" w="100%" px={{ base: 3, md: 4 }} py={{ base: 3, md: 4 }}>
           <HStack gap={2} mb={2} color={MUTED} fontSize="11px">
-            <Text color={PRIMARY_MAROON} cursor="pointer" onClick={() => navigate("/reports")}>
+            <Text
+              color={PRIMARY_MAROON}
+              cursor="pointer"
+              onClick={() => navigate("/reports")}
+            >
               Reports
             </Text>
             <Text>/</Text>
             <Text>Bank Book</Text>
           </HStack>
 
-          <Flex justify="space-between" align={{ base: "flex-start", md: "center" }} gap={3} mb={3} direction={{ base: "column", md: "row" }}>
+          <Flex
+            justify="space-between"
+            align={{ base: "flex-start", md: "center" }}
+            gap={3}
+            mb={3}
+            direction={{ base: "column", md: "row" }}
+          >
             <Box>
-              <Text fontSize="10px" fontWeight="700" color={RED} mb={1}>BANK BOOK REPORT</Text>
-              <Heading color={DARK} fontSize={{ base: "22px", md: "26px" }} mb={1}>Bank Book</Heading>
-              <Text color={MUTED} fontSize="11px">View all bank transactions for the selected date.</Text>
+              <Text fontSize="10px" fontWeight="700" color={RED} mb={1}>
+                BANK BOOK REPORT
+              </Text>
+              <Heading color={DARK} fontSize={{ base: "22px", md: "26px" }} mb={1}>
+                Bank Book
+              </Heading>
+              <Text color={MUTED} fontSize="11px">
+                View all bank transactions for the selected date.
+              </Text>
             </Box>
 
             <HStack gap={2}>
-              <Button variant="outline" borderColor="#FF5A7D" color={RED} bg="white" h="38px" px={4} fontSize="12px" borderRadius="6px" onClick={() => setIsPrintOpen(true)} _hover={{ bg: "#FFF0F4" }}>
+              <Button
+                variant="outline"
+                borderColor="#FF5A7D"
+                color={RED}
+                bg="white"
+                h="38px"
+                px={4}
+                fontSize="12px"
+                borderRadius="6px"
+                onClick={() => setIsPrintOpen(true)}
+                _hover={{ bg: "#FFF0F4" }}
+              >
                 <Icon as={LuPrinter} mr={2} boxSize={4} /> Print
               </Button>
-              <Button variant="outline" borderColor="#FF5A7D" color={RED} bg="white" h="38px" px={4} fontSize="12px" borderRadius="6px" onClick={() => setIsPrintOpen(true)} _hover={{ bg: "#FFF0F4" }}>
+              <Button
+                variant="outline"
+                borderColor="#FF5A7D"
+                color={RED}
+                bg="white"
+                h="38px"
+                px={4}
+                fontSize="12px"
+                borderRadius="6px"
+                onClick={() => setIsPrintOpen(true)}
+                _hover={{ bg: "#FFF0F4" }}
+              >
                 <Icon as={LuFileText} mr={2} boxSize={4} /> Generate PDF
               </Button>
             </HStack>
           </Flex>
 
           <Box border={`1px solid ${BORDER}`} borderRadius="8px" p={3} bg="white">
-            <ReportFilterBar search={search} setSearch={setSearch} dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo} onReset={reset} />
-            <ReportLedgerTable rows={rows} isLoading={isLoading} totals={totals} showTotals />
-            <Text fontSize="11px" color={MUTED} mt={2} textAlign="right">Showing {rows.length} entries</Text>
+            <ReportFilterBar
+              search={search}
+              setSearch={setSearch}
+              dateFrom={dateFrom}
+              setDateFrom={setDateFrom}
+              dateTo={dateTo}
+              setDateTo={setDateTo}
+              onReset={reset}
+            />
+            <ReportLedgerTable
+              rows={rows}
+              isLoading={isLoading}
+              totals={totals}
+              showTotals
+            />
+            <Text fontSize="11px" color={MUTED} mt={2} textAlign="right">
+              Showing {rows.length} entries
+            </Text>
           </Box>
         </Box>
 
@@ -407,12 +583,20 @@ const BankBookPage = () => {
         isOpen={isPrintOpen}
         onClose={() => setIsPrintOpen(false)}
         title="BANK BOOK"
-        subtitle={dateFrom === dateTo ? `For the day ${dateFrom}` : `From ${dateFrom || "—"} to ${dateTo || "—"}`}
+        subtitle={
+          dateFrom === dateTo
+            ? `For the day ${dateFrom}`
+            : `From ${dateFrom || "—"} to ${dateTo || "—"}`
+        }
         church={church}
         pdfFileName={`BankBook_${dateFrom || "from"}_${dateTo || "to"}.pdf`}
         defaultOrientation="portrait"
       >
-        <BankBookPrintTable rows={rows} totals={totals} openingBalance={openingBalance} />
+        <BankBookPrintTable
+          rows={rows}
+          totals={totals}
+          openingBalance={openingBalance}
+        />
       </ChurchPrintModal>
     </>
   );

@@ -1179,3 +1179,7 @@ export const updateContra = (id, data) =>
 
 export const cancelContra = (id, data) =>
   apiClient.post(`/api/registry/contra/${id}/cancel/`, data);
+
+
+export const getBalanceSheetReport = (params = {}) =>
+  apiClient.get("/api/registry/reports/balance-sheet/", { params });

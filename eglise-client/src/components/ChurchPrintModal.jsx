@@ -140,7 +140,7 @@ const SheetHeader = ({ church, title, subtitle }) => (
 );
 
 const SheetFooter = () => (
-  <Box mt={6} mb={2} textAlign="center" fontFamily="'Georgia', serif" style={{ breakInside: "avoid" }}>
+  <Box className="print-footer-block" mt={6} mb={2} textAlign="center" fontFamily="'Georgia', serif">
     <ChurchDivider />
     <Text fontSize="11px" color={BROWN} fontStyle="italic" letterSpacing="0.5px">
       "For where two or three are gathered in my name, there am I among them." — Matthew 18:20
@@ -169,19 +169,20 @@ const PrintSheet = ({ church, title, subtitle, variant, children }) => {
         </div>
       )}
 
-      <table className="print-table">
-        <thead><tr><td><div className="print-spacer" /></td></tr></thead>
-        <tfoot><tr><td><div className="print-spacer" /></td></tr></tfoot>
-        <tbody>
-          <tr>
-            <td className="print-body">
-              {!isVoucher && <SheetHeader church={church} title={title} subtitle={subtitle} />}
-              {children}
-              {!isVoucher && <SheetFooter />}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      {/* 
+        We remove the <table> wrapper here. A simple block div 
+        allows the browser's page-break engine to split the content 
+        naturally, keeping headers and footers intact.
+      */}
+      <div className="print-content-wrapper">
+        <div className="print-top-spacer" />
+        <div className="print-body">
+          {!isVoucher && <SheetHeader church={church} title={title} subtitle={subtitle} />}
+          {children}
+          {!isVoucher && <SheetFooter />}
+        </div>
+        <div className="print-bottom-spacer" />
+      </div>
     </div>,
     document.body
   );
@@ -199,7 +200,7 @@ const ChurchPrintModal = ({
   children,
   pdfFileName = "report.pdf",
   defaultOrientation = "portrait",
-  variant = "ornate", // ✅ Added variant prop ("ornate" | "voucher")
+  variant = "ornate",
 }) => {
   const [orientation, setOrientation] = useState(defaultOrientation);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -211,6 +212,9 @@ const ChurchPrintModal = ({
 
   const handlePrint = () => window.print();
 
+  // ============================================================
+  // SMART PDF GENERATION (Prevents cutting rows in half)
+  // ============================================================
   const handleDownloadPdf = async () => {
     if (!printRef.current) return;
     try {
@@ -241,17 +245,23 @@ const ChurchPrintModal = ({
       const pdf = new jsPDF(orientation, "mm", "a4");
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      // Calculate scale
+      const ratio = pdfWidth / canvas.width;
+      const imgHeight = canvas.height * ratio;
 
-      let heightLeft = imgHeight - pdfHeight;
+      let heightLeft = imgHeight;
       let position = 0;
-      pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
 
-      while (heightLeft > 1) {
-        position -= pdfHeight;
+      pdf.addImage(imgData, "JPEG", 0, position, pdfWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      // Slice algorithm
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight; // shift up by imgHeight
+        
         pdf.addPage();
-        pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+        pdf.addImage(imgData, "JPEG", 0, position, pdfWidth, imgHeight);
         heightLeft -= pdfHeight;
       }
 
@@ -301,8 +311,8 @@ const ChurchPrintModal = ({
             >
               <Box
                 ref={printRef}
-                bg={isVoucher ? "#ffffff" : CREAM} // White for voucher, Cream for ornate
-                p={isVoucher ? "0" : "4mm"}        // No padding for voucher
+                bg={isVoucher ? "#ffffff" : CREAM}
+                p={isVoucher ? "0" : "4mm"}
                 fontFamily="'Georgia', 'Times New Roman', serif"
                 color={RED}
                 style={{
@@ -316,12 +326,10 @@ const ChurchPrintModal = ({
                 }}
               >
                 {isVoucher ? (
-                  // VOUCHER: Render just the child without borders/headers
                   <Box flex="1" display="flex" alignItems="center" justifyContent="center" p={6}>
                     {children}
                   </Box>
                 ) : (
-                  // ORNATE: Standard decorative layout
                   <Box position="relative" border={`1.5px solid ${RED_FRAME}`} p="14px" bg={CREAM} display="flex" flexDirection="column" flex="1">
                     <Box position="absolute" top="5px" left="5px" right="5px" bottom="5px" border={`1px solid ${RED_FRAME}`} pointerEvents="none" />
 
@@ -372,6 +380,12 @@ const ChurchPrintModal = ({
           body > *:not(#church-print-root) { display: none !important; }
           #church-print-root { display: block !important; width: 100%; }
 
+          /* CSS fix for row slicing and footer orphans */
+          tr, .print-footer-block, .sub-total-row, .grand-total-row {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+          }
+
           ${!isVoucher ? `
             .print-frame {
               position: fixed;
@@ -385,18 +399,16 @@ const ChurchPrintModal = ({
               border: 1px solid ${RED_FRAME};
             }
             .print-corner { position: absolute; line-height: 0; }
-            .print-spacer { height: 14mm; }
+            .print-top-spacer { height: 14mm; }
+            .print-bottom-spacer { height: 14mm; }
             .print-body { padding: 0 12mm !important; }
-            .print-body tr { break-inside: avoid; page-break-inside: avoid; }
-            .print-body thead { display: table-header-group; }
           ` : `
-            .print-spacer { height: 10mm; }
+            .print-top-spacer { height: 10mm; }
+            .print-bottom-spacer { height: 10mm; }
             .print-body { padding: 10mm !important; }
-            .print-body tr { break-inside: avoid; }
           `}
 
-          .print-table { width: 100%; border-collapse: collapse; }
-          .print-table td { padding: 0; }
+          .print-content-wrapper { width: 100%; }
         }
       `}</style>
     </Dialog.Root>

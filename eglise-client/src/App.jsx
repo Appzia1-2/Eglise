@@ -1,4 +1,4 @@
-// src/App.jsx - Updated with Payment redesign (List + Add + Edit)
+// src/App.jsx
 
 import {
   BrowserRouter as Router,
@@ -120,6 +120,13 @@ import AccountLedgerEditPage from "./pages/Accountledgereditpage";
 import AccountLedgerViewPage from "./pages/Accountledgerviewpage";
 
 // =========================================================
+// BANK ACCOUNTS
+// =========================================================
+import BankAccountsPage from "./pages/BankAccountsPage";
+import BankAccountAddPage from "./pages/BankAccountAddPage";
+import BankAccountEditPage from "./pages/BankAccountEditPage";
+
+// =========================================================
 // PAYMENT ROUTES — redesigned (List + Add + Edit)
 // =========================================================
 import PaymentListPage from "./pages/PaymentListPage";
@@ -171,8 +178,8 @@ import IncomeExpenditurePage from "./pages/reports/IncomeExpenditurePage";
 import SubscriptionDueListPage from "./pages/reports/SubscriptionDueListPage";
 import SubscriptionPaidListPage from "./pages/reports/SubscriptionPaidListPage";
 import DonationRegisterPage from "./pages/reports/DonationRegisterPage";
-import ReceiptPaymentPage from "./pages/reports/ReceiptPaymentPage"; // ✅ New Import
-
+import ReceiptPaymentPage from "./pages/reports/ReceiptPaymentPage";
+import BalanceSheetPage from "./pages/reports/BalanceSheetPage";
 
 // =========================================================
 // CONTRA ROUTES
@@ -906,6 +913,34 @@ function App() {
         />
 
         {/* =========================================================
+            BANK ACCOUNTS
+        ========================================================= */}
+        <Route
+          path="/bank-accounts"
+          element={
+            <ProtectedRoute>
+              <BankAccountsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/bank-accounts/add"
+          element={
+            <ProtectedRoute>
+              <BankAccountAddPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/bank-accounts/:id/edit"
+          element={
+            <ProtectedRoute>
+              <BankAccountEditPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* =========================================================
             PAYMENTS — redesigned
         ========================================================= */}
         <Route
@@ -1341,7 +1376,7 @@ function App() {
           }
         />
 
-        {/* ✅ NEW: Receipts & Payments Combined Report */}
+        {/* ✅ Receipts & Payments Combined Report */}
         <Route
           path="/reports/receipts-payments"
           element={
@@ -1350,30 +1385,39 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         {/* =========================================================
-    CONTRA (Cash ↔ Bank transfers)
-========================================================= */}
-<Route
-  path="/contra"
+            CONTRA (Cash ↔ Bank transfers)
+        ========================================================= */}
+        <Route
+          path="/contra"
+          element={
+            <ProtectedRoute>
+              <ContraListPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/contra/add"
+          element={
+            <ProtectedRoute>
+              <ContraFormPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/contra/:id/edit"
+          element={
+            <ProtectedRoute>
+              <ContraFormPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+  path="/reports/balance-sheet"
   element={
     <ProtectedRoute>
-      <ContraListPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/contra/add"
-  element={
-    <ProtectedRoute>
-      <ContraFormPage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/contra/:id/edit"
-  element={
-    <ProtectedRoute>
-      <ContraFormPage />
+      <BalanceSheetPage />
     </ProtectedRoute>
   }
 />

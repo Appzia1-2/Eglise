@@ -30,12 +30,6 @@ const CREAM = "#FFFBF3";
 // ============================================================
 // ICONS
 // ============================================================
-const ArrowLeftIcon = ({ size = 15, color = PRIMARY_RED }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <path d="M19 12H5M12 19l-7-7 7-7" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
 const PrinterIcon = ({ size = 15, color = PRIMARY_RED }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -85,15 +79,95 @@ const formatDateDisplay = (dateStr) => {
 };
 
 // ============================================================
+// SUBSCRIPTION ADJUSTMENT ROWS
+// ============================================================
+const SubscriptionAdjustmentRows = ({ adjustment, indentLeft, forPrint = false }) => {
+  const adv = Number(adjustment?.advance_for_next_year || 0);
+  const rec = Number(adjustment?.subscription_receivable || 0);
+
+  if (!adv && !rec) return null;
+
+  const rows = [];
+
+  if (adv !== 0) {
+    rows.push({
+      label: "Less: Advance for next year",
+      amount: -adv,
+    });
+  }
+  if (rec !== 0) {
+    rows.push({
+      label: "Add: Subscription Receivable",
+      amount: rec,
+    });
+  }
+
+  if (forPrint) {
+    return rows.map((r, i) => (
+      <tr key={`adj-${i}`} style={{ borderBottom: `1px solid ${BORDER_COLOR}`, backgroundColor: CREAM }}>
+        <td style={{ padding: "2px 8px", paddingLeft: `${indentLeft + 24}px` }}>
+          <span style={{ fontSize: "10px", fontStyle: "italic", color: SECONDARY_TEXT, fontFamily: "Georgia, serif" }}>{r.label}</span>
+        </td>
+        <td style={{ padding: "2px 8px", textAlign: "right" }}>
+          <span style={{ fontSize: "10px", fontStyle: "italic", color: SECONDARY_TEXT, fontFamily: "Georgia, serif" }}>{formatAmount(r.amount)}</span>
+        </td>
+      </tr>
+    ));
+  }
+
+  return rows.map((r, i) => (
+    <Box as="tr" key={`adj-${i}`} bg="#FAFBFC" borderBottom={`1px solid ${BORDER_COLOR}`}>
+      <Box as="td" px={3} py={1.5} pl={`${indentLeft + 24}px`}>
+        <Text fontSize="11px" fontStyle="italic" color={SECONDARY_TEXT}>{r.label}</Text>
+      </Box>
+      <Box as="td" px={3} py={1.5} textAlign="right">
+        <Text fontSize="11px" fontStyle="italic" color={SECONDARY_TEXT}>{formatAmount(r.amount)}</Text>
+      </Box>
+    </Box>
+  ));
+};
+
+// ============================================================
+// SUB TOTAL ROW
+// ============================================================
+const SubTotalRow = ({ amount, depth = 0, forPrint = false }) => {
+  const indentLeft = 12 + depth * 18;
+
+  if (forPrint) {
+    return (
+      <tr style={{ background: "#F7F9FB", borderTop: `1px solid ${BORDER_COLOR}`, borderBottom: `1px solid ${BORDER_COLOR}` }}>
+        <td style={{ padding: "4px 8px", paddingLeft: `${indentLeft + 24}px` }}>
+          <span style={{ fontSize: "10.5px", fontWeight: "700", color: TEXT_COLOR, fontFamily: "Georgia, serif" }}>Sub Total</span>
+        </td>
+        <td style={{ padding: "4px 8px", textAlign: "right" }}>
+          <span style={{ fontSize: "10.5px", fontWeight: "700", color: TEXT_COLOR, fontFamily: "Georgia, serif" }}>{formatAmount(amount)}</span>
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <Box as="tr" bg="#F7F9FB" borderTop={`1px solid ${BORDER_COLOR}`} borderBottom={`1px solid ${BORDER_COLOR}`}>
+      <Box as="td" px={3} py={2} pl={`${indentLeft + 24}px`}>
+        <Text fontSize="11px" fontWeight="700" color={TEXT_COLOR}>Sub Total</Text>
+      </Box>
+      <Box as="td" px={3} py={2} textAlign="right">
+        <Text fontSize="11px" fontWeight="700" color={TEXT_COLOR}>{formatAmount(amount)}</Text>
+      </Box>
+    </Box>
+  );
+};
+
+// ============================================================
 // RECURSIVE GROUP ROW (screen)
 // ============================================================
 const GroupRowRecursive = ({ node, depth = 0, openMap, onToggle, showLedgers }) => {
   const hasChildren = node.children && node.children.length > 0;
   const hasLedgers = showLedgers && node.ledgers && node.ledgers.length > 0;
-  const isExpandable = hasChildren || hasLedgers;
-
-  const defaultOpen = true;
-  const isOpen = openMap[node.group_name] !== undefined ? openMap[node.group_name] : defaultOpen;
+  const hasAdjustment = !!node.subscription_adjustment;
+  
+  const isExpandable = hasChildren || hasLedgers || hasAdjustment;
+  const isOpen = openMap[node.group_name] !== undefined ? openMap[node.group_name] : true;
 
   const indentLeft = 12 + depth * 18;
   const fontSize = depth === 0 ? "12px" : depth === 1 ? "11.5px" : "11px";
@@ -117,10 +191,13 @@ const GroupRowRecursive = ({ node, depth = 0, openMap, onToggle, showLedgers }) 
             </Text>
           </HStack>
         </Box>
+        
         <Box as="td" px={3} py={2.5} textAlign="right">
-          <Text fontSize={fontSize} fontWeight={fontWeight} color={TEXT_COLOR}>
-            {formatAmount(node.amount)}
-          </Text>
+          {!isExpandable && (
+            <Text fontSize={fontSize} fontWeight={fontWeight} color={TEXT_COLOR}>
+              {formatAmount(node.amount)}
+            </Text>
+          )}
         </Box>
       </Box>
 
@@ -135,9 +212,20 @@ const GroupRowRecursive = ({ node, depth = 0, openMap, onToggle, showLedgers }) 
         </Box>
       ))}
 
+      {isOpen && hasAdjustment && (
+        <SubscriptionAdjustmentRows
+          adjustment={node.subscription_adjustment}
+          indentLeft={indentLeft}
+        />
+      )}
+
       {isOpen && hasChildren && node.children.map((child, i) => (
         <GroupRowRecursive key={`${node.group_name}-${child.group_name}-${i}`} node={child} depth={depth + 1} openMap={openMap} onToggle={onToggle} showLedgers={showLedgers} />
       ))}
+
+      {isOpen && isExpandable && (
+        <SubTotalRow amount={node.amount} depth={depth} />
+      )}
     </>
   );
 };
@@ -157,7 +245,7 @@ const GrandRow = ({ label, amount, bold = false }) => (
 );
 
 // ============================================================
-// ONE SIDE (Income / Expenditure) — screen
+// ONE SIDE (screen)
 // ============================================================
 const ReportSide = ({ title, groups, openMap, onToggle, showLedgers }) => (
   <Box as="table" width="100%" borderCollapse="collapse">
@@ -180,11 +268,14 @@ const ReportSide = ({ title, groups, openMap, onToggle, showLedgers }) => (
 );
 
 // ============================================================
-// PRINT-ONLY ROW COMPONENTS
+// PRINT ROW COMPONENTS
 // ============================================================
 const PrintGroupRows = ({ node, depth = 0, showLedgers }) => {
   const hasChildren = node.children && node.children.length > 0;
   const hasLedgers = showLedgers && node.ledgers && node.ledgers.length > 0;
+  const hasAdjustment = !!node.subscription_adjustment;
+  const isExpandable = hasChildren || hasLedgers || hasAdjustment;
+  
   const indentLeft = 8 + depth * 16;
   const fontSize = depth === 0 ? "11px" : depth === 1 ? "10.5px" : "10px";
   const fontWeight = depth <= 1 ? "700" : "600";
@@ -196,29 +287,46 @@ const PrintGroupRows = ({ node, depth = 0, showLedgers }) => {
         <td style={{ padding: "4px 8px", paddingLeft: `${indentLeft}px` }}>
           <span style={{ fontSize, fontWeight, color, fontFamily: "Georgia, serif" }}>{node.group_name}</span>
         </td>
+        
         <td style={{ padding: "4px 8px", textAlign: "right" }}>
-          <span style={{ fontSize, fontWeight, color: TEXT_COLOR, fontFamily: "Georgia, serif" }}>{formatAmount(node.amount)}</span>
+          {!isExpandable && (
+            <span style={{ fontSize, fontWeight, color: TEXT_COLOR, fontFamily: "Georgia, serif" }}>{formatAmount(node.amount)}</span>
+          )}
         </td>
       </tr>
+
       {hasLedgers && node.ledgers.map((led, i) => (
         <tr key={`${node.group_name}-led-${led.ledger_name}-${i}`} style={{ borderBottom: `1px solid ${BORDER_COLOR}`, backgroundColor: CREAM }}>
           <td style={{ padding: "2px 8px", paddingLeft: `${indentLeft + 28}px` }}>
-            <span style={{ fontSize: "9px", color: SECONDARY_TEXT, fontFamily: "Georgia, serif" }}>{led.ledger_name}</span>
+            <span style={{ fontSize: "9.5px", color: SECONDARY_TEXT, fontFamily: "Georgia, serif" }}>{led.ledger_name}</span>
           </td>
           <td style={{ padding: "2px 8px", textAlign: "right" }}>
-            <span style={{ fontSize: "9px", color: SECONDARY_TEXT, fontFamily: "Georgia, serif" }}>{formatAmount(led.amount)}</span>
+            <span style={{ fontSize: "9.5px", color: SECONDARY_TEXT, fontFamily: "Georgia, serif" }}>{formatAmount(led.amount)}</span>
           </td>
         </tr>
       ))}
+
+      {hasAdjustment && (
+        <SubscriptionAdjustmentRows
+          adjustment={node.subscription_adjustment}
+          indentLeft={indentLeft}
+          forPrint
+        />
+      )}
+
       {hasChildren && node.children.map((child, i) => (
         <PrintGroupRows key={`${node.group_name}-${child.group_name}-${i}`} node={child} depth={depth + 1} showLedgers={showLedgers} />
       ))}
+
+      {isExpandable && (
+        <SubTotalRow amount={node.amount} depth={depth} forPrint />
+      )}
     </>
   );
 };
 
 const PrintGrandRow = ({ label, amount, bold = false }) => (
-  <tr style={{ background: bold ? "#F5CED8" : "#F0F4FA", borderTop: bold ? `2px solid ${BORDER_COLOR}` : "none", borderBottom: `1px solid ${BORDER_COLOR}` }}>
+  <tr className="print-footer-block" style={{ background: bold ? "#F5CED8" : "#F0F4FA", borderTop: bold ? `2px solid ${BORDER_COLOR}` : "none", borderBottom: `1px solid ${BORDER_COLOR}` }}>
     <td style={{ padding: "4px 8px" }}>
       <span style={{ fontSize: "11px", fontWeight: "700", color: bold ? DARK_RED : LINK_BLUE, fontFamily: "Georgia, serif" }}>{label}</span>
     </td>
@@ -229,53 +337,66 @@ const PrintGrandRow = ({ label, amount, bold = false }) => (
 );
 
 // ============================================================
-// PRINT CONTENT COMPONENT
+// PRINT CONTENT
 // ============================================================
-const PrintContent = ({ incomeGroups, expenditureGroups, totalIncome, totalExpenditure, net, isSurplus, isDetailed }) => (
-  <div style={{ fontFamily: "Georgia, 'Times New Roman', serif", backgroundColor: CREAM, width: "100%" }}>
-    <div style={{ display: "flex", gap: "0", border: `1px solid ${BORDER_COLOR}`, backgroundColor: CREAM }}>
-      <div style={{ flex: 1, borderRight: `1px solid ${BORDER_COLOR}` }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "Georgia, serif", backgroundColor: CREAM }}>
-          <thead>
-            <tr style={{ background: "#F7F9FB", borderBottom: `1px solid ${BORDER_COLOR}` }}>
-              <th style={{ padding: "4px 8px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: TEXT_COLOR, fontFamily: "Georgia, serif" }}>Income</th>
-              <th style={{ padding: "4px 8px", textAlign: "right", width: "120px", fontSize: "11px", fontWeight: "700", color: TEXT_COLOR, fontFamily: "Georgia, serif" }}>Amount (₹)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {incomeGroups.map((g, i) => <PrintGroupRows key={`inc-${g.group_name}-${i}`} node={g} depth={0} showLedgers={isDetailed} />)}
-          </tbody>
-          <tfoot><PrintGrandRow label="TOTAL INCOME" amount={totalIncome} /></tfoot>
-        </table>
-      </div>
-      
-      <div style={{ flex: 1 }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "Georgia, serif", backgroundColor: CREAM }}>
-          <thead>
-            <tr style={{ background: "#F7F9FB", borderBottom: `1px solid ${BORDER_COLOR}` }}>
-              <th style={{ padding: "4px 8px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: TEXT_COLOR, fontFamily: "Georgia, serif" }}>Expenditure</th>
-              <th style={{ padding: "4px 8px", textAlign: "right", width: "120px", fontSize: "11px", fontWeight: "700", color: TEXT_COLOR, fontFamily: "Georgia, serif" }}>Amount (₹)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {expenditureGroups.map((g, i) => <PrintGroupRows key={`exp-${g.group_name}-${i}`} node={g} depth={0} showLedgers={isDetailed} />)}
-          </tbody>
-          <tfoot>
-            <PrintGrandRow label="TOTAL EXPENDITURE" amount={totalExpenditure} />
-            <PrintGrandRow label={isSurplus ? "SURPLUS OF INCOME OVER EXPENDITURE" : "DEFICIT OF EXPENDITURE OVER INCOME"} amount={Math.abs(net)} />
-            <PrintGrandRow label="TOTAL" amount={totalIncome} bold />
-          </tfoot>
-        </table>
-      </div>
-    </div>
+const PrintContent = ({ incomeGroups, expenditureGroups, totalIncome, totalExpenditure, net, isSurplus, isDetailed }) => {
+  const grandTotal = Math.max(totalIncome, totalExpenditure);
 
-    <div style={{ marginTop: "8px", padding: "6px 16px", border: `1px solid ${BORDER_COLOR}`, borderRadius: "6px", background: "#F8FAFC", textAlign: "center", fontFamily: "Georgia, serif" }}>
-      <span style={{ fontSize: "11px", fontWeight: "600", color: TEXT_COLOR }}>Net {isSurplus ? "Surplus" : "Deficit"}: </span>
-      <span style={{ fontSize: "12px", fontWeight: "700", color: PRIMARY_RED }}>{formatAmount(Math.abs(net))}</span>
-      <span style={{ fontSize: "11px", color: SECONDARY_TEXT }}> — {isSurplus ? "Income exceeds expenditure" : "Expenditure exceeds income"}</span>
+  return (
+    <div style={{ fontFamily: "Georgia, 'Times New Roman', serif", backgroundColor: CREAM, width: "100%" }}>
+      <div style={{ display: "flex", gap: "0", border: `1px solid ${BORDER_COLOR}`, backgroundColor: CREAM }}>
+        <div style={{ flex: 1, borderRight: `1px solid ${BORDER_COLOR}` }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "Georgia, serif", backgroundColor: CREAM }}>
+            <thead>
+              <tr style={{ background: "#F7F9FB", borderBottom: `1px solid ${BORDER_COLOR}` }}>
+                <th style={{ padding: "4px 8px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: TEXT_COLOR, fontFamily: "Georgia, serif" }}>Income</th>
+                <th style={{ padding: "4px 8px", textAlign: "right", width: "120px", fontSize: "11px", fontWeight: "700", color: TEXT_COLOR, fontFamily: "Georgia, serif" }}>Amount (₹)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {incomeGroups.map((g, i) => <PrintGroupRows key={`inc-${g.group_name}-${i}`} node={g} depth={0} showLedgers={isDetailed} />)}
+            </tbody>
+            <tfoot>
+              <PrintGrandRow label="TOTAL INCOME" amount={totalIncome} />
+              {!isSurplus && (
+                <PrintGrandRow label="DEFICIT OF EXPENDITURE OVER INCOME" amount={Math.abs(net)} />
+              )}
+              <PrintGrandRow label="TOTAL" amount={grandTotal} bold />
+            </tfoot>
+          </table>
+        </div>
+
+        <div style={{ flex: 1 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "Georgia, serif", backgroundColor: CREAM }}>
+            <thead>
+              <tr style={{ background: "#F7F9FB", borderBottom: `1px solid ${BORDER_COLOR}` }}>
+                <th style={{ padding: "4px 8px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: TEXT_COLOR, fontFamily: "Georgia, serif" }}>Expenditure</th>
+                <th style={{ padding: "4px 8px", textAlign: "right", width: "120px", fontSize: "11px", fontWeight: "700", color: TEXT_COLOR, fontFamily: "Georgia, serif" }}>Amount (₹)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {expenditureGroups.map((g, i) => <PrintGroupRows key={`exp-${g.group_name}-${i}`} node={g} depth={0} showLedgers={isDetailed} />)}
+            </tbody>
+            <tfoot>
+              <PrintGrandRow label="TOTAL EXPENDITURE" amount={totalExpenditure} />
+              {isSurplus && (
+                <PrintGrandRow label="SURPLUS OF INCOME OVER EXPENDITURE" amount={Math.abs(net)} />
+              )}
+              <PrintGrandRow label="TOTAL" amount={grandTotal} bold />
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      {/* ✅ ADDED className="print-footer-block" HERE */}
+      <div className="print-footer-block" style={{ marginTop: "8px", padding: "6px 16px", border: `1px solid ${BORDER_COLOR}`, borderRadius: "6px", background: "#F8FAFC", textAlign: "center", fontFamily: "Georgia, serif" }}>
+        <span style={{ fontSize: "11px", fontWeight: "600", color: TEXT_COLOR }}>Net {isSurplus ? "Surplus" : "Deficit"}: </span>
+        <span style={{ fontSize: "12px", fontWeight: "700", color: PRIMARY_RED }}>{formatAmount(Math.abs(net))}</span>
+        <span style={{ fontSize: "11px", color: SECONDARY_TEXT }}> — {isSurplus ? "Income exceeds expenditure" : "Expenditure exceeds income"}</span>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ============================================================
 // PAGE
@@ -292,7 +413,7 @@ const IncomeExpenditurePage = () => {
   const [loading, setLoading] = useState(false);
   const [pageError, setPageError] = useState("");
   const [isPrintOpen, setIsPrintOpen] = useState(false);
-  
+
   const [church, setChurch] = useState({ name: "", address: "" });
 
   useEffect(() => {
@@ -302,11 +423,7 @@ const IncomeExpenditurePage = () => {
         const c = res?.data ?? res ?? {};
         setChurch({
           name: c.name || "Church",
-          address:
-            c.full_address ||
-            c.address ||
-            [c.city, c.state, c.country].filter(Boolean).join(", ") ||
-            "",
+          address: c.full_address || c.address || [c.city, c.state, c.country].filter(Boolean).join(", ") || "",
         });
       } catch (err) {
         console.error("Failed to fetch church info", err);
@@ -348,6 +465,8 @@ const IncomeExpenditurePage = () => {
   const net = data?.net_surplus || 0;
   const isSurplus = data?.is_surplus ?? true;
 
+  const grandTotal = Math.max(totalIncome, totalExpenditure);
+
   const isDetailed = displayMode === "Detailed";
 
   const countNodes = (nodes) => nodes.reduce((s, n) => s + 1 + countNodes(n.children || []) + (n.ledgers?.length || 0), 0);
@@ -388,9 +507,6 @@ const IncomeExpenditurePage = () => {
           </Box>
 
           <HStack gap={3} flexWrap="wrap">
-            {/* <Button variant="outline" h="40px" px={5} borderColor={PRIMARY_RED} color={PRIMARY_RED} borderRadius="6px" fontSize="12px" fontWeight="600" onClick={() => navigate("/reports")} _hover={{ bg: "#FFF5F7" }} leftIcon={<ArrowLeftIcon />}>
-              Back
-            </Button> */}
             <Button variant="outline" h="40px" px={5} borderColor={PRIMARY_RED} color={PRIMARY_RED} borderRadius="6px" fontSize="12px" fontWeight="600" onClick={handleOpenPrint} isDisabled={!hasData} _hover={{ bg: "#FFF5F7" }} leftIcon={<PrinterIcon />}>
               Print
             </Button>
@@ -465,6 +581,10 @@ const IncomeExpenditurePage = () => {
                   <Box as="table" width="100%" borderCollapse="collapse">
                     <Box as="tbody">
                       <GrandRow label="TOTAL INCOME" amount={totalIncome} />
+                      {!isSurplus && (
+                        <GrandRow label="DEFICIT OF EXPENDITURE OVER INCOME" amount={Math.abs(net)} />
+                      )}
+                      <GrandRow label="TOTAL" amount={grandTotal} bold />
                     </Box>
                   </Box>
                 </Box>
@@ -476,8 +596,10 @@ const IncomeExpenditurePage = () => {
                   <Box as="table" width="100%" borderCollapse="collapse">
                     <Box as="tbody">
                       <GrandRow label="TOTAL EXPENDITURE" amount={totalExpenditure} />
-                      <GrandRow label={isSurplus ? "SURPLUS OF INCOME OVER EXPENDITURE" : "DEFICIT OF EXPENDITURE OVER INCOME"} amount={Math.abs(net)} />
-                      <GrandRow label="TOTAL" amount={totalIncome} bold />
+                      {isSurplus && (
+                        <GrandRow label="SURPLUS OF INCOME OVER EXPENDITURE" amount={Math.abs(net)} />
+                      )}
+                      <GrandRow label="TOTAL" amount={grandTotal} bold />
                     </Box>
                   </Box>
                 </Box>
@@ -498,13 +620,13 @@ const IncomeExpenditurePage = () => {
         </Flex>
       </Container>
 
-      <ChurchPrintModal 
-        isOpen={isPrintOpen} 
-        onClose={() => setIsPrintOpen(false)} 
-        title={`INCOME & EXPENDITURE ${isDetailed ? "STATEMENT" : "SUMMARY"}`} 
-        subtitle={printSubtitle} 
-        church={church} 
-        pdfFileName={`income-expenditure-${dateFrom}-to-${dateTo}.pdf`} 
+      <ChurchPrintModal
+        isOpen={isPrintOpen}
+        onClose={() => setIsPrintOpen(false)}
+        title={`INCOME & EXPENDITURE ${isDetailed ? "STATEMENT" : "SUMMARY"}`}
+        subtitle={printSubtitle}
+        church={church}
+        pdfFileName={`income-expenditure-${dateFrom}-to-${dateTo}.pdf`}
         defaultOrientation="landscape"
       >
         <PrintContent incomeGroups={incomeGroups} expenditureGroups={expenditureGroups} totalIncome={totalIncome} totalExpenditure={totalExpenditure} net={net} isSurplus={isSurplus} isDetailed={isDetailed} />

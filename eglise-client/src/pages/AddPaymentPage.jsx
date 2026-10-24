@@ -18,13 +18,13 @@ import { LuSearch, LuX, LuChevronDown } from "react-icons/lu";
 
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import BankAccountSelect from "../components/BankAccountSelect";
 
 import {
   createPayment,
   getPayment,
   updatePayment,
   listAccountLedgers,
-  listBankAccounts,
 } from "../api/registryServices";
 
 const PRIMARY_RED = "#D7193F";
@@ -47,7 +47,6 @@ const TRANSACTION_TYPES = [
   { value: "CASH", label: "Cash" },
 ];
 
-// ✅ Only these natures are shown for a PAYMENT
 const PAYMENT_LEDGER_NATURES = ["EXPENSE", "LIABILITY"];
 
 const today = () => new Date().toISOString().split("T")[0];
@@ -75,7 +74,6 @@ const SearchableLedgerSelect = ({
     return options.filter((o) => o.label.toLowerCase().includes(q));
   }, [options, query]);
 
-  // Close on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (containerRef.current && !containerRef.current.contains(e.target)) {
@@ -234,7 +232,6 @@ const AddPaymentPage = () => {
   const isEdit = Boolean(id);
 
   const [ledgers, setLedgers] = useState([]);
-  const [banks, setBanks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -248,29 +245,21 @@ const AddPaymentPage = () => {
     party_name: "",
     payment_type: "BANK",
     payment_mode: "BANK_TRANSFER",
-    bank_account: "",
+    bank_account: null,
     account_ledger: "",
     amount: "",
     narration: "",
   });
 
-  // =========================================================
-  // LOAD
-  // =========================================================
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
         setPageError("");
 
-        const [lRes, bRes] = await Promise.all([
-          listAccountLedgers(),
-          listBankAccounts(),
-        ]);
-
+        const lRes = await listAccountLedgers();
         const all = lRes?.data?.results ?? lRes?.data ?? [];
 
-        // ✅ Filter + sort ledgers for a PAYMENT
         const filtered = (Array.isArray(all) ? all : [])
           .filter((l) =>
             PAYMENT_LEDGER_NATURES.includes(
@@ -285,7 +274,6 @@ const AddPaymentPage = () => {
           });
 
         setLedgers(filtered);
-        setBanks(bRes?.data?.results ?? bRes?.data ?? []);
 
         if (isEdit) {
           const pRes = await getPayment(id);
@@ -297,7 +285,7 @@ const AddPaymentPage = () => {
             party_name: p.party_name || "",
             payment_type: p.payment_type || "BANK",
             payment_mode: p.payment_mode || "BANK_TRANSFER",
-            bank_account: p.bank_account ? String(p.bank_account) : "",
+            bank_account: p.bank_account ? Number(p.bank_account) : null,
             account_ledger: p.account_ledger ? String(p.account_ledger) : "",
             amount: p.amount ?? "",
             narration: p.narration || "",
@@ -314,25 +302,11 @@ const AddPaymentPage = () => {
     load();
   }, [id, isEdit]);
 
-  // =========================================================
-  // MEMOS
-  // =========================================================
   const showBankField = formData.payment_type === "BANK";
 
-  const bankOptions = useMemo(
-    () =>
-      banks
-        .filter((b) => b.is_active !== false)
-        .map((b) => ({
-          value: String(b.id),
-          label:
-            b.display_name ||
-            `${b.bank_name} ${b.masked_account_number || ""}`,
-        })),
-    [banks]
-  );
+  // ✅ Bank payment requires a bank account
+  const bankRequired = showBankField && !formData.bank_account;
 
-  // ✅ Show "Ledger Name (Group Name)" to disambiguate duplicates
   const ledgerOptions = useMemo(
     () =>
       ledgers.map((l) => ({
@@ -344,9 +318,6 @@ const AddPaymentPage = () => {
     [ledgers]
   );
 
-  // =========================================================
-  // HANDLERS
-  // =========================================================
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((p) => ({ ...p, [name]: value }));
@@ -354,7 +325,6 @@ const AddPaymentPage = () => {
     setPageError("");
   };
 
-  // ✅ Direct value setter (for searchable dropdown)
   const handleLedgerChange = (value) => {
     setFormData((p) => ({ ...p, account_ledger: value }));
     setFieldErrors((p) => ({ ...p, account_ledger: undefined }));
@@ -367,7 +337,7 @@ const AddPaymentPage = () => {
       ...p,
       payment_type: v,
       payment_mode: v === "CASH" ? "CASH" : "BANK_TRANSFER",
-      bank_account: v === "CASH" ? "" : p.bank_account,
+      bank_account: v === "CASH" ? null : p.bank_account,
     }));
     setFieldErrors((p) => ({
       ...p,
@@ -376,9 +346,6 @@ const AddPaymentPage = () => {
     }));
   };
 
-  // =========================================================
-  // VALIDATION
-  // =========================================================
   const validate = () => {
     const e = {};
     if (!formData.payment_date) e.payment_date = "Date is required.";
@@ -388,13 +355,16 @@ const AddPaymentPage = () => {
     if (!formData.account_ledger) e.account_ledger = "Account ledger is required.";
     if (!formData.amount || Number(formData.amount) <= 0)
       e.amount = "Amount must be greater than zero.";
+
+    // ✅ Bank payments require a bank account
+    if (formData.payment_type === "BANK" && !formData.bank_account) {
+      e.bank_account = "Bank account is required for bank payments.";
+    }
+
     setFieldErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  // =========================================================
-  // SUBMIT
-  // =========================================================
   const handleSubmit = async (e) => {
     e.preventDefault();
     setPageError("");
@@ -469,7 +439,6 @@ const AddPaymentPage = () => {
       <Navbar />
 
       <Container maxW="1400px" px={{ base: 4, md: 5 }} pt={3} pb={6} flex="1">
-        {/* BREADCRUMB */}
         <HStack gap={2} mb={2} fontSize="11px">
           <Text color={BLUE}>Activities</Text>
           <Text color="#A2ACBB">/</Text>
@@ -480,7 +449,6 @@ const AddPaymentPage = () => {
           </Text>
         </HStack>
 
-        {/* HEADER */}
         <Box mb={4}>
           <Text
             color={PRIMARY_RED}
@@ -506,7 +474,6 @@ const AddPaymentPage = () => {
           </Text>
         </Box>
 
-        {/* FORM CARD */}
         <Box
           bg="white"
           px={{ base: 4, md: 6 }}
@@ -532,7 +499,6 @@ const AddPaymentPage = () => {
             )}
 
             <SimpleGrid columns={{ base: 1, md: 2 }} gap={4}>
-              {/* DATE */}
               <FormField label="Date" required error={fieldErrors.payment_date}>
                 <Input
                   type="date"
@@ -550,7 +516,6 @@ const AddPaymentPage = () => {
                 />
               </FormField>
 
-              {/* VOUCHER NUMBER */}
               <FormField label="Voucher Number" required>
                 <HStack gap={2}>
                   <Input
@@ -579,7 +544,6 @@ const AddPaymentPage = () => {
                 </HStack>
               </FormField>
 
-              {/* REF NO */}
               <FormField label="Ref Number" error={fieldErrors.ref_no}>
                 <Input
                   name="ref_no"
@@ -597,7 +561,6 @@ const AddPaymentPage = () => {
                 />
               </FormField>
 
-              {/* PARTY NAME */}
               <FormField label="Party Name" required error={fieldErrors.party_name}>
                 <Input
                   name="party_name"
@@ -615,7 +578,6 @@ const AddPaymentPage = () => {
                 />
               </FormField>
 
-              {/* PAYMENT TYPE */}
               <FormField label="Payment Type" required error={fieldErrors.payment_type}>
                 <SelectWrapper error={fieldErrors.payment_type}>
                   <Box
@@ -646,7 +608,6 @@ const AddPaymentPage = () => {
                 </SelectWrapper>
               </FormField>
 
-              {/* TRANSACTION TYPE */}
               <FormField label="Transaction Type" required error={fieldErrors.payment_mode}>
                 <SelectWrapper error={fieldErrors.payment_mode}>
                   <Box
@@ -677,44 +638,42 @@ const AddPaymentPage = () => {
                 </SelectWrapper>
               </FormField>
 
-              {/* BANK ACCOUNT */}
-              <FormField label="Bank Account" error={fieldErrors.bank_account}>
-                <SelectWrapper error={fieldErrors.bank_account}>
-                  <Box
-                    as="select"
-                    name="bank_account"
+              {/* ✅ BANK ACCOUNT — required for BANK, hidden for CASH */}
+              <Box>
+                {showBankField ? (
+                  <BankAccountSelect
                     value={formData.bank_account}
-                    onChange={handleChange}
-                    disabled={!showBankField}
-                    width="100%"
-                    height="40px"
-                    fontSize="12px"
-                    color={formData.bank_account ? TEXT_COLOR : SECONDARY_TEXT}
-                    border={`1px solid ${
-                      fieldErrors.bank_account ? "#F56565" : BORDER_COLOR
-                    }`}
-                    borderRadius="6px"
-                    bg={!showBankField ? "#F7F9FB" : "white"}
-                    appearance="none"
-                    px="11px"
-                    outline="none"
-                    cursor={!showBankField ? "not-allowed" : "pointer"}
-                  >
-                    <option value="">
-                      {!showBankField
-                        ? "Not applicable for Cash"
-                        : "Select Bank Account (optional)"}
-                    </option>
-                    {bankOptions.map((b) => (
-                      <option key={b.value} value={b.value}>
-                        {b.label}
-                      </option>
-                    ))}
-                  </Box>
-                </SelectWrapper>
-              </FormField>
+                    onChange={(id) =>
+                      setFormData((p) => ({ ...p, bank_account: id }))
+                    }
+                    label="Bank Account"
+                    isRequired={true}
+                    errorText={fieldErrors.bank_account}
+                  />
+                ) : (
+                  <>
+                    <Text
+                      fontSize="11px"
+                      fontWeight="600"
+                      color={TEXT_COLOR}
+                      mb={1.5}
+                    >
+                      Bank Account
+                    </Text>
+                    <Input
+                      value="Not applicable for Cash"
+                      isReadOnly
+                      bg="#F7F9FB"
+                      color={SECONDARY_TEXT}
+                      h="40px"
+                      fontSize="12px"
+                      borderColor={BORDER_COLOR}
+                      borderRadius="6px"
+                    />
+                  </>
+                )}
+              </Box>
 
-              {/* ACCOUNT LEDGER — Searchable */}
               <FormField
                 label="Account Ledger"
                 required
@@ -729,7 +688,6 @@ const AddPaymentPage = () => {
                 />
               </FormField>
 
-              {/* AMOUNT */}
               <FormField label="Amount" required error={fieldErrors.amount}>
                 <Input
                   type="number"
@@ -749,7 +707,6 @@ const AddPaymentPage = () => {
               </FormField>
             </SimpleGrid>
 
-            {/* NARRATION */}
             <Box mt={4}>
               <FormField label="Narration" error={fieldErrors.narration}>
                 <Textarea
@@ -770,8 +727,22 @@ const AddPaymentPage = () => {
               </FormField>
             </Box>
 
-            {/* SUBMIT */}
-            <Flex justify="flex-end" mt={5}>
+            <Flex
+              justify="flex-end"
+              mt={5}
+              direction="column"
+              align="flex-end"
+            >
+              {bankRequired && (
+                <Text
+                  fontSize="11px"
+                  color="red.500"
+                  mb={2}
+                  textAlign="right"
+                >
+                  Bank account is required for bank payments.
+                </Text>
+              )}
               <Button
                 type="submit"
                 bg={PRIMARY_RED}

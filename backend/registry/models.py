@@ -3225,6 +3225,12 @@ class BankAccount(models.Model):
     ifsc_code = models.CharField(max_length=20, blank=True, null=True)
     branch = models.CharField(max_length=150, blank=True, null=True)
     is_active = models.BooleanField(default=True)
+    opening_balance = models.DecimalField(
+        max_digits=15, 
+        decimal_places=2, 
+        default=0.00,
+        help_text="Initial balance when the account was added"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -3435,6 +3441,23 @@ class CommitteeMaster(models.Model):
     committee_from_date = models.DateField()
 
     committee_to_date = models.DateField()
+    # ✅ NEW FIELDS
+    president = models.ForeignKey(
+        'Priest', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='presided_committees',
+        help_text="Active Vicar"
+    )
+    vice_president = models.ForeignKey(
+        'Priest', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='vice_presided_committees',
+        help_text="Active Assistant Vicar"
+    )
 
     # Multiple committee members
     # Example:

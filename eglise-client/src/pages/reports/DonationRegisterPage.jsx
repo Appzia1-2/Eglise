@@ -33,11 +33,6 @@ const LINK_BLUE = "#2B5CE6";
 // ============================================================
 // ICONS
 // ============================================================
-const ArrowLeftIcon = ({ size = 15, color = PRIMARY_RED }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <path d="M19 12H5M12 19l-7-7 7-7" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
 const PrinterIcon = ({ size = 15, color = PRIMARY_RED }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -94,8 +89,7 @@ const formatDateShort = (iso) => {
 };
 
 // ============================================================
-// SEARCHABLE SELECT (generic — same component used on other
-// report pages, extracted here for convenience)
+// SEARCHABLE SELECT (generic)
 // ============================================================
 const SearchableSelect = ({
   options,
@@ -554,6 +548,13 @@ const DonationRegisterPage = () => {
   }, []);
 
   const fetchData = async () => {
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+      setPageError("Date From cannot be later than Date To.");
+      setRows([]);
+      setTotal(0);
+      return;
+    }
+
     try {
       setLoading(true);
       setPageError("");
@@ -579,10 +580,11 @@ const DonationRegisterPage = () => {
     }
   };
 
+  // ✅ Only fetch on mount. The Filter button triggers subsequent fetches.
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [donorId, dateFrom, dateTo, paymentMode, sortBy]);
+  }, []);
 
   const periodLabel = `${formatDateShort(dateFrom)} – ${formatDateShort(dateTo)}`;
 
@@ -641,21 +643,6 @@ const DonationRegisterPage = () => {
           </Box>
 
           <HStack gap={3} flexWrap="wrap">
-            <Button
-              variant="outline"
-              h="40px"
-              px={5}
-              borderColor={PRIMARY_RED}
-              color={PRIMARY_RED}
-              borderRadius="6px"
-              fontSize="12px"
-              fontWeight="600"
-              onClick={() => navigate("/reports")}
-              _hover={{ bg: "#FFF5F7" }}
-              leftIcon={<ArrowLeftIcon />}
-            >
-              Back
-            </Button>
             <Button
               variant="outline"
               h="40px"
@@ -732,6 +719,7 @@ const DonationRegisterPage = () => {
                 <Input
                   type="date"
                   value={dateFrom}
+                  max={dateTo || undefined}
                   onChange={(e) => setDateFrom(e.target.value)}
                   h="40px"
                   fontSize="12px"
@@ -759,6 +747,8 @@ const DonationRegisterPage = () => {
                 <Input
                   type="date"
                   value={dateTo}
+                  min={dateFrom || undefined}
+                  max={today()}
                   onChange={(e) => setDateTo(e.target.value)}
                   h="40px"
                   fontSize="12px"

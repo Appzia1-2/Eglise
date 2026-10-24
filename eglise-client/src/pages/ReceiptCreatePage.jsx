@@ -27,13 +27,13 @@ import {
 
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import BankAccountSelect from "../components/BankAccountSelect";
 
 import { toaster } from "../components/ui/toaster";
 
 import {
   listMembers,
   listAccountLedgers,
-  listBankAccounts,
   createReceipt,
 } from "../api/registryServices";
 
@@ -44,10 +44,6 @@ const RED = "#D7193F";
 const DARK = "#182338";
 const MUTED = "#60708C";
 const BORDER = "#DCE2EA";
-
-// ============================================================
-// LEDGER FILTER FOR RECEIPTS
-// ============================================================
 
 const RECEIPT_LEDGER_NATURES = ["INCOME"];
 
@@ -259,7 +255,6 @@ const ReceiptCreatePage = () => {
 
   const [members, setMembers] = useState([]);
   const [ledgers, setLedgers] = useState([]);
-  const [bankAccounts, setBankAccounts] = useState([]);
 
   const [form, setForm] = useState({
     receipt_date: today(),
@@ -267,7 +262,7 @@ const ReceiptCreatePage = () => {
     member: "",
     payment_type: "BANK",
     transaction_type: "BANK_TRANSFER",
-    bank_account: "",
+    bank_account: null,
     narration: "",
     lines: [emptyLine()],
   });
@@ -275,10 +270,9 @@ const ReceiptCreatePage = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const [mRes, lRes, bRes] = await Promise.all([
+        const [mRes, lRes] = await Promise.all([
           listMembers(),
           listAccountLedgers(),
-          listBankAccounts(),
         ]);
 
         const toArray = (r) => {
@@ -289,8 +283,6 @@ const ReceiptCreatePage = () => {
         const allLedgers = toArray(lRes);
         const allMembers = toArray(mRes);
 
-        // ✅ Filter + sort ledgers for a RECEIPT
-        //    INCOME only, cash/bank excluded, closing excluded.
         const receiptLedgers = allLedgers
           .filter(isReceiptLedger)
           .sort((a, b) => {
@@ -300,14 +292,12 @@ const ReceiptCreatePage = () => {
             return (a.ledger_name || "").localeCompare(b.ledger_name || "");
           });
 
-        // ✅ NEW: Filter out dead/expired/inactive members
         const activeMembers = allMembers.filter(
           (m) => m.is_active && !m.expired
         );
 
         setMembers(activeMembers);
         setLedgers(receiptLedgers);
-        setBankAccounts(toArray(bRes));
       } catch (err) {
         console.error(err);
         toaster.create({
@@ -345,11 +335,27 @@ const ReceiptCreatePage = () => {
     [form.lines]
   );
 
+  // ✅ Bank receipt requires a bank account
+  const bankRequired =
+    form.payment_type === "BANK" && !form.bank_account;
+
   const handleSave = async () => {
     if (!form.member) {
       toaster.create({ title: "Member is required", type: "error" });
       return;
     }
+
+    // ✅ Bank receipts require a bank account
+    if (bankRequired) {
+      toaster.create({
+        title: "Bank account is required",
+        description:
+          "Select a bank account, or add one if none exist yet.",
+        type: "error",
+      });
+      return;
+    }
+
     if (!form.lines.length) {
       toaster.create({ title: "At least one line is required", type: "error" });
       return;
@@ -598,7 +604,16 @@ const ReceiptCreatePage = () => {
                 <select
                   value={form.payment_type}
                   onChange={(e) =>
-                    setForm({ ...form, payment_type: e.target.value })
+                    setForm((f) => ({
+                      ...f,
+                      payment_type: e.target.value,
+                      bank_account:
+                        e.target.value === "CASH" ? null : f.bank_account,
+                      transaction_type:
+                        e.target.value === "CASH"
+                          ? "CASH"
+                          : f.transaction_type,
+                    }))
                   }
                   style={{
                     width: "100%",
@@ -673,51 +688,39 @@ const ReceiptCreatePage = () => {
               </Box>
             </Box>
 
+            {/* ✅ BANK ACCOUNT — required for BANK, hidden for CASH */}
             <Box flex="1">
-              <Text fontSize="12px" fontWeight="600" color={DARK} mb={1}>
-                Bank Account
-              </Text>
-              <Box position="relative">
-                <select
+              {form.payment_type === "BANK" ? (
+                <BankAccountSelect
                   value={form.bank_account}
-                  onChange={(e) =>
-                    setForm({ ...form, bank_account: e.target.value })
+                  onChange={(id) =>
+                    setForm((f) => ({ ...f, bank_account: id }))
                   }
-                  disabled={form.payment_type === "CASH"}
-                  style={{
-                    width: "100%",
-                    height: "40px",
-                    border: `1px solid ${BORDER}`,
-                    borderRadius: "6px",
-                    padding: "0 35px 0 12px",
-                    fontSize: "13px",
-                    background:
-                      form.payment_type === "CASH" ? "#F7F9FB" : "white",
-                    color: DARK,
-                    appearance: "none",
-                    cursor:
-                      form.payment_type === "CASH" ? "not-allowed" : "pointer",
-                  }}
-                >
-                  <option value="">Select bank account</option>
-                  {bankAccounts.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.display_name ||
-                        `${b.bank_name} ${b.masked_account_number || ""}`}
-                    </option>
-                  ))}
-                </select>
-                <Icon
-                  as={LuChevronDown}
-                  position="absolute"
-                  right="12px"
-                  top="50%"
-                  transform="translateY(-50%)"
-                  color={MUTED}
-                  boxSize={4}
-                  pointerEvents="none"
+                  label="Bank Account"
+                  isRequired={true}
+                  errorText={
+                    bankRequired
+                      ? "Bank account is required for bank receipts."
+                      : undefined
+                  }
                 />
-              </Box>
+              ) : (
+                <>
+                  <Text fontSize="12px" fontWeight="600" color={DARK} mb={1}>
+                    Bank Account
+                  </Text>
+                  <Input
+                    value="Not applicable for Cash"
+                    isReadOnly
+                    bg="#F7F9FB"
+                    color={MUTED}
+                    h="40px"
+                    borderColor={BORDER}
+                    borderRadius="6px"
+                    fontSize="13px"
+                  />
+                </>
+              )}
             </Box>
           </Flex>
 
@@ -900,7 +903,12 @@ const ReceiptCreatePage = () => {
             />
           </Box>
 
-          <Flex justify="flex-end">
+          <Flex justify="flex-end" direction="column" align="flex-end">
+            {bankRequired && (
+              <Text fontSize="11px" color="red.500" mb={2} textAlign="right">
+                Bank account is required for bank receipts.
+              </Text>
+            )}
             <Button
               bg={RED}
               color="white"

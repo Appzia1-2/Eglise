@@ -36,6 +36,22 @@ const formatDate = (s) => {
   });
 };
 
+// ============================================================
+// NATURE-AWARE BALANCE COLUMN PICKER
+// ============================================================
+//
+// ASSET / EXPENSE  → +ve = Debit, -ve = Credit
+// LIABILITY / INCOME / EQUITY → +ve = Credit, -ve = Debit
+//
+const isDebitNature = (nature) =>
+  nature === "ASSET" || nature === "EXPENSE";
+
+const balanceOnDebitSide = (amount, nature) => {
+  const dn = isDebitNature(nature);
+  const positive = amount >= 0;
+  return (dn && positive) || (!dn && !positive);
+};
+
 const ReportLedgerTable = ({
   rows = [],
   isLoading,
@@ -43,13 +59,14 @@ const ReportLedgerTable = ({
   totalDebit,
   totalCredit,
   closingBalance,
+  ledgerNature = "ASSET",        // ✅ new — defaults to ASSET for cash/bank reports
   totals,
   showTotals = false,
 }) => {
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
-  // ✅ FIXED: Credit = Money In, Debit = Money Out
+  // Sum only from `rows` (whole period) — not paginated
   const computedTotals = useMemo(() => {
     let credit = 0;
     let debit = 0;
@@ -61,7 +78,6 @@ const ReportLedgerTable = ({
     return { credit, debit };
   }, [rows]);
 
-  // ✅ FIXED: Map the props correctly to their respective columns
   const finalCredit =
     totals?.credit !== undefined
       ? totals.credit
@@ -79,6 +95,19 @@ const ReportLedgerTable = ({
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const startIdx = (page - 1) * pageSize;
   const pageRows = rows.slice(startIdx, startIdx + pageSize);
+
+  // ✅ Column placement for opening / closing
+  const openingOnDebit =
+    openingBalance !== undefined
+      ? balanceOnDebitSide(toNumber(openingBalance), ledgerNature)
+      : true;
+  const openingAmount = Math.abs(toNumber(openingBalance));
+
+  const closingOnDebit =
+    closingBalance !== undefined
+      ? balanceOnDebitSide(toNumber(closingBalance), ledgerNature)
+      : true;
+  const closingAmount = Math.abs(toNumber(closingBalance));
 
   const columns = [
     { key: "date", label: "Date", align: "left" },
@@ -137,7 +166,8 @@ const ReportLedgerTable = ({
               </Box>
             ) : (
               <>
-                {openingBalance !== undefined && (
+                {/* ✅ Opening Balance — shown on page 1 only, placed by nature */}
+                {openingBalance !== undefined && page === 1 && (
                   <Box as="tr" bg={HIGHLIGHT_BG}>
                     <Box
                       as="td"
@@ -161,8 +191,9 @@ const ReportLedgerTable = ({
                       fontWeight="700"
                       color={BLUE}
                       borderBottom={`1px solid ${BORDER}`}
+                      whiteSpace="nowrap"
                     >
-                      —
+                      {openingOnDebit ? "—" : formatAmount(openingAmount)}
                     </Box>
                     <Box
                       as="td"
@@ -173,8 +204,9 @@ const ReportLedgerTable = ({
                       fontWeight="700"
                       color={BLUE}
                       borderBottom={`1px solid ${BORDER}`}
+                      whiteSpace="nowrap"
                     >
-                      {formatAmount(openingBalance)}
+                      {openingOnDebit ? formatAmount(openingAmount) : "—"}
                     </Box>
                   </Box>
                 )}
@@ -197,6 +229,7 @@ const ReportLedgerTable = ({
                     const amt = toNumber(r.amount);
                     const isCredit = r.direction === "CREDIT";
                     const isDebit = r.direction === "DEBIT";
+                    const memberName = r.memberName || r.member_name || "";
 
                     return (
                       <Box
@@ -230,8 +263,6 @@ const ReportLedgerTable = ({
                         >
                           {r.voucherNo || "—"}
                         </Box>
-                        
-                        {/* ✅ UPDATED: Render Member/Party Name below the ledger name */}
                         <Box
                           as="td"
                           px={4}
@@ -242,13 +273,12 @@ const ReportLedgerTable = ({
                           borderBottom={`1px solid ${BORDER}`}
                         >
                           <Text>{r.particulars || r.account || "—"}</Text>
-                          {r.memberName && (
+                          {memberName && (
                             <Text fontSize="11px" color={MUTED} mt={0.5}>
-                              {r.memberName}
+                              {memberName}
                             </Text>
                           )}
                         </Box>
-
                         <Box
                           as="td"
                           px={4}
@@ -274,8 +304,6 @@ const ReportLedgerTable = ({
                         >
                           {r.cashBankAccount || r.cashBank || "—"}
                         </Box>
-
-                        {/* ✅ FIXED: Credit column */}
                         <Box
                           as="td"
                           px={4}
@@ -289,8 +317,6 @@ const ReportLedgerTable = ({
                         >
                           {isCredit && amt > 0 ? formatAmount(amt) : "—"}
                         </Box>
-
-                        {/* ✅ FIXED: Debit column */}
                         <Box
                           as="td"
                           px={4}
@@ -309,7 +335,8 @@ const ReportLedgerTable = ({
                   })
                 )}
 
-                {showTotals && rows.length > 0 && (
+                {/* Total — only on last page */}
+                {showTotals && rows.length > 0 && page === totalPages && (
                   <Box as="tr" bg={HIGHLIGHT_BG}>
                     <Box
                       as="td"
@@ -353,48 +380,52 @@ const ReportLedgerTable = ({
                   </Box>
                 )}
 
-                {closingBalance !== undefined && rows.length > 0 && (
-                  <Box as="tr" bg={HIGHLIGHT_BG}>
-                    <Box
-                      as="td"
-                      colSpan={5}
-                      px={4}
-                      py="10px"
-                      textAlign="center"
-                      fontSize="13px"
-                      fontWeight="700"
-                      color={BLUE}
-                      borderBottom={`1px solid ${BORDER}`}
-                    >
-                      Closing Balance
+                {/* ✅ Closing Balance — on last page only, placed by nature */}
+                {closingBalance !== undefined &&
+                  rows.length > 0 &&
+                  page === totalPages && (
+                    <Box as="tr" bg={HIGHLIGHT_BG}>
+                      <Box
+                        as="td"
+                        colSpan={5}
+                        px={4}
+                        py="10px"
+                        textAlign="center"
+                        fontSize="13px"
+                        fontWeight="700"
+                        color={BLUE}
+                        borderBottom={`1px solid ${BORDER}`}
+                      >
+                        Closing Balance
+                      </Box>
+                      <Box
+                        as="td"
+                        px={4}
+                        py="10px"
+                        textAlign="right"
+                        fontSize="13px"
+                        fontWeight="700"
+                        color={BLUE}
+                        borderBottom={`1px solid ${BORDER}`}
+                        whiteSpace="nowrap"
+                      >
+                        {closingOnDebit ? "—" : formatAmount(closingAmount)}
+                      </Box>
+                      <Box
+                        as="td"
+                        px={4}
+                        py="10px"
+                        textAlign="right"
+                        fontSize="13px"
+                        fontWeight="700"
+                        color={BLUE}
+                        borderBottom={`1px solid ${BORDER}`}
+                        whiteSpace="nowrap"
+                      >
+                        {closingOnDebit ? formatAmount(closingAmount) : "—"}
+                      </Box>
                     </Box>
-                    <Box
-                      as="td"
-                      px={4}
-                      py="10px"
-                      textAlign="right"
-                      fontSize="13px"
-                      fontWeight="700"
-                      color={BLUE}
-                      borderBottom={`1px solid ${BORDER}`}
-                    >
-                      —
-                    </Box>
-                    <Box
-                      as="td"
-                      px={4}
-                      py="10px"
-                      textAlign="right"
-                      fontSize="13px"
-                      fontWeight="700"
-                      color={BLUE}
-                      borderBottom={`1px solid ${BORDER}`}
-                      whiteSpace="nowrap"
-                    >
-                      {formatAmount(closingBalance)}
-                    </Box>
-                  </Box>
-                )}
+                  )}
               </>
             )}
           </Box>

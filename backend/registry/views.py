@@ -3574,6 +3574,11 @@ class AccountLedgerMasterListCreateView(generics.ListCreateAPIView):
             church=self.request.user.church
         ).order_by("ledger_name")
 
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx["church"] = self.request.user.church
+        return ctx
+
     def perform_create(self, serializer):
         serializer.save(church=self.request.user.church)
 
@@ -3584,6 +3589,11 @@ class AccountLedgerMasterDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return AccountLedgerMaster.objects.filter(church=self.request.user.church)
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx["church"] = self.request.user.church
+        return ctx
 
 
 from .models import BankAccount
@@ -3737,7 +3747,7 @@ class LedgerEntryListAPIView(ListAPIView):
     List ledger entries with optional filters:
 
       ?ledger=<id>
-      ?book=cash | bank      -> filter by ledger name/group
+      ?book=cash | bank
       ?from=YYYY-MM-DD
       ?to=YYYY-MM-DD
       ?include_cancelled=true
@@ -3746,6 +3756,15 @@ class LedgerEntryListAPIView(ListAPIView):
     """
     permission_classes = [IsAuthenticated, IsChurchUser]
     serializer_class = LedgerEntrySerializer
+
+    # ✅ Only the real cash/bank ledgers — no stale "Closing -"
+    CASH_LEDGERS = ["Cash in Hand"]
+    BANK_LEDGERS = [
+        "Balance in Savings Account",
+        "Balance in Deposit Account",
+        "Balance in Other Accounts",
+    ]
+    CASH_BANK_GROUP = "I. Opening Balances"
 
     def get_queryset(self):
         church = self.request.user.church
@@ -3764,35 +3783,37 @@ class LedgerEntryListAPIView(ListAPIView):
         if ledger_id:
             qs = qs.filter(ledger_id=ledger_id)
 
-        # ---------- book filter (cash / bank) ----------
+        # ---------- book filter ----------
         book = (self.request.query_params.get("book") or "").lower().strip()
 
-        if book in ("cash", "bank"):
-            cash_ledgers = [
-                "Cash in Hand", 
-                "Closing - Cash in Hand"
-            ]
-            bank_ledgers = [
-                "Balance in Savings Account", 
-                "Balance in Deposit Account", 
-                "Balance in Other Accounts",
-                "Closing - Savings Account",
-                "Closing - Deposit Account",
-                "Closing - Other Accounts"
-            ]
-            
-            target_ledgers = cash_ledgers if book == "cash" else bank_ledgers
-            
+        if book == "cash":
+            target = self.CASH_LEDGERS
+        elif book == "bank":
+            target = self.BANK_LEDGERS
+        else:
+            target = None
+
+        if target:
             matching_entries = LedgerEntry.objects.filter(
                 church=church,
-                ledger__ledger_name__in=target_ledgers
+                ledger__ledger_name__in=target,
+                ledger__account_group__group_name=self.CASH_BANK_GROUP,
             )
-            
-            receipt_ids = matching_entries.exclude(receipt_id__isnull=True).values_list('receipt_id', flat=True)
-            payment_ids = matching_entries.exclude(payment_id__isnull=True).values_list('payment_id', flat=True)
+
+            receipt_ids = matching_entries.exclude(
+                receipt_id__isnull=True
+            ).values_list('receipt_id', flat=True)
+            payment_ids = matching_entries.exclude(
+                payment_id__isnull=True
+            ).values_list('payment_id', flat=True)
+            contra_ids = matching_entries.exclude(
+                contra_id__isnull=True
+            ).values_list('contra_id', flat=True)
 
             qs = qs.filter(
-                Q(receipt_id__in=receipt_ids) | Q(payment_id__in=payment_ids)
+                Q(receipt_id__in=receipt_ids)
+                | Q(payment_id__in=payment_ids)
+                | Q(contra_id__in=contra_ids)
             )
 
         # ---------- date range ----------
@@ -3809,13 +3830,11 @@ class LedgerEntryListAPIView(ListAPIView):
         if include_cancelled not in ("true", "1", "yes"):
             qs = qs.filter(is_cancelled=False, is_reversal=False)
 
-        # Chronological order (oldest first) — required for running balance
         return qs.order_by("entry_date", "id")
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
 
-        # Build running balance map from the SAME queryset (already ordered asc)
         running_map = self._compute_running_balances(queryset)
 
         opening = 0.0
@@ -3828,11 +3847,8 @@ class LedgerEntryListAPIView(ListAPIView):
         date_to = self.request.query_params.get("to")
 
         if ledger_id:
-            # ==========================================
-            # SINGLE LEDGER MODE (e.g. General Ledger)
-            # ==========================================
+            # ============ SINGLE LEDGER MODE ============
             try:
-                from .models import AccountLedgerMaster
                 ledger = AccountLedgerMaster.objects.get(
                     id=ledger_id, church=request.user.church
                 )
@@ -3844,7 +3860,7 @@ class LedgerEntryListAPIView(ListAPIView):
                 )
                 total_debit = float(agg["debits"] or 0)
                 total_credit = float(agg["credits"] or 0)
-                
+
                 nature = (ledger.ledger_nature or "ASSET").upper()
                 if nature in ("ASSET", "EXPENSE"):
                     closing = opening + total_debit - total_credit
@@ -3853,38 +3869,37 @@ class LedgerEntryListAPIView(ListAPIView):
             except Exception:
                 pass
         else:
-            # ==========================================
-            # MULTI-LEDGER MODE (e.g. Day Book, Cash Book)
-            #
-            # Calculate combined Cash + Bank balance for the day
-            # before `date_from` as opening, and for `date_to` as closing.
-            # ==========================================
-            CASH_BANK_LEDGERS = [
-                "Cash in Hand",
-                "Balance in Savings Account",
-                "Balance in Deposit Account",
-                "Balance in Other Accounts",
-            ]
+            # ============ MULTI-LEDGER MODE ============
+            # ✅ Scope the opening/closing to the requested book.
+            #    - book="cash"  → only Cash in Hand
+            #    - book="bank"  → only the three bank ledgers
+            #    - no book       → all four (Day Book / combined view)
+            book_param = (self.request.query_params.get("book") or "").lower().strip()
 
-            from .models import AccountLedgerMaster
+            if book_param == "cash":
+                scoped_ledgers = self.CASH_LEDGERS
+            elif book_param == "bank":
+                scoped_ledgers = self.BANK_LEDGERS
+            else:
+                scoped_ledgers = self.CASH_LEDGERS + self.BANK_LEDGERS
 
-            # Opening balances of the ledgers themselves
             ledger_opening_total = sum(
                 float(l.op_balance or 0)
                 for l in AccountLedgerMaster.objects.filter(
                     church=request.user.church,
-                    ledger_name__in=CASH_BANK_LEDGERS,
+                    ledger_name__in=scoped_ledgers,
+                    account_group__group_name=self.CASH_BANK_GROUP,
                 )
             )
 
-            def get_cash_bank_balance(as_of_date):
-                """Returns Combined Cash + Bank balance up to (and including) as_of_date."""
+            def get_book_balance(as_of_date):
                 if not as_of_date:
                     return ledger_opening_total
-                
+
                 agg = LedgerEntry.objects.filter(
                     church=request.user.church,
-                    ledger__ledger_name__in=CASH_BANK_LEDGERS,
+                    ledger__ledger_name__in=scoped_ledgers,
+                    ledger__account_group__group_name=self.CASH_BANK_GROUP,
                     entry_date__lte=as_of_date,
                     is_cancelled=False,
                     is_reversal=False,
@@ -3892,28 +3907,23 @@ class LedgerEntryListAPIView(ListAPIView):
                     debits=Sum("amount", filter=Q(entry_type="DEBIT")),
                     credits=Sum("amount", filter=Q(entry_type="CREDIT")),
                 )
-                
+
                 debits = float(agg["debits"] or 0)
                 credits = float(agg["credits"] or 0)
-
-                # Cash and Bank are ASSETs: Balance = Opening + Debits - Credits
                 return ledger_opening_total + debits - credits
 
-            # Opening: as of the day BEFORE date_from
             if date_from:
                 try:
                     dt_from = datetime.strptime(date_from, "%Y-%m-%d").date()
                     day_before = dt_from - timedelta(days=1)
-                    opening = get_cash_bank_balance(day_before)
+                    opening = get_book_balance(day_before)
                 except (ValueError, TypeError):
                     opening = ledger_opening_total
             else:
                 opening = ledger_opening_total
 
-            # Closing: as of date_to (or today if no date_to)
-            closing = get_cash_bank_balance(date_to or datetime.now().date())
+            closing = get_book_balance(date_to or datetime.now().date())
 
-            # Total In / Out for the selected window
             agg = queryset.aggregate(
                 debits=Sum("amount", filter=Q(entry_type="DEBIT")),
                 credits=Sum("amount", filter=Q(entry_type="CREDIT")),
@@ -3931,7 +3941,7 @@ class LedgerEntryListAPIView(ListAPIView):
         )
 
         data = list(serializer.data)
-        data.reverse()  # newest first for display
+        data.reverse()
 
         return Response({
             "count": len(data),
@@ -3944,21 +3954,15 @@ class LedgerEntryListAPIView(ListAPIView):
 
     def _compute_running_balances(self, queryset):
         from collections import defaultdict
-        from .models import AccountLedgerMaster
 
         balances = defaultdict(lambda: None)
         ledger_ids = {e.ledger_id for e in queryset}
 
         ledgers = {
             l.id: l
-            for l in AccountLedgerMaster.objects.filter(
-                id__in=ledger_ids
-            )
+            for l in AccountLedgerMaster.objects.filter(id__in=ledger_ids)
         }
-        openings = {
-            lid: float(l.op_balance or 0)
-            for lid, l in ledgers.items()
-        }
+        openings = {lid: float(l.op_balance or 0) for lid, l in ledgers.items()}
         natures = {
             lid: (l.ledger_nature or "ASSET").upper()
             for lid, l in ledgers.items()
@@ -4754,6 +4758,13 @@ class IncomeExpenditureReportAPIView(APIView):
     INCOME_ROOTS = ["II. Revenue Receipts", "III. Inter Church / Unit Accounts"]
     EXPENSE_ROOTS = ["V. Inter Church / Unit Payments", "VI. Revenue Payments"]
 
+    # Statutory adjustment ledgers — handled at the report level,
+    # never summed into the tree.
+    ADJUSTMENT_LEDGER_NAMES = (
+        "Advance for next year",              # 2214 (LIABILITY)
+        "Monthly Subscription Receivable",    # 2215 (ASSET)
+    )
+
     def get(self, request):
         church = request.user.church
         date_from = request.query_params.get("from")
@@ -4768,9 +4779,14 @@ class IncomeExpenditureReportAPIView(APIView):
             church, self.EXPENSE_ROOTS, date_from, date_to, is_detailed, "EXPENSE"
         )
 
-        total_income = sum(g["amount"] for g in income)
-        total_expenditure = sum(g["amount"] for g in expenditure)
-        net = total_income - total_expenditure
+        # ✅ Statutory adjustment for Members Subscriptions
+        sub_adj = self._subscription_adjustment(church, date_from, date_to)
+        if sub_adj is not None and abs(sub_adj["net_delta"]) > 0.004:
+            self._apply_subscription_adjustment(income, sub_adj)
+
+        total_income = round(sum(g["amount"] for g in income), 2)
+        total_expenditure = round(sum(g["amount"] for g in expenditure), 2)
+        net = round(total_income - total_expenditure, 2)
 
         return Response({
             "from": date_from,
@@ -4783,6 +4799,86 @@ class IncomeExpenditureReportAPIView(APIView):
             "net_surplus": net,
             "is_surplus": net >= 0,
         })
+
+    # =========================================================
+    # SUBSCRIPTION ADJUSTMENT
+    # =========================================================
+
+    def _subscription_adjustment(self, church, date_from, date_to):
+        from django.db.models import Sum, Q
+
+        def _movement(ledger_name):
+            qs = LedgerEntry.objects.filter(
+                church=church,
+                ledger__ledger_name=ledger_name,
+                is_cancelled=False,
+                is_reversal=False,
+            )
+            if date_from:
+                qs = qs.filter(entry_date__gte=date_from)
+            if date_to:
+                qs = qs.filter(entry_date__lte=date_to)
+
+            agg = qs.aggregate(
+                debits=Sum("amount", filter=Q(entry_type="DEBIT")),
+                credits=Sum("amount", filter=Q(entry_type="CREDIT")),
+            )
+            return float(agg["debits"] or 0), float(agg["credits"] or 0)
+
+        d2214, c2214 = _movement("Advance for next year")
+        d2215, c2215 = _movement("Monthly Subscription Receivable")
+
+        # 2214: debits = earned this period, credits = un-earned
+        # (advance received). Net income adjustment = d - c.
+        adv_delta = d2214 - c2214
+
+        # 2215: debits = billed this period (income earned but
+        # not collected), credits = collection of prior billed.
+        # Net income adjustment = d - c.
+        rec_delta = d2215 - c2215
+
+        net = adv_delta + rec_delta
+        if abs(net) < 0.004:
+            return None
+
+        return {
+            "advance_delta": round(adv_delta, 2),
+            "receivable_delta": round(rec_delta, 2),
+            "net_delta": round(net, 2),
+        }
+
+    def _apply_subscription_adjustment(self, income_tree, adj):
+        def _walk(nodes):
+            for node in nodes:
+                if node.get("group_name") == "Members Subscriptions":
+                    node["amount"] = round(
+                        node["amount"] + adj["net_delta"], 2
+                    )
+                    node["subscription_adjustment"] = {
+                        "advance_for_next_year": adj["advance_delta"],
+                        "subscription_receivable": adj["receivable_delta"],
+                        "net": adj["net_delta"],
+                    }
+                    return True
+                if _walk(node.get("children", [])):
+                    return True
+            return False
+
+        found = _walk(income_tree)
+
+        if found:
+            def _recompute(nodes):
+                for node in nodes:
+                    _recompute(node.get("children", []))
+                    if node.get("children"):
+                        node["amount"] = round(
+                            sum(c["amount"] for c in node["children"]), 2
+                        )
+            _recompute(income_tree)
+
+    # =========================================================
+    # TREE BUILDERS
+    # =========================================================
 
     def _build_tree(self, church, root_names, date_from, date_to, is_detailed, side):
         roots = AccountGroupMaster.objects.filter(
@@ -4844,6 +4940,11 @@ class IncomeExpenditureReportAPIView(APIView):
             is_cancelled=False,
             is_reversal=False,
         )
+        # ✅ Exclude 2214 / 2215 — they are adjusted at the
+        # report level, not summed into the tree.
+        qs = qs.exclude(
+            ledger__ledger_name__in=self.ADJUSTMENT_LEDGER_NAMES
+        )
         if date_from:
             qs = qs.filter(entry_date__gte=date_from)
         if date_to:
@@ -4865,6 +4966,8 @@ class IncomeExpenditureReportAPIView(APIView):
 
         ledgers = AccountLedgerMaster.objects.filter(
             church=church, account_group=group, status=True,
+        ).exclude(
+            ledger_name__in=self.ADJUSTMENT_LEDGER_NAMES
         ).order_by("ledger_name")
 
         out = []
@@ -5091,6 +5194,7 @@ def _get_paid_amount(church, member, ledger, month_start, month_end):
 # ============================================================
 # REPORTS — SUBSCRIPTION DUE LIST
 # ============================================================
+
 class SubscriptionDueListAPIView(APIView):
     """
     Ward-grouped list of members whose subscription is not fully paid
@@ -5127,36 +5231,64 @@ class SubscriptionDueListAPIView(APIView):
                 continue
 
             monthly_due = Decimal("0")
+            yearly_due = Decimal("0")
             charity_due = Decimal("0")
             diocese_due = Decimal("0")
 
             for s in subs:
-                # Skip subscriptions with no ledger
                 if not s.ledger:
                     continue
 
-                expected = Decimal(str(s.amount or 0))
+                # Prorate yearly subscriptions
+                base_amount = Decimal(str(s.amount or 0))
+                if s.billing_cycle == "YEARLY":
+                    expected = base_amount / Decimal("12")
+                else:
+                    expected = base_amount
+
                 paid = Decimal(str(
-                    _get_paid_amount(church, member, s.ledger, month_start, month_end)
+                    _get_paid_amount(
+                        church, member, s.ledger, month_start, month_end
+                    )
                 ))
                 remaining = max(Decimal("0"), expected - paid)
 
-                # Match based on ledger group/name
+                # Classify by ledger group / name
                 ledger_group = (s.ledger.account_group.group_name or "").lower()
                 ledger_name = (s.ledger.ledger_name or "").lower()
-                
-                if "charity" in ledger_group or "charity" in ledger_name:
+
+                is_charity = (
+                    "charity" in ledger_group
+                    or "charity" in ledger_name
+                    or "poor fund" in ledger_group
+                    or "poor fund" in ledger_name
+                    or "medical" in ledger_group
+                    or "medical" in ledger_name
+                    or "education" in ledger_group
+                    or "education" in ledger_name
+                )
+
+                is_diocese = (
+                    "diocese" in ledger_group
+                    or "diocese" in ledger_name
+                    or "diocesan" in ledger_group
+                    or "diocesan" in ledger_name
+                )
+
+                if is_charity:
                     charity_due += remaining
-                elif "diocese" in ledger_group or "diocese" in ledger_name:
+                elif is_diocese:
                     diocese_due += remaining
                 else:
-                    monthly_due += remaining
+                    if s.billing_cycle == "YEARLY":
+                        yearly_due += remaining
+                    else:
+                        monthly_due += remaining
 
-            total_due = monthly_due + charity_due + diocese_due
+            total_due = monthly_due + yearly_due + charity_due + diocese_due
             if total_due <= 0:
                 continue
 
-            # ✅ Get billing cycle from the first matched subscription
             first_sub = subs[0] if subs else None
             billing_cycle = first_sub.billing_cycle if first_sub else "MONTHLY"
 
@@ -5171,11 +5303,13 @@ class SubscriptionDueListAPIView(APIView):
                 "member_id": member.id,
                 "name": member.name,
                 "family_name": family_name,
+                "house_name": member.house_name,
                 "monthly_subscription": float(monthly_due),
+                "yearly_subscription": float(yearly_due),
                 "charity_fund": float(charity_due),
                 "diocese_fund": float(diocese_due),
                 "total_due": float(total_due),
-                "billing_cycle": billing_cycle, # ✅ Send this to frontend
+                "billing_cycle": billing_cycle,
             })
             bucket["_total"] += total_due
 
@@ -5197,6 +5331,7 @@ class SubscriptionDueListAPIView(APIView):
             "wards": wards,
             "grand_total": float(grand_total),
         })
+
 
 # ============================================================
 # REPORTS — SUBSCRIPTION PAID LIST
@@ -5222,7 +5357,6 @@ class SubscriptionPaidListAPIView(APIView):
         month_start, month_end = _month_range(date_from, date_to)
         subs_by_grade = _subscriptions_by_grade(church)
 
-        # All receipt lines in this month for this church
         lines = ReceiptLine.objects.filter(
             receipt__church=church,
             receipt__is_cancelled=False,
@@ -5248,54 +5382,65 @@ class SubscriptionPaidListAPIView(APIView):
             lname = (line.ledger.ledger_name or "").lower()
             lgroup = (line.ledger.account_group.group_name or "").lower()
 
-            # Only count lines that point to subscription-ish ledgers
-            if not (
+            is_subscription = (
                 "subscription" in lname or "subscription" in lgroup
-                or "charity" in lname or "charity" in lgroup
-                or "diocese" in lname or "diocese" in lgroup
-            ):
+            )
+            is_charity = (
+                "charity" in lname or "charity" in lgroup
+                or "poor fund" in lname or "poor fund" in lgroup
+                or "medical" in lname or "medical" in lgroup
+                or "education" in lname or "education" in lgroup
+            )
+            is_diocese = (
+                "diocese" in lname or "diocese" in lgroup
+                or "diocesan" in lname or "diocesan" in lgroup
+            )
+
+            if not (is_subscription or is_charity or is_diocese):
                 continue
 
             ward_name = member.ward.ward_name if member.ward else "Unassigned"
             family_name = member.family.family_name if member.family else ""
 
-            # Find or create member bucket inside ward
             bucket = wards_map.setdefault(ward_name, {
                 "ward": ward_name, "by_member": {}, "_total": Decimal("0"),
             })
 
             mkey = member.id
             if mkey not in bucket["by_member"]:
-                # Get billing cycle from the member's grade subscription
                 subs = subs_by_grade.get(member.grade_id, [])
                 first_sub = subs[0] if subs else None
                 billing_cycle = first_sub.billing_cycle if first_sub else "MONTHLY"
-                
+
                 bucket["by_member"][mkey] = {
                     "member_id": member.id,
                     "name": member.name,
                     "family_name": family_name,
+                    "house_name": member.house_name,
                     "monthly_subscription": Decimal("0"),
+                    "yearly_subscription": Decimal("0"),
                     "charity_fund": Decimal("0"),
                     "diocese_fund": Decimal("0"),
                     "total_paid": Decimal("0"),
-                    "billing_cycle": billing_cycle, # ✅ Send to frontend
+                    "billing_cycle": billing_cycle,
                 }
 
             m = bucket["by_member"][mkey]
             amt = Decimal(str(line.amount or 0))
 
-            if "charity" in lname or "charity" in lgroup:
+            if is_charity:
                 m["charity_fund"] += amt
-            elif "diocese" in lname or "diocese" in lgroup:
+            elif is_diocese:
                 m["diocese_fund"] += amt
             else:
-                m["monthly_subscription"] += amt
+                if m["billing_cycle"] == "YEARLY":
+                    m["yearly_subscription"] += amt
+                else:
+                    m["monthly_subscription"] += amt
 
             m["total_paid"] += amt
             bucket["_total"] += amt
 
-        # Serialize
         wards = []
         grand_total = Decimal("0")
         for wname in sorted(wards_map.keys()):
@@ -5306,7 +5451,9 @@ class SubscriptionPaidListAPIView(APIView):
                     "member_id": m["member_id"],
                     "name": m["name"],
                     "family_name": m["family_name"],
+                    "house_name": m["house_name"],
                     "monthly_subscription": float(m["monthly_subscription"]),
+                    "yearly_subscription": float(m["yearly_subscription"]),
                     "charity_fund": float(m["charity_fund"]),
                     "diocese_fund": float(m["diocese_fund"]),
                     "total_paid": float(m["total_paid"]),
@@ -5326,8 +5473,7 @@ class SubscriptionPaidListAPIView(APIView):
             "wards": wards,
             "grand_total": float(grand_total),
         })
-
-
+    
 # registry/views.py
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -5337,224 +5483,461 @@ from datetime import date
 from .models import ReceiptLine, PaymentMaster
 
 class ReceiptPaymentCombinedAPIView(APIView):
+    """
+    Receipt & Payment Summary.
+
+    Two things are reported side-by-side:
+
+      1. CASH  — "Cash in Hand"                    (per-side opening/closing/flow)
+      2. BANK  — the three Balance-in-* ledgers    (per-side opening/closing/flow)
+
+    Reconciliation is done against LEDGER TRUTH, not against Receipt/Payment
+    rows, because cash/bank can also move via:
+      - ContraMaster            (Cash↔Bank, Bank→Bank)
+      - BankAccount opening_balance entries    (Dr Bank / Cr Equity)
+      - Any manual LedgerEntry posting to a cash/bank ledger
+
+    `is_balanced` therefore means:
+        opening_balance + ledger_debits − ledger_credits == closing_balance
+    which is the accounting identity that actually holds.
+    """
     permission_classes = [IsAuthenticated, IsChurchUser]
+
+    CASH_LEDGERS = ["Cash in Hand"]
+    BANK_LEDGERS = [
+        "Balance in Savings Account",
+        "Balance in Deposit Account",
+        "Balance in Other Accounts",
+    ]
+    CASH_BANK_GROUP = "I. Opening Balances"
+
+    # ------------------------------------------------------------------
+    # ENTRY POINT
+    # ------------------------------------------------------------------
 
     def get(self, request):
         church = request.user.church
-        date_from = request.query_params.get("from")
-        date_to = request.query_params.get("to")
 
-        if not date_from or not date_to:
-            today = date.today()
-            date_from = today.replace(day=1)
-            date_to = today
+        date_from = self._parse_date(request.query_params.get("from"))
+        date_to = self._parse_date(request.query_params.get("to"))
 
-        # ==========================================
-        # 0. OPENING & CLOSING BALANCES
-        # ==========================================
-        CASH_BANK_LEDGERS = [
-            "Cash in Hand", 
-            "Balance in Savings Account", 
-            "Balance in Deposit Account", 
-            "Balance in Other Accounts"
-        ]
+        if not date_from:
+            date_from = date.today().replace(day=1)
+        if not date_to:
+            date_to = date.today()
 
-        # Function to calculate balance of cash/bank ledgers up to a specific date
-        def get_cash_bank_balance(as_of_date):
-            from django.db.models import Sum, Q
-            qs = LedgerEntry.objects.filter(
-                church=church,
-                ledger__ledger_name__in=CASH_BANK_LEDGERS,
-                entry_date__lte=as_of_date,
+        if date_to < date_from:
+            return Response(
+                {"detail": "`to` cannot be earlier than `from`."},
+                status=400,
+            )
+
+        # --------------------------------------------------------------
+        # 0. OPENING / CLOSING — SEPARATED BY SIDE
+        # --------------------------------------------------------------
+        opening_cash = self._side_balance(
+            church, self.CASH_LEDGERS, date_from, inclusive=False
+        )
+        opening_bank = self._side_balance(
+            church, self.BANK_LEDGERS, date_from, inclusive=False
+        )
+
+        closing_cash = self._side_balance(
+            church, self.CASH_LEDGERS, date_to, inclusive=True
+        )
+        closing_bank = self._side_balance(
+            church, self.BANK_LEDGERS, date_to, inclusive=True
+        )
+
+        opening_balance = round(opening_cash + opening_bank, 2)
+        closing_balance = round(closing_cash + closing_bank, 2)
+
+        # --------------------------------------------------------------
+        # 1. RECEIPT DETAIL (INCOME ledgers only)
+        # --------------------------------------------------------------
+        receipts_data, total_income = self._build_receipt_tree(
+            church, date_from, date_to
+        )
+
+        # --------------------------------------------------------------
+        # 2. PAYMENT DETAIL (Expense/Asset/Liability ledgers only)
+        # --------------------------------------------------------------
+        payments_data, total_expense = self._build_payment_tree(
+            church, date_from, date_to
+        )
+
+        # --------------------------------------------------------------
+        # 3. PER-SIDE MOVEMENTS
+        #    cash side and bank side flows must each reconcile independently
+        # --------------------------------------------------------------
+        cash_dr, cash_cr = self._ledger_movement(
+            church, self.CASH_LEDGERS, date_from, date_to
+        )
+        bank_dr, bank_cr = self._ledger_movement(
+            church, self.BANK_LEDGERS, date_from, date_to
+        )
+
+        # Split receipt/payment/contra by payment_type so the PDF can
+        # show "Cash receipts: X, Bank receipts: Y".
+        cash_receipts, bank_receipts = self._receipt_side_totals(
+            church, date_from, date_to
+        )
+        cash_payments, bank_payments = self._payment_side_totals(
+            church, date_from, date_to
+        )
+        cash_contra_net, bank_contra_net = self._contra_side_deltas(
+            church, date_from, date_to
+        )
+
+        # --------------------------------------------------------------
+        # 4. RECONCILIATION — LEDGER TRUTH
+        # --------------------------------------------------------------
+        expected_closing = round(
+            opening_balance + (cash_dr + bank_dr) - (cash_cr + bank_cr), 2
+        )
+        is_balanced = abs(expected_closing - closing_balance) < 0.01
+
+        # --------------------------------------------------------------
+        # 5. RESPONSE
+        # --------------------------------------------------------------
+        return Response({
+            "from": date_from.isoformat(),
+            "to": date_to.isoformat(),
+            "receipts": receipts_data,
+            "payments": payments_data,
+            "summary": {
+                # ---- existing fields (kept for compatibility) ----
+                "opening_balance": opening_balance,
+                "opening_cash": opening_cash,
+                "opening_bank": opening_bank,
+                "total_income": total_income,
+                "total_receipts": round(opening_balance + total_income, 2),
+                "total_expense": total_expense,
+                "closing_balance": closing_balance,
+                "closing_cash": closing_cash,
+                "closing_bank": closing_bank,
+                "total_payments": round(total_expense + closing_balance, 2),
+                "is_balanced": is_balanced,
+
+                # ---- NEW: per-side movement breakdown ----
+                "cash_flow": {
+                    "opening": opening_cash,
+                    "receipts": cash_receipts,
+                    "payments": cash_payments,
+                    "contra_net": cash_contra_net,
+                    "ledger_debits": round(cash_dr, 2),
+                    "ledger_credits": round(cash_cr, 2),
+                    "closing": closing_cash,
+                },
+                "bank_flow": {
+                    "opening": opening_bank,
+                    "receipts": bank_receipts,
+                    "payments": bank_payments,
+                    "contra_net": bank_contra_net,
+                    "ledger_debits": round(bank_dr, 2),
+                    "ledger_credits": round(bank_cr, 2),
+                    "closing": closing_bank,
+                },
+
+                # ---- NEW: reconciliation diagnostics ----
+                "expected_closing": expected_closing,
+                "reconciliation_gap": round(
+                    closing_balance - expected_closing, 2
+                ),
+            },
+        })
+
+    # ==================================================================
+    # BALANCE — SIDE-AWARE (nature-correct)
+    # ==================================================================
+
+    def _side_balance(self, church, target_ledgers, as_of_date, inclusive):
+        """
+        Sum opening balance + nature-aware movements for every ledger in
+        `target_ledgers` that belongs to CASH_BANK_GROUP.
+
+        ASSET / EXPENSE : opening + debits − credits
+        LIABILITY / INCOME / EQUITY : opening + credits − debits
+
+        `inclusive=True`  → entries with entry_date <= as_of_date
+        `inclusive=False` → entries with entry_date <  as_of_date
+        """
+        ledgers = AccountLedgerMaster.objects.filter(
+            church=church,
+            ledger_name__in=target_ledgers,
+            account_group__group_name=self.CASH_BANK_GROUP,
+        )
+
+        date_filter = (
+            Q(entries__entry_date__lte=as_of_date)
+            if inclusive
+            else Q(entries__entry_date__lt=as_of_date)
+        )
+
+        total = 0.0
+        for ledger in ledgers:
+            nature = (ledger.ledger_nature or "ASSET").upper()
+            agg = ledger.entries.filter(
                 is_cancelled=False,
                 is_reversal=False,
-            )
-            agg = qs.aggregate(
+            ).filter(
+                Q(entry_date__lte=as_of_date)
+                if inclusive
+                else Q(entry_date__lt=as_of_date)
+            ).aggregate(
                 debits=Sum("amount", filter=Q(entry_type="DEBIT")),
                 credits=Sum("amount", filter=Q(entry_type="CREDIT")),
             )
-            debits = float(agg["debits"] or 0)
-            credits = float(agg["credits"] or 0)
-            
-            # Opening balances of the ledgers themselves
-            from .models import AccountLedgerMaster
-            opening = sum(
-                float(l.op_balance or 0)
-                for l in AccountLedgerMaster.objects.filter(
-                    church=church, ledger_name__in=CASH_BANK_LEDGERS
-                )
-            )
-            # For ASSET (Cash/Bank), Balance = Opening + Debits - Credits
-            return opening + debits - credits
+            dr = float(agg["debits"] or 0)
+            cr = float(agg["credits"] or 0)
+            op = float(ledger.op_balance or 0)
 
-        # Get balance on the day BEFORE date_from
-        from datetime import datetime, timedelta
-        dt_from = datetime.strptime(date_from, "%Y-%m-%d").date()
-        day_before = dt_from - timedelta(days=1)
-        
-        opening_balance = get_cash_bank_balance(day_before)
-        closing_balance = get_cash_bank_balance(date_to)
+            if nature in ("ASSET", "EXPENSE"):
+                total += op + dr - cr
+            else:
+                total += op + cr - dr
 
-        # ==========================================
-        # 1. FETCH RECEIPTS (INCOME)
-        # ==========================================
-        receipt_lines = ReceiptLine.objects.filter(
+        return round(total, 2)
+
+    # ==================================================================
+    # MOVEMENTS — for reconciliation
+    # ==================================================================
+
+    def _ledger_movement(self, church, target_ledgers, date_from, date_to):
+        """Raw DEBIT / CREDIT totals inside the range, on the given ledgers."""
+        qs = LedgerEntry.objects.filter(
+            church=church,
+            ledger__ledger_name__in=target_ledgers,
+            ledger__account_group__group_name=self.CASH_BANK_GROUP,
+            entry_date__gte=date_from,
+            entry_date__lte=date_to,
+            is_cancelled=False,
+            is_reversal=False,
+        )
+        agg = qs.aggregate(
+            debits=Sum("amount", filter=Q(entry_type="DEBIT")),
+            credits=Sum("amount", filter=Q(entry_type="CREDIT")),
+        )
+        return float(agg["debits"] or 0), float(agg["credits"] or 0)
+
+    def _receipt_side_totals(self, church, date_from, date_to):
+        """How much of `total_income` came in via cash vs bank."""
+        qs = ReceiptLine.objects.filter(
             receipt__church=church,
             receipt__is_cancelled=False,
             receipt__receipt_date__gte=date_from,
             receipt__receipt_date__lte=date_to,
-        ).select_related('ledger', 'ledger__account_group', 'ledger__account_group__under_group')
+            ledger__ledger_nature="INCOME",
+        )
+        cash = qs.filter(receipt__payment_type="CASH").aggregate(
+            t=Sum("amount")
+        )["t"] or 0
+        bank = qs.exclude(receipt__payment_type="CASH").aggregate(
+            t=Sum("amount")
+        )["t"] or 0
+        return float(cash), float(bank)
 
-        income_groups = {}
-        total_income = 0
-
-        for line in receipt_lines:
-            if not line.ledger or not line.ledger.account_group:
-                continue
-                
-            group = line.ledger.account_group
-            top_group = group
-            while top_group.under_group:
-                top_group = top_group.under_group
-                
-            parent_name = top_group.group_name
-            sub_group_name = group.group_name if group != top_group else None
-            
-            amount = float(line.amount or 0)
-            total_income += amount
-
-            if parent_name not in income_groups:
-                income_groups[parent_name] = {
-                    "name": parent_name,
-                    "amount": 0,
-                    "sub_groups": {}
-                }
-            
-            income_groups[parent_name]["amount"] += amount
-
-            if sub_group_name:
-                if sub_group_name not in income_groups[parent_name]["sub_groups"]:
-                    income_groups[parent_name]["sub_groups"][sub_group_name] = {"name": sub_group_name, "amount": 0, "ledgers": {}}
-                
-                income_groups[parent_name]["sub_groups"][sub_group_name]["amount"] += amount
-                ledger_name = line.ledger.ledger_name
-                if ledger_name not in income_groups[parent_name]["sub_groups"][sub_group_name]["ledgers"]:
-                    income_groups[parent_name]["sub_groups"][sub_group_name]["ledgers"][ledger_name] = 0
-                income_groups[parent_name]["sub_groups"][sub_group_name]["ledgers"][ledger_name] += amount
-            else:
-                if "ledgers" not in income_groups[parent_name]:
-                    income_groups[parent_name]["ledgers"] = {}
-                ledger_name = line.ledger.ledger_name
-                if ledger_name not in income_groups[parent_name]["ledgers"]:
-                    income_groups[parent_name]["ledgers"][ledger_name] = 0
-                income_groups[parent_name]["ledgers"][ledger_name] += amount
-
-        receipts_data = []
-        for g in income_groups.values():
-            formatted_subs = []
-            for sg in g["sub_groups"].values():
-                sg["ledgers"] = [{"name": k, "amount": v} for k, v in sg["ledgers"].items()]
-                formatted_subs.append(sg)
-            
-            g["sub_groups"] = formatted_subs
-            if "ledgers" in g:
-                g["ledgers"] = [{"name": k, "amount": v} for k, v in g["ledgers"].items()]
-            receipts_data.append(g)
-            
-        receipts_data.sort(key=lambda x: x['name'])
-
-        # ==========================================
-        # 2. FETCH PAYMENTS (EXPENSES)
-        # ==========================================
-        payments = PaymentMaster.objects.filter(
+    def _payment_side_totals(self, church, date_from, date_to):
+        """How much of `total_expense` went out via cash vs bank."""
+        qs = PaymentMaster.objects.filter(
             church=church,
             is_cancelled=False,
             payment_date__gte=date_from,
             payment_date__lte=date_to,
-        ).select_related('account_ledger', 'account_ledger__account_group', 'account_ledger__account_group__under_group')
+            account_ledger__ledger_nature__in=("EXPENSE", "ASSET", "LIABILITY"),
+        )
+        cash = qs.filter(payment_type="CASH").aggregate(
+            t=Sum("amount")
+        )["t"] or 0
+        bank = qs.filter(payment_type="BANK").aggregate(
+            t=Sum("amount")
+        )["t"] or 0
+        return float(cash), float(bank)
 
-        expense_groups = {}
-        total_expense = 0
+    def _contra_side_deltas(self, church, date_from, date_to):
+        """
+        Contra nets to zero across cash+bank combined. But it moves
+        money BETWEEN the two sides. Return the delta applied to the
+        cash side and the bank side:
+
+          contra DEBIT  side  → +delta
+          contra CREDIT side  → -delta
+        """
+        from django.db.models import Q as _Q
+        qs = ContraMaster.objects.filter(
+            church=church,
+            is_cancelled=False,
+            contra_date__gte=date_from,
+            contra_date__lte=date_to,
+        ).prefetch_related("from_ledger", "to_ledger")
+
+        cash = 0.0
+        bank = 0.0
+        for c in qs:
+            amt = float(c.amount or 0)
+            if c.to_ledger and c.to_ledger.ledger_name in self.CASH_LEDGERS:
+                cash += amt
+            if c.to_ledger and c.to_ledger.ledger_name in self.BANK_LEDGERS:
+                bank += amt
+            if c.from_ledger and c.from_ledger.ledger_name in self.CASH_LEDGERS:
+                cash -= amt
+            if c.from_ledger and c.from_ledger.ledger_name in self.BANK_LEDGERS:
+                bank -= amt
+
+        return round(cash, 2), round(bank, 2)
+
+    # ==================================================================
+    # RECEIPT TREE
+    # ==================================================================
+
+    def _build_receipt_tree(self, church, date_from, date_to):
+        """
+        Returns (receipts_data, total_income). Ledger natures restricted
+        to INCOME so legacy / manual rows on ASSET/LIABILITY ledgers
+        cannot inflate the report.
+        """
+        lines = (
+            ReceiptLine.objects
+            .filter(
+                receipt__church=church,
+                receipt__is_cancelled=False,
+                receipt__receipt_date__gte=date_from,
+                receipt__receipt_date__lte=date_to,
+                ledger__ledger_nature="INCOME",
+            )
+            .select_related(
+                "ledger",
+                "ledger__account_group",
+                "ledger__account_group__under_group",
+            )
+        )
+
+        groups = {}
+        total = 0.0
+
+        for line in lines:
+            if not line.ledger or not line.ledger.account_group:
+                continue
+
+            amount = float(line.amount or 0)
+            total += amount
+
+            self._add_to_tree(
+                groups, line.ledger, amount
+            )
+
+        return self._finalize_tree(groups), round(total, 2)
+
+    # ==================================================================
+    # PAYMENT TREE
+    # ==================================================================
+
+    def _build_payment_tree(self, church, date_from, date_to):
+        """
+        Returns (payments_data, total_expense). Ledger natures restricted
+        to EXPENSE / ASSET / LIABILITY (mirrors PaymentMasterSerializer).
+        """
+        payments = (
+            PaymentMaster.objects
+            .filter(
+                church=church,
+                is_cancelled=False,
+                payment_date__gte=date_from,
+                payment_date__lte=date_to,
+                account_ledger__ledger_nature__in=(
+                    "EXPENSE", "ASSET", "LIABILITY",
+                ),
+            )
+            .select_related(
+                "account_ledger",
+                "account_ledger__account_group",
+                "account_ledger__account_group__under_group",
+            )
+        )
+
+        groups = {}
+        total = 0.0
 
         for p in payments:
             if not p.account_ledger or not p.account_ledger.account_group:
                 continue
-                
-            group = p.account_ledger.account_group
-            top_group = group
-            while top_group.under_group:
-                top_group = top_group.under_group
-                
-            parent_name = top_group.group_name
-            sub_group_name = group.group_name if group != top_group else None
-            
+
             amount = float(p.amount or 0)
-            total_expense += amount
+            total += amount
 
-            if parent_name not in expense_groups:
-                expense_groups[parent_name] = {
-                    "name": parent_name,
-                    "amount": 0,
-                    "sub_groups": {}
-                }
-            
-            expense_groups[parent_name]["amount"] += amount
+            self._add_to_tree(groups, p.account_ledger, amount)
 
-            if sub_group_name:
-                if sub_group_name not in expense_groups[parent_name]["sub_groups"]:
-                    expense_groups[parent_name]["sub_groups"][sub_group_name] = {"name": sub_group_name, "amount": 0, "ledgers": {}}
-                
-                expense_groups[parent_name]["sub_groups"][sub_group_name]["amount"] += amount
-                ledger_name = p.account_ledger.ledger_name
-                if ledger_name not in expense_groups[parent_name]["sub_groups"][sub_group_name]["ledgers"]:
-                    expense_groups[parent_name]["sub_groups"][sub_group_name]["ledgers"][ledger_name] = 0
-                expense_groups[parent_name]["sub_groups"][sub_group_name]["ledgers"][ledger_name] += amount
-            else:
-                if "ledgers" not in expense_groups[parent_name]:
-                    expense_groups[parent_name]["ledgers"] = {}
-                ledger_name = p.account_ledger.ledger_name
-                if ledger_name not in expense_groups[parent_name]["ledgers"]:
-                    expense_groups[parent_name]["ledgers"][ledger_name] = 0
-                expense_groups[parent_name]["ledgers"][ledger_name] += amount
+        return self._finalize_tree(groups), round(total, 2)
 
-        payments_data = []
-        for g in expense_groups.values():
-            formatted_subs = []
+    # ==================================================================
+    # SHARED TREE HELPERS
+    # ==================================================================
+
+    @staticmethod
+    def _add_to_tree(groups, ledger, amount):
+        group = ledger.account_group
+        top_group = group
+        while top_group.under_group:
+            top_group = top_group.under_group
+
+        parent_name = top_group.group_name
+        sub_group_name = group.group_name if group != top_group else None
+
+        parent = groups.setdefault(
+            parent_name,
+            {"name": parent_name, "amount": 0, "sub_groups": {}, "ledgers": {}},
+        )
+        parent["amount"] += amount
+
+        if sub_group_name:
+            sub = parent["sub_groups"].setdefault(
+                sub_group_name,
+                {"name": sub_group_name, "amount": 0, "ledgers": {}},
+            )
+            sub["amount"] += amount
+            sub["ledgers"][ledger.ledger_name] = (
+                sub["ledgers"].get(ledger.ledger_name, 0) + amount
+            )
+        else:
+            parent["ledgers"][ledger.ledger_name] = (
+                parent["ledgers"].get(ledger.ledger_name, 0) + amount
+            )
+
+    @staticmethod
+    def _finalize_tree(groups):
+        out = []
+        for g in groups.values():
+            sub_list = []
             for sg in g["sub_groups"].values():
-                sg["ledgers"] = [{"name": k, "amount": v} for k, v in sg["ledgers"].items()]
-                formatted_subs.append(sg)
-            
-            g["sub_groups"] = formatted_subs
-            if "ledgers" in g:
-                g["ledgers"] = [{"name": k, "amount": v} for k, v in g["ledgers"].items()]
-            payments_data.append(g)
-            
-        payments_data.sort(key=lambda x: x['name'])
+                sg["ledgers"] = [
+                    {"name": k, "amount": round(v, 2)}
+                    for k, v in sg["ledgers"].items()
+                ]
+                sub_list.append(sg)
+            g["sub_groups"] = sub_list
+            g["ledgers"] = [
+                {"name": k, "amount": round(v, 2)}
+                for k, v in g["ledgers"].items()
+            ]
+            g["amount"] = round(g["amount"], 2)
+            out.append(g)
+        out.sort(key=lambda x: x["name"])
+        return out
 
-        # ==========================================
-        # 3. RETURN RESPONSE
-        # ==========================================
-        # Total Receipts = Opening Balance + Total Income
-        total_receipts = opening_balance + total_income
-        
-        # Total Payments = Total Expense + Closing Balance
-        total_payments = total_expense + closing_balance
+    # ==================================================================
+    # UTIL
+    # ==================================================================
 
-        return Response({
-            "from": date_from,
-            "to": date_to,
-            "receipts": receipts_data,
-            "payments": payments_data,
-            "summary": {
-                "opening_balance": opening_balance,
-                "total_income": total_income,
-                "total_receipts": total_receipts,
-                "total_expense": total_expense,
-                "closing_balance": closing_balance,
-                "total_payments": total_payments,
-                "is_balanced": abs(total_receipts - total_payments) < 0.01
-            }
-        })
+    @staticmethod
+    def _parse_date(value):
+        if not value:
+            return None
+        if isinstance(value, date):
+            return value
+        try:
+            return datetime.strptime(str(value), "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            return None
 # --------------------------------------------------Dash Board------------------------------------------------
 # registry/views.py
 
@@ -5817,4 +6200,78 @@ class ContraCancelAPIView(APIView):
             "detail": "Contra cancelled successfully.",
             "contra_id": contra.id,
             "voucher_number": contra.voucher_number,
+        })
+
+# --------------------------------------Balance sheet-------------------------------------------------
+
+# ============================================================
+# REPORTS — BALANCE SHEET
+# ============================================================
+
+class BalanceSheetAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsChurchUser]
+
+    def get(self, request):
+        church = request.user.church
+        date_to = request.query_params.get("to")
+
+        ledgers = AccountLedgerMaster.objects.filter(
+            church=church, status=True
+        ).select_related("account_group", "account_group__under_group")
+
+        assets = []
+        liabilities = []
+        
+        total_income = 0.0
+        total_expense = 0.0
+
+        total_assets = 0.0
+        total_liabilities = 0.0
+
+        for ledger in ledgers:
+            group = ledger.account_group
+            nature = (ledger.ledger_nature or "").upper()
+            balance = ledger.get_current_balance()
+
+            if abs(balance) < 0.01:
+                continue
+
+            item = {
+                "id": ledger.id,
+                "name": ledger.ledger_name,
+                "group": group.group_name,
+                "balance": float(balance),
+            }
+
+            if nature == "ASSET":
+                assets.append(item)
+                total_assets += balance
+            elif nature in ("LIABILITY", "EQUITY"):
+                liabilities.append(item)
+                total_liabilities += balance
+            elif nature == "INCOME":
+                total_income += balance
+            elif nature == "EXPENSE":
+                total_expense += balance
+
+        # ✅ Calculate Net Surplus (Income - Expenses)
+        net_surplus = total_income - total_expense
+
+        # Add the surplus to Equity (Liabilities side)
+        if abs(net_surplus) >= 0.01:
+            liabilities.append({
+                "id": "surplus",
+                "name": "Current Year Surplus (Income - Expense)",
+                "group": "C. Reserve Fund",
+                "balance": float(net_surplus)
+            })
+            total_liabilities += net_surplus
+
+        return Response({
+            "to": date_to,
+            "assets": assets,
+            "total_assets": round(total_assets, 2),
+            "liabilities": liabilities,
+            "total_liabilities": round(total_liabilities, 2),
+            "difference": round(total_assets - total_liabilities, 2),
         })

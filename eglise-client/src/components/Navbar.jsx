@@ -46,9 +46,10 @@ const ROUTE_MAP = {
   Subscriptions: "/subscriptions",
   "Ledger Group": "/account-groups",
   "Account Ledger": "/account-ledgers",
+  "Bank Accounts": "/bank-accounts",
   Receipts: "/receipts",
   Payments: "/payments",
-  Contra: "/contra",              // ✅ NEW
+  Contra: "/contra",
   "Qurbana Receipts": "/qurbana-receipts",
   Committee: "/committees",
   "Committee Members": "/committees",
@@ -56,6 +57,7 @@ const ROUTE_MAP = {
   "Member List": "/member-directory",
   "Age Wise List": "/age-wise-list",
   "Phone Directory": "/phone-directory",
+  "Balance Sheet": "/reports/balance-sheet",
 
   // ✅ Report routes (Accounts)
   "Day Book": "/reports/day-book",
@@ -107,7 +109,7 @@ const MENU_DATA = {
     },
     {
       title: "Accounts",
-      items: ["Account Ledger", "Ledger Group"],
+      items: ["Account Ledger", "Ledger Group", "Bank Accounts"],
       subSections: [
         {
           title: "Sunday School",
@@ -142,7 +144,6 @@ const MENU_DATA = {
     },
     {
       title: "Accounts",
-      // ✅ NEW: Contra inserted between Payments and Qurbana Receipts
       items: ["Receipts", "Payments", "Contra", "Qurbana Receipts"],
     },
     {
@@ -192,6 +193,7 @@ const MENU_DATA = {
         "Member Ledger",
         "Income Expenditure",
         "Receipt & Payments",
+        "Balance Sheet", // ✅ Added
         "Subscription Due List",
         "Donations Register",
         "Subscription Paid List",

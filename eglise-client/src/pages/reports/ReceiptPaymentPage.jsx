@@ -22,11 +22,6 @@ const LINK_BLUE = "#2B5CE6";
 // ============================================================
 // CUSTOM ICONS
 // ============================================================
-const ArrowLeftIcon = ({ size = 15, color = PRIMARY_RED }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <path d="M19 12H5M12 19l-7-7 7-7" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
 const PrinterIcon = ({ size = 15, color = PRIMARY_RED }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -65,6 +60,50 @@ const today = () => new Date().toISOString().split("T")[0];
 const monthStart = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`; };
 const formatDateDisplay = (dateStr) => { if (!dateStr) return ""; const [y, m, d] = dateStr.split("-"); return `${d}/${m}/${y}`; };
 
+/**
+ * Format a signed delta so a contra transfer is readable:
+ *   +₹5,000  →  5,000 was added to this side
+ *   −₹5,000  →  5,000 was removed from this side
+ *   ₹0.00    →  no movement
+ */
+const formatSigned = (n) => {
+  const v = Number(n || 0);
+  if (Math.abs(v) < 0.005) return formatAmount(0);
+  const sign = v > 0 ? "+" : "−";
+  return sign + formatAmount(Math.abs(v));
+};
+
+// ============================================================
+// SUB TOTAL ROW
+// ============================================================
+const SubTotalRow = ({ amount, depth = 0, forPrint = false }) => {
+  const indentLeft = 12 + depth * 20;
+
+  if (forPrint) {
+    return (
+      <tr style={{ background: "#F7F9FB", borderTop: `1px solid ${BORDER_COLOR}`, borderBottom: `1px solid ${BORDER_COLOR}` }}>
+        <td style={{ padding: "4px 8px", paddingLeft: `${indentLeft + 16}px` }}>
+          <span style={{ fontSize: "10.5px", fontWeight: "700", color: TEXT_COLOR, fontFamily: "Georgia, serif" }}>Sub Total</span>
+        </td>
+        <td style={{ padding: "4px 8px", textAlign: "right" }}>
+          <span style={{ fontSize: "10.5px", fontWeight: "700", color: TEXT_COLOR, fontFamily: "Georgia, serif" }}>{formatAmount(amount)}</span>
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <Box as="tr" bg="#F7F9FB" borderTop={`1px solid ${BORDER_COLOR}`} borderBottom={`1px solid ${BORDER_COLOR}`}>
+      <Box as="td" px={3} py={2} pl={`${indentLeft + 16}px`}>
+        <Text fontSize="11px" fontWeight="700" color={TEXT_COLOR}>Sub Total</Text>
+      </Box>
+      <Box as="td" px={3} py={2} textAlign="right">
+        <Text fontSize="11px" fontWeight="700" color={TEXT_COLOR}>{formatAmount(amount)}</Text>
+      </Box>
+    </Box>
+  );
+};
+
 // ============================================================
 // SCREEN ROW COMPONENT
 // ============================================================
@@ -72,7 +111,7 @@ const RowGroup = ({ item, side, depth = 0, openMap, toggle, isDetailed }) => {
   const isOpen = openMap[`${side}-${item.name}`] !== false;
   const hasSubGroups = item.sub_groups && item.sub_groups.length > 0;
   const hasLedgers = item.ledgers && item.ledgers.length > 0;
-  
+
   const showLedgers = hasLedgers && (isDetailed || !hasSubGroups);
   const isExpandable = hasSubGroups || showLedgers;
 
@@ -92,7 +131,9 @@ const RowGroup = ({ item, side, depth = 0, openMap, toggle, isDetailed }) => {
           </HStack>
         </Box>
         <Box as="td" px={3} py={2.5} textAlign="right">
-          <Text fontSize="12px" fontWeight="700" color={TEXT_COLOR}>{formatAmount(item.amount)}</Text>
+          {!isExpandable && (
+            <Text fontSize="12px" fontWeight="700" color={TEXT_COLOR}>{formatAmount(item.amount)}</Text>
+          )}
         </Box>
       </Box>
 
@@ -101,6 +142,7 @@ const RowGroup = ({ item, side, depth = 0, openMap, toggle, isDetailed }) => {
           {hasSubGroups && item.sub_groups.map((sg, i) => (
             <RowGroup key={i} item={sg} side={side} depth={depth + 1} openMap={openMap} toggle={toggle} isDetailed={isDetailed} />
           ))}
+
           {showLedgers && item.ledgers.map((led, i) => (
             <Box as="tr" key={i} bg="#FAFBFC" borderBottom={`1px solid ${BORDER_COLOR}`}>
               <Box as="td" px={3} py={2} pl={`${32 + depth * 20}px`}>
@@ -111,6 +153,8 @@ const RowGroup = ({ item, side, depth = 0, openMap, toggle, isDetailed }) => {
               </Box>
             </Box>
           ))}
+
+          {isExpandable && <SubTotalRow amount={item.amount} depth={depth} />}
         </>
       )}
     </>
@@ -124,7 +168,8 @@ const PrintRows = ({ item, depth = 0, isDetailed }) => {
   const hasSubGroups = item.sub_groups && item.sub_groups.length > 0;
   const hasLedgers = item.ledgers && item.ledgers.length > 0;
   const showLedgers = hasLedgers && (isDetailed || !hasSubGroups);
-  
+  const isExpandable = hasSubGroups || showLedgers;
+
   const indent = 8 + depth * 16;
   const fontSize = depth === 0 ? "10.5px" : "10px";
   const color = depth === 0 ? DARK_RED : TEXT_COLOR;
@@ -136,10 +181,14 @@ const PrintRows = ({ item, depth = 0, isDetailed }) => {
           <span style={{ fontSize, fontWeight: "700", color, fontFamily: "Georgia, serif" }}>{item.name.toUpperCase()}</span>
         </td>
         <td style={{ padding: "6px 8px", textAlign: "right" }}>
-          <span style={{ fontSize, fontWeight: "700", color: TEXT_COLOR, fontFamily: "Georgia, serif" }}>{formatAmount(item.amount)}</span>
+          {!isExpandable && (
+            <span style={{ fontSize, fontWeight: "700", color: TEXT_COLOR, fontFamily: "Georgia, serif" }}>{formatAmount(item.amount)}</span>
+          )}
         </td>
       </tr>
+
       {hasSubGroups && item.sub_groups.map((sg, i) => <PrintRows key={i} item={sg} depth={depth + 1} isDetailed={isDetailed} />)}
+
       {showLedgers && item.ledgers.map((led, i) => (
         <tr key={`led-${i}`} style={{ borderBottom: `1px solid ${BORDER_COLOR}`, background: "#FAFBFC" }}>
           <td style={{ padding: "4px 8px", paddingLeft: `${indent + 16}px` }}>
@@ -150,6 +199,8 @@ const PrintRows = ({ item, depth = 0, isDetailed }) => {
           </td>
         </tr>
       ))}
+
+      {isExpandable && <SubTotalRow amount={item.amount} depth={depth} forPrint />}
     </>
   );
 };
@@ -161,59 +212,169 @@ const PrintGrandRow = ({ label, amount, bold = false }) => (
   </tr>
 );
 
-const PrintContent = ({ receipts, payments, summary, isDetailed }) => (
-  <div style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>
-    <div style={{ display: "flex", gap: "0", border: `1px solid ${BORDER_COLOR}` }}>
-      {/* LEFT: RECEIPTS */}
-      <div style={{ flex: 1, borderRight: `1px solid ${BORDER_COLOR}` }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ background: "#F7F9FB", borderBottom: `1px solid ${BORDER_COLOR}` }}>
-              <th style={{ padding: "8px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: TEXT_COLOR }}>Receipts</th>
-              <th style={{ padding: "8px", textAlign: "right", width: "120px", fontSize: "11px", fontWeight: "700", color: TEXT_COLOR }}>Amount (₹)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {/* ✅ OPENING BALANCE ADDED */}
-            <tr style={{ borderBottom: `1px solid ${BORDER_COLOR}`, background: "#F8FAFC" }}>
-              <td style={{ padding: "6px 8px" }}><span style={{ fontSize: "10.5px", fontWeight: "700", color: DARK_RED }}>I. OPENING BALANCES (CASH & BANK)</span></td>
-              <td style={{ padding: "6px 8px", textAlign: "right" }}><span style={{ fontSize: "10.5px", fontWeight: "700", color: TEXT_COLOR }}>{formatAmount(summary.opening_balance)}</span></td>
-            </tr>
-            
-            {receipts.map((g, i) => <PrintRows key={i} item={g} depth={0} isDetailed={isDetailed} />)}
-          </tbody>
-          <tfoot>
-            <PrintGrandRow label="TOTAL RECEIPTS" amount={summary.total_receipts} bold />
-          </tfoot>
-        </table>
+/**
+ * Renders the combined Opening / Closing figure, then the
+ * Cash in Hand + Bank Accounts breakdown on the rows directly
+ * BELOW it. The breakdown is indented and subordinated so the
+ * combined figure reads first.
+ *
+ *   I. OPENING BALANCES (CASH & BANK)          ₹ 2,55,000.00
+ *       — Cash in Hand                          ₹   45,000.00
+ *       — Bank Accounts                         ₹ 2,10,000.00
+ */
+const PrintBalanceBlock = ({ title, total, cash, bank, tone = "red" }) => {
+  const titleColor = tone === "red" ? DARK_RED : LINK_BLUE;
+  const subStyle = {
+    padding: "4px 8px",
+    textAlign: "right",
+    color: SECONDARY_TEXT,
+    fontFamily: "Georgia, serif",
+  };
+
+  return (
+    <>
+      {/* Combined headline row */}
+      <tr style={{ background: "#FFF5F5", borderTop: `1px solid ${BORDER_COLOR}`, borderBottom: `1px solid ${BORDER_COLOR}` }}>
+        <td style={{ padding: "8px", textAlign: "right" }}>
+          <span style={{ fontSize: "11px", fontWeight: "700", color: titleColor, fontFamily: "Georgia, serif" }}>
+            {title}
+          </span>
+        </td>
+        <td style={{ padding: "8px", textAlign: "right" }}>
+          <span style={{ fontSize: "11px", fontWeight: "700", color: TEXT_COLOR, fontFamily: "Georgia, serif" }}>
+            {formatAmount(total)}
+          </span>
+        </td>
+      </tr>
+
+      {/* Breakdown rows — indented, italic, BELOW the combined figure */}
+      <tr style={{ borderBottom: `1px solid ${BORDER_COLOR}` }}>
+        <td style={{ ...subStyle, paddingLeft: "28px" }}>
+          <span style={{ fontSize: "10px", fontStyle: "italic" }}>— Cash in Hand</span>
+        </td>
+        <td style={subStyle}>
+          <span style={{ fontSize: "10px" }}>{formatAmount(cash)}</span>
+        </td>
+      </tr>
+      <tr style={{ borderBottom: `1px solid ${BORDER_COLOR}` }}>
+        <td style={{ ...subStyle, paddingLeft: "28px" }}>
+          <span style={{ fontSize: "10px", fontStyle: "italic" }}>— Bank Accounts</span>
+        </td>
+        <td style={subStyle}>
+          <span style={{ fontSize: "10px" }}>{formatAmount(bank)}</span>
+        </td>
+      </tr>
+    </>
+  );
+};
+
+const PrintContent = ({ receipts, payments, summary, isDetailed }) => {
+  const openingCash = summary.opening_cash ?? 0;
+  const openingBank = summary.opening_bank ?? 0;
+  const closingCash = summary.closing_cash ?? 0;
+  const closingBank = summary.closing_bank ?? 0;
+
+  return (
+    <div style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>
+      <div style={{ display: "flex", gap: "0", border: `1px solid ${BORDER_COLOR}` }}>
+        {/* LEFT: RECEIPTS */}
+        <div style={{ flex: 1, borderRight: `1px solid ${BORDER_COLOR}` }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: "#F7F9FB", borderBottom: `1px solid ${BORDER_COLOR}` }}>
+                <th style={{ padding: "8px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: TEXT_COLOR }}>Receipts</th>
+                <th style={{ padding: "8px", textAlign: "right", width: "130px", fontSize: "11px", fontWeight: "700", color: TEXT_COLOR }}>Amount (₹)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {receipts.map((g, i) => <PrintRows key={i} item={g} depth={0} isDetailed={isDetailed} />)}
+            </tbody>
+            <tfoot>
+              <PrintBalanceBlock
+                title="I. OPENING BALANCES (CASH & BANK)"
+                total={summary.opening_balance}
+                cash={openingCash}
+                bank={openingBank}
+              />
+              <PrintGrandRow label="TOTAL RECEIPTS" amount={summary.total_receipts} bold />
+            </tfoot>
+          </table>
+        </div>
+
+        {/* RIGHT: PAYMENTS */}
+        <div style={{ flex: 1 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: "#F7F9FB", borderBottom: `1px solid ${BORDER_COLOR}` }}>
+                <th style={{ padding: "8px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: TEXT_COLOR }}>Payments</th>
+                <th style={{ padding: "8px", textAlign: "right", width: "130px", fontSize: "11px", fontWeight: "700", color: TEXT_COLOR }}>Amount (₹)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {payments.map((g, i) => <PrintRows key={i} item={g} depth={0} isDetailed={isDetailed} />)}
+            </tbody>
+            <tfoot>
+              <PrintBalanceBlock
+                title="VIII. CLOSING BALANCES (CASH & BANK)"
+                total={summary.closing_balance}
+                cash={closingCash}
+                bank={closingBank}
+              />
+              <PrintGrandRow label="TOTAL PAYMENTS" amount={summary.total_payments} bold />
+            </tfoot>
+          </table>
+        </div>
       </div>
-      
-      {/* RIGHT: PAYMENTS */}
-      <div style={{ flex: 1 }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ background: "#F7F9FB", borderBottom: `1px solid ${BORDER_COLOR}` }}>
-              <th style={{ padding: "8px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: TEXT_COLOR }}>Payments</th>
-              <th style={{ padding: "8px", textAlign: "right", width: "120px", fontSize: "11px", fontWeight: "700", color: TEXT_COLOR }}>Amount (₹)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {payments.map((g, i) => <PrintRows key={i} item={g} depth={0} isDetailed={isDetailed} />)}
-            
-            {/* ✅ CLOSING BALANCE ADDED */}
-            <tr style={{ borderBottom: `1px solid ${BORDER_COLOR}`, background: "#F8FAFC" }}>
-              <td style={{ padding: "6px 8px" }}><span style={{ fontSize: "10.5px", fontWeight: "700", color: DARK_RED }}>VIII. CLOSING BALANCES (CASH & BANK)</span></td>
-              <td style={{ padding: "6px 8px", textAlign: "right" }}><span style={{ fontSize: "10.5px", fontWeight: "700", color: TEXT_COLOR }}>{formatAmount(summary.closing_balance)}</span></td>
-            </tr>
-          </tbody>
-          <tfoot>
-            <PrintGrandRow label="TOTAL PAYMENTS" amount={summary.total_payments} bold />
-          </tfoot>
-        </table>
-      </div>
+
+      {/* Reconciliation strip — only if the backend reports a non-zero gap */}
+      {typeof summary.reconciliation_gap === "number" && Math.abs(summary.reconciliation_gap) >= 0.01 && (
+        <div style={{ marginTop: 8, padding: 8, border: `1px solid ${BORDER_COLOR}`, background: "#FFF5F5" }}>
+          <span style={{ fontSize: "10px", color: DARK_RED, fontFamily: "Georgia, serif" }}>
+            Reconciliation warning: expected closing
+            {" " + formatAmount(summary.expected_closing || 0)} vs reported
+            {" " + formatAmount(summary.closing_balance || 0)} (gap {formatAmount(summary.reconciliation_gap)}).
+            Please check for manual ledger entries on cash/bank ledgers.
+          </span>
+        </div>
+      )}
     </div>
-  </div>
-);
+  );
+};
+
+// ============================================================
+// SIDE FLOW MINI-CARD (screen only)
+// ============================================================
+const SideFlowCard = ({ title, flow, tone = "red" }) => {
+  if (!flow) return null;
+  const titleColor = tone === "red" ? DARK_RED : LINK_BLUE;
+  return (
+    <Box border={`1px solid ${BORDER_COLOR}`} borderRadius="8px" p={3} bg="#FFFFFF">
+      <Text fontSize="11px" fontWeight="700" color={titleColor} mb={2} textTransform="uppercase">{title}</Text>
+      <HStack justify="space-between" fontSize="11px" color={SECONDARY_TEXT} mb={1}>
+        <Text>Opening</Text>
+        <Text color={TEXT_COLOR} fontWeight="600">{formatAmount(flow.opening)}</Text>
+      </HStack>
+      <HStack justify="space-between" fontSize="11px" color={SECONDARY_TEXT} mb={1}>
+        <Text>Receipts</Text>
+        <Text color={TEXT_COLOR}>{formatAmount(flow.receipts)}</Text>
+      </HStack>
+      <HStack justify="space-between" fontSize="11px" color={SECONDARY_TEXT} mb={1}>
+        <Text>Payments</Text>
+        <Text color={TEXT_COLOR}>{formatAmount(flow.payments)}</Text>
+      </HStack>
+      <HStack justify="space-between" fontSize="11px" color={SECONDARY_TEXT} mb={1}>
+        <Text>Contra (net)</Text>
+        <Text color={Number(flow.contra_net) > 0 ? "#1F7A3A" : Number(flow.contra_net) < 0 ? PRIMARY_RED : TEXT_COLOR}>
+          {formatSigned(flow.contra_net)}
+        </Text>
+      </HStack>
+      <HStack justify="space-between" fontSize="12px" borderTop={`1px solid ${BORDER_COLOR}`} pt={2} mt={1}>
+        <Text fontWeight="700" color={TEXT_COLOR}>Closing</Text>
+        <Text fontWeight="800" color={TEXT_COLOR}>{formatAmount(flow.closing)}</Text>
+      </HStack>
+    </Box>
+  );
+};
 
 // ============================================================
 // MAIN PAGE
@@ -224,13 +385,13 @@ const ReceiptPaymentPage = () => {
   const [dateFrom, setDateFrom] = useState(monthStart());
   const [dateTo, setDateTo] = useState(today());
   const [displayMode, setDisplayMode] = useState("Summary");
-  
+
   const [openMap, setOpenMap] = useState({});
   const [data, setData] = useState({ receipts: [], payments: [], summary: {} });
   const [loading, setLoading] = useState(false);
   const [pageError, setPageError] = useState("");
   const [isPrintOpen, setIsPrintOpen] = useState(false);
-  
+
   const [church, setChurch] = useState({ name: "", address: "" });
 
   useEffect(() => {
@@ -272,9 +433,34 @@ const ReceiptPaymentPage = () => {
 
   const receipts = data?.receipts || [];
   const payments = data?.payments || [];
-  const summary = data?.summary || { opening_balance: 0, total_income: 0, total_receipts: 0, total_expense: 0, closing_balance: 0, total_payments: 0 };
+
+  // ✅ Safe defaults for every field the UI reads, so a mid-deploy
+  //    backend without cash_flow/bank_flow won't crash the page.
+  const summary = {
+    opening_balance: 0,
+    total_income: 0,
+    total_receipts: 0,
+    total_expense: 0,
+    closing_balance: 0,
+    total_payments: 0,
+    opening_cash: 0,
+    opening_bank: 0,
+    closing_cash: 0,
+    closing_bank: 0,
+    expected_closing: 0,
+    reconciliation_gap: 0,
+    is_balanced: false,
+    cash_flow: null,
+    bank_flow: null,
+    ...(data?.summary || {}),
+  };
+
   const hasData = receipts.length > 0 || payments.length > 0;
   const isDetailed = displayMode === "Detailed";
+
+  // ✅ Reconciliation gap is the trustworthy "is_balanced" signal.
+  const gap = Number(summary.reconciliation_gap || 0);
+  const isTrulyBalanced = Math.abs(gap) < 0.01;
 
   const handleOpenPrint = () => { if (hasData) setIsPrintOpen(true); };
 
@@ -296,7 +482,6 @@ const ReceiptPaymentPage = () => {
             <Text color={SECONDARY_TEXT} fontSize="12px">View cash receipts and payments grouped by ledger group.</Text>
           </Box>
           <HStack gap={3} flexWrap="wrap">
-            {/* <Button variant="outline" h="40px" px={5} borderColor={PRIMARY_RED} color={PRIMARY_RED} borderRadius="6px" fontSize="12px" fontWeight="600" onClick={() => navigate(-1)} _hover={{ bg: "#FFF5F7" }} leftIcon={<ArrowLeftIcon />}>Back</Button> */}
             <Button variant="outline" h="40px" px={5} borderColor={PRIMARY_RED} color={PRIMARY_RED} borderRadius="6px" fontSize="12px" fontWeight="600" onClick={handleOpenPrint} isDisabled={!hasData} _hover={{ bg: "#FFF5F7" }} leftIcon={<PrinterIcon />}>Print</Button>
             <Button variant="outline" h="40px" px={5} borderColor={PRIMARY_RED} color={PRIMARY_RED} borderRadius="6px" fontSize="12px" fontWeight="600" onClick={handleOpenPrint} isDisabled={!hasData} _hover={{ bg: "#FFF5F7" }} leftIcon={<FilePdfIcon />}>Generate PDF</Button>
           </HStack>
@@ -334,6 +519,12 @@ const ReceiptPaymentPage = () => {
           </Flex>
         </Box>
 
+        {pageError && (
+          <Box mb={4} p={3} borderRadius="6px" bg="#FFF5F5" border="1px solid #FED7D7">
+            <Text color="red.600" fontSize="12px">{pageError}</Text>
+          </Box>
+        )}
+
         {loading ? (
           <Box border={`1px solid ${BORDER_COLOR}`} borderRadius="10px" py={14} textAlign="center"><Text color={SECONDARY_TEXT} fontSize="12px">Loading…</Text></Box>
         ) : !hasData ? (
@@ -342,87 +533,144 @@ const ReceiptPaymentPage = () => {
             <Text color={SECONDARY_TEXT} fontSize="12px" mt={1}>Adjust the date range or post entries.</Text>
           </Box>
         ) : (
-          <Box border={`1px solid ${BORDER_COLOR}`} borderRadius="10px" overflow="hidden">
-            <Box bg="#F7F9FB" borderBottom={`1px solid ${BORDER_COLOR}`} textAlign="center" py={3}>
-              <Text fontSize="14px" fontWeight="700" color={TEXT_COLOR} letterSpacing="0.6px">
-                RECEIPTS &amp; PAYMENTS {isDetailed ? "STATEMENT" : "SUMMARY"}
-              </Text>
+          <>
+            {/* PER-SIDE SUMMARY CARDS (Cash vs Bank) — QA item */}
+            {(summary.cash_flow || summary.bank_flow) && (
+              <Flex gap={3} mb={4} direction={{ base: "column", md: "row" }}>
+                <Box flex="1"><SideFlowCard title="Cash in Hand" flow={summary.cash_flow} tone="red" /></Box>
+                <Box flex="1"><SideFlowCard title="Bank Accounts" flow={summary.bank_flow} tone="blue" /></Box>
+              </Flex>
+            )}
+
+            <Box border={`1px solid ${BORDER_COLOR}`} borderRadius="10px" overflow="hidden">
+              <Box bg="#F7F9FB" borderBottom={`1px solid ${BORDER_COLOR}`} textAlign="center" py={3}>
+                <Text fontSize="14px" fontWeight="700" color={TEXT_COLOR} letterSpacing="0.6px">
+                  RECEIPTS &amp; PAYMENTS {isDetailed ? "STATEMENT" : "SUMMARY"}
+                </Text>
+              </Box>
+
+              <Flex direction={{ base: "column", lg: "row" }}>
+                {/* LEFT: RECEIPTS */}
+                <Box flex="1" borderRight={{ base: "none", lg: `1px solid ${BORDER_COLOR}` }} borderBottom={{ base: `1px solid ${BORDER_COLOR}`, lg: "none" }}>
+                  <Box as="table" width="100%" borderCollapse="collapse">
+                    <Box as="thead">
+                      <Box as="tr" bg="#F7F9FB" borderBottom={`1px solid ${BORDER_COLOR}`}>
+                        <Box as="th" px={3} py={3} textAlign="left"><Text fontSize="12px" fontWeight="700" color={TEXT_COLOR}>Receipts</Text></Box>
+                        <Box as="th" px={3} py={3} textAlign="right" width="180px"><Text fontSize="12px" fontWeight="700" color={TEXT_COLOR}>Amount (₹)</Text></Box>
+                      </Box>
+                    </Box>
+                    <Box as="tbody">
+                      {receipts.map((item, i) => <RowGroup key={i} item={item} side="rec" depth={0} openMap={openMap} toggle={toggle} isDetailed={isDetailed} />)}
+                    </Box>
+                  </Box>
+                  <Box borderTop={`1px solid ${BORDER_COLOR}`}>
+                    <Box as="table" width="100%" borderCollapse="collapse">
+                      <Box as="tbody">
+                        {/* Opening Balance — combined first, breakdown below */}
+                        <Box as="tr" bg="#FFF5F5" borderBottom={`1px solid ${BORDER_COLOR}`}>
+                          <Box as="td" px={3} py={2.5} textAlign="right">
+                            <Text fontSize="12px" fontWeight="700" color={DARK_RED} textTransform="uppercase">I. Opening Balances (Cash &amp; Bank)</Text>
+                          </Box>
+                          <Box as="td" px={3} py={2.5} textAlign="right" width="180px">
+                            <Text fontSize="12px" fontWeight="700" color={TEXT_COLOR}>{formatAmount(summary.opening_balance)}</Text>
+                          </Box>
+                        </Box>
+                        <Box as="tr" bg="#FFF5F5" borderBottom={`1px solid ${BORDER_COLOR}`}>
+                          <Box as="td" px={3} py={1.5} pl="28px" textAlign="right">
+                            <Text fontSize="11px" color={SECONDARY_TEXT} fontStyle="italic">— Cash in Hand</Text>
+                          </Box>
+                          <Box as="td" px={3} py={1.5} textAlign="right" width="180px">
+                            <Text fontSize="11px" color={TEXT_COLOR}>{formatAmount(summary.opening_cash)}</Text>
+                          </Box>
+                        </Box>
+                        <Box as="tr" bg="#FFF5F5" borderBottom={`1px solid ${BORDER_COLOR}`}>
+                          <Box as="td" px={3} py={1.5} pl="28px" textAlign="right">
+                            <Text fontSize="11px" color={SECONDARY_TEXT} fontStyle="italic">— Bank Accounts</Text>
+                          </Box>
+                          <Box as="td" px={3} py={1.5} textAlign="right" width="180px">
+                            <Text fontSize="11px" color={TEXT_COLOR}>{formatAmount(summary.opening_bank)}</Text>
+                          </Box>
+                        </Box>
+                        <tr bg="#F0F4FA"><td style={{ padding: '12px', fontWeight: '700', color: LINK_BLUE, fontSize: '12px' }}>TOTAL RECEIPTS</td><td style={{ padding: '12px', textAlign: 'right', fontWeight: '700', color: TEXT_COLOR, fontSize: '12px' }}>{formatAmount(summary.total_receipts)}</td></tr>
+                      </Box>
+                    </Box>
+                  </Box>
+                </Box>
+
+                {/* RIGHT: PAYMENTS */}
+                <Box flex="1">
+                  <Box as="table" width="100%" borderCollapse="collapse">
+                    <Box as="thead">
+                      <Box as="tr" bg="#F7F9FB" borderBottom={`1px solid ${BORDER_COLOR}`}>
+                        <Box as="th" px={3} py={3} textAlign="left"><Text fontSize="12px" fontWeight="700" color={TEXT_COLOR}>Payments</Text></Box>
+                        <Box as="th" px={3} py={3} textAlign="right" width="180px"><Text fontSize="12px" fontWeight="700" color={TEXT_COLOR}>Amount (₹)</Text></Box>
+                      </Box>
+                    </Box>
+                    <Box as="tbody">
+                      {payments.map((item, i) => <RowGroup key={i} item={item} side="pay" depth={0} openMap={openMap} toggle={toggle} isDetailed={isDetailed} />)}
+                    </Box>
+                  </Box>
+                  <Box borderTop={`1px solid ${BORDER_COLOR}`}>
+                    <Box as="table" width="100%" borderCollapse="collapse">
+                      <Box as="tbody">
+                        {/* Closing Balance — combined first, breakdown below */}
+                        <Box as="tr" bg="#FFF5F5" borderBottom={`1px solid ${BORDER_COLOR}`}>
+                          <Box as="td" px={3} py={2.5} textAlign="right">
+                            <Text fontSize="12px" fontWeight="700" color={DARK_RED} textTransform="uppercase">VIII. Closing Balances (Cash &amp; Bank)</Text>
+                          </Box>
+                          <Box as="td" px={3} py={2.5} textAlign="right" width="180px">
+                            <Text fontSize="12px" fontWeight="700" color={TEXT_COLOR}>{formatAmount(summary.closing_balance)}</Text>
+                          </Box>
+                        </Box>
+                        <Box as="tr" bg="#FFF5F5" borderBottom={`1px solid ${BORDER_COLOR}`}>
+                          <Box as="td" px={3} py={1.5} pl="28px" textAlign="right">
+                            <Text fontSize="11px" color={SECONDARY_TEXT} fontStyle="italic">— Cash in Hand</Text>
+                          </Box>
+                          <Box as="td" px={3} py={1.5} textAlign="right" width="180px">
+                            <Text fontSize="11px" color={TEXT_COLOR}>{formatAmount(summary.closing_cash)}</Text>
+                          </Box>
+                        </Box>
+                        <Box as="tr" bg="#FFF5F5" borderBottom={`1px solid ${BORDER_COLOR}`}>
+                          <Box as="td" px={3} py={1.5} pl="28px" textAlign="right">
+                            <Text fontSize="11px" color={SECONDARY_TEXT} fontStyle="italic">— Bank Accounts</Text>
+                          </Box>
+                          <Box as="td" px={3} py={1.5} textAlign="right" width="180px">
+                            <Text fontSize="11px" color={TEXT_COLOR}>{formatAmount(summary.closing_bank)}</Text>
+                          </Box>
+                        </Box>
+                        <tr bg="#F0F4FA"><td style={{ padding: '12px', fontWeight: '700', color: LINK_BLUE, fontSize: '12px' }}>TOTAL PAYMENTS</td><td style={{ padding: '12px', textAlign: 'right', fontWeight: '700', color: TEXT_COLOR, fontSize: '12px' }}>{formatAmount(summary.total_payments)}</td></tr>
+                      </Box>
+                    </Box>
+                  </Box>
+                </Box>
+              </Flex>
             </Box>
 
-            <Flex direction={{ base: "column", lg: "row" }}>
-              {/* LEFT: RECEIPTS */}
-              <Box flex="1" borderRight={{ base: "none", lg: `1px solid ${BORDER_COLOR}` }} borderBottom={{ base: `1px solid ${BORDER_COLOR}`, lg: "none" }}>
-                <Box as="table" width="100%" borderCollapse="collapse">
-                  <Box as="thead">
-                    <Box as="tr" bg="#F7F9FB" borderBottom={`1px solid ${BORDER_COLOR}`}>
-                      <Box as="th" px={3} py={3} textAlign="left"><Text fontSize="12px" fontWeight="700" color={TEXT_COLOR}>Receipts</Text></Box>
-                      <Box as="th" px={3} py={3} textAlign="right" width="180px"><Text fontSize="12px" fontWeight="700" color={TEXT_COLOR}>Amount (₹)</Text></Box>
-                    </Box>
-                  </Box>
-                  <Box as="tbody">
-                    {/* ✅ OPENING BALANCE ADDED */}
-                    <Box as="tr" bg="#F8FAFC" borderBottom={`1px solid ${BORDER_COLOR}`}>
-                      <Box as="td" px={3} py={2.5}>
-                        <Text fontSize="12px" fontWeight="700" color={DARK_RED} textTransform="uppercase">I. Opening Balances (Cash & Bank)</Text>
-                      </Box>
-                      <Box as="td" px={3} py={2.5} textAlign="right">
-                        <Text fontSize="12px" fontWeight="700" color={TEXT_COLOR}>{formatAmount(summary.opening_balance)}</Text>
-                      </Box>
-                    </Box>
-
-                    {receipts.map((item, i) => <RowGroup key={i} item={item} side="rec" depth={0} openMap={openMap} toggle={toggle} isDetailed={isDetailed} />)}
-                  </Box>
-                </Box>
-                <Box borderTop={`1px solid ${BORDER_COLOR}`}>
-                  <Box as="table" width="100%" borderCollapse="collapse"><Box as="tbody">
-                    <tr bg="#F0F4FA"><td style={{ padding: '12px', fontWeight: '700', color: LINK_BLUE, fontSize: '12px' }}>TOTAL RECEIPTS</td><td style={{ padding: '12px', textAlign: 'right', fontWeight: '700', color: TEXT_COLOR, fontSize: '12px' }}>{formatAmount(summary.total_receipts)}</td></tr>
-                  </Box></Box>
-                </Box>
-              </Box>
-
-              {/* RIGHT: PAYMENTS */}
-              <Box flex="1">
-                <Box as="table" width="100%" borderCollapse="collapse">
-                  <Box as="thead">
-                    <Box as="tr" bg="#F7F9FB" borderBottom={`1px solid ${BORDER_COLOR}`}>
-                      <Box as="th" px={3} py={3} textAlign="left"><Text fontSize="12px" fontWeight="700" color={TEXT_COLOR}>Payments</Text></Box>
-                      <Box as="th" px={3} py={3} textAlign="right" width="180px"><Text fontSize="12px" fontWeight="700" color={TEXT_COLOR}>Amount (₹)</Text></Box>
-                    </Box>
-                  </Box>
-                  <Box as="tbody">
-                    {payments.map((item, i) => <RowGroup key={i} item={item} side="pay" depth={0} openMap={openMap} toggle={toggle} isDetailed={isDetailed} />)}
-                    
-                    {/* ✅ CLOSING BALANCE ADDED */}
-                    <Box as="tr" bg="#F8FAFC" borderBottom={`1px solid ${BORDER_COLOR}`}>
-                      <Box as="td" px={3} py={2.5}>
-                        <Text fontSize="12px" fontWeight="700" color={DARK_RED} textTransform="uppercase">VIII. Closing Balances (Cash & Bank)</Text>
-                      </Box>
-                      <Box as="td" px={3} py={2.5} textAlign="right">
-                        <Text fontSize="12px" fontWeight="700" color={TEXT_COLOR}>{formatAmount(summary.closing_balance)}</Text>
-                      </Box>
-                    </Box>
-                  </Box>
-                </Box>
-                <Box borderTop={`1px solid ${BORDER_COLOR}`}>
-                  <Box as="table" width="100%" borderCollapse="collapse"><Box as="tbody">
-                    <tr bg="#F0F4FA"><td style={{ padding: '12px', fontWeight: '700', color: LINK_BLUE, fontSize: '12px' }}>TOTAL PAYMENTS</td><td style={{ padding: '12px', textAlign: 'right', fontWeight: '700', color: TEXT_COLOR, fontSize: '12px' }}>{formatAmount(summary.total_payments)}</td></tr>
-                  </Box></Box>
-                </Box>
-              </Box>
+            {/* Reconciliation footer — ledger-truth driven */}
+            <Flex mt={4} px={5} py={3} border={`1px solid ${BORDER_COLOR}`} borderRadius="8px" bg="#F8FAFC" align="center" justify="center" gap={3} wrap="wrap">
+              <Text fontSize="12px" color={TEXT_COLOR} fontWeight="600">Reconciliation Gap:</Text>
+              <Text fontSize="13px" color={isTrulyBalanced ? "#1F7A3A" : PRIMARY_RED} fontWeight="700">
+                {formatAmount(gap)}
+              </Text>
+              {isTrulyBalanced ? (
+                <>
+                  <Box width="5px" height="5px" borderRadius="50%" bg={SECONDARY_TEXT} />
+                  <Text fontSize="12px" color={SECONDARY_TEXT}>Cash &amp; Bank books are balanced</Text>
+                </>
+              ) : (
+                <>
+                  <Box width="5px" height="5px" borderRadius="50%" bg={SECONDARY_TEXT} />
+                  <Text fontSize="12px" color={SECONDARY_TEXT}>
+                    Check for manual ledger entries on cash/bank ledgers
+                    {typeof summary.expected_closing === "number" && (
+                      <> — expected {formatAmount(summary.expected_closing)}</>
+                    )}
+                  </Text>
+                </>
+              )}
             </Flex>
-          </Box>
+          </>
         )}
-
-        <Flex mt={4} px={5} py={3} border={`1px solid ${BORDER_COLOR}`} borderRadius="8px" bg="#F8FAFC" align="center" justify="center" gap={3} wrap="wrap">
-          <Text fontSize="12px" color={TEXT_COLOR} fontWeight="600">Difference:</Text>
-          <Text fontSize="13px" color={PRIMARY_RED} fontWeight="700">{formatAmount(Math.abs(summary.total_receipts - summary.total_payments))}</Text>
-          {summary.is_balanced && (
-            <>
-              <Box width="5px" height="5px" borderRadius="50%" bg={SECONDARY_TEXT} />
-              <Text fontSize="12px" color={SECONDARY_TEXT}>Receipts and Payments are balanced</Text>
-            </>
-          )}
-        </Flex>
       </Container>
 
       <Footer />

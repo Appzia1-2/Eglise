@@ -80,7 +80,7 @@ from .views import (
     ReceiptCancelAPIView,
     LedgerBalanceAPIView,MemberLedgerReportAPIView,
     IncomeExpenditureReportAPIView,
-    DonationRegisterReportAPIView,SubscriptionDueListAPIView,
+    DonationRegisterReportAPIView,SubscriptionDueListAPIView,BalanceSheetAPIView ,
     SubscriptionPaidListAPIView,ChurchDashboardMetricsAPIView,ReceiptPaymentCombinedAPIView,ContraMasterListCreateView, ContraMasterDetailView,ContraCancelAPIView 
 )
 
@@ -331,5 +331,8 @@ path("reports/receipt-payment/", ReceiptPaymentCombinedAPIView.as_view(), name="
 path("contra/", ContraMasterListCreateView.as_view(), name="contra-list"),
 path("contra/<int:pk>/", ContraMasterDetailView.as_view(), name="contra-detail"),
 path("contra/<int:pk>/cancel/", ContraCancelAPIView.as_view(), name="contra-cancel"),
+
+
+path("reports/balance-sheet/", BalanceSheetAPIView.as_view(), name="report-balance-sheet"),
 
 ]

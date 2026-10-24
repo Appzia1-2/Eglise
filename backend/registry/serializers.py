@@ -8,7 +8,7 @@ from .models import Package
 from .models import ChurchSubscription, Package
 from django.utils import timezone
 from django.db import models
-
+from .models import get_cash_ledger, get_bank_ledger
 from rest_framework import serializers
 from registry.models import Diocese
 
@@ -4626,27 +4626,76 @@ class AccountLedgerMasterSerializer(serializers.ModelSerializer):
     def get_current_balance(self, obj):
         return round(obj.get_current_balance(), 2)
 
+    # --------------------------------------------------------
+    # NAME UNIQUENESS
+    # --------------------------------------------------------
     def validate_ledger_name(self, value):
-        if not value.strip():
-            raise serializers.ValidationError("Ledger name cannot be empty")
-        return value
+        if not value or not value.strip():
+            raise serializers.ValidationError("Ledger name cannot be empty.")
 
-    # ========================================================
+        church = self.context.get("church") or getattr(self.instance, "church", None)
+        if not church:
+            return value.strip()
+
+        qs = AccountLedgerMaster.objects.filter(
+            church=church,
+            ledger_name__iexact=value.strip(),
+        )
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+
+        if qs.exists():
+            raise serializers.ValidationError(
+                f'A ledger named "{value.strip()}" already exists in this church.'
+            )
+        return value.strip()
+
+    # --------------------------------------------------------
+    # LOCK RESERVED / VALIDATE GROUP
+    # --------------------------------------------------------
+    def validate(self, data):
+        # Reserved rows can only have their status toggled
+        if self.instance and self.instance.reserved:
+            locked = {"ledger_name", "account_group", "ledger_nature", "ledger_code"}
+            for field in locked:
+                if field in data and data[field] != getattr(self.instance, field):
+                    raise serializers.ValidationError({
+                        field: (
+                            "This is a system-seeded ledger. "
+                            "Only the status field can be changed."
+                        )
+                    })
+
+        # Block creating a reserved ledger through the API
+        if not self.instance and data.get("reserved") is True:
+            raise serializers.ValidationError({
+                "reserved": (
+                    "Reserved ledgers are seeded by the system, "
+                    "not created via the API."
+                )
+            })
+
+        # Group must belong to the same church
+        church = self.context.get("church") or getattr(self.instance, "church", None)
+        group = data.get("account_group") or getattr(self.instance, "account_group", None)
+        if church and group and group.church_id != church.id:
+            raise serializers.ValidationError({
+                "account_group": "Group does not belong to this church."
+            })
+
+        return data
+
+    # --------------------------------------------------------
     # LOCK OPENING BALANCE
-    # ========================================================
+    # --------------------------------------------------------
     def update(self, instance, validated_data):
-        # Check if op_balance is being updated
         if "op_balance" in validated_data:
             new_balance = validated_data["op_balance"]
             old_balance = instance.op_balance or 0.0
-
-            # If the old balance is greater than 0, block the edit
-            # unless it's just being sent back exactly as it was.
             if old_balance > 0 and float(new_balance) != float(old_balance):
                 raise serializers.ValidationError({
                     "op_balance": "Opening balance is already set and cannot be modified."
                 })
-
         return super().update(instance, validated_data)
 
 class LedgerEntrySerializer(serializers.ModelSerializer):
@@ -4747,6 +4796,9 @@ class LedgerEntrySerializer(serializers.ModelSerializer):
 # BANK ACCOUNT SERIALIZER
 # ============================================================
 
+from .models import BankAccount, AccountLedgerMaster, LedgerEntry
+from decimal import Decimal
+
 class BankAccountSerializer(serializers.ModelSerializer):
     display_name = serializers.CharField(read_only=True)
 
@@ -4760,6 +4812,7 @@ class BankAccountSerializer(serializers.ModelSerializer):
             "display_name",
             "ifsc_code",
             "branch",
+            "opening_balance", # ✅ Added
             "is_active",
             "created_at",
             "updated_at",
@@ -4776,6 +4829,49 @@ class BankAccountSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Account number cannot be empty.")
         return value.strip()
 
+    @transaction.atomic
+    def create(self, validated_data):
+        church = self.context["church"]
+        bank_account = super().create(validated_data)
+
+        # ✅ Post the Opening Balance to the Ledger
+        ob = bank_account.opening_balance
+        if ob and ob > 0:
+            # 1. Find the primary Bank Ledger (Balance in Savings Account)
+            bank_ledger = AccountLedgerMaster.objects.filter(
+                church=church,
+                ledger_name__iexact="Balance in Savings Account"
+            ).first()
+
+            # 2. Find the Opening Balance Equity Ledger
+            equity_ledger = AccountLedgerMaster.objects.filter(
+                church=church,
+                ledger_name__iexact="Balance as per last Balance Sheet"
+            ).first()
+
+            if bank_ledger and equity_ledger:
+                # DEBIT Bank (Asset increases)
+                LedgerEntry.objects.create(
+                    church=church,
+                    ledger=bank_ledger,
+                    entry_type="DEBIT",
+                    amount=ob,
+                    entry_date=timezone.now().date(),
+                    narration=f"Opening Balance for {bank_account.bank_name} ({bank_account.masked_account_number})",
+                )
+
+                # CREDIT Equity (Equity increases)
+                LedgerEntry.objects.create(
+                    church=church,
+                    ledger=equity_ledger,
+                    entry_type="CREDIT",
+                    amount=ob,
+                    entry_date=timezone.now().date(),
+                    narration=f"Opening Balance for {bank_account.bank_name} ({bank_account.masked_account_number})",
+                )
+
+        return bank_account
+
 
 # ============================================================
 # PAYMENT SERIALIZERS
@@ -4784,25 +4880,25 @@ class BankAccountSerializer(serializers.ModelSerializer):
 class PaymentMasterSerializer(serializers.ModelSerializer):
     account_ledger_name = serializers.CharField(
         source="account_ledger.ledger_name",
-        read_only=True
+        read_only=True,
     )
     bank_account_display = serializers.CharField(
         source="bank_account.display_name",
         read_only=True,
-        allow_null=True
+        allow_null=True,
     )
     payment_type_label = serializers.CharField(
         source="get_payment_type_display",
-        read_only=True
+        read_only=True,
     )
     payment_mode_label = serializers.CharField(
         source="get_payment_mode_display",
-        read_only=True
+        read_only=True,
     )
     cancel_reason_label = serializers.CharField(
         source="get_cancel_reason_display",
         read_only=True,
-        allow_null=True
+        allow_null=True,
     )
     status_label = serializers.SerializerMethodField()
 
@@ -4848,7 +4944,9 @@ class PaymentMasterSerializer(serializers.ModelSerializer):
 
     def validate_amount(self, value):
         if value is None or value <= 0:
-            raise serializers.ValidationError("Amount must be greater than zero.")
+            raise serializers.ValidationError(
+                "Amount must be greater than zero."
+            )
         return value
 
     def validate_party_name(self, value):
@@ -4857,24 +4955,131 @@ class PaymentMasterSerializer(serializers.ModelSerializer):
         return value.strip()
 
     def validate(self, data):
+        church = self.context.get("church")
+
         payment_type = data.get(
             "payment_type",
-            getattr(self.instance, "payment_type", "BANK")
+            getattr(self.instance, "payment_type", "BANK"),
         )
         bank_account = data.get(
             "bank_account",
-            getattr(self.instance, "bank_account", None)
+            getattr(self.instance, "bank_account", None),
         )
 
-        # if payment_type == "BANK" and not bank_account:
-        #     raise serializers.ValidationError({
-        #         "bank_account": "Bank account is required when payment type is Bank."
-        #     })
+        # ------------------------------------------------------
+        # CASH — force bank_account to None
+        # ------------------------------------------------------
         if payment_type == "CASH":
             data["bank_account"] = None
 
-        if payment_type == "CASH":
-            data["bank_account"] = None
+        # ------------------------------------------------------
+        # BANK — bank_account is required (with auto-fill for
+        # the single-account case)
+        # ------------------------------------------------------
+        elif payment_type == "BANK":
+            if not church:
+                raise serializers.ValidationError({
+                    "detail":
+                        "No church context. Cannot validate bank account."
+                })
+
+            active_banks = church.bank_accounts.filter(is_active=True)
+
+            if bank_account is None:
+                if active_banks.count() == 0:
+                    raise serializers.ValidationError({
+                        "bank_account": (
+                            "No bank accounts configured. "
+                            "Add a bank account first."
+                        )
+                    })
+                if active_banks.count() == 1:
+                    data["bank_account"] = active_banks.first()
+                else:
+                    raise serializers.ValidationError({
+                        "bank_account": (
+                            "Please select which bank account this "
+                            "payment was made from."
+                        )
+                    })
+            else:
+                if bank_account.church_id != church.id:
+                    raise serializers.ValidationError({
+                        "bank_account":
+                            "Bank account does not belong to this church."
+                    })
+                if not bank_account.is_active:
+                    raise serializers.ValidationError({
+                        "bank_account":
+                            "Selected bank account is inactive."
+                    })
+
+        # ------------------------------------------------------
+        # Account ledger validation
+        # ------------------------------------------------------
+        ledger = data.get(
+            "account_ledger",
+            getattr(self.instance, "account_ledger", None),
+        )
+        if ledger is None:
+            raise serializers.ValidationError({
+                "account_ledger": "Account ledger is required."
+            })
+
+        if church and ledger.church_id != church.id:
+            raise serializers.ValidationError({
+                "account_ledger": "Ledger does not belong to this church."
+            })
+
+        nature = (ledger.ledger_nature or "").upper()
+        if nature not in ("EXPENSE", "ASSET", "LIABILITY"):
+            raise serializers.ValidationError({
+                "account_ledger": (
+                    f"Payments can only be posted to expense, asset, "
+                    f"or liability ledgers. '{ledger.ledger_name}' is "
+                    f"{nature.lower()}."
+                )
+            })
+
+        # ======================================================
+        # Q2: Insufficient balance check
+        #
+        # Payments draw down the balance of the cash or bank
+        # ledger. If that balance is less than the payment
+        # amount, we reject the payment — otherwise the ledger
+        # goes negative and the Bank Book / Balance Sheet go
+        # wrong.
+        #
+        # Receipts are exempt (they add to balance). Reversals
+        # are exempt (they happen inside reverse_ledger_entry,
+        # not through this serializer).
+        # ======================================================
+        amount = data.get("amount")
+        if church and amount and payment_type:
+            if payment_type == "CASH":
+                source_ledger = get_cash_ledger(church)
+            else:
+                source_ledger = get_bank_ledger(church)
+
+            if not source_ledger:
+                raise serializers.ValidationError({
+                    "detail": (
+                        f"{payment_type.lower()} ledger is not "
+                        f"configured for this church. Cannot post payment."
+                    )
+                })
+
+            available = source_ledger.get_current_balance()
+            requested = float(amount)
+
+            if requested > available:
+                raise serializers.ValidationError({
+                    "amount": (
+                        f"Insufficient {payment_type.lower()} "
+                        f"balance. Available: ₹{available:.2f}, "
+                        f"requested: ₹{requested:.2f}."
+                    )
+                })
 
         return data
 
@@ -4912,7 +5117,15 @@ class QurbanaReceiptsSerializer(serializers.ModelSerializer):
 from rest_framework import serializers
 
 from .models import CommitteeMaster
+from rest_framework import serializers
+from .models import CommitteeMaster, Priest
+
 class CommitteeMasterSerializer(serializers.ModelSerializer):
+    # ✅ Read-only fields to return the names and designations to the frontend
+    president_name = serializers.CharField(source="president.name", read_only=True)
+    president_designation = serializers.CharField(source="president.get_designation_display", read_only=True)
+    vice_president_name = serializers.CharField(source="vice_president.name", read_only=True)
+    vice_president_designation = serializers.CharField(source="vice_president.get_designation_display", read_only=True)
 
     class Meta:
         model = CommitteeMaster
@@ -4920,6 +5133,11 @@ class CommitteeMasterSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "church",
             "committee_code",
+            # ✅ Make the auto-fetched names read-only
+            "president_name",
+            "president_designation",
+            "vice_president_name",
+            "vice_president_designation",
         )
 
     def validate(self, data):
@@ -4964,14 +5182,12 @@ class CommitteeMasterSerializer(serializers.ModelSerializer):
                         f"Member {index + 1}: designation is required."
                 })
 
-            # ✅ NEW: phone is required
             if not item.get("phone"):
                 raise serializers.ValidationError({
                     "members":
                         f"Member {index + 1}: phone is required."
                 })
 
-            # ✅ OPTIONAL: basic format check (digits, +, -, spaces)
             phone = str(item.get("phone", "")).strip()
 
             if len(phone) < 7 or len(phone) > 20:
@@ -4979,6 +5195,38 @@ class CommitteeMasterSerializer(serializers.ModelSerializer):
                     "members":
                         f"Member {index + 1}: phone must be between 7 and 20 characters."
                 })
+
+        # =========================================================
+        # ✅ AUTO-ASSIGN PRESIDENT & VICE PRESIDENT
+        # =========================================================
+        # We only run this on CREATE (not update) to prevent overriding
+        # historical data if a vicar changes later.
+        request = self.context.get("request")
+        
+        if request and not self.instance:
+            church = request.user.church
+            
+            # 1. Auto-assign Active Vicar as President
+            if not data.get("president"):
+                active_vicar = Priest.objects.filter(
+                    church=church, 
+                    designation="MAIN", 
+                    is_active=True
+                ).order_by("-date_from").first()
+                
+                if active_vicar:
+                    data["president"] = active_vicar
+
+            # 2. Auto-assign Active Assistant Vicar as Vice President
+            if not data.get("vice_president"):
+                active_asst_vicar = Priest.objects.filter(
+                    church=church, 
+                    designation="ASSISTANT", 
+                    is_active=True
+                ).order_by("-date_from").first()
+                
+                if active_asst_vicar:
+                    data["vice_president"] = active_asst_vicar
 
         return data
 
@@ -5472,11 +5720,6 @@ class ReceiptMasterSerializer(serializers.ModelSerializer):
     member_name = serializers.CharField(
         source="member.name", read_only=True
     )
-    # bank_account_display = serializers.CharField(
-    #     source="bank_account.display_name",
-    #     read_only=True,
-    #     allow_null=True
-    # )
     bank_account_display = serializers.SerializerMethodField()
     payment_details = serializers.SerializerMethodField()
 
@@ -5549,58 +5792,81 @@ class ReceiptMasterSerializer(serializers.ModelSerializer):
 
         payment_type = data.get(
             "payment_type",
-            getattr(self.instance, "payment_type", "BANK")
+            getattr(self.instance, "payment_type", "BANK"),
         )
         transaction_type = data.get(
             "transaction_type",
-            getattr(self.instance, "transaction_type", None)
+            getattr(self.instance, "transaction_type", None),
         )
         bank_account = data.get(
             "bank_account",
-            getattr(self.instance, "bank_account", None)
+            getattr(self.instance, "bank_account", None),
         )
 
-        # if payment_type == "BANK":
-        #     if not transaction_type:
-        #         raise serializers.ValidationError({
-        #             "transaction_type":
-        #                 "Transaction type is required for bank receipts."
-        #         })
-        #     if not bank_account:
-        #         raise serializers.ValidationError({
-        #             "bank_account":
-        #                 "Bank account is required for bank receipts."
-        #         })
-        #     if church and bank_account.church_id != church.id:
-        #         raise serializers.ValidationError({
-        #             "bank_account":
-        #                 "Bank account does not belong to this church."
-        #         })
+        # ------------------------------------------------------
+        # CASH — force bank_account to None
+        # ------------------------------------------------------
+        if payment_type == "CASH":
+            data["bank_account"] = None
+            data["transaction_type"] = None
 
-        if payment_type == "BANK":
+        # ------------------------------------------------------
+        # BANK — bank_account is required (with auto-fill for
+        # the single-account case)
+        # ------------------------------------------------------
+        elif payment_type == "BANK":
             if not transaction_type:
                 raise serializers.ValidationError({
                     "transaction_type":
                         "Transaction type is required for bank receipts."
                 })
 
-            # ✅ bank_account is now OPTIONAL
-            if bank_account and church and bank_account.church_id != church.id:
+            if not church:
                 raise serializers.ValidationError({
-                    "bank_account":
-                        "Bank account does not belong to this church."
+                    "detail":
+                        "No church context. Cannot validate bank account."
                 })
 
-        if payment_type == "CASH":
-            data["bank_account"] = None
-            data["transaction_type"] = None
+            active_banks = church.bank_accounts.filter(is_active=True)
 
+            if bank_account is None:
+                if active_banks.count() == 0:
+                    raise serializers.ValidationError({
+                        "bank_account": (
+                            "No bank accounts configured. "
+                            "Add a bank account first."
+                        )
+                    })
+                if active_banks.count() == 1:
+                    # Auto-fill the only active bank
+                    data["bank_account"] = active_banks.first()
+                else:
+                    raise serializers.ValidationError({
+                        "bank_account": (
+                            "Please select which bank account "
+                            "received this payment."
+                        )
+                    })
+            else:
+                if bank_account.church_id != church.id:
+                    raise serializers.ValidationError({
+                        "bank_account":
+                            "Bank account does not belong to this church."
+                    })
+                if not bank_account.is_active:
+                    raise serializers.ValidationError({
+                        "bank_account":
+                            "Selected bank account is inactive."
+                    })
+
+        # ------------------------------------------------------
+        # Lines
+        # ------------------------------------------------------
         lines = data.get("lines") or []
 
         if not lines:
             raise serializers.ValidationError({
-                "lines":
-                    "At least one Particulars line is required."
+                "lines": "At least one Particulars line is required."
             })
 
         total = 0
@@ -5624,6 +5890,16 @@ class ReceiptMasterSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     "lines":
                         f"Line {idx + 1}: ledger does not belong to this church."
+                })
+
+            # Only INCOME ledgers can be posted to a receipt line
+            if (ledger.ledger_nature or "").upper() != "INCOME":
+                raise serializers.ValidationError({
+                    "lines": (
+                        f"Line {idx + 1}: only INCOME ledgers can be used "
+                        f"on a receipt. '{ledger.ledger_name}' is "
+                        f"{(ledger.ledger_nature or 'UNKNOWN').lower()}."
+                    )
                 })
 
             total += amount
@@ -5661,7 +5937,7 @@ class ReceiptMasterSerializer(serializers.ModelSerializer):
         total = (
             ReceiptLine.objects
             .filter(receipt=receipt)
-            .aggregate(s=models.Sum("amount"))["s"]
+            .aggregate(s=Sum("amount"))["s"]
             or 0
         )
         receipt.grand_total = total
@@ -5702,7 +5978,7 @@ class ReceiptMasterSerializer(serializers.ModelSerializer):
             total = (
                 ReceiptLine.objects
                 .filter(receipt=instance)
-                .aggregate(s=models.Sum("amount"))["s"]
+                .aggregate(s=Sum("amount"))["s"]
                 or 0
             )
             instance.grand_total = total
@@ -5784,29 +6060,90 @@ class ContraMasterSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         church = self.context.get("church")
+        contra_type = data.get("contra_type")
+        amount = data.get("amount")
 
         from_ledger = data.get("from_ledger")
         to_ledger = data.get("to_ledger")
 
-        if from_ledger and to_ledger and from_ledger.id == to_ledger.id:
-            raise serializers.ValidationError(
-                {"to_ledger": "Source and destination ledgers must be different."}
-            )
+        # =====================================================
+        # ✅ AUTO-RESOLVE LEDGERS FROM CONTRA TYPE
+        # Under "one church = one bank" the user shouldn't have
+        # to pick ledgers manually for CASH_TO_BANK / BANK_TO_CASH.
+        # =====================================================
+        if contra_type and (from_ledger is None or to_ledger is None):
+            cash = get_cash_ledger(church) if church else None
+            bank = get_bank_ledger(church) if church else None
 
-        # Both sides must be ASSET ledgers (cash/bank). This is what makes
-        # it a contra and not an income/expense transaction.
-        for ledger, field in ((from_ledger, "from_ledger"), (to_ledger, "to_ledger")):
-            if ledger and (ledger.ledger_nature or "").upper() != "ASSET":
+            if contra_type == "CASH_TO_BANK":
+                from_ledger = from_ledger or cash
+                to_ledger = to_ledger or bank
+            elif contra_type == "BANK_TO_CASH":
+                from_ledger = from_ledger or bank
+                to_ledger = to_ledger or cash
+            elif contra_type == "BANK_TO_BANK":
+                if from_ledger is None or to_ledger is None:
+                    raise serializers.ValidationError({
+                        "from_ledger": (
+                            "Bank-to-Bank contra requires explicit "
+                            "source and destination ledgers."
+                        )
+                    })
+
+            if from_ledger is None or to_ledger is None:
                 raise serializers.ValidationError({
-                    field: "Contra is only allowed between Asset (Cash/Bank) ledgers."
+                    "detail": (
+                        "Cash / Bank ledgers are not configured for this "
+                        "church. Cannot create contra."
+                    )
                 })
 
-        if church:
-            for ledger, field in ((from_ledger, "from_ledger"), (to_ledger, "to_ledger")):
-                if ledger and ledger.church_id != church.id:
-                    raise serializers.ValidationError({
-                        field: "Ledger does not belong to this church."
-                    })
+            data["from_ledger"] = from_ledger
+            data["to_ledger"] = to_ledger
+
+        # ---- Sanity ----
+        if from_ledger is None or to_ledger is None:
+            raise serializers.ValidationError({
+                "detail": "from_ledger and to_ledger are required."
+            })
+
+        if from_ledger.id == to_ledger.id:
+            raise serializers.ValidationError({
+                "to_ledger": "Source and destination ledgers must be different."
+            })
+
+        for ledger, field in (
+            (from_ledger, "from_ledger"),
+            (to_ledger, "to_ledger"),
+        ):
+            if (ledger.ledger_nature or "").upper() != "ASSET":
+                raise serializers.ValidationError({
+                    field: (
+                        "Contra is only allowed between Asset "
+                        "(Cash/Bank) ledgers."
+                    )
+                })
+            if church and ledger.church_id != church.id:
+                raise serializers.ValidationError({
+                    field: "Ledger does not belong to this church."
+                })
+
+        # =====================================================
+        # ✅ BALANCE CHECK ON THE SOURCE SIDE
+        # Contra reduces the source balance, so the source
+        # must have enough funds.
+        # =====================================================
+        if amount and amount > 0:
+            available = from_ledger.get_current_balance()
+            if float(amount) > available:
+                raise serializers.ValidationError({
+                    "amount": (
+                        f"Insufficient balance in "
+                        f"'{from_ledger.ledger_name}'. "
+                        f"Available: ₹{available:.2f}, "
+                        f"requested: ₹{amount:.2f}."
+                    )
+                })
 
         return data
 

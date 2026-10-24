@@ -32,12 +32,6 @@ const BLUE = "#315AB5";
 // ------------------------------------------------------------
 // Icons
 // ------------------------------------------------------------
-const ArrowLeftIcon = ({ size = 15, color = PRIMARY_RED }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <path d="M19 12H5M12 19l-7-7 7-7" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
 const PrinterIcon = ({ size = 15, color = PRIMARY_RED }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -354,6 +348,13 @@ const MemberLedgerPage = () => {
   const memberName = members.find((m) => String(m.id) === String(selectedMember))?.name || "";
   const periodLabel = `${formatDateShort(dateFrom)} – ${formatDateShort(dateTo)}`;
 
+  // ✅ Split opening/closing by sign so they land in the correct column
+  const openingIsCredit = opening >= 0;
+  const openingAmount = Math.abs(opening);
+
+  const closingIsCredit = totals.closing >= 0;
+  const closingAmount = Math.abs(totals.closing);
+
   const LedgerTable = ({ forPrint = false }) => {
     const headerBg = forPrint ? "#F4D8DE" : "#F7F9FB";
     const headerColor = forPrint ? DARK_RED : TEXT_COLOR;
@@ -365,8 +366,25 @@ const MemberLedgerPage = () => {
         <Box as="table" width="100%" borderCollapse="collapse" fontSize={forPrint ? "11px" : "12px"} fontFamily={forPrint ? "Georgia, serif" : "inherit"}>
           <Box as="thead">
             <Box as="tr" bg={headerBg}>
-              {["Date", "Voucher Number", "Account Ledger", "Cash / Bank Account", "Credit (₹)", "Debit (₹)"].map((label, i) => (
-                <Box as="th" key={label} textAlign={i >= 4 ? "right" : "left"} px={3} py={2.5} fontSize="11px" fontWeight="700" color={headerColor} borderBottom={`1px solid ${rowBorder}`}>
+              {[
+                "Date",
+                "Voucher Number",
+                "Account Ledger",
+                "Cash / Bank Account",
+                "Debit (₹)",     // ✅ Debit first (matches all other reports)
+                "Credit (₹)",    // ✅ Credit second
+              ].map((label, i) => (
+                <Box
+                  as="th"
+                  key={label}
+                  textAlign={i >= 4 ? "right" : "left"}
+                  px={3}
+                  py={2.5}
+                  fontSize="11px"
+                  fontWeight="700"
+                  color={headerColor}
+                  borderBottom={`1px solid ${rowBorder}`}
+                >
                   {label}
                 </Box>
               ))}
@@ -374,18 +392,18 @@ const MemberLedgerPage = () => {
           </Box>
 
           <Box as="tbody">
-            {/* OPENING BALANCE - Moved to Credit Column since Member Payments are Credits */}
+            {/* OPENING — placed by sign */}
             <Box as="tr" bg={forPrint ? "#FBE9ED" : "#F5F7FA"}>
               <Box as="td" colSpan={4} px={3} py={2}>
                 <Text fontWeight="600" color={forPrint ? DARK_RED : BLUE} fontSize={forPrint ? "11px" : "12px"}>
-                  Opening Balance
+                  Opening Cumulative
                 </Text>
               </Box>
               <Box as="td" textAlign="right" px={3} py={2} color={forPrint ? DARK_RED : BLUE} fontWeight="700">
-                {formatCurrency(opening)}
+                {openingIsCredit ? "—" : formatCurrency(openingAmount)}
               </Box>
-              <Box as="td" textAlign="right" px={3} py={2}>
-                <Text color={SECONDARY_TEXT}>—</Text>
+              <Box as="td" textAlign="right" px={3} py={2} color={forPrint ? DARK_RED : BLUE} fontWeight="700">
+                {openingIsCredit ? formatCurrency(openingAmount) : "—"}
               </Box>
             </Box>
 
@@ -396,8 +414,8 @@ const MemberLedgerPage = () => {
                 <Box as="td" px={3} py={2} color={TEXT_COLOR}>{row.voucher || "—"}</Box>
                 <Box as="td" px={3} py={2} color={forPrint ? DARK_RED : BLUE}>{row.ledger_name || "—"}</Box>
                 <Box as="td" px={3} py={2} color={TEXT_COLOR}>{row.cash_bank || "—"}</Box>
-                <Box as="td" px={3} py={2} textAlign="right" color={TEXT_COLOR}>{row.credit ? formatCurrency(row.credit) : "—"}</Box>
                 <Box as="td" px={3} py={2} textAlign="right" color={TEXT_COLOR}>{row.debit ? formatCurrency(row.debit) : "—"}</Box>
+                <Box as="td" px={3} py={2} textAlign="right" color={TEXT_COLOR}>{row.credit ? formatCurrency(row.credit) : "—"}</Box>
               </Box>
             ))}
 
@@ -409,25 +427,25 @@ const MemberLedgerPage = () => {
                 </Text>
               </Box>
               <Box as="td" textAlign="right" px={3} py={2.5} fontWeight="700" color={forPrint ? DARK_RED : BLUE}>
-                {formatCurrency(totals.credit)}
+                {formatCurrency(totals.debit)}
               </Box>
               <Box as="td" textAlign="right" px={3} py={2.5} fontWeight="700" color={forPrint ? DARK_RED : BLUE}>
-                {formatCurrency(totals.debit)}
+                {formatCurrency(totals.credit)}
               </Box>
             </Box>
 
-            {/* CLOSING - Moved to Credit Column */}
+            {/* CLOSING — placed by sign */}
             <Box as="tr" bg={forPrint ? "#F5CED8" : "#EEF1F6"} borderTop={`1px solid ${rowBorder}`}>
               <Box as="td" colSpan={4} px={3} py={2.5} textAlign="right">
                 <Text fontWeight="700" color={forPrint ? DARK_RED : BLUE} fontSize={forPrint ? "11px" : "12px"}>
-                  Closing Balance
+                  Cumulative Total
                 </Text>
               </Box>
               <Box as="td" textAlign="right" px={3} py={2.5} fontWeight="700" color={forPrint ? DARK_RED : BLUE}>
-                {formatCurrency(totals.closing)}
+                {closingIsCredit ? "—" : formatCurrency(closingAmount)}
               </Box>
-              <Box as="td" textAlign="right" px={3} py={2.5}>
-                <Text color={SECONDARY_TEXT}>—</Text>
+              <Box as="td" textAlign="right" px={3} py={2.5} fontWeight="700" color={forPrint ? DARK_RED : BLUE}>
+                {closingIsCredit ? formatCurrency(closingAmount) : "—"}
               </Box>
             </Box>
           </Box>
@@ -461,9 +479,6 @@ const MemberLedgerPage = () => {
           </Box>
 
           <HStack gap={3} flexWrap="wrap">
-            {/* <Button variant="outline" h="40px" px={5} borderColor={PRIMARY_RED} color={PRIMARY_RED} borderRadius="6px" fontSize="12px" fontWeight="600" onClick={() => navigate("/reports")} _hover={{ bg: "#FFF5F7" }} leftIcon={<ArrowLeftIcon />}>
-              Back
-            </Button> */}
             <Button variant="outline" h="40px" px={5} borderColor={PRIMARY_RED} color={PRIMARY_RED} borderRadius="6px" fontSize="12px" fontWeight="600" onClick={() => setPrintOpen(true)} _hover={{ bg: "#FFF5F7" }} leftIcon={<PrinterIcon />}>
               Print
             </Button>
@@ -534,7 +549,19 @@ const MemberLedgerPage = () => {
 
       <Footer />
 
-      <ChurchPrintModal isOpen={printOpen} onClose={() => setPrintOpen(false)} title="MEMBER LEDGER" church={church} subtitle={<><Text as="span" fontWeight="700">Member Name:</Text> {memberName}<Box as="span" mx={3}>•</Box><Text as="span" fontWeight="700">Period:</Text> {periodLabel}</>}>
+      <ChurchPrintModal
+        isOpen={printOpen}
+        onClose={() => setPrintOpen(false)}
+        title="MEMBER LEDGER"
+        church={church}
+        subtitle={
+          <>
+            <Text as="span" fontWeight="700">Member Name:</Text> {memberName}
+            <Box as="span" mx={3}>•</Box>
+            <Text as="span" fontWeight="700">Period:</Text> {periodLabel}
+          </>
+        }
+      >
         <LedgerTable forPrint />
       </ChurchPrintModal>
     </Box>

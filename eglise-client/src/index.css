@@ -26,3 +26,39 @@ body {
   background-color: var(--white);
   color: var(--dark-text);
 }
+
+/* ============================================================
+   PRINT-SPECIFIC RULES (Fixes sliced rows and orphaned footers)
+   ============================================================ */
+@media print {
+  /* 1. Prevent any table row from being sliced in half */
+  tr {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* 2. Repeat table headers at the top of every printed page */
+  thead {
+    display: table-header-group !important;
+  }
+
+  /* 3. Keep table footers (totals) attached to the bottom of the table */
+  tfoot {
+    display: table-footer-group !important;
+    break-inside: avoid !important;
+  }
+
+  /* 4. Keep specific blocks together (like Net Surplus or Quotes) */
+  .print-footer-block, 
+  .grand-total-row, 
+  .sub-total-row {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* 5. Ensure the body allows the page to scroll infinitely for printing */
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+  }
+}

@@ -11,7 +11,7 @@ import {
   Icon,
   Text,
 } from "@chakra-ui/react";
-import { LuArrowLeft, LuPrinter, LuFileText } from "react-icons/lu";
+import { LuPrinter, LuFileText } from "react-icons/lu";
 
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -48,20 +48,33 @@ const fmt = (n) =>
     maximumFractionDigits: 2,
   });
 
+const formatDateDisplay = (dateStr) => {
+  if (!dateStr) return "—";
+  const [y, m, d] = dateStr.split("-");
+  return `${d}/${m}/${y}`;
+};
+
+// ============================================================
+// ALL FOUR CASH / BANK LEDGERS
+// ============================================================
+
 const CASH_BANK_EXACT_NAMES = [
   "cash in hand",
   "balance in savings account",
+  "balance in deposit account",
+  "balance in other accounts",
 ];
 
 const isCashOrBankLedger = (ledgerName) => {
   const n = String(ledgerName || "").trim().toLowerCase();
   if (!n) return false;
-  return CASH_BANK_EXACT_NAMES.some((exact) => n === exact);
+  return CASH_BANK_EXACT_NAMES.includes(n);
 };
 
-// ------------------------------------------------------------
-// Helper: extract member / party name from a ledger entry
-// ------------------------------------------------------------
+// ============================================================
+// EXTRACT MEMBER / PARTY NAME
+// ============================================================
+
 const extractMemberName = (entry) => {
   if (!entry) return "";
   return (
@@ -84,9 +97,10 @@ const extractMemberName = (entry) => {
   );
 };
 
-// ------------------------------------------------------------
-// Group flat LedgerEntry rows into one row per voucher.
-// ------------------------------------------------------------
+// ============================================================
+// GROUP LEDGER ENTRIES BY VOUCHER
+// ============================================================
+
 const groupLedgerEntries = (entries) => {
   const groups = new Map();
 
@@ -127,7 +141,6 @@ const groupLedgerEntries = (entries) => {
     const g = groups.get(key);
     g._entries.push(e);
 
-    // ✅ Capture member / party name from any entry that has it
     if (!g.memberName) {
       const name = extractMemberName(e);
       if (name) g.memberName = name;
@@ -178,7 +191,6 @@ const groupLedgerEntries = (entries) => {
         : g._entries[0]?.ledger_name || "—";
     }
 
-    // ✅ Fallback: if no memberName yet, scan all entries in the voucher
     if (!g.memberName) {
       for (const entry of g._entries) {
         const name = extractMemberName(entry);
@@ -194,10 +206,17 @@ const groupLedgerEntries = (entries) => {
   });
 };
 
-// ------------------------------------------------------------
-// Print Table
-// ------------------------------------------------------------
-const DayBookPrintTable = ({ rows, totals, openingBalance, closingBalance }) => {
+// ============================================================
+// PRINT TABLE — closing cash & bank balance only
+// ============================================================
+
+const DayBookPrintTable = ({
+  rows,
+  totals,
+  closingBalance,
+  dateFrom,
+  dateTo,
+}) => {
   const thStyle = {
     border: "1px solid #F0C2C2",
     padding: "10px 8px",
@@ -220,30 +239,29 @@ const DayBookPrintTable = ({ rows, totals, openingBalance, closingBalance }) => 
 
   const numStyle = { ...tdStyle, textAlign: "right" };
 
+  const periodLabel =
+    dateFrom === dateTo
+      ? `For the day ${dateFrom || "—"}`
+      : `From ${dateFrom || "—"} to ${dateTo || "—"}`;
+
   return (
     <Box fontFamily="'Georgia', serif">
+      <Text fontSize="12px" color="#555" mb={3} textAlign="center">
+        {periodLabel}
+      </Text>
+
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
             <th style={thStyle}>Date</th>
             <th style={thStyle}>Voucher Number</th>
-            <th style={thStyle}>Account Ledger</th>
+            <th style={thStyle}>Particulars</th>
             <th style={thStyle}>Cash / Bank Account</th>
-            <th style={{ ...thStyle, textAlign: "right" }}>Credit (₹)</th>
-            <th style={{ ...thStyle, textAlign: "right" }}>Debit (₹)</th>
+            <th style={{ ...thStyle, textAlign: "right" }}>Receipt (₹)</th>
+            <th style={{ ...thStyle, textAlign: "right" }}>Payment (₹)</th>
           </tr>
         </thead>
         <tbody>
-          <tr style={{ background: "#FFF5F5" }}>
-            <td colSpan={4} style={{ ...tdStyle, fontWeight: "bold", color: "#8B1A1A" }}>
-              Opening Balance
-            </td>
-            <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>
-              ₹{fmt(openingBalance)}
-            </td>
-            <td style={{ ...numStyle, color: "#8B1A1A" }}>—</td>
-          </tr>
-
           {rows.length === 0 ? (
             <tr>
               <td
@@ -262,52 +280,105 @@ const DayBookPrintTable = ({ rows, totals, openingBalance, closingBalance }) => 
             rows.map((r, i) => (
               <tr
                 key={r.key}
-                style={{ background: i % 2 === 0 ? "#FFFFFF" : "#FFF9F9" }}
+                style={{
+                  background: i % 2 === 0 ? "#FFFFFF" : "#FFF9F9",
+                }}
               >
                 <td style={tdStyle}>{r.date}</td>
-                <td style={tdStyle}>{r.voucherNo}</td>
+                <td style={tdStyle}>
+                  <div>{r.voucherNo}</div>
+                  <div style={{ fontSize: "11px", color: "#888" }}>
+                    {r.voucherType}
+                  </div>
+                </td>
                 <td style={{ ...tdStyle, color: "#8B1A1A" }}>
                   <div>{r.particulars}</div>
                   {r.memberName && (
-                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>
+                    <div
+                      style={{
+                        fontSize: "11px",
+                        color: "#666",
+                        marginTop: "2px",
+                      }}
+                    >
                       {r.memberName}
                     </div>
                   )}
                 </td>
                 <td style={tdStyle}>{r.cashBankAccount}</td>
-                <td style={{ ...numStyle, color: "#8B1A1A" }}>
-                  {r.direction === "CREDIT" ? `₹${fmt(r.amount)}` : "—"}
+                <td style={{ ...numStyle, color: "#2E7D32" }}>
+                  {r.direction === "CREDIT"
+                    ? `₹${fmt(r.amount)}`
+                    : "—"}
                 </td>
-                <td style={{ ...numStyle, color: "#8B1A1A" }}>
-                  {r.direction === "DEBIT" ? `₹${fmt(r.amount)}` : "—"}
+                <td style={{ ...numStyle, color: "#B71C1C" }}>
+                  {r.direction === "DEBIT"
+                    ? `₹${fmt(r.amount)}`
+                    : "—"}
                 </td>
               </tr>
             ))
           )}
 
-          <tr style={{ background: "#FCEAEC", borderTop: "1px solid #F0C2C2" }}>
+          {/* Total */}
+          <tr
+            style={{
+              background: "#FCEAEC",
+              borderTop: "1px solid #F0C2C2",
+            }}
+          >
             <td
               colSpan={4}
-              style={{ ...tdStyle, textAlign: "right", fontWeight: "bold", color: "#8B1A1A" }}
+              style={{
+                ...tdStyle,
+                textAlign: "right",
+                fontWeight: "bold",
+                color: "#8B1A1A",
+              }}
             >
               Total
             </td>
-            <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>
+            <td
+              style={{
+                ...numStyle,
+                fontWeight: "bold",
+                color: "#2E7D32",
+              }}
+            >
               ₹{fmt(totals.credit)}
             </td>
-            <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>
+            <td
+              style={{
+                ...numStyle,
+                fontWeight: "bold",
+                color: "#B71C1C",
+              }}
+            >
               ₹{fmt(totals.debit)}
             </td>
           </tr>
 
+          {/* Closing Balance — accurate label */}
           <tr style={{ background: "#FFF5F5" }}>
             <td
               colSpan={4}
-              style={{ ...tdStyle, textAlign: "right", fontWeight: "bold", color: "#8B1A1A" }}
+              style={{
+                ...tdStyle,
+                textAlign: "right",
+                fontWeight: "bold",
+                color: "#8B1A1A",
+              }}
             >
-              Closing Balance
+              Cash &amp; Bank Balance as of{" "}
+              {formatDateDisplay(dateTo)}
             </td>
-            <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>
+            <td
+              style={{
+                ...numStyle,
+                fontWeight: "bold",
+                color: "#8B1A1A",
+              }}
+            >
               ₹{fmt(closingBalance)}
             </td>
             <td style={{ ...numStyle, color: "#8B1A1A" }}>—</td>
@@ -318,25 +389,24 @@ const DayBookPrintTable = ({ rows, totals, openingBalance, closingBalance }) => 
   );
 };
 
-// ------------------------------------------------------------
-// Page
-// ------------------------------------------------------------
+// ============================================================
+// PAGE
+// ============================================================
+
 const DayBookPage = () => {
   const navigate = useNavigate();
 
   const [rawEntries, setRawEntries] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-
   const [search, setSearch] = useState("");
 
+  // ✅ Default to TODAY
   const [dateFrom, setDateFrom] = useState(todayISO());
   const [dateTo, setDateTo] = useState(todayISO());
 
-  const [openingBalance, setOpeningBalance] = useState(0);
   const [closingBalance, setClosingBalance] = useState(0);
 
   const [church, setChurch] = useState({ name: "", address: "" });
-
   const [isPrintOpen, setIsPrintOpen] = useState(false);
 
   useEffect(() => {
@@ -367,12 +437,10 @@ const DayBookPage = () => {
       if (dateTo) params.to = dateTo;
 
       const res = await listLedgerEntries(params);
-
       const body = res?.data ?? {};
       let data = body.results ?? body ?? [];
       if (!Array.isArray(data)) data = [];
 
-      setOpeningBalance(Number(body.opening_balance ?? 0));
       setClosingBalance(Number(body.closing_balance ?? 0));
 
       setRawEntries(data);
@@ -384,7 +452,6 @@ const DayBookPage = () => {
         type: "error",
       });
       setRawEntries([]);
-      setOpeningBalance(0);
       setClosingBalance(0);
     } finally {
       setIsLoading(false);
@@ -445,6 +512,8 @@ const DayBookPage = () => {
     setDateTo(todayISO());
   };
 
+  const isToday = dateFrom === todayISO() && dateTo === todayISO();
+
   return (
     <>
       <Box minH="100vh" bg="white" display="flex" flexDirection="column">
@@ -490,7 +559,9 @@ const DayBookPage = () => {
                 Day Book
               </Heading>
               <Text color={MUTED} fontSize="13px">
-                View all cash and bank transactions for the selected date.
+                {isToday
+                  ? "Showing today's transactions."
+                  : "Showing transactions for the selected period."}
               </Text>
             </Box>
 
@@ -531,7 +602,12 @@ const DayBookPage = () => {
             </HStack>
           </Flex>
 
-          <Box border={`1px solid ${BORDER}`} borderRadius="8px" p={4} bg="white">
+          <Box
+            border={`1px solid ${BORDER}`}
+            borderRadius="8px"
+            p={4}
+            bg="white"
+          >
             <ReportFilterBar
               search={search}
               setSearch={setSearch}
@@ -549,23 +625,33 @@ const DayBookPage = () => {
               showTotals
             />
 
-            {/* ✅ CLOSING BALANCE FOOTER (At the bottom of the table) */}
-            {!isLoading && rows.length > 0 && (
+            {!isLoading && rows.length === 0 && isToday && (
+              <Box
+                mt={4}
+                p={3}
+                borderRadius="6px"
+                bg="#FFF8E6"
+                border="1px solid #F5D97A"
+              >
+                <Text fontSize="12px" color="#8A6D00">
+                  No transactions were posted today. Pick a different
+                  date range to see older entries.
+                </Text>
+              </Box>
+            )}
+
+            {!isLoading && (
               <Flex
                 justify="flex-end"
                 align="center"
-                mt={5}
+                mt={4}
                 pt={3}
-                borderTop={`2px solid ${BORDER}`}
+                borderTop={`1px solid ${BORDER}`}
               >
                 <HStack gap={4}>
-                  <Text
-                    fontSize="13px"
-                    fontWeight="700"
-                    color={MUTED}
-                    letterSpacing="0.4px"
-                  >
-                    CLOSING BALANCE
+                  <Text fontSize="13px" fontWeight="700" color={MUTED} letterSpacing="0.4px">
+                    CASH &amp; BANK BALANCE AS OF{" "}
+                    {formatDateDisplay(dateTo)}
                   </Text>
                   <Text fontSize="18px" fontWeight="800" color={DARK}>
                     ₹{fmt(closingBalance)}
@@ -573,6 +659,10 @@ const DayBookPage = () => {
                 </HStack>
               </Flex>
             )}
+
+            <Text fontSize="11px" color={MUTED} mt={2} textAlign="right">
+              Showing {rows.length} entries
+            </Text>
           </Box>
         </Box>
 
@@ -595,8 +685,9 @@ const DayBookPage = () => {
         <DayBookPrintTable
           rows={rows}
           totals={totals}
-          openingBalance={openingBalance}
           closingBalance={closingBalance}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
         />
       </ChurchPrintModal>
     </>

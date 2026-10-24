@@ -12,12 +12,14 @@ import {
   NativeSelect,
   Text,
   IconButton,
+  Badge,
 } from "@chakra-ui/react";
 import {
   LuLock,
   LuCalendarDays,
   LuPlus,
   LuMinus,
+  LuUserCheck,
 } from "react-icons/lu";
 import { useNavigate } from "react-router-dom";
 
@@ -28,6 +30,7 @@ import {
   createCommittee,
   listMembers,
   listDesignations,
+  getPriestDropdown, // ✅ FIXED: Singular import
 } from "../api/registryServices";
 
 const PRIMARY_MAROON = "var(--primary-maroon)";
@@ -80,6 +83,10 @@ const CommitteeAddPage = () => {
 
   const [members, setMembers] = useState([]);
   const [designations, setDesignations] = useState([]);
+  
+  // ✅ State for the active Vicar and Assistant Vicar
+  const [president, setPresident] = useState(null);
+  const [vicePresident, setVicePresident] = useState(null);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -102,22 +109,39 @@ const CommitteeAddPage = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const [mRes, dRes] = await Promise.all([
+        // Fetch members, designations, and priests concurrently
+        const [mRes, dRes, pRes] = await Promise.all([
           listMembers(),
           listDesignations(),
+          getPriestDropdown(), // ✅ FIXED: Singular function call
         ]);
 
         const allMembers = getArrayData(mRes);
 
-        // ✅ NEW: Filter out dead / inactive / expired members
+        // Filter out dead / inactive / expired members
         const activeMembers = allMembers.filter(
           (m) => m.is_active && !m.expired
         );
 
         setMembers(activeMembers);
         setDesignations(getArrayData(dRes));
+
+        // ✅ Find the Active Vicar (Main) and Assistant Vicar
+        const priests = getArrayData(pRes);
+        
+        // The backend PriestDropdownAPIView returns status: "CURRENT" | "UPCOMING"
+        const activeVicar = priests.find(
+          (p) => p.designation === "MAIN" && p.status === "CURRENT"
+        );
+        const activeAsstVicar = priests.find(
+          (p) => p.designation === "ASSISTANT" && p.status === "CURRENT"
+        );
+
+        setPresident(activeVicar || null);
+        setVicePresident(activeAsstVicar || null);
+        
       } catch (err) {
-        console.error(err);
+        console.error("Error loading form data:", err);
       }
     };
     load();
@@ -234,7 +258,7 @@ const CommitteeAddPage = () => {
       return;
     }
 
-    // ✅ Validate phone on every valid row
+    // Validate phone on every valid row
     for (const r of validRows) {
       if (!r.phone || !String(r.phone).trim()) {
         setError("Phone number is required for every member.");
@@ -263,6 +287,11 @@ const CommitteeAddPage = () => {
         committee_name: form.committee_name.trim(),
         committee_from_date: form.committee_from_date,
         committee_to_date: form.committee_to_date,
+        
+        // ✅ Pass the IDs of the President and Vice President to the backend
+        president: president?.id || null,
+        vice_president: vicePresident?.id || null,
+        
         members: validRows.map((r) => ({
           member: Number(r.member),
           designation: Number(r.designation),
@@ -555,6 +584,47 @@ const CommitteeAddPage = () => {
                       pointerEvents="none"
                     />
                   </Box>
+                </Box>
+              </Flex>
+            </Box>
+
+            {/* ✅ NEW SECTION: LEADERSHIP (PRESIDENT / VICE PRESIDENT) */}
+            <Box mb={6} p={4} bg="#F8FAFC" borderRadius="8px" border="1px solid" borderColor={BORDER}>
+              <Flex align="center" gap={2} mb={3}>
+                <Icon as={LuUserCheck} color={PRIMARY_MAROON} boxSize={5} />
+                <Heading fontSize="15px" fontWeight="700" color={DARK}>
+                  Committee Leadership
+                </Heading>
+              </Flex>
+              <Text fontSize="12px" color={MUTED} mb={4}>
+                The current active Vicar and Assistant Vicar will automatically be assigned as President and Vice President.
+              </Text>
+
+              <Flex direction={{ base: "column", md: "row" }} gap={5}>
+                {/* President */}
+                <Box flex={1}>
+                  <Text fontSize="12px" fontWeight="600" color={DARK} mb="8px">
+                    President (Vicar)
+                  </Text>
+                  <Flex h="42px" border="1px solid" borderColor={BORDER} borderRadius="7px" bg="white" align="center" px={3} justify="space-between">
+                    <Text fontSize="13px" color={president ? DARK : MUTED}>
+                      {president ? president.name : "No active Vicar found"}
+                    </Text>
+                    {president && <Badge colorScheme="green">Active</Badge>}
+                  </Flex>
+                </Box>
+
+                {/* Vice President */}
+                <Box flex={1}>
+                  <Text fontSize="12px" fontWeight="600" color={DARK} mb="8px">
+                    Vice President (Asst. Vicar)
+                  </Text>
+                  <Flex h="42px" border="1px solid" borderColor={BORDER} borderRadius="7px" bg="white" align="center" px={3} justify="space-between">
+                    <Text fontSize="13px" color={vicePresident ? DARK : MUTED}>
+                      {vicePresident ? vicePresident.name : "No active Asst. Vicar found"}
+                    </Text>
+                    {vicePresident && <Badge colorScheme="green">Active</Badge>}
+                  </Flex>
                 </Box>
               </Flex>
             </Box>
