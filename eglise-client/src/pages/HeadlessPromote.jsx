@@ -193,7 +193,7 @@ const HeadlessPromote = () => {
 
     // If the member doesn't have an email, we REQUIRE it here 
     // to prevent the backend 400 error.
-    if (!emailInput || !emailInput.trim()) {
+    if (!selectedMember.email && (!emailInput || !emailInput.trim())) {
       setError("An email address is required for the new family head to create their login.");
       return;
     }
@@ -202,8 +202,8 @@ const HeadlessPromote = () => {
       setSubmitting(true);
       setError("");
 
-      // 1. If the email is new or changed, update the member first
-      if (selectedMember.email !== emailInput.trim()) {
+      // 1. If the email is new or changed (for members without email), update the member first
+      if (!selectedMember.email && emailInput.trim()) {
         await updateMember(selectedMember.id, { email: emailInput.trim() });
       }
 
@@ -532,27 +532,45 @@ const HeadlessPromote = () => {
                   </VStack>
                 </RadioGroup.Root>
 
-                {/* EMAIL INPUT - PREVENTS 400 ERROR */}
+                {/* EMAIL HANDLING */}
                 {selectedMember && (
                   <Box mt="20px" p="16px" bg="var(--light-bg)" borderRadius="8px" border="1px solid var(--border-color)">
-                    <Field.Root required>
-                      <Field.Label fontWeight="600" color="var(--dark-text)" fontSize="13px">
-                        Email Address for Login
-                      </Field.Label>
-                      <Input
-                        type="email"
-                        value={emailInput}
-                        onChange={(e) => setEmailInput(e.target.value)}
-                        placeholder="Enter email for the new family head"
-                        bg="var(--white)"
-                        h="40px"
-                        fontSize="13px"
-                        borderColor="var(--border-color)"
-                      />
-                      <Field.HelperText fontSize="11px" color="var(--light-gray)" mt="6px">
-                        An email is required to create the family head login. If the member's email is already on file, it will appear here automatically.
-                      </Field.HelperText>
-                    </Field.Root>
+                    
+                    {/* If they ALREADY have an email, just show it */}
+                    {selectedMember.email && selectedMember.email.trim() !== "" ? (
+                      <Box>
+                        <Text fontWeight="600" color="var(--dark-text)" fontSize="13px">
+                          Login Email
+                        </Text>
+                        <Text fontSize="14px" color="var(--primary-maroon)" fontWeight="700" mt="4px">
+                          {selectedMember.email}
+                        </Text>
+                        <Text fontSize="11px" color="var(--light-gray)" mt="6px">
+                          This email will be used to create the family head login.
+                        </Text>
+                      </Box>
+                    ) : (
+                      /* If they DO NOT have an email, force them to type it */
+                      <Field.Root required>
+                        <Field.Label fontWeight="600" color="var(--dark-text)" fontSize="13px">
+                          Email Address for Login
+                        </Field.Label>
+                        <Input
+                          type="email"
+                          value={emailInput}
+                          onChange={(e) => setEmailInput(e.target.value)}
+                          placeholder="Enter email for the new family head"
+                          bg="var(--white)"
+                          h="40px"
+                          fontSize="13px"
+                          borderColor="var(--border-color)"
+                        />
+                        <Field.HelperText fontSize="11px" color="var(--light-gray)" mt="6px">
+                          This member does not have an email on file. An email is required to create their login.
+                        </Field.HelperText>
+                      </Field.Root>
+                    )}
+                    
                   </Box>
                 )}
 
@@ -575,7 +593,7 @@ const HeadlessPromote = () => {
                     h="36px" px="17px" fontSize="12px"
                     onClick={handlePromote}
                     loading={submitting}
-                    disabled={!selectedMember || !emailInput || submitting}
+                    disabled={!selectedMember || (!selectedMember.email && !emailInput) || submitting}
                     _hover={{ bg: "var(--primary-maroon)", opacity: 0.9 }}
                   >
                     <LuUserPlus size={15} />

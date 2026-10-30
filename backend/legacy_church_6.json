@@ -1,0 +1,1215 @@
+{
+  "church_id": 6,
+  "legacy_ledgers": [
+    {
+      "id": 3123,
+      "ledger_code": 2101,
+      "ledger_name": "Bhandaram - Church",
+      "ledger_nature": "INCOME",
+      "account_group_id": 957,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3124,
+      "ledger_code": 2102,
+      "ledger_name": "Bhandaram - Kurishinthotti",
+      "ledger_nature": "INCOME",
+      "account_group_id": 957,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3125,
+      "ledger_code": 2103,
+      "ledger_name": "Bhandaram - Others",
+      "ledger_nature": "INCOME",
+      "account_group_id": 957,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3126,
+      "ledger_code": 2110,
+      "ledger_name": "Qurbana Receipts",
+      "ledger_nature": "INCOME",
+      "account_group_id": 958,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3127,
+      "ledger_code": 2121,
+      "ledger_name": "Offering - Church",
+      "ledger_nature": "INCOME",
+      "account_group_id": 959,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3128,
+      "ledger_code": 2122,
+      "ledger_name": "Offering - Kurishinthotti",
+      "ledger_nature": "INCOME",
+      "account_group_id": 959,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3129,
+      "ledger_code": 2123,
+      "ledger_name": "Offering - Baptism",
+      "ledger_nature": "INCOME",
+      "account_group_id": 959,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3130,
+      "ledger_code": 2124,
+      "ledger_name": "Offering - Funeral",
+      "ledger_nature": "INCOME",
+      "account_group_id": 959,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3131,
+      "ledger_code": 2125,
+      "ledger_name": "Offering - Birthday Contributions",
+      "ledger_nature": "INCOME",
+      "account_group_id": 959,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3132,
+      "ledger_code": 2126,
+      "ledger_name": "Offering - Other",
+      "ledger_nature": "INCOME",
+      "account_group_id": 959,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3133,
+      "ledger_code": 2127,
+      "ledger_name": "Offering - Ritual Articles",
+      "ledger_nature": "INCOME",
+      "account_group_id": 959,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3134,
+      "ledger_code": 2161,
+      "ledger_name": "Festival - July 3rd",
+      "ledger_nature": "INCOME",
+      "account_group_id": 960,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3135,
+      "ledger_code": 2162,
+      "ledger_name": "Festival - August 15",
+      "ledger_nature": "INCOME",
+      "account_group_id": 960,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3136,
+      "ledger_code": 2163,
+      "ledger_name": "Festival - Church Festival",
+      "ledger_nature": "INCOME",
+      "account_group_id": 960,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3137,
+      "ledger_code": 2164,
+      "ledger_name": "Festival - Parumala",
+      "ledger_nature": "INCOME",
+      "account_group_id": 960,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3138,
+      "ledger_code": 2165,
+      "ledger_name": "Festival - Others",
+      "ledger_nature": "INCOME",
+      "account_group_id": 960,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3139,
+      "ledger_code": 2171,
+      "ledger_name": "Pilgrimage - Parumala",
+      "ledger_nature": "INCOME",
+      "account_group_id": 961,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3140,
+      "ledger_code": 2172,
+      "ledger_name": "Pilgrimage - Others",
+      "ledger_nature": "INCOME",
+      "account_group_id": 961,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3141,
+      "ledger_code": 2181,
+      "ledger_name": "Spiritual Org - Sunday School",
+      "ledger_nature": "INCOME",
+      "account_group_id": 962,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3142,
+      "ledger_code": 2182,
+      "ledger_name": "Spiritual Org - Youth Movement",
+      "ledger_nature": "INCOME",
+      "account_group_id": 962,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3143,
+      "ledger_code": 2183,
+      "ledger_name": "Spiritual Org - Vanitha Samajam",
+      "ledger_nature": "INCOME",
+      "account_group_id": 962,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3144,
+      "ledger_code": 2184,
+      "ledger_name": "Spiritual Org - Prarthanayogam",
+      "ledger_nature": "INCOME",
+      "account_group_id": 962,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3145,
+      "ledger_code": 2185,
+      "ledger_name": "Spiritual Org - Bala Samajam",
+      "ledger_nature": "INCOME",
+      "account_group_id": 962,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3146,
+      "ledger_code": 2186,
+      "ledger_name": "Spiritual Org - OVBS",
+      "ledger_nature": "INCOME",
+      "account_group_id": 962,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3147,
+      "ledger_code": 2187,
+      "ledger_name": "Spiritual Org - MGOCSM",
+      "ledger_nature": "INCOME",
+      "account_group_id": 962,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3148,
+      "ledger_code": 2188,
+      "ledger_name": "Spiritual Org - Others",
+      "ledger_nature": "INCOME",
+      "account_group_id": 962,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3149,
+      "ledger_code": 2212,
+      "ledger_name": "Subscription - Current Year",
+      "ledger_nature": "INCOME",
+      "account_group_id": 963,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3150,
+      "ledger_code": 2213,
+      "ledger_name": "Subscription - Outstanding Prior Year",
+      "ledger_nature": "INCOME",
+      "account_group_id": 963,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3151,
+      "ledger_code": 2214,
+      "ledger_name": "Subscription - Advance Next Year",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 963,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3152,
+      "ledger_code": 2216,
+      "ledger_name": "Subscription - Others",
+      "ledger_nature": "INCOME",
+      "account_group_id": 963,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3153,
+      "ledger_code": 2221,
+      "ledger_name": "Parish Hall Rent (GST)",
+      "ledger_nature": "INCOME",
+      "account_group_id": 964,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3157,
+      "ledger_code": 2234,
+      "ledger_name": "Receipt from Tomb/Grave",
+      "ledger_nature": "INCOME",
+      "account_group_id": 965,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3162,
+      "ledger_code": 2304,
+      "ledger_name": "Assistance for Poor Fund",
+      "ledger_nature": "INCOME",
+      "account_group_id": 966,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3164,
+      "ledger_code": 2306,
+      "ledger_name": "Education Assistance",
+      "ledger_nature": "INCOME",
+      "account_group_id": 966,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3165,
+      "ledger_code": 2307,
+      "ledger_name": "Dhyanam / Suvishshayogam",
+      "ledger_nature": "INCOME",
+      "account_group_id": 966,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3166,
+      "ledger_code": 2308,
+      "ledger_name": "Church Celebrations",
+      "ledger_nature": "INCOME",
+      "account_group_id": 966,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3180,
+      "ledger_code": 2501,
+      "ledger_name": "Commercial Building Rent (GST)",
+      "ledger_nature": "INCOME",
+      "account_group_id": 969,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3192,
+      "ledger_code": 2911,
+      "ledger_name": "Grant from Catholicate - Capital",
+      "ledger_nature": "INCOME",
+      "account_group_id": 974,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3193,
+      "ledger_code": 2912,
+      "ledger_name": "Grant from Catholicate - Revenue",
+      "ledger_nature": "INCOME",
+      "account_group_id": 974,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3194,
+      "ledger_code": 2921,
+      "ledger_name": "Grant from Diocese - Capital",
+      "ledger_nature": "INCOME",
+      "account_group_id": 974,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3195,
+      "ledger_code": 2922,
+      "ledger_name": "Grant from Diocese - Revenue",
+      "ledger_nature": "INCOME",
+      "account_group_id": 974,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3197,
+      "ledger_code": 3001,
+      "ledger_name": "Corpus Donation - Building",
+      "ledger_nature": "INCOME",
+      "account_group_id": 976,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3198,
+      "ledger_code": 3002,
+      "ledger_name": "Corpus Donation - Church Articles",
+      "ledger_nature": "INCOME",
+      "account_group_id": 976,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3199,
+      "ledger_code": 3003,
+      "ledger_name": "Corpus Donation - Other",
+      "ledger_nature": "INCOME",
+      "account_group_id": 976,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3201,
+      "ledger_code": 3102,
+      "ledger_name": "Loan from Others",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 977,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3203,
+      "ledger_code": 3201,
+      "ledger_name": "Advance from Diocese",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 978,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3204,
+      "ledger_code": 3202,
+      "ledger_name": "Rent Advance (Own)",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 978,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3207,
+      "ledger_code": 3205,
+      "ledger_name": "Deposits / Bonds",
+      "ledger_nature": "ASSET",
+      "account_group_id": 978,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3211,
+      "ledger_code": 3304,
+      "ledger_name": "Rent Deposits (Liabilities)",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 979,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3212,
+      "ledger_code": 3351,
+      "ledger_name": "Return of Deposits",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 980,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3213,
+      "ledger_code": 3352,
+      "ledger_name": "Return of Investments",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 980,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3218,
+      "ledger_code": 3653,
+      "ledger_name": "Collection of TDS Payable",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 983,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3220,
+      "ledger_code": 4000,
+      "ledger_name": "To Malankara Metropolitan",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 987,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3221,
+      "ledger_code": 4003,
+      "ledger_name": "To Diocesan - Diocesan Day",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 988,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3222,
+      "ledger_code": 4004,
+      "ledger_name": "To Diocesan - Vivaha Kaimuthu",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 988,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3223,
+      "ledger_code": 4005,
+      "ledger_name": "To Diocesan - Hossana Kanikka",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 988,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3224,
+      "ledger_code": 4006,
+      "ledger_name": "To Diocesan - Kohene Kanikka",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 988,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3225,
+      "ledger_code": 4008,
+      "ledger_name": "To Diocesan - Other",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 988,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3226,
+      "ledger_code": 4009,
+      "ledger_name": "To Other Offices - Mission Sunday",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 989,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3227,
+      "ledger_code": 4010,
+      "ledger_name": "To Other Offices - Sunday School Day",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 989,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3228,
+      "ledger_code": 4011,
+      "ledger_name": "To Other Offices - Seminary Day",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 989,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3229,
+      "ledger_code": 4012,
+      "ledger_name": "To Other Offices - Gerbo Sunday",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 989,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3230,
+      "ledger_code": 4013,
+      "ledger_name": "To Other Offices - Others",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 989,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3236,
+      "ledger_code": 4203,
+      "ledger_name": "Church Consumables / Daily",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 994,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3239,
+      "ledger_code": 4206,
+      "ledger_name": "Feast Expenses",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 994,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3240,
+      "ledger_code": 4207,
+      "ledger_name": "Food and Refreshment",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 994,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3246,
+      "ledger_code": 4213,
+      "ledger_name": "Church Expenses - Others",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 994,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3247,
+      "ledger_code": 4231,
+      "ledger_name": "Allowances to Priest",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 995,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3249,
+      "ledger_code": 4233,
+      "ledger_name": "Priest Welfare Fund / Gratuity",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 995,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3250,
+      "ledger_code": 4234,
+      "ledger_name": "Staff Welfare Fund",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 995,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3259,
+      "ledger_code": 4257,
+      "ledger_name": "Vehicle Running and Maintenance",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 996,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3260,
+      "ledger_code": 4258,
+      "ledger_name": "Miscellaneous - Others",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 996,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3261,
+      "ledger_code": 4261,
+      "ledger_name": "Perunnal - July 3rd",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 997,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3262,
+      "ledger_code": 4262,
+      "ledger_name": "Perunnal - August 15",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 997,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3263,
+      "ledger_code": 4263,
+      "ledger_name": "Perunnal - Church Festival",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 997,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3264,
+      "ledger_code": 4264,
+      "ledger_name": "Perunnal - Parumala",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 997,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3265,
+      "ledger_code": 4265,
+      "ledger_name": "Perunnal - Others",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 997,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3267,
+      "ledger_code": 4271,
+      "ledger_name": "Repairs - Buildings",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 998,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3268,
+      "ledger_code": 4272,
+      "ledger_name": "Repairs - Equipments",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 998,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3269,
+      "ledger_code": 4273,
+      "ledger_name": "Repairs - Computers",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 998,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3270,
+      "ledger_code": 4274,
+      "ledger_name": "Repairs - Vehicles",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 998,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3271,
+      "ledger_code": 4275,
+      "ledger_name": "Repairs - Others",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 998,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3274,
+      "ledger_code": 4284,
+      "ledger_name": "Celebration - Christmas",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 999,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3275,
+      "ledger_code": 4285,
+      "ledger_name": "Celebration - Others",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 999,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3276,
+      "ledger_code": 4302,
+      "ledger_name": "Spiritual Org Expense - Sunday School",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 1001,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3277,
+      "ledger_code": 4303,
+      "ledger_name": "Spiritual Org Expense - Youth Movement",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 1001,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3278,
+      "ledger_code": 4304,
+      "ledger_name": "Spiritual Org Expense - Vanitha Samajam",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 1001,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3279,
+      "ledger_code": 4305,
+      "ledger_name": "Spiritual Org Expense - Prarthanayogam",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 1001,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3280,
+      "ledger_code": 4306,
+      "ledger_name": "Spiritual Org Expense - Bala Samajam",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 1001,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3281,
+      "ledger_code": 4307,
+      "ledger_name": "Spiritual Org Expense - OVBS",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 1001,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3282,
+      "ledger_code": 4308,
+      "ledger_name": "Spiritual Org Expense - MGOCSM",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 1001,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3283,
+      "ledger_code": 4309,
+      "ledger_name": "Spiritual Org Expense - Others",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 1001,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3284,
+      "ledger_code": 4311,
+      "ledger_name": "Charity - Medical Aid",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 1002,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3285,
+      "ledger_code": 4312,
+      "ledger_name": "Charity - Marriage Aid",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 1002,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3286,
+      "ledger_code": 4313,
+      "ledger_name": "Charity - Housing Aid",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 1002,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3287,
+      "ledger_code": 4314,
+      "ledger_name": "Charity - Education & Scholarship",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 1002,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3288,
+      "ledger_code": 4315,
+      "ledger_name": "Charity - Rice Distribution",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 1002,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3289,
+      "ledger_code": 4316,
+      "ledger_name": "Charity - Deaddiction Movement",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 1002,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3290,
+      "ledger_code": 4317,
+      "ledger_name": "Charity - Other",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 1002,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3297,
+      "ledger_code": 4343,
+      "ledger_name": "Building Tax - Let out",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 1004,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3299,
+      "ledger_code": 4345,
+      "ledger_name": "Taxes - Others",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 1004,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3303,
+      "ledger_code": 4502,
+      "ledger_name": "Interest on Other Loans",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 1007,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3309,
+      "ledger_code": 4555,
+      "ledger_name": "Professional and Service Charges",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 1008,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3314,
+      "ledger_code": 4560,
+      "ledger_name": "Administrative - Others",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 1008,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3334,
+      "ledger_code": 4620,
+      "ledger_name": "Computers and Software",
+      "ledger_nature": "ASSET",
+      "account_group_id": 1010,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3343,
+      "ledger_code": 4703,
+      "ledger_name": "Endowment Fund Investment",
+      "ledger_nature": "ASSET",
+      "account_group_id": 1011,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3350,
+      "ledger_code": 4801,
+      "ledger_name": "Rent Deposits (Assets)",
+      "ledger_nature": "ASSET",
+      "account_group_id": 1013,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3355,
+      "ledger_code": 4851,
+      "ledger_name": "Repayment - Loan from Banks",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 1014,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3356,
+      "ledger_code": 4852,
+      "ledger_name": "Repayment - Loan from Others",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 1014,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3357,
+      "ledger_code": 4853,
+      "ledger_name": "Repayment - Advance from Diocese",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 1014,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3358,
+      "ledger_code": 4854,
+      "ledger_name": "Repayment - Outstanding Expenses",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 1014,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3359,
+      "ledger_code": 4855,
+      "ledger_name": "Repayment - Advances from Others",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 1014,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3360,
+      "ledger_code": 4856,
+      "ledger_name": "Repayment - Deposits/Bonds",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 1014,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3361,
+      "ledger_code": 4857,
+      "ledger_name": "Repayment - Loan from Members",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 1014,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3363,
+      "ledger_code": 4902,
+      "ledger_name": "Tax Deducted at Source",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 1015,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3368,
+      "ledger_code": 6100,
+      "ledger_name": "Closing - Savings Account",
+      "ledger_nature": "ASSET",
+      "account_group_id": 1019,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3369,
+      "ledger_code": 6200,
+      "ledger_name": "Closing - Deposit Account",
+      "ledger_nature": "ASSET",
+      "account_group_id": 1019,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3370,
+      "ledger_code": 6300,
+      "ledger_name": "Closing - Other Accounts",
+      "ledger_nature": "ASSET",
+      "account_group_id": 1019,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3371,
+      "ledger_code": 6400,
+      "ledger_name": "Closing - Cash in Hand",
+      "ledger_nature": "ASSET",
+      "account_group_id": 1019,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3372,
+      "ledger_code": 5001,
+      "ledger_name": "Capital Fund - Opening Balance",
+      "ledger_nature": "EQUITY",
+      "account_group_id": 1021,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3373,
+      "ledger_code": 3550,
+      "ledger_name": "General Capital Fund Additions",
+      "ledger_nature": "EQUITY",
+      "account_group_id": 1021,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3374,
+      "ledger_code": 5101,
+      "ledger_name": "Corpus Donations - Opening Balance",
+      "ledger_nature": "EQUITY",
+      "account_group_id": 1022,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3380,
+      "ledger_code": 5302,
+      "ledger_name": "Loan from Others (BS)",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 1025,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3381,
+      "ledger_code": 5303,
+      "ledger_name": "Loan from Church Members (BS)",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 1025,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3387,
+      "ledger_code": 5400,
+      "ledger_name": "Interest Payable on Borrowings",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 1026,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3393,
+      "ledger_code": 5461,
+      "ledger_name": "Special Collection - Malankara Metropolitan",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 1028,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3394,
+      "ledger_code": 5462,
+      "ledger_name": "Special Collection - Diocesan Office",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 1028,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3395,
+      "ledger_code": 5463,
+      "ledger_name": "Special Collection - Other MOSC Office",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 1028,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3397,
+      "ledger_code": 5701,
+      "ledger_name": "Bonds / Mutual Funds",
+      "ledger_nature": "ASSET",
+      "account_group_id": 1030,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3398,
+      "ledger_code": 5702,
+      "ledger_name": "Other Investments (BS)",
+      "ledger_nature": "ASSET",
+      "account_group_id": 1030,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3399,
+      "ledger_code": 5751,
+      "ledger_name": "Advance to Spiritual Organisations (BS)",
+      "ledger_nature": "ASSET",
+      "account_group_id": 1031,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3400,
+      "ledger_code": 5752,
+      "ledger_name": "Advance for Land (BS)",
+      "ledger_nature": "ASSET",
+      "account_group_id": 1031,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3401,
+      "ledger_code": 5753,
+      "ledger_name": "Advances to MOSC Institutions (BS)",
+      "ledger_nature": "ASSET",
+      "account_group_id": 1031,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3402,
+      "ledger_code": 5754,
+      "ledger_name": "Advance to Contractors (BS)",
+      "ledger_nature": "ASSET",
+      "account_group_id": 1031,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3403,
+      "ledger_code": 5755,
+      "ledger_name": "Other Advances (BS)",
+      "ledger_nature": "ASSET",
+      "account_group_id": 1031,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3404,
+      "ledger_code": 5801,
+      "ledger_name": "Rent Deposits (Assets BS)",
+      "ledger_nature": "ASSET",
+      "account_group_id": 1032,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3405,
+      "ledger_code": 5802,
+      "ledger_name": "Electricity Deposit (BS)",
+      "ledger_nature": "ASSET",
+      "account_group_id": 1032,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3406,
+      "ledger_code": 5803,
+      "ledger_name": "Telephone Deposit (BS)",
+      "ledger_nature": "ASSET",
+      "account_group_id": 1032,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3407,
+      "ledger_code": 5804,
+      "ledger_name": "LPG Cylinder Deposit (BS)",
+      "ledger_nature": "ASSET",
+      "account_group_id": 1032,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3408,
+      "ledger_code": 5805,
+      "ledger_name": "Other Security Deposits (BS)",
+      "ledger_nature": "ASSET",
+      "account_group_id": 1032,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3412,
+      "ledger_code": 5901,
+      "ledger_name": "Refund of Taxes (Receivable)",
+      "ledger_nature": "ASSET",
+      "account_group_id": 1034,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3413,
+      "ledger_code": 5902,
+      "ledger_name": "TDS/TCS for Current Year",
+      "ledger_nature": "ASSET",
+      "account_group_id": 1034,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3415,
+      "ledger_code": 2215,
+      "ledger_name": "Monthly Subscription Receivable",
+      "ledger_nature": "ASSET",
+      "account_group_id": 1034,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3928,
+      "ledger_code": 5400,
+      "ledger_name": "Interest Payable on Borrowings and Loans (Expense)",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 1007,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3933,
+      "ledger_code": 4564,
+      "ledger_name": "Rent Deposits (Liability)",
+      "ledger_nature": "LIABILITY",
+      "account_group_id": 1008,
+      "op_balance": 0.0
+    }
+  ],
+  "legacy_groups": [
+    {
+      "id": 956,
+      "group_name": "A. Church Receipts",
+      "under_group_id": 955,
+      "account_code": 2000
+    },
+    {
+      "id": 957,
+      "group_name": "Bhandaram Collection",
+      "under_group_id": 956,
+      "account_code": 2100
+    },
+    {
+      "id": 958,
+      "group_name": "Qurbana Receipts",
+      "under_group_id": 956,
+      "account_code": 2110
+    },
+    {
+      "id": 959,
+      "group_name": "Offerings Received",
+      "under_group_id": 956,
+      "account_code": 2120
+    },
+    {
+      "id": 961,
+      "group_name": "Receipts for Pilgrimage",
+      "under_group_id": 956,
+      "account_code": 2170
+    },
+    {
+      "id": 973,
+      "group_name": "Special Collections (Receipts)",
+      "under_group_id": 972,
+      "account_code": 2800
+    },
+    {
+      "id": 988,
+      "group_name": "To Diocesan Office",
+      "under_group_id": 986,
+      "account_code": 4000
+    },
+    {
+      "id": 999,
+      "group_name": "Other Religious Payments",
+      "under_group_id": 993,
+      "account_code": 4280
+    }
+  ]
+}

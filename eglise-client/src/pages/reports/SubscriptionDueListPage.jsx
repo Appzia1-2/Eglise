@@ -259,9 +259,9 @@ const SearchableSelect = ({
 };
 
 // ============================================================
-// DUE TABLE
+// DUE TABLE (DYNAMIC LEDGER COLUMNS)
 // ============================================================
-const DueTable = ({ wards, forPrint = false }) => {
+const DueTable = ({ wards, ledgers = [], forPrint = false }) => {
   const headerBg = forPrint ? "#F4D8DE" : "#F7F9FB";
   const headerColor = forPrint ? DARK_RED : TEXT_COLOR;
   const wardBg = forPrint ? "#FBE9ED" : "#FFF5F7";
@@ -273,23 +273,27 @@ const DueTable = ({ wards, forPrint = false }) => {
   const totalMembers = wards.reduce((s, w) => s + (w.member_count || 0), 0);
 
   return (
-    <Box border={`1px solid ${rowBorder}`} borderRadius={forPrint ? "0" : "10px"} overflow="hidden">
+    <Box border={`1px solid ${rowBorder}`} borderRadius={forPrint ? "0" : "10px"} overflow="hidden" overflowX="auto">
       <Box as="table" width="100%" minW="850px" borderCollapse="collapse" fontSize={forPrint ? "11px" : "12px"} fontFamily={forPrint ? "Georgia, serif" : "inherit"}>
         <Box as="thead">
           <Box as="tr" bg={headerBg}>
-            {[
-              "Member Name",
-              "Family",
-              "Monthly Due",
-              "Yearly Due",
-              "Charity Due",
-              "Diocese Due",
-              "Total Due",
-            ].map((label, i) => (
-              <Box as="th" key={label} textAlign={i >= 2 ? "right" : "left"} px={3} py={3} fontSize="11px" fontWeight="700" color={headerColor} borderBottom={`1px solid ${rowBorder}`} letterSpacing="0.3px" whiteSpace="nowrap">
-                {label}
+            <Box as="th" textAlign="left" px={3} py={3} fontSize="11px" fontWeight="700" color={headerColor} borderBottom={`1px solid ${rowBorder}`} letterSpacing="0.3px" whiteSpace="nowrap">
+              Member Name
+            </Box>
+            <Box as="th" textAlign="left" px={3} py={3} fontSize="11px" fontWeight="700" color={headerColor} borderBottom={`1px solid ${rowBorder}`} letterSpacing="0.3px" whiteSpace="nowrap">
+              Family
+            </Box>
+            
+            {/* Dynamic Ledger Columns */}
+            {ledgers.map((ledgerName) => (
+              <Box as="th" key={ledgerName} textAlign="right" px={3} py={3} fontSize="11px" fontWeight="700" color={headerColor} borderBottom={`1px solid ${rowBorder}`} letterSpacing="0.3px" whiteSpace="nowrap">
+                {ledgerName}
               </Box>
             ))}
+
+            <Box as="th" textAlign="right" px={3} py={3} fontSize="11px" fontWeight="700" color={headerColor} borderBottom={`1px solid ${rowBorder}`} letterSpacing="0.3px" whiteSpace="nowrap">
+              Total Due
+            </Box>
           </Box>
         </Box>
         <Box as="tbody">
@@ -297,7 +301,7 @@ const DueTable = ({ wards, forPrint = false }) => {
             <React.Fragment key={w.ward}>
               {/* Ward header */}
               <Box as="tr" bg={wardBg} borderTop={`1px solid ${wardRowBorder}`} borderBottom={`1px solid ${wardRowBorder}`}>
-                <Box as="td" colSpan={6} px={3} py={2.5}>
+                <Box as="td" colSpan={ledgers.length + 2} px={3} py={2.5}>
                   <HStack gap={2} align="center">
                     <HomeIcon size={16} color={forPrint ? DARK_RED : PRIMARY_RED} />
                     <Text fontSize={forPrint ? "12px" : "13px"} fontWeight="700" color={forPrint ? DARK_RED : TEXT_COLOR}>
@@ -323,33 +327,19 @@ const DueTable = ({ wards, forPrint = false }) => {
                     {m.house_name && <Text fontSize="10px" color={SECONDARY_TEXT}>{m.house_name}</Text>}
                   </Box>
 
-                  {/* Monthly Due */}
-                  <Box as="td" px={3} py={2} textAlign="right" color={TEXT_COLOR} whiteSpace="nowrap">
-                    {m.monthly_subscription > 0 ? (
-                      <Text fontWeight="600">{fmt(m.monthly_subscription)}</Text>
-                    ) : (
-                      <Text color={SECONDARY_TEXT}>—</Text>
-                    )}
-                  </Box>
-
-                  {/* Yearly Due */}
-                  <Box as="td" px={3} py={2} textAlign="right" color={TEXT_COLOR} whiteSpace="nowrap">
-                    {m.yearly_subscription > 0 ? (
-                      <Text fontWeight="600">{fmt(m.yearly_subscription)}</Text>
-                    ) : (
-                      <Text color={SECONDARY_TEXT}>—</Text>
-                    )}
-                  </Box>
-
-                  {/* Charity Due */}
-                  <Box as="td" px={3} py={2} textAlign="right" color={TEXT_COLOR} whiteSpace="nowrap">
-                    {m.charity_fund > 0 ? fmt(m.charity_fund) : <Text color={SECONDARY_TEXT}>—</Text>}
-                  </Box>
-
-                  {/* Diocese Due */}
-                  <Box as="td" px={3} py={2} textAlign="right" color={TEXT_COLOR} whiteSpace="nowrap">
-                    {m.diocese_fund > 0 ? fmt(m.diocese_fund) : <Text color={SECONDARY_TEXT}>—</Text>}
-                  </Box>
+                  {/* Dynamic Ledger Values */}
+                  {ledgers.map((ledgerName) => {
+                    const amt = m.ledgers?.[ledgerName] || 0;
+                    return (
+                      <Box as="td" key={ledgerName} px={3} py={2} textAlign="right" color={TEXT_COLOR} whiteSpace="nowrap">
+                        {amt > 0 ? (
+                          <Text fontWeight="600">{fmt(amt)}</Text>
+                        ) : (
+                          <Text color={SECONDARY_TEXT}>—</Text>
+                        )}
+                      </Box>
+                    );
+                  })}
 
                   {/* Total Due */}
                   <Box as="td" px={3} py={2} textAlign="right" fontWeight="600" color={TEXT_COLOR} whiteSpace="nowrap">
@@ -362,7 +352,7 @@ const DueTable = ({ wards, forPrint = false }) => {
           
           {/* Grand Total */}
           <Box as="tr" bg={forPrint ? "#F5CED8" : "#F5F7FA"} borderTop={`2px solid ${rowBorder}`}>
-            <Box as="td" colSpan={6} px={3} py={3} textAlign="right">
+            <Box as="td" colSpan={ledgers.length + 2} px={3} py={3} textAlign="right">
               <Text fontSize="12px" fontWeight="700" color={forPrint ? DARK_RED : BLUE} letterSpacing="0.3px">
                 Grand Total {forPrint ? "" : ` (${totalMembers} members)`}
               </Text>
@@ -392,7 +382,7 @@ const SubscriptionDueListPage = () => {
   const [dateFrom, setDateFrom] = useState(monthStart());
   const [dateTo, setDateTo] = useState(today());
 
-  const [data, setData] = useState({ wards: [], grand_total: 0 });
+  const [data, setData] = useState({ wards: [], grand_total: 0, ledgers: [] });
   const [loading, setLoading] = useState(false);
   const [pageError, setPageError] = useState("");
   const [printOpen, setPrintOpen] = useState(false);
@@ -418,15 +408,18 @@ const SubscriptionDueListPage = () => {
       const params = { from: dateFrom, to: dateTo };
       if (selectedWard) params.ward_id = selectedWard;
       if (selectedMember) params.member_id = selectedMember;
+      
       const res = await getSubscriptionDueReport(params);
+      
       setData({
         wards: res?.data?.wards || [],
         grand_total: res?.data?.grand_total || 0,
+        ledgers: res?.data?.ledgers || [],
       });
     } catch (err) {
       console.error("Due list fetch error:", err);
       setPageError("Unable to load subscription due list.");
-      setData({ wards: [], grand_total: 0 });
+      setData({ wards: [], grand_total: 0, ledgers: [] });
     } finally {
       setLoading(false);
     }
@@ -510,7 +503,7 @@ const SubscriptionDueListPage = () => {
             <Text color={SECONDARY_TEXT} fontSize="12px" mt={1}>All members are fully paid for this period.</Text>
           </Box>
         ) : (
-          <DueTable wards={data.wards} />
+          <DueTable wards={data.wards} ledgers={data.ledgers} />
         )}
 
         <Flex mt={4} justify="space-between" align="center" direction={{ base: "column", md: "row" }} gap={2}>
@@ -521,7 +514,7 @@ const SubscriptionDueListPage = () => {
       <Footer />
 
       <ChurchPrintModal isOpen={printOpen} onClose={() => setPrintOpen(false)} title="SUBSCRIPTION DUE LIST" church={church} subtitle={<><Text as="span" fontWeight="700">Period:</Text>{" "}{periodLabel}</>}>
-        <DueTable wards={data.wards || []} forPrint />
+        <DueTable wards={data.wards || []} ledgers={data.ledgers || []} forPrint />
       </ChurchPrintModal>
     </Box>
   );

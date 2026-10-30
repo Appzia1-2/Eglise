@@ -4812,7 +4812,7 @@ class BankAccountSerializer(serializers.ModelSerializer):
             "display_name",
             "ifsc_code",
             "branch",
-            "opening_balance", # ✅ Added
+            "opening_balance",
             "is_active",
             "created_at",
             "updated_at",
@@ -4829,46 +4829,95 @@ class BankAccountSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Account number cannot be empty.")
         return value.strip()
 
+    def _resolve_church(self, validated_data):
+        """
+        Resolve the church from context, then validated_data,
+        then request.user. Never raises a raw KeyError.
+        """
+        church = self.context.get("church")
+
+        if church is None:
+            church = validated_data.get("church")
+
+        if church is None:
+            request = self.context.get("request")
+            if request is not None:
+                church = getattr(request.user, "church", None)
+
+        if church is None:
+            raise serializers.ValidationError({
+                "detail": (
+                    "Church context is missing. The bank account "
+                    "cannot be created without a church."
+                )
+            })
+
+        return church
+
     @transaction.atomic
     def create(self, validated_data):
-        church = self.context["church"]
+        # ✅ Safe church resolution — no KeyError, no 500.
+        church = self._resolve_church(validated_data)
+
+        # Ensure the church FK is present on the model instance.
+        validated_data.setdefault("church", church)
+
         bank_account = super().create(validated_data)
 
-        # ✅ Post the Opening Balance to the Ledger
-        ob = bank_account.opening_balance
-        if ob and ob > 0:
-            # 1. Find the primary Bank Ledger (Balance in Savings Account)
+        opening = bank_account.opening_balance or 0
+
+        if opening > 0:
             bank_ledger = AccountLedgerMaster.objects.filter(
                 church=church,
-                ledger_name__iexact="Balance in Savings Account"
+                ledger_name__iexact="Balance in Savings Account",
             ).first()
 
-            # 2. Find the Opening Balance Equity Ledger
             equity_ledger = AccountLedgerMaster.objects.filter(
                 church=church,
-                ledger_name__iexact="Balance as per last Balance Sheet"
+                ledger_name__iexact="Balance as per last Balance Sheet",
             ).first()
 
-            if bank_ledger and equity_ledger:
-                # DEBIT Bank (Asset increases)
-                LedgerEntry.objects.create(
-                    church=church,
-                    ledger=bank_ledger,
-                    entry_type="DEBIT",
-                    amount=ob,
-                    entry_date=timezone.now().date(),
-                    narration=f"Opening Balance for {bank_account.bank_name} ({bank_account.masked_account_number})",
-                )
+            # ✅ Fail loudly instead of silently skipping the posting.
+            if not bank_ledger or not equity_ledger:
+                missing = []
+                if not bank_ledger:
+                    missing.append("'Balance in Savings Account'")
+                if not equity_ledger:
+                    missing.append("'Balance as per last Balance Sheet'")
 
-                # CREDIT Equity (Equity increases)
-                LedgerEntry.objects.create(
-                    church=church,
-                    ledger=equity_ledger,
-                    entry_type="CREDIT",
-                    amount=ob,
-                    entry_date=timezone.now().date(),
-                    narration=f"Opening Balance for {bank_account.bank_name} ({bank_account.masked_account_number})",
-                )
+                raise serializers.ValidationError({
+                    "opening_balance": (
+                        "Cannot post opening balance. The following "
+                        "ledger(s) are not seeded for this church: "
+                        f"{', '.join(missing)}. "
+                        "Run seed_default_accounts() or contact admin."
+                    )
+                })
+
+            narration = (
+                f"Opening Balance for {bank_account.bank_name} "
+                f"({bank_account.masked_account_number})"
+            )
+
+            # DEBIT Bank (Asset increases)
+            LedgerEntry.objects.create(
+                church=church,
+                ledger=bank_ledger,
+                entry_type="DEBIT",
+                amount=opening,
+                entry_date=timezone.now().date(),
+                narration=narration,
+            )
+
+            # CREDIT Equity (Equity increases)
+            LedgerEntry.objects.create(
+                church=church,
+                ledger=equity_ledger,
+                entry_type="CREDIT",
+                amount=opening,
+                entry_date=timezone.now().date(),
+                narration=narration,
+            )
 
         return bank_account
 

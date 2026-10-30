@@ -169,23 +169,70 @@ const PrintSheet = ({ church, title, subtitle, variant, children }) => {
         </div>
       )}
 
-      {/* 
-        We remove the <table> wrapper here. A simple block div 
-        allows the browser's page-break engine to split the content 
-        naturally, keeping headers and footers intact.
-      */}
       <div className="print-content-wrapper">
-        <div className="print-top-spacer" />
-        <div className="print-body">
-          {!isVoucher && <SheetHeader church={church} title={title} subtitle={subtitle} />}
-          {children}
-          {!isVoucher && <SheetFooter />}
-        </div>
-        <div className="print-bottom-spacer" />
+        {/*
+          Wrapper table: browsers repeat <thead> and <tfoot> on EVERY printed page,
+          so the spacers keep content clear of the fixed frame on all pages
+          (not just the first and last).
+        */}
+        <table className="print-wrapper">
+          <thead>
+            <tr><td><div className="print-top-spacer" /></td></tr>
+          </thead>
+          <tfoot>
+            <tr><td><div className="print-bottom-spacer" /></td></tr>
+          </tfoot>
+          <tbody>
+            <tr>
+              <td>
+                <div className="print-body">
+                  {!isVoucher && <SheetHeader church={church} title={title} subtitle={subtitle} />}
+                  {children}
+                  {!isVoucher && <SheetFooter />}
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>,
     document.body
   );
+};
+
+
+// ============================================================
+// PDF HELPERS
+// ============================================================
+const PX_PER_MM = 96 / 25.4;
+const PDF_SIDE_MM = 14;   // left/right content margin (inside frame)
+const PDF_TOP_MM = 16;    // top content margin (inside frame)
+const PDF_BOTTOM_MM = 16; // bottom content margin (inside frame)
+const CORNER_MM = 18.5;
+
+// Renders the corner flourish to a transparent PNG so it can be stamped on every PDF page
+const cornerDataUrl = (flip) =>
+  new Promise((resolve) => {
+    const t =
+      flip === "xy" ? "translate(90,90) scale(-1,-1)" :
+      flip === "x" ? "translate(90,0) scale(-1,1)" :
+      flip === "y" ? "translate(0,90) scale(1,-1)" : "";
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="270" height="270" viewBox="0 0 90 90"><g transform="${t}"><g stroke="${RED}" stroke-width="1.6" fill="none" stroke-linecap="round"><path d="M6 40 Q6 18 18 12 Q30 6 40 14 Q48 22 36 30 Q26 34 26 24 Q26 16 34 16"/><path d="M14 6 Q38 6 40 26"/><path d="M6 20 Q20 20 22 34"/><path d="M46 12 Q52 8 54 14 Q50 18 46 16 Z" fill="${RED}" stroke="none"/><path d="M12 46 Q8 52 14 54 Q18 50 16 46 Z" fill="${RED}" stroke="none"/><circle cx="34" cy="10" r="1.8" fill="${RED}" stroke="none"/><circle cx="10" cy="34" r="1.8" fill="${RED}" stroke="none"/><path d="M22 22 Q30 22 30 30 Q30 38 22 38"/></g></g></svg>`;
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = 270;
+      c.height = 270;
+      c.getContext("2d").drawImage(img, 0, 0, 270, 270);
+      resolve(c.toDataURL("image/png"));
+    };
+    img.onerror = () => resolve(null);
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  });
+
+const hexToRgb = (hex) => {
+  const n = parseInt(hex.replace("#", ""), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 };
 
 // ============================================================
@@ -205,67 +252,205 @@ const ChurchPrintModal = ({
   const [orientation, setOrientation] = useState(defaultOrientation);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const printRef = useRef(null);
+  const contentRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) setOrientation(defaultOrientation);
   }, [isOpen, defaultOrientation]);
 
+  const isVoucher = variant === "voucher";
+
   const handlePrint = () => window.print();
 
-  // ============================================================
-  // SMART PDF GENERATION (Prevents cutting rows in half)
-  // ============================================================
-  const handleDownloadPdf = async () => {
+  // Voucher: single page, simple capture
+  const downloadVoucherPdf = async () => {
     if (!printRef.current) return;
+    const clone = printRef.current.cloneNode(true);
+    clone.style.width = orientation === "portrait" ? "210mm" : "297mm";
+    clone.style.height = "auto";
+
+    const wrapper = document.createElement("div");
+    wrapper.style.position = "fixed";
+    wrapper.style.left = "-9999px";
+    wrapper.style.top = "0";
+    wrapper.appendChild(clone);
+    document.body.appendChild(wrapper);
+
+    const canvas = await html2canvas(clone, { scale: 2, useCORS: true, backgroundColor: "#ffffff", logging: false });
+    document.body.removeChild(wrapper);
+
+    const imgData = canvas.toDataURL("image/jpeg", 0.98);
+    const pdf = new jsPDF(orientation, "mm", "a4");
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const imgHeight = canvas.height * (pdfWidth / canvas.width);
+
+    let heightLeft = imgHeight;
+    let position = 0;
+    pdf.addImage(imgData, "JPEG", 0, position, pdfWidth, imgHeight);
+    heightLeft -= pdfHeight;
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, "JPEG", 0, position, pdfWidth, imgHeight);
+      heightLeft -= pdfHeight;
+    }
+    pdf.save(pdfFileName);
+  };
+
+  // Ornate: paginate at row boundaries, redraw frame + corners + margins on EVERY page
+  const downloadOrnatePdf = async () => {
+    if (!contentRef.current) return;
+
+    const pdf = new jsPDF(orientation, "mm", "a4");
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const contentWmm = pageW - PDF_SIDE_MM * 2;
+    const contentHmm = pageH - PDF_TOP_MM - PDF_BOTTOM_MM;
+    const pagePx = contentHmm * PX_PER_MM;
+
+    // Clone ONLY the content (header + body + footer), without the frame
+    const clone = contentRef.current.cloneNode(true);
+    Object.assign(clone.style, {
+      width: `${contentWmm}mm`,
+      height: "auto",
+      minHeight: "0",
+      flex: "none",
+      background: CREAM,
+      fontFamily: "'Georgia', 'Times New Roman', serif",
+      color: RED,
+    });
+
+    const wrapper = document.createElement("div");
+    wrapper.style.position = "fixed";
+    wrapper.style.left = "-9999px";
+    wrapper.style.top = "0";
+    wrapper.appendChild(clone);
+    document.body.appendChild(wrapper);
+
     try {
-      setIsGeneratingPdf(true);
+      if (document.fonts?.ready) await document.fonts.ready;
 
-      const clone = printRef.current.cloneNode(true);
-      clone.style.width = orientation === "portrait" ? "210mm" : "297mm";
-      clone.style.height = "auto";
-
-      const wrapper = document.createElement("div");
-      wrapper.style.position = "fixed";
-      wrapper.style.left = "-9999px";
-      wrapper.style.top = "0";
-      wrapper.appendChild(clone);
-      document.body.appendChild(wrapper);
+      // Collect safe break points (bottom edge of every row / block), in CSS px
+      const cloneRect = clone.getBoundingClientRect();
+      const totalPx = cloneRect.height;
+      const rel = (n) => n - cloneRect.top;
+      const breaks = [
+        // after every table row
+        ...Array.from(clone.querySelectorAll("tr")).map((el) => rel(el.getBoundingClientRect().bottom)),
+        // before the footer block (never cut inside it)
+        ...Array.from(clone.querySelectorAll(".print-footer-block")).map((el) => rel(el.getBoundingClientRect().top)),
+        // after the sheet header
+        ...(clone.children[0] ? [rel(clone.children[0].getBoundingClientRect().bottom)] : []),
+      ]
+        .filter((b) => b > 1 && b < totalPx - 1)
+        .sort((a, b) => a - b);
 
       const canvas = await html2canvas(clone, {
         scale: 2,
         useCORS: true,
-        backgroundColor: variant === "voucher" ? "#ffffff" : CREAM,
+        backgroundColor: CREAM,
         logging: false,
       });
+      const k = canvas.height / totalPx; // canvas px per CSS px
 
-      document.body.removeChild(wrapper);
-
-      const imgData = canvas.toDataURL("image/jpeg", 0.98);
-
-      const pdf = new jsPDF(orientation, "mm", "a4");
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      
-      // Calculate scale
-      const ratio = pdfWidth / canvas.width;
-      const imgHeight = canvas.height * ratio;
-
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, "JPEG", 0, position, pdfWidth, imgHeight);
-      heightLeft -= pdfHeight;
-
-      // Slice algorithm
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight; // shift up by imgHeight
-        
-        pdf.addPage();
-        pdf.addImage(imgData, "JPEG", 0, position, pdfWidth, imgHeight);
-        heightLeft -= pdfHeight;
+      // Work out page slices
+      const slices = [];
+      let start = 0;
+      let guard = 0;
+      while (start < totalPx - 1 && guard++ < 200) {
+        const limit = start + pagePx;
+        let end;
+        if (totalPx <= limit + 0.5) {
+          end = totalPx;
+        } else {
+          let best = -1;
+          for (let i = breaks.length - 1; i >= 0; i--) {
+            if (breaks[i] <= limit + 0.5 && breaks[i] > start + 20) {
+              best = breaks[i];
+              break;
+            }
+          }
+          end = best > 0 ? best : limit; // fallback: hard cut
+        }
+        slices.push([start, end]);
+        start = end;
       }
 
+      // Never leave the last page "thin" (e.g. only the Matthew 18:20 footer):
+      // pull earlier rows onto it so the footer always sits under real content.
+      const minLastPx = 60 * PX_PER_MM;
+      let pulls = 0;
+      while (slices.length > 1 && pulls++ < 6) {
+        const last = slices[slices.length - 1];
+        if (last[1] - last[0] >= minLastPx) break;
+        const prev = slices[slices.length - 2];
+        const cand = [...breaks].reverse().find((b) => b < last[0] - 1 && b > prev[0] + 30);
+        if (cand === undefined || last[1] - cand > pagePx) break;
+        prev[1] = cand;
+        last[0] = cand;
+      }
+
+      const [fr, fg, fb] = hexToRgb(CREAM);
+      const [rr, rg, rb] = hexToRgb(RED_FRAME);
+      const corners = await Promise.all([
+        cornerDataUrl(""), cornerDataUrl("x"), cornerDataUrl("y"), cornerDataUrl("xy"),
+      ]);
+
+      slices.forEach(([s0, e0], idx) => {
+        if (idx > 0) pdf.addPage();
+
+        // page background
+        pdf.setFillColor(fr, fg, fb);
+        pdf.rect(0, 0, pageW, pageH, "F");
+
+        // double frame
+        pdf.setDrawColor(rr, rg, rb);
+        pdf.setLineWidth(0.4);
+        pdf.rect(4, 4, pageW - 8, pageH - 8);
+        pdf.setLineWidth(0.26);
+        pdf.rect(5.4, 5.4, pageW - 10.8, pageH - 10.8);
+
+        // content slice
+        const sy = Math.round(s0 * k);
+        const sh = Math.max(1, Math.min(canvas.height - sy, Math.round((e0 - s0) * k)));
+        const sliceCanvas = document.createElement("canvas");
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = sh;
+        const ctx = sliceCanvas.getContext("2d");
+        ctx.fillStyle = CREAM;
+        ctx.fillRect(0, 0, sliceCanvas.width, sh);
+        ctx.drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, canvas.width, sh);
+
+        pdf.addImage(
+          sliceCanvas.toDataURL("image/jpeg", 0.98),
+          "JPEG",
+          PDF_SIDE_MM,
+          PDF_TOP_MM,
+          contentWmm,
+          (e0 - s0) / PX_PER_MM
+        );
+
+        // corner flourishes (on top of frame, every page)
+        const o = 2.4;
+        const far = (n) => n - o - CORNER_MM;
+        if (corners[0]) pdf.addImage(corners[0], "PNG", o, o, CORNER_MM, CORNER_MM);
+        if (corners[1]) pdf.addImage(corners[1], "PNG", far(pageW), o, CORNER_MM, CORNER_MM);
+        if (corners[2]) pdf.addImage(corners[2], "PNG", o, far(pageH), CORNER_MM, CORNER_MM);
+        if (corners[3]) pdf.addImage(corners[3], "PNG", far(pageW), far(pageH), CORNER_MM, CORNER_MM);
+      });
+
       pdf.save(pdfFileName);
+    } finally {
+      if (wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    try {
+      setIsGeneratingPdf(true);
+      if (isVoucher) await downloadVoucherPdf();
+      else await downloadOrnatePdf();
     } catch (err) {
       console.error("PDF generation failed", err);
       alert("Failed to generate PDF. Please use the Print button and save as PDF instead.");
@@ -273,8 +458,6 @@ const ChurchPrintModal = ({
       setIsGeneratingPdf(false);
     }
   };
-
-  const isVoucher = variant === "voucher";
 
   return (
     <Dialog.Root open={isOpen} onOpenChange={(e) => !e.open && onClose()} size="full">
@@ -338,13 +521,15 @@ const ChurchPrintModal = ({
                     <Box position="absolute" bottom="-6px" left="-6px" zIndex={5}><CornerFlourish flip="y" /></Box>
                     <Box position="absolute" bottom="-6px" right="-6px" zIndex={5}><CornerFlourish flip="xy" /></Box>
 
-                    <SheetHeader church={church} title={title} subtitle={subtitle} />
+                    <Box ref={contentRef} display="flex" flexDirection="column" flex="1">
+                      <SheetHeader church={church} title={title} subtitle={subtitle} />
 
-                    <Box position="relative" zIndex={2} flex="1">
-                      {children}
+                      <Box position="relative" zIndex={2} flex="1">
+                        {children}
+                      </Box>
+
+                      <SheetFooter />
                     </Box>
-
-                    <SheetFooter />
                   </Box>
                 )}
               </Box>
@@ -380,8 +565,55 @@ const ChurchPrintModal = ({
           body > *:not(#church-print-root) { display: none !important; }
           #church-print-root { display: block !important; width: 100%; }
 
-          /* CSS fix for row slicing and footer orphans */
-          tr, .print-footer-block, .sub-total-row, .grand-total-row {
+          /* FORCE PAGE BREAKS (inner report tables) */
+          table {
+            page-break-inside: auto;
+            width: 100%;
+            table-layout: fixed; /* CRITICAL: Prevents columns from shifting */
+          }
+          thead {
+            display: table-header-group;
+          }
+          tfoot {
+            display: table-footer-group;
+          }
+          tr {
+            page-break-inside: avoid !important;
+            page-break-after: auto;
+            break-inside: avoid !important;
+          }
+          td, th {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+
+          /* ---- WRAPPER TABLE: repeats spacers on every page ---- */
+          table.print-wrapper {
+            width: 100%;
+            table-layout: auto;
+            border-collapse: collapse;
+          }
+          table.print-wrapper > thead { display: table-header-group; }
+          table.print-wrapper > tfoot { display: table-footer-group; }
+          table.print-wrapper > thead > tr > td,
+          table.print-wrapper > tfoot > tr > td,
+          table.print-wrapper > tbody > tr > td {
+            padding: 0;
+            border: none;
+          }
+          /* Let the single big body row split across pages */
+          table.print-wrapper > tbody > tr,
+          table.print-wrapper > tbody > tr > td {
+            break-inside: auto !important;
+            page-break-inside: auto !important;
+          }
+          /* Keep the spacer rows themselves intact */
+          table.print-wrapper > thead > tr,
+          table.print-wrapper > tfoot > tr {
+            break-inside: avoid !important;
+          }
+
+          .print-footer-block, .sub-total-row, .grand-total-row {
             break-inside: avoid !important;
             page-break-inside: avoid !important;
           }
@@ -392,6 +624,7 @@ const ChurchPrintModal = ({
               top: 4mm; left: 4mm; right: 4mm; bottom: 4mm;
               border: 1.5px solid ${RED_FRAME};
               pointer-events: none;
+              z-index: 99;
             }
             .print-frame-inner {
               position: absolute;
@@ -405,7 +638,7 @@ const ChurchPrintModal = ({
           ` : `
             .print-top-spacer { height: 10mm; }
             .print-bottom-spacer { height: 10mm; }
-            .print-body { padding: 10mm !important; }
+            .print-body { padding: 0 10mm !important; }
           `}
 
           .print-content-wrapper { width: 100%; }

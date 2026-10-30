@@ -83,6 +83,7 @@ from .views import (
     DonationRegisterReportAPIView,SubscriptionDueListAPIView,BalanceSheetAPIView ,
     SubscriptionPaidListAPIView,ChurchDashboardMetricsAPIView,ReceiptPaymentCombinedAPIView,ContraMasterListCreateView, ContraMasterDetailView,ContraCancelAPIView 
 )
+from .views import IncomeExpenditureStatutoryAPIView,ReceiptPaymentStatutoryAPIView
 
 urlpatterns = [
 
@@ -335,4 +336,15 @@ path("contra/<int:pk>/cancel/", ContraCancelAPIView.as_view(), name="contra-canc
 
 path("reports/balance-sheet/", BalanceSheetAPIView.as_view(), name="report-balance-sheet"),
 
+
+path(
+        "reports/income-expenditure-statutory/",
+        IncomeExpenditureStatutoryAPIView.as_view(),
+        name="income-expenditure-statutory",
+    ),
+path(
+    "reports/receipts-payments-statutory/",
+    ReceiptPaymentStatutoryAPIView.as_view(),
+    name="receipts-payments-statutory",
+),
 ]

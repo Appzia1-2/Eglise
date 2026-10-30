@@ -1141,6 +1141,18 @@ export const getMemberLedgerReport = (params = {}) =>
 export const getIncomeExpenditureReport = (params = {}) =>
   apiClient.get("/api/registry/reports/income-expenditure/", { params });
 
+export const getIncomeExpenditureStatutory = async ({ from, to, prev_from, prev_to } = {}) => {
+  const params = { from, to };
+  if (prev_from) params.prev_from = prev_from;
+  if (prev_to)   params.prev_to   = prev_to;
+
+  const res = await apiClient.get(
+    "/api/registry/reports/income-expenditure-statutory/",
+    { params }
+  );
+  return res;
+};
+
 export const getDonationRegisterReport = (params = {}) =>
   apiClient.get("/api/registry/reports/donation-register/", { params });
 
@@ -1183,3 +1195,21 @@ export const cancelContra = (id, data) =>
 
 export const getBalanceSheetReport = (params = {}) =>
   apiClient.get("/api/registry/reports/balance-sheet/", { params });
+
+
+
+
+
+export const getReceiptPaymentStatutory = async ({
+  from, to, prev_from, prev_to,
+} = {}) => {
+  const params = { from, to };
+  if (prev_from) params.prev_from = prev_from;
+  if (prev_to)   params.prev_to   = prev_to;
+
+  const res = await apiClient.get(
+    "/api/registry/reports/receipts-payments-statutory/",
+    { params }
+  );
+  return res;
+};

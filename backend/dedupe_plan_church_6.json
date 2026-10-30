@@ -1,0 +1,1829 @@
+{
+  "church_id": 6,
+  "plan": [
+    {
+      "survivor_id": 3119,
+      "survivor_code": 1000,
+      "dupes": [
+        {
+          "id": 5224,
+          "code": 100000
+        }
+      ],
+      "name": "Balance in Savings Account",
+      "group_id": 954
+    },
+    {
+      "survivor_id": 3120,
+      "survivor_code": 1100,
+      "dupes": [
+        {
+          "id": 5225,
+          "code": 110000
+        }
+      ],
+      "name": "Balance in Deposit Account",
+      "group_id": 954
+    },
+    {
+      "survivor_id": 3121,
+      "survivor_code": 1200,
+      "dupes": [
+        {
+          "id": 5226,
+          "code": 120000
+        }
+      ],
+      "name": "Balance in Other Accounts",
+      "group_id": 954
+    },
+    {
+      "survivor_id": 3122,
+      "survivor_code": 1300,
+      "dupes": [
+        {
+          "id": 5227,
+          "code": 130000
+        }
+      ],
+      "name": "Cash in Hand",
+      "group_id": 954
+    },
+    {
+      "survivor_id": 3154,
+      "survivor_code": 2231,
+      "dupes": [
+        {
+          "id": 5263,
+          "code": 223100
+        }
+      ],
+      "name": "Income from Publications",
+      "group_id": 965
+    },
+    {
+      "survivor_id": 3155,
+      "survivor_code": 2232,
+      "dupes": [
+        {
+          "id": 5264,
+          "code": 223200
+        }
+      ],
+      "name": "Income from Own Institutions",
+      "group_id": 965
+    },
+    {
+      "survivor_id": 3156,
+      "survivor_code": 2233,
+      "dupes": [
+        {
+          "id": 5265,
+          "code": 223300
+        }
+      ],
+      "name": "Ambulance Charges",
+      "group_id": 965
+    },
+    {
+      "survivor_id": 3158,
+      "survivor_code": 2235,
+      "dupes": [
+        {
+          "id": 5267,
+          "code": 223500
+        }
+      ],
+      "name": "Other Receipts",
+      "group_id": 965
+    },
+    {
+      "survivor_id": 3159,
+      "survivor_code": 2301,
+      "dupes": [
+        {
+          "id": 5268,
+          "code": 230100
+        }
+      ],
+      "name": "General Donations",
+      "group_id": 966
+    },
+    {
+      "survivor_id": 3160,
+      "survivor_code": 2302,
+      "dupes": [
+        {
+          "id": 5269,
+          "code": 230200
+        }
+      ],
+      "name": "House Building Assistance Fund",
+      "group_id": 966
+    },
+    {
+      "survivor_id": 3161,
+      "survivor_code": 2303,
+      "dupes": [
+        {
+          "id": 5270,
+          "code": 230300
+        }
+      ],
+      "name": "Marriage Assistance Fund",
+      "group_id": 966
+    },
+    {
+      "survivor_id": 3163,
+      "survivor_code": 2305,
+      "dupes": [
+        {
+          "id": 5272,
+          "code": 230500
+        }
+      ],
+      "name": "Medical Assistance",
+      "group_id": 966
+    },
+    {
+      "survivor_id": 3167,
+      "survivor_code": 2309,
+      "dupes": [
+        {
+          "id": 5276,
+          "code": 230900
+        }
+      ],
+      "name": "Meeting and Conventions",
+      "group_id": 966
+    },
+    {
+      "survivor_id": 3168,
+      "survivor_code": 2310,
+      "dupes": [
+        {
+          "id": 5277,
+          "code": 231000
+        }
+      ],
+      "name": "Christmas Karol",
+      "group_id": 966
+    },
+    {
+      "survivor_id": 3169,
+      "survivor_code": 2311,
+      "dupes": [
+        {
+          "id": 5278,
+          "code": 231100
+        }
+      ],
+      "name": "Parish Day",
+      "group_id": 966
+    },
+    {
+      "survivor_id": 3170,
+      "survivor_code": 2312,
+      "dupes": [
+        {
+          "id": 5279,
+          "code": 231200
+        }
+      ],
+      "name": "Lent and Passion Week",
+      "group_id": 966
+    },
+    {
+      "survivor_id": 3171,
+      "survivor_code": 2313,
+      "dupes": [
+        {
+          "id": 5280,
+          "code": 231300
+        }
+      ],
+      "name": "Marriage Receipts",
+      "group_id": 966
+    },
+    {
+      "survivor_id": 3172,
+      "survivor_code": 2314,
+      "dupes": [
+        {
+          "id": 5281,
+          "code": 231400
+        }
+      ],
+      "name": "Harvest Festival Receipts",
+      "group_id": 966
+    },
+    {
+      "survivor_id": 3173,
+      "survivor_code": 2315,
+      "dupes": [
+        {
+          "id": 5282,
+          "code": 231500
+        }
+      ],
+      "name": "Annadhanam and Feast",
+      "group_id": 966
+    },
+    {
+      "survivor_id": 3174,
+      "survivor_code": 2316,
+      "dupes": [
+        {
+          "id": 5283,
+          "code": 231600
+        }
+      ],
+      "name": "Receipt of Agricultural Produces",
+      "group_id": 966
+    },
+    {
+      "survivor_id": 3175,
+      "survivor_code": 2317,
+      "dupes": [
+        {
+          "id": 5284,
+          "code": 231700
+        }
+      ],
+      "name": "Other Donations",
+      "group_id": 966
+    },
+    {
+      "survivor_id": 3176,
+      "survivor_code": 2401,
+      "dupes": [
+        {
+          "id": 5285,
+          "code": 240100
+        }
+      ],
+      "name": "Bank SB Interest",
+      "group_id": 967
+    },
+    {
+      "survivor_id": 3177,
+      "survivor_code": 2402,
+      "dupes": [
+        {
+          "id": 5286,
+          "code": 240200
+        }
+      ],
+      "name": "Bank FD Interest",
+      "group_id": 967
+    },
+    {
+      "survivor_id": 3178,
+      "survivor_code": 2403,
+      "dupes": [
+        {
+          "id": 5287,
+          "code": 240300
+        }
+      ],
+      "name": "Other Investment Income",
+      "group_id": 967
+    },
+    {
+      "survivor_id": 3179,
+      "survivor_code": 2450,
+      "dupes": [
+        {
+          "id": 5288,
+          "code": 245000
+        }
+      ],
+      "name": "Agricultural Income",
+      "group_id": 968
+    },
+    {
+      "survivor_id": 3181,
+      "survivor_code": 2600,
+      "dupes": [
+        {
+          "id": 5292,
+          "code": 260000
+        }
+      ],
+      "name": "Hospital Collections",
+      "group_id": 970
+    },
+    {
+      "survivor_id": 3182,
+      "survivor_code": 2700,
+      "dupes": [
+        {
+          "id": 5293,
+          "code": 270000
+        }
+      ],
+      "name": "School/College Collections",
+      "group_id": 971
+    },
+    {
+      "survivor_id": 3200,
+      "survivor_code": 3101,
+      "dupes": [
+        {
+          "id": 5311,
+          "code": 310100
+        }
+      ],
+      "name": "Loan from Banks",
+      "group_id": 977
+    },
+    {
+      "survivor_id": 3202,
+      "survivor_code": 3103,
+      "dupes": [
+        {
+          "id": 5313,
+          "code": 310300
+        }
+      ],
+      "name": "Loan from Church Members",
+      "group_id": 977
+    },
+    {
+      "survivor_id": 3205,
+      "survivor_code": 3203,
+      "dupes": [
+        {
+          "id": 5316,
+          "code": 320300
+        }
+      ],
+      "name": "Advances from Trustees",
+      "group_id": 978
+    },
+    {
+      "survivor_id": 3206,
+      "survivor_code": 3204,
+      "dupes": [
+        {
+          "id": 5317,
+          "code": 320400
+        }
+      ],
+      "name": "Advance from Others",
+      "group_id": 978
+    },
+    {
+      "survivor_id": 3208,
+      "survivor_code": 3301,
+      "dupes": [
+        {
+          "id": 5319,
+          "code": 330100
+        }
+      ],
+      "name": "Expenses Payables",
+      "group_id": 979
+    },
+    {
+      "survivor_id": 3209,
+      "survivor_code": 3302,
+      "dupes": [
+        {
+          "id": 5320,
+          "code": 330200
+        }
+      ],
+      "name": "Advances Returned",
+      "group_id": 979
+    },
+    {
+      "survivor_id": 3210,
+      "survivor_code": 3303,
+      "dupes": [
+        {
+          "id": 5321,
+          "code": 330300
+        }
+      ],
+      "name": "Other Liabilities",
+      "group_id": 979
+    },
+    {
+      "survivor_id": 3214,
+      "survivor_code": 3400,
+      "dupes": [
+        {
+          "id": 5325,
+          "code": 340000
+        }
+      ],
+      "name": "Endowment Receipts",
+      "group_id": 981
+    },
+    {
+      "survivor_id": 3215,
+      "survivor_code": 3500,
+      "dupes": [
+        {
+          "id": 5326,
+          "code": 350000
+        }
+      ],
+      "name": "Sale of Fixed Assets",
+      "group_id": 982
+    },
+    {
+      "survivor_id": 3216,
+      "survivor_code": 3651,
+      "dupes": [
+        {
+          "id": 5327,
+          "code": 365100
+        }
+      ],
+      "name": "Refund of Taxes",
+      "group_id": 983
+    },
+    {
+      "survivor_id": 3217,
+      "survivor_code": 3652,
+      "dupes": [
+        {
+          "id": 5328,
+          "code": 365200
+        }
+      ],
+      "name": "GST Collected",
+      "group_id": 983
+    },
+    {
+      "survivor_id": 3219,
+      "survivor_code": 3700,
+      "dupes": [
+        {
+          "id": 5330,
+          "code": 370000
+        }
+      ],
+      "name": "Other Capital Receipts",
+      "group_id": 984
+    },
+    {
+      "survivor_id": 3231,
+      "survivor_code": 4031,
+      "dupes": [
+        {
+          "id": 5346,
+          "code": 403100
+        }
+      ],
+      "name": "Priest Salary Paid to Diocese",
+      "group_id": 990
+    },
+    {
+      "survivor_id": 3232,
+      "survivor_code": 4032,
+      "dupes": [
+        {
+          "id": 5347,
+          "code": 403200
+        }
+      ],
+      "name": "Methrasana Vihitham",
+      "group_id": 990
+    },
+    {
+      "survivor_id": 3233,
+      "survivor_code": 4102,
+      "dupes": [
+        {
+          "id": 5348,
+          "code": 410200
+        }
+      ],
+      "name": "Grant to Spiritual Organisations",
+      "group_id": 991
+    },
+    {
+      "survivor_id": 3234,
+      "survivor_code": 4103,
+      "dupes": [
+        {
+          "id": 5349,
+          "code": 410300
+        }
+      ],
+      "name": "Other Grants",
+      "group_id": 991
+    },
+    {
+      "survivor_id": 3235,
+      "survivor_code": 4202,
+      "dupes": [
+        {
+          "id": 5350,
+          "code": 420200
+        }
+      ],
+      "name": "Holy Qurbana Allowances",
+      "group_id": 994
+    },
+    {
+      "survivor_id": 3237,
+      "survivor_code": 4204,
+      "dupes": [
+        {
+          "id": 5352,
+          "code": 420400
+        }
+      ],
+      "name": "Suvisheshayogam Expenses",
+      "group_id": 994
+    },
+    {
+      "survivor_id": 3238,
+      "survivor_code": 4205,
+      "dupes": [
+        {
+          "id": 5353,
+          "code": 420500
+        }
+      ],
+      "name": "Holy Week and Dhyanam Expenses",
+      "group_id": 994
+    },
+    {
+      "survivor_id": 3241,
+      "survivor_code": 4208,
+      "dupes": [
+        {
+          "id": 5356,
+          "code": 420800
+        }
+      ],
+      "name": "Owned Institution Expenses",
+      "group_id": 994
+    },
+    {
+      "survivor_id": 3242,
+      "survivor_code": 4209,
+      "dupes": [
+        {
+          "id": 5357,
+          "code": 420900
+        }
+      ],
+      "name": "Legal Expenses",
+      "group_id": 994
+    },
+    {
+      "survivor_id": 3243,
+      "survivor_code": 4210,
+      "dupes": [
+        {
+          "id": 5358,
+          "code": 421000
+        }
+      ],
+      "name": "Rent Paid",
+      "group_id": 994
+    },
+    {
+      "survivor_id": 3244,
+      "survivor_code": 4211,
+      "dupes": [
+        {
+          "id": 5359,
+          "code": 421100
+        }
+      ],
+      "name": "Electricity Charges",
+      "group_id": 994
+    },
+    {
+      "survivor_id": 3245,
+      "survivor_code": 4212,
+      "dupes": [
+        {
+          "id": 5360,
+          "code": 421200
+        }
+      ],
+      "name": "Fuel and Water Charges",
+      "group_id": 994
+    },
+    {
+      "survivor_id": 3248,
+      "survivor_code": 4232,
+      "dupes": [
+        {
+          "id": 5363,
+          "code": 423200
+        }
+      ],
+      "name": "Salary and Allowances to Others",
+      "group_id": 995
+    },
+    {
+      "survivor_id": 3251,
+      "survivor_code": 4235,
+      "dupes": [
+        {
+          "id": 5366,
+          "code": 423500
+        }
+      ],
+      "name": "Allowances to Kapyar",
+      "group_id": 995
+    },
+    {
+      "survivor_id": 3252,
+      "survivor_code": 4236,
+      "dupes": [
+        {
+          "id": 5367,
+          "code": 423600
+        }
+      ],
+      "name": "Honorarium",
+      "group_id": 995
+    },
+    {
+      "survivor_id": 3253,
+      "survivor_code": 4251,
+      "dupes": [
+        {
+          "id": 5368,
+          "code": 425100
+        }
+      ],
+      "name": "Wages and Cooly",
+      "group_id": 996
+    },
+    {
+      "survivor_id": 3254,
+      "survivor_code": 4252,
+      "dupes": [
+        {
+          "id": 5369,
+          "code": 425200
+        }
+      ],
+      "name": "Meeting and Conference Expenses",
+      "group_id": 996
+    },
+    {
+      "survivor_id": 3255,
+      "survivor_code": 4253,
+      "dupes": [
+        {
+          "id": 5370,
+          "code": 425300
+        }
+      ],
+      "name": "Cleaning Expenses",
+      "group_id": 996
+    },
+    {
+      "survivor_id": 3256,
+      "survivor_code": 4254,
+      "dupes": [
+        {
+          "id": 5371,
+          "code": 425400
+        }
+      ],
+      "name": "Ambulance Expenses",
+      "group_id": 996
+    },
+    {
+      "survivor_id": 3257,
+      "survivor_code": 4255,
+      "dupes": [
+        {
+          "id": 5372,
+          "code": 425500
+        }
+      ],
+      "name": "Canteen Payments",
+      "group_id": 996
+    },
+    {
+      "survivor_id": 3258,
+      "survivor_code": 4256,
+      "dupes": [
+        {
+          "id": 5373,
+          "code": 425600
+        }
+      ],
+      "name": "Tomb Construction",
+      "group_id": 996
+    },
+    {
+      "survivor_id": 3266,
+      "survivor_code": 4266,
+      "dupes": [
+        {
+          "id": 5381,
+          "code": 426600
+        }
+      ],
+      "name": "Pilgrimage Expenses",
+      "group_id": 997
+    },
+    {
+      "survivor_id": 3291,
+      "survivor_code": 4318,
+      "dupes": [
+        {
+          "id": 5407,
+          "code": 431800
+        }
+      ],
+      "name": "Annadhanam Expenses",
+      "group_id": 1002
+    },
+    {
+      "survivor_id": 3292,
+      "survivor_code": 4319,
+      "dupes": [
+        {
+          "id": 5408,
+          "code": 431900
+        }
+      ],
+      "name": "Gifts and Compliments",
+      "group_id": 1002
+    },
+    {
+      "survivor_id": 3293,
+      "survivor_code": 4320,
+      "dupes": [
+        {
+          "id": 5409,
+          "code": 432000
+        }
+      ],
+      "name": "Scholarships",
+      "group_id": 1002
+    },
+    {
+      "survivor_id": 3294,
+      "survivor_code": 4330,
+      "dupes": [
+        {
+          "id": 5410,
+          "code": 433000
+        }
+      ],
+      "name": "Agricultural Expenses",
+      "group_id": 1003
+    },
+    {
+      "survivor_id": 3295,
+      "survivor_code": 4341,
+      "dupes": [
+        {
+          "id": 5411,
+          "code": 434100
+        }
+      ],
+      "name": "Land Tax",
+      "group_id": 1004
+    },
+    {
+      "survivor_id": 3296,
+      "survivor_code": 4342,
+      "dupes": [
+        {
+          "id": 5412,
+          "code": 434200
+        }
+      ],
+      "name": "Building Tax",
+      "group_id": 1004
+    },
+    {
+      "survivor_id": 3298,
+      "survivor_code": 4344,
+      "dupes": [
+        {
+          "id": 5414,
+          "code": 434400
+        }
+      ],
+      "name": "Penalty",
+      "group_id": 1004
+    },
+    {
+      "survivor_id": 3300,
+      "survivor_code": 4350,
+      "dupes": [
+        {
+          "id": 5416,
+          "code": 435000
+        }
+      ],
+      "name": "Hospital Expenses",
+      "group_id": 1005
+    },
+    {
+      "survivor_id": 3301,
+      "survivor_code": 4400,
+      "dupes": [
+        {
+          "id": 5417,
+          "code": 440000
+        }
+      ],
+      "name": "School/College Expenses",
+      "group_id": 1006
+    },
+    {
+      "survivor_id": 3302,
+      "survivor_code": 4501,
+      "dupes": [
+        {
+          "id": 5418,
+          "code": 450100
+        }
+      ],
+      "name": "Interest on Bank Loans",
+      "group_id": 1007
+    },
+    {
+      "survivor_id": 3304,
+      "survivor_code": 4503,
+      "dupes": [
+        {
+          "id": 5420,
+          "code": 450300
+        }
+      ],
+      "name": "Bank Charges",
+      "group_id": 1007
+    },
+    {
+      "survivor_id": 3305,
+      "survivor_code": 4551,
+      "dupes": [
+        {
+          "id": 5422,
+          "code": 455100
+        }
+      ],
+      "name": "Travelling Expenses",
+      "group_id": 1008
+    },
+    {
+      "survivor_id": 3306,
+      "survivor_code": 4552,
+      "dupes": [
+        {
+          "id": 5423,
+          "code": 455200
+        }
+      ],
+      "name": "Auditors Remuneration",
+      "group_id": 1008
+    },
+    {
+      "survivor_id": 3307,
+      "survivor_code": 4553,
+      "dupes": [
+        {
+          "id": 5424,
+          "code": 455300
+        }
+      ],
+      "name": "Postage and Telephone",
+      "group_id": 1008
+    },
+    {
+      "survivor_id": 3308,
+      "survivor_code": 4554,
+      "dupes": [
+        {
+          "id": 5425,
+          "code": 455400
+        }
+      ],
+      "name": "Printing and Stationery",
+      "group_id": 1008
+    },
+    {
+      "survivor_id": 3310,
+      "survivor_code": 4556,
+      "dupes": [
+        {
+          "id": 5427,
+          "code": 455600
+        }
+      ],
+      "name": "Office Expenses",
+      "group_id": 1008
+    },
+    {
+      "survivor_id": 3311,
+      "survivor_code": 4557,
+      "dupes": [
+        {
+          "id": 5428,
+          "code": 455700
+        }
+      ],
+      "name": "Subscription and Periodicals",
+      "group_id": 1008
+    },
+    {
+      "survivor_id": 3312,
+      "survivor_code": 4558,
+      "dupes": [
+        {
+          "id": 5429,
+          "code": 455800
+        }
+      ],
+      "name": "Insurance Charges",
+      "group_id": 1008
+    },
+    {
+      "survivor_id": 3313,
+      "survivor_code": 4559,
+      "dupes": [
+        {
+          "id": 5430,
+          "code": 455900
+        }
+      ],
+      "name": "Advertisement Expenses",
+      "group_id": 1008
+    },
+    {
+      "survivor_id": 3315,
+      "survivor_code": 4601,
+      "dupes": [
+        {
+          "id": 5435,
+          "code": 460100
+        }
+      ],
+      "name": "Land",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3316,
+      "survivor_code": 4602,
+      "dupes": [
+        {
+          "id": 5436,
+          "code": 460200
+        }
+      ],
+      "name": "Land Development",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3317,
+      "survivor_code": 4603,
+      "dupes": [
+        {
+          "id": 5437,
+          "code": 460300
+        }
+      ],
+      "name": "Well and Tubewell",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3318,
+      "survivor_code": 4604,
+      "dupes": [
+        {
+          "id": 5438,
+          "code": 460400
+        }
+      ],
+      "name": "Church Building",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3319,
+      "survivor_code": 4605,
+      "dupes": [
+        {
+          "id": 5439,
+          "code": 460500
+        }
+      ],
+      "name": "Office Complex",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3320,
+      "survivor_code": 4606,
+      "dupes": [
+        {
+          "id": 5440,
+          "code": 460600
+        }
+      ],
+      "name": "Dhyana Mandiram",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3321,
+      "survivor_code": 4607,
+      "dupes": [
+        {
+          "id": 5441,
+          "code": 460700
+        }
+      ],
+      "name": "Kurushupalli Building",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3322,
+      "survivor_code": 4608,
+      "dupes": [
+        {
+          "id": 5442,
+          "code": 460800
+        }
+      ],
+      "name": "Parish Hall Building",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3323,
+      "survivor_code": 4609,
+      "dupes": [
+        {
+          "id": 5443,
+          "code": 460900
+        }
+      ],
+      "name": "Building of Owned Institutions",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3324,
+      "survivor_code": 4610,
+      "dupes": [
+        {
+          "id": 5444,
+          "code": 461000
+        }
+      ],
+      "name": "Compound Wall",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3325,
+      "survivor_code": 4611,
+      "dupes": [
+        {
+          "id": 5445,
+          "code": 461100
+        }
+      ],
+      "name": "Parsonage",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3326,
+      "survivor_code": 4612,
+      "dupes": [
+        {
+          "id": 5446,
+          "code": 461200
+        }
+      ],
+      "name": "Kodimaram",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3327,
+      "survivor_code": 4613,
+      "dupes": [
+        {
+          "id": 5447,
+          "code": 461300
+        }
+      ],
+      "name": "Commercial Building",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3328,
+      "survivor_code": 4614,
+      "dupes": [
+        {
+          "id": 5448,
+          "code": 461400
+        }
+      ],
+      "name": "Other Buildings",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3329,
+      "survivor_code": 4615,
+      "dupes": [
+        {
+          "id": 5449,
+          "code": 461500
+        }
+      ],
+      "name": "Furniture and Fixtures",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3330,
+      "survivor_code": 4616,
+      "dupes": [
+        {
+          "id": 5450,
+          "code": 461600
+        }
+      ],
+      "name": "Church Equipments",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3331,
+      "survivor_code": 4617,
+      "dupes": [
+        {
+          "id": 5451,
+          "code": 461700
+        }
+      ],
+      "name": "Other Equipments",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3332,
+      "survivor_code": 4618,
+      "dupes": [
+        {
+          "id": 5452,
+          "code": 461800
+        }
+      ],
+      "name": "Motor Vehicles",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3333,
+      "survivor_code": 4619,
+      "dupes": [
+        {
+          "id": 5453,
+          "code": 461900
+        }
+      ],
+      "name": "Ambulance",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3335,
+      "survivor_code": 4621,
+      "dupes": [
+        {
+          "id": 5455,
+          "code": 462100
+        }
+      ],
+      "name": "Website",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3336,
+      "survivor_code": 4622,
+      "dupes": [
+        {
+          "id": 5456,
+          "code": 462200
+        }
+      ],
+      "name": "Electrical Equipments",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3337,
+      "survivor_code": 4623,
+      "dupes": [
+        {
+          "id": 5457,
+          "code": 462300
+        }
+      ],
+      "name": "Machinery and Equipments",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3338,
+      "survivor_code": 4624,
+      "dupes": [
+        {
+          "id": 5458,
+          "code": 462400
+        }
+      ],
+      "name": "Generator",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3339,
+      "survivor_code": 4625,
+      "dupes": [
+        {
+          "id": 5459,
+          "code": 462500
+        }
+      ],
+      "name": "Sound System",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3340,
+      "survivor_code": 4626,
+      "dupes": [
+        {
+          "id": 5460,
+          "code": 462600
+        }
+      ],
+      "name": "Books",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3341,
+      "survivor_code": 4627,
+      "dupes": [
+        {
+          "id": 5461,
+          "code": 462700
+        }
+      ],
+      "name": "Building Under Construction",
+      "group_id": 1010
+    },
+    {
+      "survivor_id": 3342,
+      "survivor_code": 4702,
+      "dupes": [
+        {
+          "id": 5463,
+          "code": 470200
+        }
+      ],
+      "name": "Mutual Funds",
+      "group_id": 1011
+    },
+    {
+      "survivor_id": 3344,
+      "survivor_code": 4704,
+      "dupes": [
+        {
+          "id": 5465,
+          "code": 470400
+        }
+      ],
+      "name": "Other Investments",
+      "group_id": 1011
+    },
+    {
+      "survivor_id": 3345,
+      "survivor_code": 4751,
+      "dupes": [
+        {
+          "id": 5466,
+          "code": 475100
+        }
+      ],
+      "name": "Advance to Spiritual Organisations",
+      "group_id": 1012
+    },
+    {
+      "survivor_id": 3346,
+      "survivor_code": 4752,
+      "dupes": [
+        {
+          "id": 5467,
+          "code": 475200
+        }
+      ],
+      "name": "Advance for Land",
+      "group_id": 1012
+    },
+    {
+      "survivor_id": 3347,
+      "survivor_code": 4753,
+      "dupes": [
+        {
+          "id": 5468,
+          "code": 475300
+        }
+      ],
+      "name": "Advances to MOSC Institutions",
+      "group_id": 1012
+    },
+    {
+      "survivor_id": 3348,
+      "survivor_code": 4754,
+      "dupes": [
+        {
+          "id": 5469,
+          "code": 475400
+        }
+      ],
+      "name": "Advance to Contractors",
+      "group_id": 1012
+    },
+    {
+      "survivor_id": 3349,
+      "survivor_code": 4755,
+      "dupes": [
+        {
+          "id": 5470,
+          "code": 475500
+        }
+      ],
+      "name": "Other Advances",
+      "group_id": 1012
+    },
+    {
+      "survivor_id": 3351,
+      "survivor_code": 4802,
+      "dupes": [
+        {
+          "id": 5472,
+          "code": 480200
+        }
+      ],
+      "name": "Electricity Deposit",
+      "group_id": 1013
+    },
+    {
+      "survivor_id": 3352,
+      "survivor_code": 4803,
+      "dupes": [
+        {
+          "id": 5473,
+          "code": 480300
+        }
+      ],
+      "name": "Telephone Deposit",
+      "group_id": 1013
+    },
+    {
+      "survivor_id": 3353,
+      "survivor_code": 4804,
+      "dupes": [
+        {
+          "id": 5474,
+          "code": 480400
+        }
+      ],
+      "name": "LPG Cylinder Deposit",
+      "group_id": 1013
+    },
+    {
+      "survivor_id": 3354,
+      "survivor_code": 4805,
+      "dupes": [
+        {
+          "id": 5475,
+          "code": 480500
+        }
+      ],
+      "name": "Other Security Deposits",
+      "group_id": 1013
+    },
+    {
+      "survivor_id": 3362,
+      "survivor_code": 4901,
+      "dupes": [
+        {
+          "id": 5483,
+          "code": 490100
+        }
+      ],
+      "name": "Payment of TDS Collected",
+      "group_id": 1015
+    },
+    {
+      "survivor_id": 3364,
+      "survivor_code": 4903,
+      "dupes": [
+        {
+          "id": 5485,
+          "code": 490300
+        }
+      ],
+      "name": "GST Paid",
+      "group_id": 1015
+    },
+    {
+      "survivor_id": 3365,
+      "survivor_code": 4940,
+      "dupes": [
+        {
+          "id": 5486,
+          "code": 494000
+        }
+      ],
+      "name": "Payment of Sundries Payable",
+      "group_id": 1016
+    },
+    {
+      "survivor_id": 3366,
+      "survivor_code": 4950,
+      "dupes": [
+        {
+          "id": 5487,
+          "code": 495000
+        }
+      ],
+      "name": "Payment from Endowment Fund",
+      "group_id": 1017
+    },
+    {
+      "survivor_id": 3367,
+      "survivor_code": 4955,
+      "dupes": [
+        {
+          "id": 5488,
+          "code": 495500
+        }
+      ],
+      "name": "Other Capital Payments",
+      "group_id": 1018
+    },
+    {
+      "survivor_id": 3375,
+      "survivor_code": 5151,
+      "dupes": [
+        {
+          "id": 5495,
+          "code": 515100
+        }
+      ],
+      "name": "General Reserve",
+      "group_id": 1023
+    },
+    {
+      "survivor_id": 3376,
+      "survivor_code": 5152,
+      "dupes": [
+        {
+          "id": 5496,
+          "code": 515200
+        }
+      ],
+      "name": "Other Reserves",
+      "group_id": 1023
+    },
+    {
+      "survivor_id": 3377,
+      "survivor_code": 5153,
+      "dupes": [
+        {
+          "id": 5497,
+          "code": 515300
+        }
+      ],
+      "name": "Income & Expenditure Account",
+      "group_id": 1023
+    },
+    {
+      "survivor_id": 3378,
+      "survivor_code": 5200,
+      "dupes": [
+        {
+          "id": 5501,
+          "code": 520000
+        }
+      ],
+      "name": "Endowment Fund",
+      "group_id": 1024
+    },
+    {
+      "survivor_id": 3379,
+      "survivor_code": 5301,
+      "dupes": [
+        {
+          "id": 5502,
+          "code": 530100
+        }
+      ],
+      "name": "Loan from Banks (BS)",
+      "group_id": 1025
+    },
+    {
+      "survivor_id": 3382,
+      "survivor_code": 5305,
+      "dupes": [
+        {
+          "id": 5505,
+          "code": 530500
+        }
+      ],
+      "name": "Advances from MOSC Institutions",
+      "group_id": 1025
+    },
+    {
+      "survivor_id": 3383,
+      "survivor_code": 5306,
+      "dupes": [
+        {
+          "id": 5506,
+          "code": 530600
+        }
+      ],
+      "name": "Advances from Others (BS)",
+      "group_id": 1025
+    },
+    {
+      "survivor_id": 3384,
+      "survivor_code": 5307,
+      "dupes": [
+        {
+          "id": 5507,
+          "code": 530700
+        }
+      ],
+      "name": "Catholicate Day Collection Advances",
+      "group_id": 1025
+    },
+    {
+      "survivor_id": 3386,
+      "survivor_code": 4564,
+      "dupes": [
+        {
+          "id": 5508,
+          "code": 456400
+        }
+      ],
+      "name": "Rent Deposits (BS)",
+      "group_id": 1025
+    },
+    {
+      "survivor_id": 3390,
+      "survivor_code": 4562,
+      "dupes": [
+        {
+          "id": 5512,
+          "code": 456200
+        }
+      ],
+      "name": "Other Expenses Payable",
+      "group_id": 1027
+    },
+    {
+      "survivor_id": 3391,
+      "survivor_code": 5451,
+      "dupes": [
+        {
+          "id": 5513,
+          "code": 545100
+        }
+      ],
+      "name": "GST Payable",
+      "group_id": 1028
+    },
+    {
+      "survivor_id": 3392,
+      "survivor_code": 5452,
+      "dupes": [
+        {
+          "id": 5514,
+          "code": 545200
+        }
+      ],
+      "name": "TDS Payable",
+      "group_id": 1028
+    },
+    {
+      "survivor_id": 3396,
+      "survivor_code": 5600,
+      "dupes": [
+        {
+          "id": 5518,
+          "code": 560000
+        }
+      ],
+      "name": "Fixed Assets (Schedule A)",
+      "group_id": 1029
+    },
+    {
+      "survivor_id": 3409,
+      "survivor_code": 5821,
+      "dupes": [
+        {
+          "id": 5531,
+          "code": 582100
+        }
+      ],
+      "name": "Income Receivable on Investments",
+      "group_id": 1033
+    },
+    {
+      "survivor_id": 3410,
+      "survivor_code": 5822,
+      "dupes": [
+        {
+          "id": 5532,
+          "code": 582200
+        }
+      ],
+      "name": "Interest Receivable on Advances",
+      "group_id": 1033
+    },
+    {
+      "survivor_id": 3411,
+      "survivor_code": 5823,
+      "dupes": [
+        {
+          "id": 5533,
+          "code": 582300
+        }
+      ],
+      "name": "Interest Receivable on Deposits",
+      "group_id": 1033
+    },
+    {
+      "survivor_id": 3414,
+      "survivor_code": 5903,
+      "dupes": [
+        {
+          "id": 5536,
+          "code": 590300
+        }
+      ],
+      "name": "TDS/TCS of Previous Years",
+      "group_id": 1034
+    },
+    {
+      "survivor_id": 3416,
+      "survivor_code": 5904,
+      "dupes": [
+        {
+          "id": 5537,
+          "code": 590400
+        }
+      ],
+      "name": "Sundry Receivables",
+      "group_id": 1034
+    },
+    {
+      "survivor_id": 3417,
+      "survivor_code": 5905,
+      "dupes": [
+        {
+          "id": 5538,
+          "code": 590500
+        }
+      ],
+      "name": "Cover Collections Receivable",
+      "group_id": 1034
+    },
+    {
+      "survivor_id": 3418,
+      "survivor_code": 5950,
+      "dupes": [
+        {
+          "id": 5539,
+          "code": 595000
+        }
+      ],
+      "name": "Stock",
+      "group_id": 1035
+    },
+    {
+      "survivor_id": 3931,
+      "survivor_code": 4561,
+      "dupes": [
+        {
+          "id": 5432,
+          "code": 456100
+        }
+      ],
+      "name": "Expenses Payable",
+      "group_id": 1008
+    },
+    {
+      "survivor_id": 3932,
+      "survivor_code": 4563,
+      "dupes": [
+        {
+          "id": 5433,
+          "code": 456300
+        }
+      ],
+      "name": "Income Tax",
+      "group_id": 1008
+    },
+    {
+      "survivor_id": 3935,
+      "survivor_code": 4701,
+      "dupes": [
+        {
+          "id": 5462,
+          "code": 470100
+        }
+      ],
+      "name": "Deposits/ Bonds",
+      "group_id": 1011
+    },
+    {
+      "survivor_id": 3940,
+      "survivor_code": 5001,
+      "dupes": [
+        {
+          "id": 5491,
+          "code": 500100
+        }
+      ],
+      "name": "Balance as per last Balance Sheet",
+      "group_id": 1021
+    },
+    {
+      "survivor_id": 3941,
+      "survivor_code": 5302,
+      "dupes": [
+        {
+          "id": 5503,
+          "code": 530200
+        }
+      ],
+      "name": "Loan from Others (Other than Church Members) (BS)",
+      "group_id": 1025
+    },
+    {
+      "survivor_id": 3942,
+      "survivor_code": 5303,
+      "dupes": [
+        {
+          "id": 5504,
+          "code": 530300
+        }
+      ],
+      "name": "Loans From Church Members (BS)",
+      "group_id": 1025
+    },
+    {
+      "survivor_id": 3944,
+      "survivor_code": 5461,
+      "dupes": [
+        {
+          "id": 5515,
+          "code": 546100
+        }
+      ],
+      "name": "Against Malankara Metropolitan Payments",
+      "group_id": 1028
+    },
+    {
+      "survivor_id": 3945,
+      "survivor_code": 5462,
+      "dupes": [
+        {
+          "id": 5516,
+          "code": 546200
+        }
+      ],
+      "name": "Against Diocession Office Payments",
+      "group_id": 1028
+    },
+    {
+      "survivor_id": 3946,
+      "survivor_code": 5463,
+      "dupes": [
+        {
+          "id": 5517,
+          "code": 546300
+        }
+      ],
+      "name": "Against Other MOSC Office Payments",
+      "group_id": 1028
+    },
+    {
+      "survivor_id": 3947,
+      "survivor_code": 5701,
+      "dupes": [
+        {
+          "id": 5519,
+          "code": 570100
+        }
+      ],
+      "name": "Bonds/ Mutual Funds",
+      "group_id": 1030
+    }
+  ]
+}

@@ -1,0 +1,343 @@
+{
+  "church_id": 6,
+  "legacy_ledgers": [
+    {
+      "id": 3123,
+      "ledger_code": 2101,
+      "ledger_name": "Bhandaram - Church",
+      "ledger_nature": "INCOME",
+      "account_group_id": 957,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3124,
+      "ledger_code": 2102,
+      "ledger_name": "Bhandaram - Kurishinthotti",
+      "ledger_nature": "INCOME",
+      "account_group_id": 957,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3125,
+      "ledger_code": 2103,
+      "ledger_name": "Bhandaram - Others",
+      "ledger_nature": "INCOME",
+      "account_group_id": 957,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3126,
+      "ledger_code": 2110,
+      "ledger_name": "Qurbana Receipts",
+      "ledger_nature": "INCOME",
+      "account_group_id": 958,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3127,
+      "ledger_code": 2121,
+      "ledger_name": "Offering - Church",
+      "ledger_nature": "INCOME",
+      "account_group_id": 959,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3128,
+      "ledger_code": 2122,
+      "ledger_name": "Offering - Kurishinthotti",
+      "ledger_nature": "INCOME",
+      "account_group_id": 959,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3129,
+      "ledger_code": 2123,
+      "ledger_name": "Offering - Baptism",
+      "ledger_nature": "INCOME",
+      "account_group_id": 959,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3130,
+      "ledger_code": 2124,
+      "ledger_name": "Offering - Funeral",
+      "ledger_nature": "INCOME",
+      "account_group_id": 959,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3131,
+      "ledger_code": 2125,
+      "ledger_name": "Offering - Birthday Contributions",
+      "ledger_nature": "INCOME",
+      "account_group_id": 959,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3132,
+      "ledger_code": 2126,
+      "ledger_name": "Offering - Other",
+      "ledger_nature": "INCOME",
+      "account_group_id": 959,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3133,
+      "ledger_code": 2127,
+      "ledger_name": "Offering - Ritual Articles",
+      "ledger_nature": "INCOME",
+      "account_group_id": 959,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3139,
+      "ledger_code": 2171,
+      "ledger_name": "Pilgrimage - Parumala",
+      "ledger_nature": "INCOME",
+      "account_group_id": 961,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3140,
+      "ledger_code": 2172,
+      "ledger_name": "Pilgrimage - Others",
+      "ledger_nature": "INCOME",
+      "account_group_id": 961,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3183,
+      "ledger_code": 2801,
+      "ledger_name": "Catholicate Day Collection",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 973,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3184,
+      "ledger_code": 2802,
+      "ledger_name": "Recceessa",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 973,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3185,
+      "ledger_code": 2803,
+      "ledger_name": "Vivaha Kaimuthu",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 973,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3186,
+      "ledger_code": 2804,
+      "ledger_name": "Mission Sunday Collection",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 973,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3187,
+      "ledger_code": 2805,
+      "ledger_name": "Sunday School Day Collection",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 973,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3188,
+      "ledger_code": 2806,
+      "ledger_name": "Seminary Day Collection",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 973,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3189,
+      "ledger_code": 2807,
+      "ledger_name": "Diocesan Day Collection",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 973,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3190,
+      "ledger_code": 2808,
+      "ledger_name": "Garbo Sunday Collection",
+      "ledger_nature": "INCOME",
+      "account_group_id": 973,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3191,
+      "ledger_code": 2809,
+      "ledger_name": "Other Collections",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 973,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3192,
+      "ledger_code": 2911,
+      "ledger_name": "Grant from Catholicate - Capital",
+      "ledger_nature": "INCOME",
+      "account_group_id": 974,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3193,
+      "ledger_code": 2912,
+      "ledger_name": "Grant from Catholicate - Revenue",
+      "ledger_nature": "INCOME",
+      "account_group_id": 974,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3194,
+      "ledger_code": 2921,
+      "ledger_name": "Grant from Diocese - Capital",
+      "ledger_nature": "INCOME",
+      "account_group_id": 974,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3195,
+      "ledger_code": 2922,
+      "ledger_name": "Grant from Diocese - Revenue",
+      "ledger_nature": "INCOME",
+      "account_group_id": 974,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3196,
+      "ledger_code": 2923,
+      "ledger_name": "Salary Fund",
+      "ledger_nature": "INCOME",
+      "account_group_id": 974,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3221,
+      "ledger_code": 4003,
+      "ledger_name": "To Diocesan - Diocesan Day",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 988,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3222,
+      "ledger_code": 4004,
+      "ledger_name": "To Diocesan - Vivaha Kaimuthu",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 988,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3223,
+      "ledger_code": 4005,
+      "ledger_name": "To Diocesan - Hossana Kanikka",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 988,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3224,
+      "ledger_code": 4006,
+      "ledger_name": "To Diocesan - Kohene Kanikka",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 988,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3225,
+      "ledger_code": 4008,
+      "ledger_name": "To Diocesan - Other",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 988,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3272,
+      "ledger_code": 4281,
+      "ledger_name": "Publication",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 999,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3273,
+      "ledger_code": 4282,
+      "ledger_name": "Send off Expenses",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 999,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3274,
+      "ledger_code": 4284,
+      "ledger_name": "Celebration - Christmas",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 999,
+      "op_balance": 0.0
+    },
+    {
+      "id": 3275,
+      "ledger_code": 4285,
+      "ledger_name": "Celebration - Others",
+      "ledger_nature": "EXPENSE",
+      "account_group_id": 999,
+      "op_balance": 0.0
+    }
+  ],
+  "legacy_groups": [
+    {
+      "id": 956,
+      "group_name": "A. Church Receipts",
+      "under_group_id": 955,
+      "account_code": 2000
+    },
+    {
+      "id": 957,
+      "group_name": "Bhandaram Collection",
+      "under_group_id": 956,
+      "account_code": 2100
+    },
+    {
+      "id": 958,
+      "group_name": "Qurbana Receipts",
+      "under_group_id": 956,
+      "account_code": 2110
+    },
+    {
+      "id": 959,
+      "group_name": "Offerings Received",
+      "under_group_id": 956,
+      "account_code": 2120
+    },
+    {
+      "id": 961,
+      "group_name": "Receipts for Pilgrimage",
+      "under_group_id": 956,
+      "account_code": 2170
+    },
+    {
+      "id": 973,
+      "group_name": "Special Collections (Receipts)",
+      "under_group_id": 972,
+      "account_code": 2800
+    },
+    {
+      "id": 988,
+      "group_name": "To Diocesan Office",
+      "under_group_id": 986,
+      "account_code": 4000
+    },
+    {
+      "id": 999,
+      "group_name": "Other Religious Payments",
+      "under_group_id": 993,
+      "account_code": 4280
+    }
+  ]
+}

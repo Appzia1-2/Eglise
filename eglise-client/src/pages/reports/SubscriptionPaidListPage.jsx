@@ -264,9 +264,9 @@ const SearchableSelect = ({
 };
 
 // ============================================================
-// PAID TABLE
+// PAID TABLE (DYNAMIC LEDGER COLUMNS)
 // ============================================================
-const PaidTable = ({ wards, forPrint = false }) => {
+const PaidTable = ({ wards, ledgers = [], forPrint = false }) => {
   const headerBg = forPrint ? "#F4D8DE" : "#F7F9FB";
   const headerColor = forPrint ? DARK_RED : TEXT_COLOR;
   const wardBg = forPrint ? "#FBE9ED" : "#FFF5F7";
@@ -275,7 +275,7 @@ const PaidTable = ({ wards, forPrint = false }) => {
   const wardRowBorder = forPrint ? "#DDAAB8" : "#F2C7D2";
 
   const grandTotal = wards.reduce(
-    (sum, ward) => sum + (Number(ward.ward_total ?? ward.ward_paid_total ?? 0) || 0),
+    (sum, ward) => sum + (Number(ward.ward_total) || 0),
     0
   );
 
@@ -289,31 +289,23 @@ const PaidTable = ({ wards, forPrint = false }) => {
       <Box as="table" width="100%" minW="850px" borderCollapse="collapse" fontSize={forPrint ? "11px" : "12px"} fontFamily={forPrint ? "Georgia, serif" : "inherit"}>
         <Box as="thead">
           <Box as="tr" bg={headerBg}>
-            {[
-              "Member Name",
-              "Family",
-              "Monthly Subscription",
-              "Yearly Subscription",
-              "Charity Paid",
-              "Diocese Paid",
-              "Total Paid",
-            ].map((label, index) => (
-              <Box
-                as="th"
-                key={label}
-                textAlign={index >= 2 ? "right" : "left"}
-                px={3}
-                py={3}
-                fontSize="11px"
-                fontWeight="700"
-                color={headerColor}
-                borderBottom={`1px solid ${rowBorder}`}
-                letterSpacing="0.3px"
-                whiteSpace="nowrap"
-              >
-                {label}
+            <Box as="th" textAlign="left" px={3} py={3} fontSize="11px" fontWeight="700" color={headerColor} borderBottom={`1px solid ${rowBorder}`} letterSpacing="0.3px" whiteSpace="nowrap">
+              Member Name
+            </Box>
+            <Box as="th" textAlign="left" px={3} py={3} fontSize="11px" fontWeight="700" color={headerColor} borderBottom={`1px solid ${rowBorder}`} letterSpacing="0.3px" whiteSpace="nowrap">
+              Family
+            </Box>
+            
+            {/* Dynamic Ledger Columns */}
+            {ledgers.map((ledgerName) => (
+              <Box as="th" key={ledgerName} textAlign="right" px={3} py={3} fontSize="11px" fontWeight="700" color={headerColor} borderBottom={`1px solid ${rowBorder}`} letterSpacing="0.3px" whiteSpace="nowrap">
+                {ledgerName}
               </Box>
             ))}
+
+            <Box as="th" textAlign="right" px={3} py={3} fontSize="11px" fontWeight="700" color={headerColor} borderBottom={`1px solid ${rowBorder}`} letterSpacing="0.3px" whiteSpace="nowrap">
+              Total Paid
+            </Box>
           </Box>
         </Box>
 
@@ -322,7 +314,7 @@ const PaidTable = ({ wards, forPrint = false }) => {
             <React.Fragment key={ward.ward}>
               {/* Ward header */}
               <Box as="tr" bg={wardBg} borderTop={`1px solid ${wardRowBorder}`} borderBottom={`1px solid ${wardRowBorder}`}>
-                <Box as="td" colSpan={6} px={3} py={2.5}>
+                <Box as="td" colSpan={ledgers.length + 2} px={3} py={2.5}>
                   <HStack gap={2} align="center">
                     <HomeIcon size={16} color={forPrint ? DARK_RED : PRIMARY_RED} />
                     <Text fontSize={forPrint ? "12px" : "13px"} fontWeight="700" color={forPrint ? DARK_RED : TEXT_COLOR}>
@@ -335,7 +327,7 @@ const PaidTable = ({ wards, forPrint = false }) => {
                 </Box>
                 <Box as="td" px={3} py={2.5} textAlign="right">
                   <Text fontSize="12px" fontWeight="700" color={forPrint ? DARK_RED : PRIMARY_RED} whiteSpace="nowrap">
-                    {fmt(ward.ward_total ?? ward.ward_paid_total ?? ward.members.reduce((s, m) => s + (Number(m.total_paid) || 0), 0))}
+                    {fmt(ward.ward_total)}
                   </Text>
                 </Box>
               </Box>
@@ -348,33 +340,19 @@ const PaidTable = ({ wards, forPrint = false }) => {
                     {member.house_name && <Text fontSize="10px" color={SECONDARY_TEXT}>{member.house_name}</Text>}
                   </Box>
 
-                  {/* Monthly Subscription */}
-                  <Box as="td" px={3} py={2} textAlign="right" color={TEXT_COLOR} whiteSpace="nowrap">
-                    {member.monthly_subscription > 0 ? (
-                      <Text fontWeight="600">{fmt(member.monthly_subscription)}</Text>
-                    ) : (
-                      <Text color={SECONDARY_TEXT}>—</Text>
-                    )}
-                  </Box>
-
-                  {/* Yearly Subscription */}
-                  <Box as="td" px={3} py={2} textAlign="right" color={TEXT_COLOR} whiteSpace="nowrap">
-                    {member.yearly_subscription > 0 ? (
-                      <Text fontWeight="600">{fmt(member.yearly_subscription)}</Text>
-                    ) : (
-                      <Text color={SECONDARY_TEXT}>—</Text>
-                    )}
-                  </Box>
-
-                  {/* Charity Paid */}
-                  <Box as="td" px={3} py={2} textAlign="right" color={TEXT_COLOR} whiteSpace="nowrap">
-                    {member.charity_fund > 0 ? fmt(member.charity_fund) : <Text color={SECONDARY_TEXT}>—</Text>}
-                  </Box>
-
-                  {/* Diocese Paid */}
-                  <Box as="td" px={3} py={2} textAlign="right" color={TEXT_COLOR} whiteSpace="nowrap">
-                    {member.diocese_fund > 0 ? fmt(member.diocese_fund) : <Text color={SECONDARY_TEXT}>—</Text>}
-                  </Box>
+                  {/* Dynamic Ledger Values */}
+                  {ledgers.map((ledgerName) => {
+                    const amt = member.ledgers?.[ledgerName] || 0;
+                    return (
+                      <Box as="td" key={ledgerName} px={3} py={2} textAlign="right" color={TEXT_COLOR} whiteSpace="nowrap">
+                        {amt > 0 ? (
+                          <Text fontWeight="600">{fmt(amt)}</Text>
+                        ) : (
+                          <Text color={SECONDARY_TEXT}>—</Text>
+                        )}
+                      </Box>
+                    );
+                  })}
 
                   {/* Total Paid */}
                   <Box as="td" px={3} py={2} textAlign="right" fontWeight="600" color={TEXT_COLOR} whiteSpace="nowrap">
@@ -387,7 +365,7 @@ const PaidTable = ({ wards, forPrint = false }) => {
 
           {/* Grand Total */}
           <Box as="tr" bg={forPrint ? "#F5CED8" : "#F5F7FA"} borderTop={`2px solid ${rowBorder}`}>
-            <Box as="td" colSpan={6} px={3} py={3} textAlign="right">
+            <Box as="td" colSpan={ledgers.length + 2} px={3} py={3} textAlign="right">
               <Text fontSize="12px" fontWeight="700" color={forPrint ? DARK_RED : BLUE} letterSpacing="0.3px">
                 Grand Total Paid {!forPrint ? ` (${totalMembers} members)` : ""}
               </Text>
@@ -417,7 +395,7 @@ const SubscriptionPaidListPage = () => {
   const [dateFrom, setDateFrom] = useState(monthStart());
   const [dateTo, setDateTo] = useState(today());
 
-  const [data, setData] = useState({ wards: [], grand_total: 0 });
+  const [data, setData] = useState({ wards: [], grand_total: 0, ledgers: [] });
   const [loading, setLoading] = useState(false);
   const [pageError, setPageError] = useState("");
   const [printOpen, setPrintOpen] = useState(false);
@@ -439,7 +417,7 @@ const SubscriptionPaidListPage = () => {
   const fetchData = async () => {
     if (dateFrom && dateTo && dateFrom > dateTo) {
       setPageError("Date From cannot be later than Date To.");
-      setData({ wards: [], grand_total: 0 });
+      setData({ wards: [], grand_total: 0, ledgers: [] });
       return;
     }
 
@@ -455,11 +433,12 @@ const SubscriptionPaidListPage = () => {
       setData({
         wards: response?.data?.wards || [],
         grand_total: Number(response?.data?.grand_total) || 0,
+        ledgers: response?.data?.ledgers || [],
       });
     } catch (error) {
       console.error("Paid list fetch error:", error);
       setPageError("Unable to load subscription paid list.");
-      setData({ wards: [], grand_total: 0 });
+      setData({ wards: [], grand_total: 0, ledgers: [] });
     } finally {
       setLoading(false);
     }
@@ -545,7 +524,7 @@ const SubscriptionPaidListPage = () => {
             <Text color={SECONDARY_TEXT} fontSize="12px" mt={1}>No subscription payments in this period.</Text>
           </Box>
         ) : (
-          <PaidTable wards={data.wards} />
+          <PaidTable wards={data.wards} ledgers={data.ledgers} />
         )}
 
         <Flex mt={4} justify="space-between" align="center" direction={{ base: "column", md: "row" }} gap={2}>
@@ -556,7 +535,7 @@ const SubscriptionPaidListPage = () => {
       <Footer />
 
       <ChurchPrintModal isOpen={printOpen} onClose={() => setPrintOpen(false)} title="SUBSCRIPTION PAID LIST" church={church} subtitle={<><Text as="span" fontWeight="700">Period:</Text>{" "}{periodLabel}</>}>
-        <PaidTable wards={data.wards || []} forPrint />
+        <PaidTable wards={data.wards || []} ledgers={data.ledgers || []} forPrint />
       </ChurchPrintModal>
     </Box>
   );
