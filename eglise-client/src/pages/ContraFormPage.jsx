@@ -386,7 +386,8 @@ const ContraFormPage = () => {
 
             {/* BANK ACCOUNT SELECTION (Physical Bank Master) */}
             <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4} mb={4}>
-              {form.contra_type === "BANK_TO_CASH" && (
+              {/* Show From Bank Account for Withdrawals and Bank-to-Bank */}
+              {(form.contra_type === "BANK_TO_CASH" || form.contra_type === "BANK_TO_BANK") && (
                 <Box>
                   <BankAccountSelect
                     value={form.from_bank_account}
@@ -398,7 +399,8 @@ const ContraFormPage = () => {
                 </Box>
               )}
 
-              {form.contra_type === "CASH_TO_BANK" && (
+              {/* Show To Bank Account for Deposits and Bank-to-Bank */}
+              {(form.contra_type === "CASH_TO_BANK" || form.contra_type === "BANK_TO_BANK") && (
                 <Box>
                   <BankAccountSelect
                     value={form.to_bank_account}

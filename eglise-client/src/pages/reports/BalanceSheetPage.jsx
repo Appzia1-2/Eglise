@@ -19,7 +19,12 @@ const BORDER      = "#DCE2EA";
 const BLUE        = "#315AB5";
 
 const fmt = (n) => "₹" + Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 });
+
 const today = () => new Date().toISOString().split("T")[0];
+const monthStart = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+};
 
 // ============================================================
 // SHARED ROW COMPONENT
@@ -193,7 +198,11 @@ const PrintStatutory = ({ liabilities, assets, totalLiab, totalAssets, dateTo })
 // ============================================================
 const BalanceSheetPage = () => {
   const navigate = useNavigate();
+  
+  // Added From Date
+  const [dateFrom, setDateFrom] = useState(monthStart());
   const [dateTo, setDateTo] = useState(today());
+  
   const [prevTo, setPrevTo] = useState("");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -209,7 +218,12 @@ const BalanceSheetPage = () => {
     try {
       setLoading(true);
       setPageError("");
-      const res = await getBalanceSheetReport({ to: dateTo, prev_to: prevTo || undefined });
+      // Passed `from` to the API just in case your backend uses it
+      const res = await getBalanceSheetReport({ 
+        from: dateFrom, 
+        to: dateTo, 
+        prev_to: prevTo || undefined 
+      });
       setData(res?.data);
     } catch (err) {
       console.error(err);
@@ -219,7 +233,7 @@ const BalanceSheetPage = () => {
     }
   };
 
-  useEffect(() => { fetchData(); }, [dateTo, prevTo]);
+  useEffect(() => { fetchData(); }, [dateFrom, dateTo, prevTo]);
 
   const liabilities = data?.liabilities || [];
   const assets = data?.assets || [];
@@ -253,13 +267,20 @@ const BalanceSheetPage = () => {
         <Box border={`1px solid ${BORDER}`} borderRadius="10px" px={{ base: 4, md: 5 }} py={4} mb={4} bg="white">
           <Flex gap={4} align="flex-end" wrap="wrap">
             <Box flex="1" maxW="200px">
-              <Text fontSize="10px" fontWeight="600" color={TEXT_COLOR} mb={1}>Current Year As of Date</Text>
+              <Text fontSize="10px" fontWeight="600" color={TEXT_COLOR} mb={1}>From Date</Text>
+              <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} h="40px" fontSize="12px" />
+            </Box>
+            
+            <Box flex="1" maxW="200px">
+              <Text fontSize="10px" fontWeight="600" color={TEXT_COLOR} mb={1}>To Date</Text>
               <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} h="40px" fontSize="12px" />
             </Box>
+
             <Box flex="1" maxW="200px">
-              <Text fontSize="10px" fontWeight="600" color={TEXT_COLOR} mb={1}>Previous Year As of Date (Optional)</Text>
+              <Text fontSize="10px" fontWeight="600" color={TEXT_COLOR} mb={1}>Previous Year To Date</Text>
               <Input type="date" value={prevTo} onChange={(e) => setPrevTo(e.target.value)} h="40px" fontSize="12px" />
             </Box>
+
             <Button h="40px" px={8} bg="white" border={`1px solid ${PRIMARY_RED}`} color={PRIMARY_RED} onClick={fetchData}>
               Filter
             </Button>
@@ -276,7 +297,9 @@ const BalanceSheetPage = () => {
           <>
             <Box border={`1px solid ${BORDER}`} borderRadius="10px" overflow="hidden" mb={4}>
               <Box bg="#F7F9FB" borderBottom={`1px solid ${BORDER}`} textAlign="center" py={3}>
-                <Text fontSize="14px" fontWeight="700" color={TEXT_COLOR} letterSpacing="0.6px">BALANCE SHEET AS AT {dateTo}</Text>
+                <Text fontSize="14px" fontWeight="700" color={TEXT_COLOR} letterSpacing="0.6px">
+                  BALANCE SHEET AS AT {dateTo}
+                </Text>
               </Box>
               <ScreenStatutory
                 liabilities={liabilities}
