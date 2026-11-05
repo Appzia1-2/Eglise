@@ -813,6 +813,26 @@ const GeneralLedgerPage = () => {
               showTotals
             />
 
+            {/* ✅ ADDED: Small Closing Balance design at the bottom */}
+            {!isLoading && (
+              <Flex
+                justify="flex-end"
+                align="center"
+                mt={4}
+                pt={3}
+                borderTop={`1px solid ${BORDER}`}
+              >
+                <HStack gap={3}>
+                  <Text fontSize="13px" fontWeight="700" color={MUTED} letterSpacing="0.4px">
+                    CLOSING BALANCE:
+                  </Text>
+                  <Text fontSize="18px" fontWeight="800" color={DARK}>
+                    {formatBalanceWithSide(closing, nature)}
+                  </Text>
+                </HStack>
+              </Flex>
+            )}
+
             <Text fontSize="11px" color={MUTED} mt={2} textAlign="right">
               Showing {rows.length} entries
             </Text>

@@ -47,6 +47,12 @@ const firstDayOfMonthISO = () => {
   return `${y}-${m}-01`;
 };
 
+const formatDateDisplay = (dateStr) => {
+  if (!dateStr) return "—";
+  const [y, m, d] = dateStr.split("-");
+  return `${d}/${m}/${y}`;
+};
+
 const toNumber = (v) => {
   if (v === null || v === undefined || v === "") return 0;
   const n = Number(String(v).replace(/[₹,\s]/g, ""));
@@ -86,12 +92,6 @@ const isCashOrBankLedger = (ledgerName) => {
 
 // ============================================================
 // GROUP LEDGER ENTRIES BY VOUCHER
-// ============================================================
-//
-// Money-in convention: Credit = money in, Debit = money out.
-//   - Receipt → Credit
-//   - Payment → Debit
-//   - Contra  → Debit to cash/bank = money IN, Credit = money OUT
 // ============================================================
 
 const groupLedgerEntries = (entries, book = "bank") => {
@@ -149,8 +149,6 @@ const groupLedgerEntries = (entries, book = "bank") => {
         } else if (voucherType === "Payment") {
           g.direction = "DEBIT"; // money out
         } else {
-          // Contra: apply the same money-in/money-out convention.
-          // DEBIT to cash/bank ledger = money IN, CREDIT = money OUT.
           g.direction = e.entry_type === "DEBIT" ? "CREDIT" : "DEBIT";
         }
       }
@@ -485,6 +483,12 @@ const BankBookPage = () => {
     setDateTo(todayISO());
   };
 
+  // Calculate screen closing balance
+  const screenClosingBalance =
+    rows.length > 0 && rows[0].running_balance !== undefined
+      ? rows[0].running_balance
+      : (openingBalance ?? 0) + totals.credit - totals.debit;
+
   return (
     <>
       <Box minH="100vh" bg="white" display="flex" flexDirection="column">
@@ -570,6 +574,27 @@ const BankBookPage = () => {
               totals={totals}
               showTotals
             />
+
+            {/* ✅ ADDED: On-Screen Closing Balance */}
+            {!isLoading && (
+              <Flex
+                justify="flex-end"
+                align="center"
+                mt={4}
+                pt={3}
+                borderTop={`1px solid ${BORDER}`}
+              >
+                <HStack gap={3}>
+                  <Text fontSize="13px" fontWeight="700" color={MUTED} letterSpacing="0.4px">
+                    CLOSING BALANCE:
+                  </Text>
+                  <Text fontSize="18px" fontWeight="800" color={DARK}>
+                    ₹{Number(screenClosingBalance).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  </Text>
+                </HStack>
+              </Flex>
+            )}
+
             <Text fontSize="11px" color={MUTED} mt={2} textAlign="right">
               Showing {rows.length} entries
             </Text>

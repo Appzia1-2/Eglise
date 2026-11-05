@@ -193,7 +193,7 @@ const MENU_DATA = {
         "Member Ledger",
         "Income Expenditure",
         "Receipt & Payments",
-        "Balance Sheet", // ✅ Added
+        // "Balance Sheet",
         "Subscription Due List",
         "Donations Register",
         "Subscription Paid List",

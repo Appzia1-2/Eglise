@@ -47,6 +47,12 @@ const firstDayOfMonthISO = () => {
   return `${y}-${m}-01`;
 };
 
+const formatDateDisplay = (dateStr) => {
+  if (!dateStr) return "—";
+  const [y, m, d] = dateStr.split("-");
+  return `${d}/${m}/${y}`;
+};
+
 const toNumber = (v) => {
   if (v === null || v === undefined || v === "") return 0;
   const n = Number(String(v).replace(/[₹,\s]/g, ""));
@@ -323,6 +329,7 @@ const CashBookPrintTable = ({ rows, totals, openingBalance }) => {
             ))
           )}
 
+          {/* Total Row */}
           <tr style={{ background: "#FCEAEC", borderTop: "1px solid #F0C2C2" }}>
             <td
               colSpan={4}
@@ -344,7 +351,8 @@ const CashBookPrintTable = ({ rows, totals, openingBalance }) => {
             <td style={numStyle}>—</td>
           </tr>
 
-          <tr style={{ background: "#FFF5F5" }}>
+          {/* Closing Balance Row */}
+          <tr style={{ background: "#FFF5F5", borderTop: "1px solid #F0C2C2" }}>
             <td
               colSpan={6}
               style={{
@@ -352,11 +360,20 @@ const CashBookPrintTable = ({ rows, totals, openingBalance }) => {
                 textAlign: "right",
                 fontWeight: "bold",
                 color: "#8B1A1A",
+                fontSize: "14px",
               }}
             >
               Closing Balance
             </td>
-            <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>
+            <td 
+              style={{ 
+                ...numStyle, 
+                fontWeight: "800", 
+                color: "#8B1A1A", 
+                fontSize: "14px",
+                borderLeft: "2px solid #F0C2C2"
+              }}
+            >
               ₹{fmt(closingBalance)}
             </td>
           </tr>
@@ -495,6 +512,12 @@ const CashBookPage = () => {
     setDateTo(todayISO());
   };
 
+  // Calculate screen closing balance
+  const screenClosingBalance =
+    rows.length > 0 && rows[0].running_balance !== undefined
+      ? rows[0].running_balance
+      : (openingBalance ?? 0) + totals.credit - totals.debit;
+
   return (
     <>
       <Box minH="100vh" bg="white" display="flex" flexDirection="column">
@@ -580,6 +603,27 @@ const CashBookPage = () => {
               totals={totals}
               showTotals
             />
+
+            {/* Clean text-only closing balance (matching your screenshot) */}
+                        {!isLoading && (
+              <Flex
+                justify="flex-end"
+                align="center"
+                mt={4}
+                pt={3}
+                borderTop={`1px solid ${BORDER}`}
+              >
+                <HStack gap={3}>
+                  <Text fontSize="13px" fontWeight="700" color={MUTED} letterSpacing="0.4px">
+                    CLOSING BALANCE:
+                  </Text>
+                  <Text fontSize="18px" fontWeight="800" color={DARK}>
+                    ₹{Number(screenClosingBalance).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  </Text>
+                </HStack>
+              </Flex>
+            )}
+
             <Text fontSize="11px" color={MUTED} mt={2} textAlign="right">
               Showing {rows.length} entries
             </Text>

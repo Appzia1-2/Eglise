@@ -306,7 +306,6 @@ const PrintStatutory = ({
 
   return (
     <div style={{ fontFamily: "Georgia, 'Times New Roman', serif", width: "100%", fontSize: "10px" }}>
-      {/* Account title — church name + diocese removed (already shown by modal ribbon header) */}
       <div style={{ textAlign: "center", marginBottom: 14 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: DARK_RED, letterSpacing: "0.5px" }}>
           INCOME AND EXPENDITURE ACCOUNT
@@ -593,6 +592,24 @@ const IncomeExpenditurePage = () => {
               net={net}
               isSurplus={isSurplus}
             />
+
+            {/* ✅ ADDED: Small Closing Balance design at the bottom */}
+            <Flex
+              justify="flex-end"
+              align="center"
+              mt={4}
+              pt={3}
+              borderTop={`1px solid ${BORDER}`}
+            >
+              <HStack gap={3}>
+                <Text fontSize="13px" fontWeight="700" color={SECONDARY} letterSpacing="0.4px">
+                  NET {isSurplus ? "SURPLUS" : "DEFICIT"}:
+                </Text>
+                <Text fontSize="18px" fontWeight="800" color={isSurplus ? "#2E7D32" : PRIMARY_RED}>
+                  {formatAmount(Math.abs(net))}
+                </Text>
+              </HStack>
+            </Flex>
           </>
         )}
       </Container>

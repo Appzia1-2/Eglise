@@ -48,7 +48,7 @@ const BankAccountAddPage = () => {
     account_number: "",
     ifsc_code: "",
     branch: "",
-    opening_balance: "", // ✅ NEW
+    opening_balance: "", 
     is_active: true,
   });
 
@@ -66,16 +66,22 @@ const BankAccountAddPage = () => {
     const trimmed = {
       bank_name: form.bank_name.trim(),
       account_number: form.account_number.trim(),
-      ifsc_code: form.ifsc_code.trim().toUpperCase() || null,
-      branch: form.branch.trim() || null,
-      opening_balance: Number(form.opening_balance || 0), // ✅ NEW
+      ifsc_code: form.ifsc_code.trim().toUpperCase(),
+      branch: form.branch.trim(),
+      opening_balance: Number(form.opening_balance || 0),
       is_active: form.is_active,
     };
 
+    // ✅ ADDED: Frontend validation to match backend "mandatory" rule
     const errors = {};
     if (!trimmed.bank_name) errors.bank_name = "Bank name is required.";
     if (!trimmed.account_number)
       errors.account_number = "Account number is required.";
+    if (!trimmed.ifsc_code) errors.ifsc_code = "IFSC code is required.";
+    if (!trimmed.branch) errors.branch = "Branch name is required.";
+    if (form.opening_balance === "" || form.opening_balance === null) {
+      errors.opening_balance = "Opening balance is required (can be 0).";
+    }
 
     if (Object.keys(errors).length) {
       setFieldErrors(errors);
@@ -281,7 +287,8 @@ const BankAccountAddPage = () => {
             </Box>
 
             <Box mb={5}>
-              <FieldLabel>IFSC Code</FieldLabel>
+              {/* ✅ ADDED required */}
+              <FieldLabel required>IFSC Code</FieldLabel>
               <Input
                 value={form.ifsc_code}
                 onChange={(e) =>
@@ -300,7 +307,8 @@ const BankAccountAddPage = () => {
             </Box>
 
             <Box mb={5}>
-              <FieldLabel>Branch</FieldLabel>
+              {/* ✅ ADDED required */}
+              <FieldLabel required>Branch</FieldLabel>
               <Input
                 value={form.branch}
                 onChange={(e) => setField("branch", e.target.value)}
@@ -315,9 +323,9 @@ const BankAccountAddPage = () => {
               )}
             </Box>
 
-            {/* ✅ NEW: OPENING BALANCE */}
+            {/* ✅ ADDED required */}
             <Box mb={5}>
-              <FieldLabel>Opening Balance (₹)</FieldLabel>
+              <FieldLabel required>Opening Balance (₹)</FieldLabel>
               <Input
                 type="number"
                 value={form.opening_balance}

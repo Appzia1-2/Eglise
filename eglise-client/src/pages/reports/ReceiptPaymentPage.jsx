@@ -71,11 +71,11 @@ const StatutoryRow = ({ row, mode = "screen" }) => {
   const bg =
     isSection  ? "#F7F9FB" :
     isTotal    ? "#F0F4FA" :
-    isSubTotal ? "#F7F9FB" :  // light grey for subtotals
+    isSubTotal ? "#F7F9FB" :  
     "white";
 
   const indentPx = [0, 20, 40, 60, 80, 100][depth] ?? 100;
-  const prefix = isSection && section ? `${section}.  ` : "";
+  const prefix = (isSection && section && !name.startsWith(section)) ? `${section}.  ` : "";
 
   const cellPad = isPrint ? "4px 6px" : "6px 8px";
   const fontSize = isPrint ? "9.5px" : "11.5px";
@@ -144,7 +144,7 @@ const StatutoryRow = ({ row, mode = "screen" }) => {
 };
 
 // ============================================================
-// SCREEN TWO-COLUMN VIEW
+// SCREEN TWO-COLUMN VIEW (Original Design)
 // ============================================================
 const ScreenStatutory = ({
   receiptRows,
@@ -308,26 +308,6 @@ const PrintStatutory = ({
 };
 
 // ============================================================
-// SIDE FLOW CARD
-// ============================================================
-const SideFlowCard = ({ title, flow, tone = "red" }) => {
-  if (!flow) return null;
-  const titleColor = tone === "red" ? DARK_RED : BLUE;
-  return (
-    <Box border={`1px solid ${BORDER}`} borderRadius="8px" p={3} bg="white">
-      <Text fontSize="11px" fontWeight="700" color={titleColor} mb={2} textTransform="uppercase">{title}</Text>
-      <HStack justify="space-between" fontSize="11px" color={SECONDARY} mb={1}><Text>Opening</Text><Text color={TEXT_COLOR} fontWeight="600">{formatAmount(flow.opening)}</Text></HStack>
-      <HStack justify="space-between" fontSize="11px" color={SECONDARY} mb={1}><Text>Receipts</Text><Text color={TEXT_COLOR}>{formatAmount(flow.receipts)}</Text></HStack>
-      <HStack justify="space-between" fontSize="11px" color={SECONDARY} mb={1}><Text>Payments</Text><Text color={TEXT_COLOR}>{formatAmount(flow.payments)}</Text></HStack>
-      <HStack justify="space-between" fontSize="12px" borderTop={`1px solid ${BORDER}`} pt={2} mt={1}>
-        <Text fontWeight="700" color={TEXT_COLOR}>Closing</Text>
-        <Text fontWeight="800" color={TEXT_COLOR}>{formatAmount(flow.closing)}</Text>
-      </HStack>
-    </Box>
-  );
-};
-
-// ============================================================
 // MAIN PAGE
 // ============================================================
 const ReceiptPaymentPage = () => {
@@ -383,14 +363,11 @@ const ReceiptPaymentPage = () => {
   const totalReceipts = data?.total_receipts || 0;
   const totalPayments = data?.total_payments || 0;
   const isBalanced = data?.is_balanced ?? true;
-  const summary = data?.summary || {};
 
   const hasData = receiptRows.length > 0 || paymentRows.length > 0;
 
-  // Stub out flow cards — the new endpoint doesn't return cash/bank flow
-  // yet. Remove this block entirely if you want to hide the cards.
-  const cashFlow = null;
-  const bankFlow = null;
+  // Calculate difference for the bottom summary
+  const diff = totalReceipts - totalPayments;
 
   return (
     <Box minH="100vh" bg="white" display="flex" flexDirection="column">
@@ -472,13 +449,6 @@ const ReceiptPaymentPage = () => {
           </Box>
         ) : (
           <>
-            {(cashFlow || bankFlow) && (
-              <Flex gap={3} mb={4} direction={{ base: "column", md: "row" }}>
-                <Box flex="1"><SideFlowCard title="Cash in Hand" flow={cashFlow} tone="red" /></Box>
-                <Box flex="1"><SideFlowCard title="Bank Accounts" flow={bankFlow} tone="blue" /></Box>
-              </Flex>
-            )}
-
             <Box
               bg="#F7F9FB"
               borderBottom={`1px solid ${BORDER}`}
@@ -505,6 +475,24 @@ const ReceiptPaymentPage = () => {
               totalPayments={totalPayments}
               isBalanced={isBalanced}
             />
+
+            {/* ✅ ADDED: Small Closing Balance design at the bottom */}
+            <Flex
+              justify="flex-end"
+              align="center"
+              mt={4}
+              pt={3}
+              borderTop={`1px solid ${BORDER}`}
+            >
+              <HStack gap={3}>
+                <Text fontSize="13px" fontWeight="700" color={SECONDARY} letterSpacing="0.4px">
+                  NET CLOSING BALANCE:
+                </Text>
+                <Text fontSize="18px" fontWeight="800" color={diff >= 0 ? "#2E7D32" : PRIMARY_RED}>
+                  {formatAmount(Math.abs(diff))}
+                </Text>
+              </HStack>
+            </Flex>
           </>
         )}
       </Container>

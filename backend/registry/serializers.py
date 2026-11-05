@@ -4796,8 +4796,10 @@ class LedgerEntrySerializer(serializers.ModelSerializer):
 # BANK ACCOUNT SERIALIZER
 # ============================================================
 
-from .models import BankAccount, AccountLedgerMaster, LedgerEntry
+from .models import BankAccount, AccountGroupMaster, AccountLedgerMaster, LedgerEntry
 from decimal import Decimal
+from django.utils import timezone
+from django.db import transaction
 
 class BankAccountSerializer(serializers.ModelSerializer):
     display_name = serializers.CharField(read_only=True)
@@ -4818,6 +4820,15 @@ class BankAccountSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ("masked_account_number", "created_at", "updated_at")
+        
+        # ✅ Make all fields mandatory as requested by the client
+        extra_kwargs = {
+            "bank_name": {"required": True, "allow_blank": False},
+            "account_number": {"required": True, "allow_blank": False},
+            "ifsc_code": {"required": True, "allow_blank": False},
+            "branch": {"required": True, "allow_blank": False},
+            "opening_balance": {"required": True, "allow_null": False},
+        }
 
     def validate_bank_name(self, value):
         if not value or not value.strip():
@@ -4867,32 +4878,57 @@ class BankAccountSerializer(serializers.ModelSerializer):
         opening = bank_account.opening_balance or 0
 
         if opening > 0:
+            # =========================================================
+            # ✅ FIX FOR OLD USERS: Auto-create ledgers if they are missing
+            # =========================================================
+            
+            # 1. Resolve the Bank Ledger (Asset)
             bank_ledger = AccountLedgerMaster.objects.filter(
                 church=church,
                 ledger_name__iexact="Balance in Savings Account",
             ).first()
 
+            if not bank_ledger:
+                # Get or create the group first
+                bank_group, _ = AccountGroupMaster.objects.get_or_create(
+                    church=church,
+                    group_name="I. Opening Balances",
+                    defaults={"account_code": 1000, "status": True, "reserved": True}
+                )
+                # Create the ledger
+                bank_ledger = AccountLedgerMaster.objects.create(
+                    church=church,
+                    ledger_name="Balance in Savings Account",
+                    account_group=bank_group,
+                    ledger_nature="ASSET",
+                    status=True,
+                    reserved=True,
+                    ledger_code=1000
+                )
+
+            # 2. Resolve the Equity Ledger
             equity_ledger = AccountLedgerMaster.objects.filter(
                 church=church,
                 ledger_name__iexact="Balance as per last Balance Sheet",
             ).first()
 
-            # ✅ Fail loudly instead of silently skipping the posting.
-            if not bank_ledger or not equity_ledger:
-                missing = []
-                if not bank_ledger:
-                    missing.append("'Balance in Savings Account'")
-                if not equity_ledger:
-                    missing.append("'Balance as per last Balance Sheet'")
-
-                raise serializers.ValidationError({
-                    "opening_balance": (
-                        "Cannot post opening balance. The following "
-                        "ledger(s) are not seeded for this church: "
-                        f"{', '.join(missing)}. "
-                        "Run seed_default_accounts() or contact admin."
-                    )
-                })
+            if not equity_ledger:
+                # Get or create the group first
+                equity_group, _ = AccountGroupMaster.objects.get_or_create(
+                    church=church,
+                    group_name="A. Capital Fund",
+                    defaults={"account_code": 5000, "status": True, "reserved": True}
+                )
+                # Create the ledger
+                equity_ledger = AccountLedgerMaster.objects.create(
+                    church=church,
+                    ledger_name="Balance as per last Balance Sheet",
+                    account_group=equity_group,
+                    ledger_nature="EQUITY",
+                    status=True,
+                    reserved=True,
+                    ledger_code=5001
+                )
 
             narration = (
                 f"Opening Balance for {bank_account.bank_name} "
@@ -6057,8 +6093,6 @@ class ReceiptCancelSerializer(serializers.Serializer):
 
 
 # ----------------------------------------------------Contra--------------------------------------------------------------------
-
-
 class ContraMasterSerializer(serializers.ModelSerializer):
     from_ledger_name = serializers.CharField(
         source="from_ledger.ledger_name", read_only=True
@@ -6098,6 +6132,12 @@ class ContraMasterSerializer(serializers.ModelSerializer):
             "is_cancelled", "cancel_reason", "cancel_remarks", "cancelled_at",
             "created_at", "updated_at",
         )
+        # ✅ THIS IS THE FIX: 
+        # Tells DRF to skip the field-level validation if the frontend sends null.
+        extra_kwargs = {
+            "from_ledger": {"required": False, "allow_null": True},
+            "to_ledger": {"required": False, "allow_null": True},
+        }
 
     def get_status_label(self, obj):
         return "Cancelled" if obj.is_cancelled else "Posted"
@@ -6117,40 +6157,33 @@ class ContraMasterSerializer(serializers.ModelSerializer):
 
         # =====================================================
         # ✅ AUTO-RESOLVE LEDGERS FROM CONTRA TYPE
-        # Under "one church = one bank" the user shouldn't have
-        # to pick ledgers manually for CASH_TO_BANK / BANK_TO_CASH.
         # =====================================================
-        if contra_type and (from_ledger is None or to_ledger is None):
+        if contra_type:
             cash = get_cash_ledger(church) if church else None
             bank = get_bank_ledger(church) if church else None
 
             if contra_type == "CASH_TO_BANK":
-                from_ledger = from_ledger or cash
-                to_ledger = to_ledger or bank
+                if not from_ledger: from_ledger = cash
+                if not to_ledger: to_ledger = bank
             elif contra_type == "BANK_TO_CASH":
-                from_ledger = from_ledger or bank
-                to_ledger = to_ledger or cash
+                if not from_ledger: from_ledger = bank
+                if not to_ledger: to_ledger = cash
             elif contra_type == "BANK_TO_BANK":
-                if from_ledger is None or to_ledger is None:
+                if not from_ledger or not to_ledger:
                     raise serializers.ValidationError({
-                        "from_ledger": (
-                            "Bank-to-Bank contra requires explicit "
-                            "source and destination ledgers."
-                        )
+                        "detail": "Bank-to-Bank contra requires explicit source and destination ledgers."
                     })
 
-            if from_ledger is None or to_ledger is None:
+            if not from_ledger or not to_ledger:
                 raise serializers.ValidationError({
-                    "detail": (
-                        "Cash / Bank ledgers are not configured for this "
-                        "church. Cannot create contra."
-                    )
+                    "detail": "Cash / Bank ledgers are not configured for this church. Cannot create contra."
                 })
 
+            # Inject them back into the validated data so Django can save them
             data["from_ledger"] = from_ledger
             data["to_ledger"] = to_ledger
 
-        # ---- Sanity ----
+        # ---- Sanity Checks ----
         if from_ledger is None or to_ledger is None:
             raise serializers.ValidationError({
                 "detail": "from_ledger and to_ledger are required."
@@ -6167,10 +6200,7 @@ class ContraMasterSerializer(serializers.ModelSerializer):
         ):
             if (ledger.ledger_nature or "").upper() != "ASSET":
                 raise serializers.ValidationError({
-                    field: (
-                        "Contra is only allowed between Asset "
-                        "(Cash/Bank) ledgers."
-                    )
+                    field: "Contra is only allowed between Asset (Cash/Bank) ledgers."
                 })
             if church and ledger.church_id != church.id:
                 raise serializers.ValidationError({
@@ -6179,18 +6209,14 @@ class ContraMasterSerializer(serializers.ModelSerializer):
 
         # =====================================================
         # ✅ BALANCE CHECK ON THE SOURCE SIDE
-        # Contra reduces the source balance, so the source
-        # must have enough funds.
         # =====================================================
         if amount and amount > 0:
             available = from_ledger.get_current_balance()
             if float(amount) > available:
                 raise serializers.ValidationError({
                     "amount": (
-                        f"Insufficient balance in "
-                        f"'{from_ledger.ledger_name}'. "
-                        f"Available: ₹{available:.2f}, "
-                        f"requested: ₹{amount:.2f}."
+                        f"Insufficient balance in '{from_ledger.ledger_name}'. "
+                        f"Available: ₹{available:.2f}, requested: ₹{amount:.2f}."
                     )
                 })
 

@@ -16,7 +16,7 @@ from phonenumber_field.modelfields import PhoneNumberField
 from django.core.validators import URLValidator
 from django.core.exceptions import ValidationError
 
-
+from django.utils.dateparse import parse_date
 
 # ============================================================
 # LEDGER RESOLUTION HELPERS
@@ -2115,21 +2115,47 @@ class Baptism(models.Model):
     class Meta:
         unique_together = ("church", "register_number")
 
+    def save(self, *args, **kwargs):
+        if self.register_number:
+            super().save(*args, **kwargs)
+            return
+
+        from django.db import transaction, IntegrityError
+        from registry.services import generate_register_number
+        
+        for attempt in range(5):
+            try:
+                with transaction.atomic():
+                    # Lock the setting row
+                    setting = RegisterSetting.objects.select_for_update().filter(
+                        church=self.church, register_type="BAPTISM"
+                    ).first()
+                    
+                    # Self-Healing
+                    highest_existing = Baptism.objects.filter(
+                        church=self.church, register_number__startswith="BAP-"
+                    ).order_by('-id').first()
+                    
+                    if highest_existing and highest_existing.register_number:
+                        try:
+                            last_num = int(highest_existing.register_number.split("-")[-1])
+                            if setting and setting.next_register_number <= last_num:
+                                setting.next_register_number = last_num + 1
+                                setting.save()
+                        except (ValueError, IndexError):
+                            pass
+
+                    self.register_number = generate_register_number(self.church, "BAPTISM")
+                    super().save(*args, **kwargs)
+                break
+            except IntegrityError:
+                if attempt == 4:
+                    raise
+                self.register_number = None
+                continue
+
     def __str__(self):
         return f"{self.name} ({self.register_number})"
-    
-    def save(self, *args, **kwargs):
-
-        if not self.register_number:
-
-            from registry.services import generate_register_number
-
-            self.register_number = generate_register_number(
-            self.church,
-            "BAPTISM"
-            )
-
-        super().save(*args, **kwargs)
 
 
 from django.db import models
@@ -2226,13 +2252,43 @@ class Marriage(models.Model):
         ordering = ["-date"]
 
     def save(self, *args, **kwargs):
-        if not self.register_number:
-            from registry.services import generate_register_number
-            self.register_number = generate_register_number(
-                self.church,
-                "MARRIAGE"
-            )
-        super().save(*args, **kwargs)
+        if self.register_number:
+            super().save(*args, **kwargs)
+            return
+
+        from django.db import transaction, IntegrityError
+        from registry.services import generate_register_number
+        
+        for attempt in range(5):
+            try:
+                with transaction.atomic():
+                    # Lock the setting row to prevent race conditions
+                    setting = RegisterSetting.objects.select_for_update().filter(
+                        church=self.church, register_type="MARRIAGE"
+                    ).first()
+                    
+                    # Self-Healing: Check if the counter is behind the actual highest record
+                    highest_existing = Marriage.objects.filter(
+                        church=self.church, register_number__startswith="MAR-"
+                    ).order_by('-id').first()
+                    
+                    if highest_existing and highest_existing.register_number:
+                        try:
+                            last_num = int(highest_existing.register_number.split("-")[-1])
+                            if setting and setting.next_register_number <= last_num:
+                                setting.next_register_number = last_num + 1
+                                setting.save()
+                        except (ValueError, IndexError):
+                            pass
+
+                    self.register_number = generate_register_number(self.church, "MARRIAGE")
+                    super().save(*args, **kwargs)
+                break
+            except IntegrityError:
+                if attempt == 4:
+                    raise
+                self.register_number = None
+                continue
 
     def __str__(self):
         groom_display = (
@@ -2359,12 +2415,43 @@ class DeathRegister(models.Model):
         # Clean dates before saving
         self._clean_dates()
         
-        # Generate register number if not present
-        if not self.reg_no:
-            self._generate_register_number()
+        if self.reg_no:
+            super().save(*args, **kwargs)
+            return
+
+        from django.db import transaction, IntegrityError
+        from registry.services import generate_register_number
         
-        # Call the parent save method
-        super().save(*args, **kwargs)
+        for attempt in range(5):
+            try:
+                with transaction.atomic():
+                    # Lock the setting row to prevent race conditions
+                    setting = RegisterSetting.objects.select_for_update().filter(
+                        church=self.church, register_type="DEATH"
+                    ).first()
+                    
+                    # Self-Healing: Check if the counter is behind the actual highest record
+                    highest_existing = DeathRegister.objects.filter(
+                        church=self.church, reg_no__startswith="DEA-"
+                    ).order_by('-id').first()
+                    
+                    if highest_existing and highest_existing.reg_no:
+                        try:
+                            last_num = int(highest_existing.reg_no.split("-")[-1])
+                            if setting and setting.next_register_number <= last_num:
+                                setting.next_register_number = last_num + 1
+                                setting.save()
+                        except (ValueError, IndexError):
+                            pass
+
+                    self.reg_no = generate_register_number(self.church, "DEATH")
+                    super().save(*args, **kwargs)
+                break
+            except IntegrityError:
+                if attempt == 4:
+                    raise
+                self.reg_no = None
+                continue
  
     def _clean_dates(self):
         """
@@ -2395,28 +2482,6 @@ class DeathRegister(models.Model):
             elif not isinstance(self.funeral_on, date):
                 logger.warning(f"funeral_on is not a date object: {type(self.funeral_on)}")
                 self.funeral_on = None
- 
-    def _generate_register_number(self):
-        """
-        Safely generate register number with error handling
-        """
-        try:
-            from registry.services import generate_register_number
-            
-            self.reg_no = generate_register_number(
-                self.church,
-                "DEATH"
-            )
-            logger.info(f"Generated register number: {self.reg_no} for death record")
-            
-        except Exception as e:
-            logger.error(f"Failed to generate register number: {e}")
-            logger.error(traceback.format_exc())
-            
-            # Fallback: Generate a temporary number
-            timestamp = int(time.time())
-            self.reg_no = f"TEMP-DEATH-{timestamp}"
-            logger.warning(f"Using temporary register number: {self.reg_no}")
     
     def get_days_since_death(self):
         """Get number of days since death"""
