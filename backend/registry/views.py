@@ -3637,6 +3637,42 @@ class BankAccountDetailView(generics.RetrieveUpdateDestroyAPIView):
         ctx["church"] = self.request.user.church
         return ctx
 
+    def destroy(self, request, *args, **kwargs):
+        """
+        Handle ProtectedError gracefully.
+
+        BankAccount has PROTECT foreign keys from:
+          - ReceiptMaster.bank_account
+          - PaymentMaster.bank_account
+          - ContraMaster.from_bank_account
+          - ContraMaster.to_bank_account
+
+        If any of those reference this account, deletion is blocked
+        at the database level. We catch that here and return a clean
+        400 error instead of an unhandled 500.
+        """
+        from django.db.models import ProtectedError
+
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError as e:
+            # e.protected_objects is a dict-like of querysets
+            protected_count = sum(
+                qs.count() for qs in e.protected_objects
+            )
+            return Response(
+                {
+                    "detail": (
+                        f"This bank account cannot be deleted because it is "
+                        f"referenced by {protected_count} record(s) "
+                        f"(receipts, payments, or contra vouchers). "
+                        f"To keep the account but hide it from dropdowns, "
+                        f"deactivate it instead by setting is_active=False."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
 # ============================================================
 # PAYMENT VIEWS
 # ============================================================
@@ -5925,25 +5961,12 @@ class ReceiptPaymentCombinedAPIView(APIView):
 # ============================================================
 # REPORTS — RECEIPTS & PAYMENTS (STATUTORY)
 # ============================================================
+from .statutory_schedule import RECEIPTS_SCHEDULE_RP, PAYMENTS_SCHEDULE_RP
+from django.db.models import Sum, Q
+from .models import LedgerEntry, BankAccount, AccountLedgerMaster
 
 class ReceiptPaymentStatutoryAPIView(APIView):
-    """
-    Statutory Receipts & Payments report.
-    """
     permission_classes = [IsAuthenticated, IsChurchUser]
-
-    RECEIPTS_ROOTS = [
-        "I. Opening Balances",
-        "II. Revenue Receipts",
-        "III. Inter Church / Unit Accounts",
-        "IV. Capital Receipts",
-    ]
-    PAYMENTS_ROOTS = [
-        "V. Inter Church / Unit Payments",
-        "VI. Revenue Payments",
-        "VII. Capital Payments",
-        "VIII. Closing Balances",
-    ]
 
     def get(self, request):
         church     = request.user.church
@@ -5953,286 +5976,110 @@ class ReceiptPaymentStatutoryAPIView(APIView):
         prev_to    = request.query_params.get("prev_to")
 
         receipts_rows = self._build_side(
-            church, self.RECEIPTS_ROOTS,
-            date_from, date_to, prev_from, prev_to,
-            side="INCOME",
-            is_opening=True,
-            is_closing=False
+            church, RECEIPTS_SCHEDULE_RP, date_from, date_to, prev_from, prev_to, side="INCOME"
         )
         payments_rows = self._build_side(
-            church, self.PAYMENTS_ROOTS,
-            date_from, date_to, prev_from, prev_to,
-            side="EXPENSE",
-            is_opening=False,
-            is_closing=True
+            church, PAYMENTS_SCHEDULE_RP, date_from, date_to, prev_from, prev_to, side="EXPENSE"
         )
 
-        total_receipts = 0.0
-        total_payments = 0.0
-        for r in receipts_rows:
-            if r["row_type"] == "grand_total":
-                total_receipts = r["current_year"]
-        for r in payments_rows:
-            if r["row_type"] == "grand_total":
-                total_payments = r["current_year"]
+        total_receipts = round(sum(r["current_year"] for r in receipts_rows if r["row_type"] == "ledger"), 2)
+        total_payments = round(sum(r["current_year"] for r in payments_rows if r["row_type"] == "ledger"), 2)
+        
+        prev_total_receipts = round(sum(r["previous_year"] for r in receipts_rows if r["row_type"] == "ledger"), 2)
+        prev_total_payments = round(sum(r["previous_year"] for r in payments_rows if r["row_type"] == "ledger"), 2)
+
+        # Add the grand totals to the bottom of the lists
+        receipts_rows.append({
+            "section": "", "code": "", "name": "TOTAL RECEIPTS (I+II+III+IV)", 
+            "depth": 0, "row_type": "grand_total", 
+            "current_year": total_receipts, "previous_year": prev_total_receipts
+        })
+        
+        payments_rows.append({
+            "section": "", "code": "", "name": "TOTAL PAYMENTS (V+VI+VII+VIII)", 
+            "depth": 0, "row_type": "grand_total", 
+            "current_year": total_payments, "previous_year": prev_total_payments
+        })
 
         return Response({
             "from": date_from,
             "to": date_to,
             "receipts": receipts_rows,
             "payments": payments_rows,
-            "total_receipts": round(total_receipts, 2),
-            "total_payments": round(total_payments, 2),
+            "total_receipts": total_receipts,
+            "total_payments": total_payments,
             "is_balanced": abs(total_receipts - total_payments) < 0.01,
+            "difference": {
+                "current_year": round(total_receipts - total_payments, 2),
+                "previous_year": round(prev_total_receipts - prev_total_payments, 2),
+            },
             "summary": self._summary(church, date_from, date_to),
         })
 
-    # ------------------------------------------------------------
-    # Side builder
-    # ------------------------------------------------------------
-    def _build_side(self, church, root_group_names, date_from, date_to,
-                    prev_from, prev_to, side, is_opening, is_closing):
-        from .models import AccountGroupMaster
-
+    def _build_side(self, church, schedule, date_from, date_to, prev_from, prev_to, side):
         rows = []
-        grand_total_cur = 0.0
-        grand_total_prev = 0.0
+        bank_index = 0
+        
+        for code, name, depth, db_key, is_group in schedule:
+            cur, prev = 0.0, 0.0
+            
+            # 1. Handle Bank Accounts (Schedules 1, 2, 3 and 5, 6, 7)
+            if db_key and db_key.startswith("BANK"):
+                bank_index += 1
+                is_closing = db_key.startswith("BANK_CLOSE")
+                
+                banks = BankAccount.objects.filter(church=church, is_active=True).select_related('ledger')
+                bank = banks[bank_index - 1] if len(banks) >= bank_index else None
+                
+                if bank:
+                    if bank.ledger:
+                        if is_closing:
+                            cur = self._running_balance(church, bank.ledger, date_to, inclusive=True)
+                            prev = self._running_balance(church, bank.ledger, prev_to, inclusive=True) if prev_to else 0.0
+                        else:
+                            cur = self._running_balance(church, bank.ledger, date_from, inclusive=False)
+                            prev = self._running_balance(church, bank.ledger, prev_from, inclusive=False) if prev_from else 0.0
+                    
+                    # ✅ FALLBACK: If the ledger calculation is 0, use the Opening Balance
+                    if abs(cur) < 0.01 and not is_closing:
+                        cur = float(bank.opening_balance or 0)
+                    
+                    # Append the actual bank name for clarity
+                    if bank.bank_name:
+                        name = f"{name} ({bank.bank_name})"
 
-        for root_name in root_group_names:
-            root = AccountGroupMaster.objects.filter(
-                church=church, group_name=root_name,
-            ).first()
-            if not root:
-                continue
-
-            # ✅ FIX: Extract the letter (e.g. "I") and strip it from the name
-            # so the frontend doesn't print "I. I. Opening Balances"
-            parts = root_name.split(". ")
-            section_letter = parts[0] if len(parts) > 1 else ""
-            clean_name = ". ".join(parts[1:]) if len(parts) > 1 else root_name
-
+            # 2. Handle standard DB Ledgers (Cash in Hand)
+            elif db_key and not is_group:
+                ledgers = AccountLedgerMaster.objects.filter(church=church, ledger_name__iexact=db_key)
+                
+                for led in ledgers:
+                    is_closing = code in ("6100", "6200", "6300", "6400")
+                    is_opening = code in ("1000", "1100", "1200", "1300")
+                    
+                    if is_closing:
+                        cur += self._running_balance(church, led, date_to, inclusive=True)
+                        prev += self._running_balance(church, led, prev_to, inclusive=True) if prev_to else 0.0
+                    elif is_opening:
+                        cur += self._running_balance(church, led, date_from, inclusive=False)
+                        prev += self._running_balance(church, led, prev_from, inclusive=False) if prev_from else 0.0
+                    else:
+                        cur += self._ledger_amount(church, led, date_from, date_to, side)
+                        prev += self._ledger_amount(church, led, prev_from, prev_to, side) if (prev_from or prev_to) else 0.0
+            
+            # 3. Add the row
             rows.append({
-                "section": section_letter,
-                "code": "",
-                "name": clean_name, # ✅ Use the cleaned name
-                "depth": 0,
-                "row_type": "section",
-                "current_year": 0.0,
-                "previous_year": 0.0,
+                "section": "",
+                "code": code or "",
+                "name": name,
+                "depth": depth,
+                "row_type": "group" if is_group else "ledger",
+                "current_year": round(cur, 2),
+                "previous_year": round(prev, 2),
             })
-
-            sub_rows, sec_cur, sec_prev = self._walk_group(
-                church, root, date_from, date_to, prev_from, prev_to,
-                side=side, depth=1, is_opening=is_opening, is_closing=is_closing,
-            )
-            rows.extend(sub_rows)
-            grand_total_cur  += sec_cur
-            grand_total_prev += sec_prev
-
-            rows.append({
-                "section": section_letter,
-                "code": "",
-                "name": f"Total of {clean_name}", # ✅ Use the cleaned name here too
-                "depth": 1,
-                "row_type": "total",
-                "current_year": round(sec_cur, 2),
-                "previous_year": round(sec_prev, 2),
-            })
-
-        rows.append({
-            "section": "",
-            "code": "",
-            "name": "TOTAL RECEIPTS" if side == "INCOME" else "TOTAL PAYMENTS",
-            "depth": 0,
-            "row_type": "grand_total",
-            "current_year": round(grand_total_cur, 2),
-            "previous_year": round(grand_total_prev, 2),
-        })
-
+            
         return rows
 
-    def _walk_group(self, church, group, date_from, date_to,
-                    prev_from, prev_to, side, depth, is_opening, is_closing):
-        from .models import AccountGroupMaster, AccountLedgerMaster, BankAccount
-
-        rows = []
-        cur_total  = 0.0
-        prev_total = 0.0
-
-        # 1. Recurse into children
-        children = AccountGroupMaster.objects.filter(
-            church=church, under_group=group,
-        ).order_by("account_code")
-        
-        for child in children:
-            child_rows, child_cur, child_prev = self._walk_group(
-                church, child, date_from, date_to, prev_from, prev_to,
-                side=side, depth=depth + 1, is_opening=is_opening, is_closing=is_closing,
-            )
-            if child_rows:
-                rows.append({
-                    "section": "",
-                    # ✅ Trims 6-digit to 4-digit
-                    "code": str(child.account_code)[:4] if child.account_code else "",
-                    "name": child.group_name,
-                    "depth": depth,
-                    "row_type": "group",
-                    "current_year": round(child_cur, 2),
-                    "previous_year": round(child_prev, 2),
-                })
-                rows.extend(child_rows)
-                rows.append({
-                    "section": "",
-                    "code": "",
-                    "name": "Sub Total",
-                    "depth": depth + 1,
-                    "row_type": "subtotal",
-                    "current_year": round(child_cur, 2),
-                    "previous_year": round(child_prev, 2),
-                })
-                cur_total  += child_cur
-                prev_total += child_prev
-
-        # 2. Process ledgers
-        if is_closing and group.group_name == "VIII. Closing Balances":
-            ledgers = AccountLedgerMaster.objects.filter(
-                church=church, 
-                ledger_name__in=["Cash in Hand", "Balance in Savings Account", "Balance in Deposit Account", "Balance in Other Accounts"],
-                account_group__group_name="I. Opening Balances",
-            ).order_by("ledger_code")
-        else:
-            ledgers = AccountLedgerMaster.objects.filter(
-                church=church, account_group=group, status=True,
-            ).order_by("ledger_code")
-
-        BANK_LEDGERS = {"Balance in Savings Account", "Balance in Deposit Account", "Balance in Other Accounts"}
-
-        for led in ledgers:
-            if led.ledger_name in BANK_LEDGERS and (is_opening or is_closing):
-                if led.ledger_name == "Balance in Savings Account":
-                    rows.append({
-                        "section": "", "code": str(led.ledger_code)[:4] if led.ledger_code else "",
-                        "name": led.ledger_name, "depth": depth, "row_type": "group",
-                        "current_year": 0.0, "previous_year": 0.0,
-                    })
-                    bank_accounts = BankAccount.objects.filter(church=church, is_active=True)
-                    bank_total_cur = 0.0
-                    bank_total_prev = 0.0
-                    
-                    for bank in bank_accounts:
-                        bank_cur = self._bank_balance(church, bank, date_from, inclusive=is_closing)
-                        bank_prev = self._bank_balance(church, bank, prev_from, inclusive=is_closing) if prev_from else 0.0
-                        
-                        rows.append({
-                            "section": "", "code": "",
-                            "name": f"{bank.bank_name} ({bank.masked_account_number})",
-                            "depth": depth + 1, "row_type": "ledger",
-                            "current_year": round(bank_cur, 2), "previous_year": round(bank_prev, 2),
-                        })
-                        bank_total_cur += bank_cur
-                        bank_total_prev += bank_prev
-                    
-                    rows.append({
-                        "section": "", "code": "", "name": "Sub Total",
-                        "depth": depth + 1, "row_type": "subtotal",
-                        "current_year": round(bank_total_cur, 2), "previous_year": round(bank_total_prev, 2),
-                    })
-                    cur_total += bank_total_cur
-                    prev_total += bank_total_prev
-                    continue 
-                else:
-                    cur  = self._ledger_amount(church, led, date_from, date_to, side, is_opening, is_closing)
-                    prev = (self._ledger_amount(church, led, prev_from, prev_to, side, is_opening, is_closing) if (prev_from or prev_to) else 0.0)
-                    if abs(cur) > 0.005 or True: # Kept your original logic to show 0.00
-                        rows.append({
-                            "section": "", "code": str(led.ledger_code)[:4] if led.ledger_code else "",
-                            "name": led.ledger_name, "depth": depth, "row_type": "ledger",
-                            "current_year": round(cur, 2), "previous_year": round(prev, 2),
-                        })
-                        cur_total += cur
-                        prev_total += prev
-                    continue
-
-            # --- NORMAL LEDGER LOGIC ---
-            cur  = self._ledger_amount(church, led, date_from, date_to, side, is_opening, is_closing)
-            prev = (self._ledger_amount(church, led, prev_from, prev_to, side, is_opening, is_closing) if (prev_from or prev_to) else 0.0)
-
-            if abs(cur) > 0.005 or True: # Kept your original logic to show 0.00
-                rows.append({
-                    "section": "", "code": str(led.ledger_code)[:4] if led.ledger_code else "",
-                    "name": led.ledger_name, "depth": depth, "row_type": "ledger",
-                    "current_year": round(cur, 2), "previous_year": round(prev, 2),
-                })
-                cur_total  += cur
-                prev_total += prev
-
-        return rows, cur_total, prev_total
-
-    def _bank_balance(self, church, bank_account, as_of_date, inclusive=False):
-        from django.db.models import Sum, Q
-        from .models import AccountLedgerMaster
-        from datetime import datetime, date
-
-        # 1. Pin the ledger strictly to the Opening Balances group (code 1000)
-        bank_ledger = AccountLedgerMaster.objects.filter(
-            church=church, 
-            ledger_name__iexact="Balance in Savings Account",
-            account_group__group_name="I. Opening Balances",
-        ).first()
-        
-        if not bank_ledger:
-            return 0.0
-
-        # 2. Convert as_of_date to a date object if it's a string
-        parsed_date = None
-        if as_of_date:
-            if isinstance(as_of_date, str):
-                try:
-                    parsed_date = datetime.strptime(as_of_date, "%Y-%m-%d").date()
-                except ValueError:
-                    parsed_date = None
-            elif isinstance(as_of_date, datetime):
-                parsed_date = as_of_date.date()
-            elif isinstance(as_of_date, date):
-                parsed_date = as_of_date
-
-        # 3. Get ALL entries for this ledger up to the as_of_date
-        qs = bank_ledger.entries.filter(is_cancelled=False, is_reversal=False)
-        
-        if parsed_date:
-            if inclusive:
-                qs = qs.filter(entry_date__lte=parsed_date)
-            else:
-                qs = qs.filter(entry_date__lt=parsed_date)
-
-        agg = qs.aggregate(
-            debits=Sum("amount", filter=Q(entry_type="DEBIT")),
-            credits=Sum("amount", filter=Q(entry_type="CREDIT")),
-        )
-        d = float(agg["debits"] or 0)
-        c = float(agg["credits"] or 0)
-
-        # 4. Add the model's opening_balance safely
-        opening = 0.0
-        if bank_account and bank_account.opening_balance:
-            if not parsed_date:
-                opening = float(bank_account.opening_balance)
-            elif bank_account.created_at:
-                account_created_date = bank_account.created_at.date()
-                if account_created_date <= parsed_date:
-                    opening = float(bank_account.opening_balance)
-
-        # 5. Calculate final balance
-        return opening + d - c
-
-    def _ledger_amount(self, church, ledger, date_from, date_to, side, is_opening, is_closing):
-        if is_opening or is_closing:
-            if ledger.ledger_name == "Cash in Hand":
-                return self._running_balance(church, ledger, date_from if is_opening else date_to, inclusive=is_closing)
-
-        from django.db.models import Sum, Q
-        from .models import LedgerEntry
-
+    def _ledger_amount(self, church, ledger, date_from, date_to, side):
         qs = LedgerEntry.objects.filter(
             church=church, ledger=ledger,
             is_cancelled=False, is_reversal=False,
@@ -6249,8 +6096,6 @@ class ReceiptPaymentStatutoryAPIView(APIView):
         return (c - d) if side == "INCOME" else (d - c)
 
     def _running_balance(self, church, ledger, as_of_date, inclusive=False):
-        from django.db.models import Sum, Q
-
         qs = ledger.entries.filter(is_cancelled=False, is_reversal=False)
         if as_of_date:
             if inclusive:
@@ -6273,8 +6118,6 @@ class ReceiptPaymentStatutoryAPIView(APIView):
 
     def _summary(self, church, date_from, date_to):
         from .models import ReceiptMaster, PaymentMaster
-        from django.db.models import Sum
-
         rcp_qs = ReceiptMaster.objects.filter(church=church, is_cancelled=False)
         pay_qs = PaymentMaster.objects.filter(church=church, is_cancelled=False)
 
@@ -6292,9 +6135,8 @@ class ReceiptPaymentStatutoryAPIView(APIView):
             "receipt_count": rcp_qs.count(),
             "payment_count": pay_qs.count(),
             "total_receipts": float(total_rcp),
-             "total_payments": float(total_pay),
+            "total_payments": float(total_pay),
         }
-    
 # --------------------------------------------------Dash Board------------------------------------------------
 # registry/views.py
 

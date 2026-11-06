@@ -11,7 +11,7 @@ from django.db import models
 from .models import get_cash_ledger, get_bank_ledger
 from rest_framework import serializers
 from registry.models import Diocese
-
+from django.db.models import Sum
 from rest_framework import serializers
 from registry.models import Diocese
 
@@ -1436,27 +1436,6 @@ class MemberSerializer(serializers.ModelSerializer):
 
             # =================================================
             # RELATIONSHIP VALIDATION
-            #
-            # ✅ FIX — 400 fix:
-            #
-            # Only validate the relationship when:
-            #
-            #   1. The client explicitly sent it, OR
-            #   2. The household actually has an active head.
-            #
-            # Previously the rules always ran against
-            # `instance.relationship` even when the client
-            # didn't send it. On a headless household that
-            # meant every PATCH rejected with
-            # "Cannot assign child relationship without
-            # active head" — even for unrelated fields like
-            # name, mobile, dob, etc.
-            #
-            # With this guard, editing a dependent of a
-            # deceased head succeeds normally, while the
-            # stricter rules still apply whenever the
-            # relationship is genuinely being changed or a
-            # head exists.
             # =================================================
 
             if relationship and (
@@ -1515,23 +1494,9 @@ class MemberSerializer(serializers.ModelSerializer):
                                 "child relationship."
                             )
                         })
-
-                    if (
-                        not instance.dob
-                        or not head.dob
-                    ):
-
-                        raise serializers.ValidationError({
-                            "dob":
-                                "DOB required to validate child relationship."
-                        })
-
-                    if instance.dob <= head.dob:
-
-                        raise serializers.ValidationError({
-                            "relationship":
-                                "Child must be younger than family head."
-                        })
+                    
+                    # ✅ FIX: Removed the strict DOB check.
+                    # The child can now be saved regardless of age difference.
 
                 # ------------------------------------------------
                 # Spouse-type relations — require a linked spouse
@@ -4795,11 +4760,12 @@ class LedgerEntrySerializer(serializers.ModelSerializer):
 # ============================================================
 # BANK ACCOUNT SERIALIZER
 # ============================================================
-
 from .models import BankAccount, AccountGroupMaster, AccountLedgerMaster, LedgerEntry
+from .models import get_bank_ledger
 from decimal import Decimal
 from django.utils import timezone
 from django.db import transaction
+
 
 class BankAccountSerializer(serializers.ModelSerializer):
     display_name = serializers.CharField(read_only=True)
@@ -4820,8 +4786,7 @@ class BankAccountSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ("masked_account_number", "created_at", "updated_at")
-        
-        # ✅ Make all fields mandatory as requested by the client
+
         extra_kwargs = {
             "bank_name": {"required": True, "allow_blank": False},
             "account_number": {"required": True, "allow_blank": False},
@@ -4865,99 +4830,132 @@ class BankAccountSerializer(serializers.ModelSerializer):
 
         return church
 
-    @transaction.atomic
-    def create(self, validated_data):
-        # ✅ Safe church resolution — no KeyError, no 500.
-        church = self._resolve_church(validated_data)
-
-        # Ensure the church FK is present on the model instance.
-        validated_data.setdefault("church", church)
-
-        bank_account = super().create(validated_data)
-
+    def _post_opening_balance(self, bank_account):
+        """
+        Post the opening balance pair ONCE per bank account.
+        DEBIT  Bank Ledger
+        CREDIT Capital Receipt Ledger (not Equity!)
+        """
+        church = bank_account.church
         opening = bank_account.opening_balance or 0
 
-        if opening > 0:
-            # =========================================================
-            # ✅ FIX FOR OLD USERS: Auto-create ledgers if they are missing
-            # =========================================================
-            
-            # 1. Resolve the Bank Ledger (Asset)
-            bank_ledger = AccountLedgerMaster.objects.filter(
-                church=church,
-                ledger_name__iexact="Balance in Savings Account",
-            ).first()
+        if opening <= 0:
+            return
 
-            if not bank_ledger:
-                # Get or create the group first
-                bank_group, _ = AccountGroupMaster.objects.get_or_create(
-                    church=church,
-                    group_name="I. Opening Balances",
-                    defaults={"account_code": 1000, "status": True, "reserved": True}
+        bank_ledger = bank_account.ledger
+        if not bank_ledger:
+            raise serializers.ValidationError({
+                "opening_balance": "Bank ledger is not configured for this account."
+            })
+
+        # ✅ CRITICAL FIX: Post to an Income/Capital Receipt ledger, NOT Equity
+        # This ensures the R&P report balances.
+        capital_ledger = AccountLedgerMaster.objects.filter(
+            church=church,
+            ledger_name__iexact="Other donation for capital expenditute",
+            account_group__group_name="A. Corpus Donations",
+            status=True,
+        ).first()
+
+        if not capital_ledger:
+            raise serializers.ValidationError({
+                "opening_balance": (
+                    "The 'Other donation for capital expenditute' ledger is not "
+                    "configured. Run the chart-of-accounts seeder."
                 )
-                # Create the ledger
-                bank_ledger = AccountLedgerMaster.objects.create(
-                    church=church,
-                    ledger_name="Balance in Savings Account",
-                    account_group=bank_group,
-                    ledger_nature="ASSET",
-                    status=True,
-                    reserved=True,
-                    ledger_code=1000
-                )
+            })
 
-            # 2. Resolve the Equity Ledger
-            equity_ledger = AccountLedgerMaster.objects.filter(
-                church=church,
-                ledger_name__iexact="Balance as per last Balance Sheet",
-            ).first()
+        narration = f"Opening Balance for {bank_account.bank_name} ({bank_account.masked_account_number})"
 
-            if not equity_ledger:
-                # Get or create the group first
-                equity_group, _ = AccountGroupMaster.objects.get_or_create(
-                    church=church,
-                    group_name="A. Capital Fund",
-                    defaults={"account_code": 5000, "status": True, "reserved": True}
-                )
-                # Create the ledger
-                equity_ledger = AccountLedgerMaster.objects.create(
-                    church=church,
-                    ledger_name="Balance as per last Balance Sheet",
-                    account_group=equity_group,
-                    ledger_nature="EQUITY",
-                    status=True,
-                    reserved=True,
-                    ledger_code=5001
-                )
-
-            narration = (
-                f"Opening Balance for {bank_account.bank_name} "
-                f"({bank_account.masked_account_number})"
-            )
-
-            # DEBIT Bank (Asset increases)
+        with transaction.atomic():
+            # DEBIT specific Bank Ledger
             LedgerEntry.objects.create(
                 church=church,
                 ledger=bank_ledger,
+                bank_account=bank_account, # ✅ Tag it
                 entry_type="DEBIT",
                 amount=opening,
                 entry_date=timezone.now().date(),
                 narration=narration,
             )
-
-            # CREDIT Equity (Equity increases)
+            # CREDIT Capital Receipt
             LedgerEntry.objects.create(
                 church=church,
-                ledger=equity_ledger,
+                ledger=capital_ledger,
                 entry_type="CREDIT",
                 amount=opening,
                 entry_date=timezone.now().date(),
                 narration=narration,
             )
 
+    @transaction.atomic
+    def create(self, validated_data):
+        church = self._resolve_church(validated_data)
+        validated_data.setdefault("church", church)
+
+        bank_account = super().create(validated_data)
+
+        # ✅ Auto-create dedicated ledger
+        from .models import AccountGroupMaster, AccountLedgerMaster
+        opening_group = AccountGroupMaster.objects.get(church=church, group_name="I. Opening Balances")
+        
+        bank_ledger = AccountLedgerMaster.objects.create(
+            church=church,
+            ledger_name=f"Bank - {bank_account.bank_name} {bank_account.masked_account_number}",
+            account_group=opening_group,
+            ledger_nature="ASSET",
+            status=True,
+            reserved=False,
+            ledger_code=1000, # Or your preferred logic
+        )
+        
+        bank_account.ledger = bank_ledger
+        bank_account.save(update_fields=["ledger"])
+
+        self._post_opening_balance(bank_account)
         return bank_account
 
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        """
+        Update a bank account.
 
+        Opening balance is LOCKED after the account is created. Changing
+        it would require reversing the existing pair and re-posting, which
+        the model can't do safely. Instead:
+
+          * If old == 0 and new > 0 → allowed (first-time set; covers
+            legacy accounts created before opening-balance posting existed).
+            Posts the pair once.
+          * If old > 0 and new != old → rejected with a clear message.
+            User must correct via a contra entry.
+
+        Other fields (bank_name, IFSC, branch, is_active) update freely.
+        """
+        old_opening = float(instance.opening_balance or 0)
+        new_opening_value = validated_data.get("opening_balance", instance.opening_balance)
+        new_opening = float(new_opening_value or 0)
+
+        # Block changing an existing opening balance
+        if old_opening > 0 and new_opening != old_opening:
+            raise serializers.ValidationError({
+                "opening_balance": (
+                    f"Opening balance is locked at ₹{old_opening:,.2f}. "
+                    f"It cannot be changed to ₹{new_opening:,.2f} after "
+                    f"the account is created. To correct it, post a contra "
+                    f"entry or a journal adjustment between this account "
+                    f"and the correcting ledger."
+                )
+            })
+
+        # Save the basic changes
+        bank_account = super().update(instance, validated_data)
+
+        # First-time set: old was 0, new is > 0 → post once
+        if old_opening == 0 and new_opening > 0:
+            self._post_opening_balance(bank_account)
+
+        return bank_account
 # ============================================================
 # PAYMENT SERIALIZERS
 # ============================================================
@@ -6150,36 +6148,28 @@ class ContraMasterSerializer(serializers.ModelSerializer):
     def validate(self, data):
         church = self.context.get("church")
         contra_type = data.get("contra_type")
-        amount = data.get("amount")
-
+        
         from_ledger = data.get("from_ledger")
         to_ledger = data.get("to_ledger")
+        from_bank = data.get("from_bank_account")
+        to_bank = data.get("to_bank_account")
 
-        # =====================================================
-        # ✅ AUTO-RESOLVE LEDGERS FROM CONTRA TYPE
-        # =====================================================
         if contra_type:
             cash = get_cash_ledger(church) if church else None
-            bank = get_bank_ledger(church) if church else None
 
             if contra_type == "CASH_TO_BANK":
-                if not from_ledger: from_ledger = cash
-                if not to_ledger: to_ledger = bank
+                from_ledger = cash
+                to_ledger = to_bank.ledger if to_bank else None
             elif contra_type == "BANK_TO_CASH":
-                if not from_ledger: from_ledger = bank
-                if not to_ledger: to_ledger = cash
+                from_ledger = from_bank.ledger if from_bank else None
+                to_ledger = cash
             elif contra_type == "BANK_TO_BANK":
-                if not from_ledger or not to_ledger:
-                    raise serializers.ValidationError({
-                        "detail": "Bank-to-Bank contra requires explicit source and destination ledgers."
-                    })
+                from_ledger = from_bank.ledger if from_bank else None
+                to_ledger = to_bank.ledger if to_bank else None
 
             if not from_ledger or not to_ledger:
-                raise serializers.ValidationError({
-                    "detail": "Cash / Bank ledgers are not configured for this church. Cannot create contra."
-                })
+                raise serializers.ValidationError({"detail": "Ledgers could not be resolved. Ensure bank accounts have linked ledgers."})
 
-            # Inject them back into the validated data so Django can save them
             data["from_ledger"] = from_ledger
             data["to_ledger"] = to_ledger
 

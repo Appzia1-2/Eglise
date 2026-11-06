@@ -677,16 +677,11 @@ DEFAULT_LEDGERS = [
     ("Cover Collections Receivable",                       "N. Receivables",                                    "5905",     "ASSET",     0),
 
     ("Stock",                                              "O. Stock",                                          "5950",     "ASSET",     0),
-
-    ("Balance in Savings Account",                         "P. Cash and Bank Balances",                         "6100",     "ASSET",     0),
-    ("Balance in Deposit Account",                         "P. Cash and Bank Balances",                         "6200",     "ASSET",     0),
-    ("Balance in Other Accounts",                          "P. Cash and Bank Balances",                         "6300",     "ASSET",     0),
-    ("Cash in Hand",                                       "P. Cash and Bank Balances",                         "6400",     "ASSET",     0),
 ]
 
 
 # ============================================================
-# SEEDER (FIXED TO USE LEDGER CODE FOR DUPLICATES)
+# SEEDER
 # ============================================================
 
 def _code_to_int(code):
@@ -716,24 +711,19 @@ def _code_to_int(code):
     }
     return base * 100 + suffix_map.get(suffix.upper(), 99)
 
+
 def seed_default_accounts(church, verbose=False):
     """
     Idempotent, duplicate-proof MOSC chart-of-accounts seeder.
 
     Match order for ledgers:
-      1. (church, ledger_name, account_group)  — because (name, group)
-         is UNIQUE in DEFAULT_LEDGERS, even when two ledgers share a
-         name under different groups (e.g. "Church" under Bhandaram
-         AND under Offerings).
-      2. (church, ledger_code integer)  — legacy rescue when the
-         original code was NULL or wrong.
+      1. (church, ledger_name, account_group)
+      2. (church, ledger_code integer)  — legacy rescue
       3. create new.
 
     Match order for groups:
       1. (church, group_name)
       2. create new.
-
-    Never duplicates. Safe to run repeatedly. Safe against legacy data.
     """
     from django.db import transaction
     from .models import AccountGroupMaster, AccountLedgerMaster
@@ -789,20 +779,19 @@ def seed_default_accounts(church, verbose=False):
 
             ledger_code_int = _code_to_int(code)
 
-            # 1. Match by (name, group) — unique in DEFAULT_LEDGERS
+            # 1. Match by (name, group)
             ledger = AccountLedgerMaster.objects.filter(
                 church=church,
                 ledger_name=ledger_name,
                 account_group=group,
             ).first()
 
-            # 2. Fall back to code match — legacy rescue
+            # 2. Fall back to code match
             if not ledger:
                 ledger = AccountLedgerMaster.objects.filter(
                     church=church,
                     ledger_code=ledger_code_int,
                 ).first()
-                # If found by code but wrong group/name, fix in place
                 if ledger:
                     changed_legacy = False
                     if ledger.ledger_name != ledger_name:
@@ -814,7 +803,7 @@ def seed_default_accounts(church, verbose=False):
                     if changed_legacy:
                         ledger.save(update_fields=["ledger_name", "account_group"])
 
-            # 3. Create only if genuinely missing
+            # 3. Create if missing
             if not ledger:
                 ledger = AccountLedgerMaster.objects.create(
                     church=church,
@@ -881,6 +870,7 @@ def seed_all_churches(verbose=False):
 
     return total
 
+
 # ============================================================
 # DEFAULT DESIGNATIONS
 # ============================================================
@@ -889,6 +879,7 @@ DEFAULT_DESIGNATIONS = [
     "President", "Vice President", "Secretary", "Joint Secretary",
     "Treasurer", "Trustee", "Lay Leader", "Accountant", "Committee Member",
 ]
+
 
 def seed_default_designations(church):
     from .models import Designation

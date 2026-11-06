@@ -49,7 +49,7 @@ const formatDateDisplay = (s) => {
 };
 
 // ============================================================
-// SHARED ROW RENDERER
+// SHARED ROW RENDERER (For Print View)
 // ============================================================
 const StatutoryRow = ({ row, mode = "screen" }) => {
   const { code, name, depth, row_type, current_year, previous_year, section } = row;
@@ -144,7 +144,7 @@ const StatutoryRow = ({ row, mode = "screen" }) => {
 };
 
 // ============================================================
-// SCREEN TWO-COLUMN VIEW (Original Design)
+// SCREEN TWO-COLUMN VIEW (Single Combined Table)
 // ============================================================
 const ScreenStatutory = ({
   receiptRows,
@@ -153,60 +153,109 @@ const ScreenStatutory = ({
   totalPayments,
   isBalanced,
 }) => {
-  const Header = ({ label }) => (
+  // Find the longest array to ensure we render every row
+  const maxRows = Math.max(receiptRows.length, paymentRows.length);
+
+  const Header = () => (
     <tr style={{ background: "#F7F9FB", borderBottom: `1px solid ${BORDER}` }}>
       <th style={{ padding: "10px 6px", width: 60, borderRight: `1px solid ${BORDER}`, fontSize: "12px", textAlign: "center" }}>Code</th>
-      <th style={{ padding: "10px 6px", textAlign: "left", fontSize: "12px" }}>{label}</th>
-      <th style={{ padding: "10px 6px", textAlign: "right", width: 130, fontSize: "12px" }}>Current (₹)</th>
-      <th style={{ padding: "10px 6px", textAlign: "right", width: 130, borderLeft: `1px solid ${BORDER}`, fontSize: "12px" }}>Previous (₹)</th>
+      <th style={{ padding: "10px 6px", textAlign: "left", fontSize: "12px", width: "35%" }}>RECEIPTS</th>
+      <th style={{ padding: "10px 6px", textAlign: "right", width: 120, fontSize: "12px" }}>Current (₹)</th>
+      <th style={{ padding: "10px 6px", textAlign: "right", width: 120, borderRight: `2px solid ${BORDER}`, fontSize: "12px" }}>Previous (₹)</th>
+      
+      <th style={{ padding: "10px 6px", width: 60, borderRight: `1px solid ${BORDER}`, fontSize: "12px", textAlign: "center" }}>Code</th>
+      <th style={{ padding: "10px 6px", textAlign: "left", fontSize: "12px", width: "35%" }}>PAYMENTS</th>
+      <th style={{ padding: "10px 6px", textAlign: "right", width: 120, fontSize: "12px" }}>Current (₹)</th>
+      <th style={{ padding: "10px 6px", textAlign: "right", width: 120, fontSize: "12px" }}>Previous (₹)</th>
     </tr>
   );
 
+  const CombinedRow = ({ receipt, payment }) => {
+    const getStyle = (row) => {
+      if (!row) return { background: "white" };
+      const isSection = row.row_type === "section";
+      const isTotal = ["total", "grand_total"].includes(row.row_type);
+      const isSubTotal = row.row_type === "subtotal";
+      const isGroup = row.row_type === "group";
+      
+      return {
+        background: isSection ? "#F7F9FB" : isTotal ? "#F0F4FA" : isSubTotal ? "#F7F9FB" : "white",
+        fontWeight: isSection || isTotal || isGroup ? 700 : isSubTotal ? 600 : 400,
+        color: isSection || isTotal ? DARK_RED : TEXT_COLOR,
+      };
+    };
+
+    const rStyle = getStyle(receipt);
+    const pStyle = getStyle(payment);
+
+    const renderSide = (row, style, isPaymentSide = false) => {
+      if (!row) {
+        // Empty cells for alignment
+        return (
+          <>
+            <td style={{ borderRight: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}` }}></td>
+            <td style={{ borderBottom: `1px solid ${BORDER}` }}></td>
+            <td style={{ borderBottom: `1px solid ${BORDER}` }}></td>
+            <td style={{ borderRight: isPaymentSide ? "none" : `2px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}` }}></td>
+          </>
+        );
+      }
+      
+      const indentPx = [0, 20, 40, 60, 80, 100][row.depth] ?? 100;
+      const prefix = (row.row_type === "section" && row.section && !row.name.startsWith(row.section)) ? `${row.section}.  ` : "";
+      const showAmount = row.row_type !== "section" && row.row_type !== "group";
+
+      return (
+        <>
+          <td style={{ width: 60, padding: "6px 8px", textAlign: "center", borderRight: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}`, fontSize: "11.5px", ...style }}>
+            {row.code || ""}
+          </td>
+          <td style={{ padding: "6px 8px", paddingLeft: `${indentPx + 8}px`, borderBottom: `1px solid ${BORDER}`, fontSize: "11.5px", textTransform: row.row_type === "section" || row.row_type === "total" ? "uppercase" : "none", ...style }}>
+            {prefix}{row.name}
+          </td>
+          <td style={{ width: 120, padding: "6px 8px", textAlign: "right", borderBottom: `1px solid ${BORDER}`, fontSize: "11.5px", ...style }}>
+            {showAmount ? formatAmount(row.current_year) : ""}
+          </td>
+          <td style={{ width: 120, padding: "6px 8px", textAlign: "right", borderLeft: `1px solid ${BORDER}`, borderRight: isPaymentSide ? "none" : `2px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}`, fontSize: "11.5px", color: SECONDARY, ...style }}>
+            {showAmount ? formatAmount(row.previous_year) : ""}
+          </td>
+        </>
+      );
+    };
+
+    return (
+      <tr>
+        {renderSide(receipt, rStyle, false)}
+        {renderSide(payment, pStyle, true)}
+      </tr>
+    );
+  };
+
   return (
-    <Flex
-      direction={{ base: "column", lg: "row" }}
-      border={`1px solid ${BORDER}`}
-      borderRadius="10px"
-      overflow="hidden"
-    >
-      {/* ---- RECEIPTS ---- */}
-      <Box flex="1" borderRight={{ base: "none", lg: `1px solid ${BORDER}` }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead><Header label="RECEIPTS" /></thead>
-          <tbody>
-            {receiptRows.map((r, i) => (
-              <StatutoryRow key={`r-${i}`} row={r} mode="screen" />
-            ))}
+    <Box border={`1px solid ${BORDER}`} borderRadius="10px" overflowX="auto" background="white" mb={4}>
+      <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1000px" }}>
+        <thead><Header /></thead>
+        <tbody>
+          {/* Loop through max rows to render both sides simultaneously */}
+          {Array.from({ length: maxRows }).map((_, i) => (
+            <CombinedRow key={i} receipt={receiptRows[i]} payment={paymentRows[i]} />
+          ))}
+          
+          {/* Grand Total Row */}
+          <tr style={{ background: "#F0F4FA", borderTop: `2px solid ${BORDER}`, borderBottom: `2px solid ${BORDER}` }}>
+            <td style={{ borderRight: `1px solid ${BORDER}` }} />
+            <td style={{ padding: "10px", fontWeight: 700, color: DARK_RED, fontSize: "12px" }}>TOTAL</td>
+            <td style={{ padding: "10px", textAlign: "right", fontWeight: 700, color: DARK_RED, fontSize: "12px" }}>{formatAmount(totalReceipts)}</td>
+            <td style={{ padding: "10px", textAlign: "right", borderLeft: `1px solid ${BORDER}`, borderRight: `2px solid ${BORDER}`, fontSize: "12px" }}>{formatAmount(0)}</td>
 
-            <tr style={{ background: "#F0F4FA", borderTop: `2px solid ${BORDER}`, borderBottom: `2px solid ${BORDER}` }}>
-              <td style={{ borderRight: `1px solid ${BORDER}` }} />
-              <td style={{ padding: "10px", fontWeight: 700, color: DARK_RED, fontSize: "12px" }}>TOTAL</td>
-              <td style={{ padding: "10px", textAlign: "right", fontWeight: 700, color: DARK_RED, fontSize: "12px" }}>{formatAmount(totalReceipts)}</td>
-              <td style={{ padding: "10px", textAlign: "right", borderLeft: `1px solid ${BORDER}`, fontSize: "12px" }}>{formatAmount(0)}</td>
-            </tr>
-          </tbody>
-        </table>
-      </Box>
-
-      {/* ---- PAYMENTS ---- */}
-      <Box flex="1">
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead><Header label="PAYMENTS" /></thead>
-          <tbody>
-            {paymentRows.map((r, i) => (
-              <StatutoryRow key={`p-${i}`} row={r} mode="screen" />
-            ))}
-
-            <tr style={{ background: "#F0F4FA", borderTop: `2px solid ${BORDER}`, borderBottom: `2px solid ${BORDER}` }}>
-              <td style={{ borderRight: `1px solid ${BORDER}` }} />
-              <td style={{ padding: "10px", fontWeight: 700, color: DARK_RED, fontSize: "12px" }}>TOTAL</td>
-              <td style={{ padding: "10px", textAlign: "right", fontWeight: 700, color: DARK_RED, fontSize: "12px" }}>{formatAmount(totalPayments)}</td>
-              <td style={{ padding: "10px", textAlign: "right", borderLeft: `1px solid ${BORDER}`, fontSize: "12px" }}>{formatAmount(0)}</td>
-            </tr>
-          </tbody>
-        </table>
-      </Box>
-    </Flex>
+            <td style={{ borderRight: `1px solid ${BORDER}` }} />
+            <td style={{ padding: "10px", fontWeight: 700, color: DARK_RED, fontSize: "12px" }}>TOTAL</td>
+            <td style={{ padding: "10px", textAlign: "right", fontWeight: 700, color: DARK_RED, fontSize: "12px" }}>{formatAmount(totalPayments)}</td>
+            <td style={{ padding: "10px", textAlign: "right", borderLeft: `1px solid ${BORDER}`, fontSize: "12px" }}>{formatAmount(0)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </Box>
   );
 };
 

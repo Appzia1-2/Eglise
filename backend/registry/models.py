@@ -18,42 +18,37 @@ from django.core.exceptions import ValidationError
 
 from django.utils.dateparse import parse_date
 
+from datetime import date, datetime, time, timedelta
+from django.db import models, transaction, IntegrityError
+
 # ============================================================
 # LEDGER RESOLUTION HELPERS
 # ============================================================
 
 def get_cash_ledger(church):
     """
-    Return the church's primary Cash ledger.
-    Matches 'Cash in Hand'. Falls back to any ledger with 'cash' in name.
+    Return the church's primary Cash ledger (group I. Opening Balances).
+    Deterministic — no relying on DB row order.
     """
-    from django.db.models import Q
-    return (
-        AccountLedgerMaster.objects
-        .filter(church=church, ledger_name__iexact="Cash in Hand")
-        .first()
-        or AccountLedgerMaster.objects
-        .filter(church=church, ledger_name__icontains="cash")
-        .exclude(ledger_name__icontains="closing")
-        .first()
-    )
+    return AccountLedgerMaster.objects.filter(
+        church=church,
+        ledger_name__iexact="Cash in Hand",
+        account_group__group_name="I. Opening Balances",
+        status=True,
+    ).order_by("id").first()
 
 
 def get_bank_ledger(church):
     """
-    Return the church's primary Bank ledger.
-    Matches 'Balance in Savings Account'.
+    Return the church's primary Bank ledger (group I. Opening Balances).
+    Deterministic — no relying on DB row order.
     """
-    from django.db.models import Q
-    return (
-        AccountLedgerMaster.objects
-        .filter(church=church, ledger_name__iexact="Balance in Savings Account")
-        .first()
-        or AccountLedgerMaster.objects
-        .filter(church=church, ledger_name__icontains="savings")
-        .exclude(ledger_name__icontains="closing")
-        .first()
-    )
+    return AccountLedgerMaster.objects.filter(
+        church=church,
+        ledger_name__iexact="Balance in Savings Account",
+        account_group__group_name="I. Opening Balances",
+        status=True,
+    ).order_by("id").first()
 
 class Diocese(models.Model):
     # Basic Information
@@ -379,11 +374,7 @@ class Package(models.Model):
     class Meta:
         ordering = ['code']
 
-from decimal import Decimal
-from datetime import date, datetime
 
-from datetime import date, datetime
-from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
 from django.db import models
@@ -2257,17 +2248,25 @@ class Marriage(models.Model):
             return
 
         from django.db import transaction, IntegrityError
+        from django.utils import timezone
+        from .models import RegisterSetting
         from registry.services import generate_register_number
         
         for attempt in range(5):
             try:
                 with transaction.atomic():
-                    # Lock the setting row to prevent race conditions
-                    setting = RegisterSetting.objects.select_for_update().filter(
-                        church=self.church, register_type="MARRIAGE"
-                    ).first()
+                    # 1. Safely get or create the setting
+                    setting, _ = RegisterSetting.objects.select_for_update().get_or_create(
+                        church=self.church,
+                        register_type="MARRIAGE",
+                        defaults={
+                            "register_prefix": "MAR-",
+                            "register_padding": 4,
+                            "next_register_number": 1,
+                        }
+                    )
                     
-                    # Self-Healing: Check if the counter is behind the actual highest record
+                    # 2. Self-healing check
                     highest_existing = Marriage.objects.filter(
                         church=self.church, register_number__startswith="MAR-"
                     ).order_by('-id').first()
@@ -2275,12 +2274,13 @@ class Marriage(models.Model):
                     if highest_existing and highest_existing.register_number:
                         try:
                             last_num = int(highest_existing.register_number.split("-")[-1])
-                            if setting and setting.next_register_number <= last_num:
+                            if setting.next_register_number <= last_num:
                                 setting.next_register_number = last_num + 1
                                 setting.save()
                         except (ValueError, IndexError):
                             pass
 
+                    # 3. Generate and save
                     self.register_number = generate_register_number(self.church, "MARRIAGE")
                     super().save(*args, **kwargs)
                 break
@@ -2354,7 +2354,7 @@ class DheshaKuri(models.Model):
 import logging
 from django.db import models
 from django.utils import timezone
-from datetime import date, datetime
+
 
 logger = logging.getLogger(__name__)
 
@@ -2400,19 +2400,13 @@ class DeathRegister(models.Model):
  
     @property
     def tomb_charge(self):
-        """Get the fee amount from the selected TombFee"""
         return self.tomb_fee.tomb_fees if self.tomb_fee else None
     
     @property
     def tomb_type(self):
-        """Get the tomb type from the selected TombFee"""
         return self.tomb_fee.tomb_type if self.tomb_fee else None
  
     def save(self, *args, **kwargs):
-        """
-        Override save to handle date conversions and register number generation
-        """
-        # Clean dates before saving
         self._clean_dates()
         
         if self.reg_no:
@@ -2425,12 +2419,12 @@ class DeathRegister(models.Model):
         for attempt in range(5):
             try:
                 with transaction.atomic():
-                    # Lock the setting row to prevent race conditions
+                    # Lock the setting row
                     setting = RegisterSetting.objects.select_for_update().filter(
                         church=self.church, register_type="DEATH"
                     ).first()
                     
-                    # Self-Healing: Check if the counter is behind the actual highest record
+                    # Self-Healing
                     highest_existing = DeathRegister.objects.filter(
                         church=self.church, reg_no__startswith="DEA-"
                     ).order_by('-id').first()
@@ -2454,44 +2448,23 @@ class DeathRegister(models.Model):
                 continue
  
     def _clean_dates(self):
-        """
-        Convert string dates to proper date objects
-        """
-        # Clean died_on
-        if self.died_on:
-            if isinstance(self.died_on, str):
-                parsed = parse_date(self.died_on)
-                if parsed:
-                    self.died_on = parsed
-                else:
-                    logger.warning(f"Invalid died_on date format: {self.died_on}")
-                    self.died_on = None
-            elif not isinstance(self.died_on, date):
-                logger.warning(f"died_on is not a date object: {type(self.died_on)}")
-                self.died_on = None
+        if self.died_on and isinstance(self.died_on, str):
+            parsed = parse_date(self.died_on)
+            if parsed:
+                self.died_on = parsed
         
-        # Clean funeral_on
-        if self.funeral_on:
-            if isinstance(self.funeral_on, str):
-                parsed = parse_date(self.funeral_on)
-                if parsed:
-                    self.funeral_on = parsed
-                else:
-                    logger.warning(f"Invalid funeral_on date format: {self.funeral_on}")
-                    self.funeral_on = None
-            elif not isinstance(self.funeral_on, date):
-                logger.warning(f"funeral_on is not a date object: {type(self.funeral_on)}")
-                self.funeral_on = None
+        if self.funeral_on and isinstance(self.funeral_on, str):
+            parsed = parse_date(self.funeral_on)
+            if parsed:
+                self.funeral_on = parsed
     
     def get_days_since_death(self):
-        """Get number of days since death"""
         if self.died_on:
             today = date.today()
             return (today - self.died_on).days
         return None
     
     def get_days_since_funeral(self):
-        """Get number of days since funeral"""
         if self.funeral_on:
             today = date.today()
             return (today - self.funeral_on).days
@@ -2870,6 +2843,14 @@ class LedgerEntry(models.Model):
         related_name="ledger_entries"
     )
 
+    bank_account = models.ForeignKey(
+        "BankAccount",
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name="ledger_entries"
+    )
+
     ledger = models.ForeignKey(
         AccountLedgerMaster,
         on_delete=models.PROTECT,
@@ -3110,77 +3091,47 @@ class ReceiptMaster(models.Model):
         super().save(*args, **kwargs)
 
     # ============================================================
-    # LEDGER POSTING  — THE FIX
+    # LEDGER POSTING
     # ============================================================
 
     def post_to_ledger(self):
-        """
-        Post TWO entries per receipt:
-
-          1. CREDIT on each income ledger     (income ↑ on credit)
-          2. DEBIT  on the Cash / Bank ledger (asset ↑ on debit)
-
-        Previously BOTH sides were posted as DEBIT, which made
-        total debits ≠ total credits and broke every income
-        ledger balance.
-
-        Raises ValidationError if no Cash / Bank ledger is configured —
-        never silently posts only one side.
-
-        Idempotent.
-        """
-        if self.ledger_entries.filter(
-            is_cancelled=False, is_reversal=False
-        ).exists():
+        if self.ledger_entries.filter(is_cancelled=False, is_reversal=False).exists():
             return
 
-        # ----- 1. Income side — CREDIT per line -----
-        total = 0
-        for line in self.lines.all():
-            LedgerEntry.objects.create(
-                church=self.church,
-                ledger=line.ledger,
-                entry_type="CREDIT",              # ✅ FIXED (was DEBIT)
-                amount=line.amount,
-                entry_date=self.receipt_date,
-                narration=(
-                    self.narration
-                    or f"Receipt {self.receipt_number}"
-                ),
-                receipt=self,
-            )
-            total += float(line.amount or 0)
-
-        if total <= 0:
-            return
-
-        # ----- 2. Cash / Bank side — DEBIT -----
         if self.payment_type == "CASH":
             cash_bank_ledger = get_cash_ledger(self.church)
+            bank_acc = None
         else:
-            cash_bank_ledger = get_bank_ledger(self.church)
+            # ✅ FIX: Use the specific bank account's ledger
+            bank_acc = self.bank_account
+            if not bank_acc or not bank_acc.ledger:
+                raise ValidationError("Selected bank account has no configured ledger.")
+            cash_bank_ledger = bank_acc.ledger
 
         if not cash_bank_ledger:
-            raise ValidationError(
-                "Cash / Bank ledger is not configured for this church. "
-                "Cannot post receipt."
+            raise ValidationError("Cash/Bank ledger is not configured.")
+
+        lines = list(self.lines.all())
+        total = sum(float(line.amount or 0) for line in lines)
+        if total <= 0: return
+
+        narration = self.narration or f"Receipt {self.receipt_number}"
+
+        with transaction.atomic():
+            for line in lines:
+                LedgerEntry.objects.create(
+                    church=self.church, ledger=line.ledger, entry_type="CREDIT",
+                    amount=line.amount, entry_date=self.receipt_date,
+                    narration=narration, receipt=self,
+                )
+            LedgerEntry.objects.create(
+                church=self.church, ledger=cash_bank_ledger, bank_account=bank_acc,
+                entry_type="DEBIT", amount=total, entry_date=self.receipt_date,
+                narration=narration, receipt=self,
             )
 
-        LedgerEntry.objects.create(
-            church=self.church,
-            ledger=cash_bank_ledger,
-            entry_type="DEBIT",                   # money in
-            amount=total,
-            entry_date=self.receipt_date,
-            narration=(
-                self.narration
-                or f"Receipt {self.receipt_number}"
-            ),
-            receipt=self,
-        )
-
     # ============================================================
-    # REVERSAL (unchanged — generic opposite-entry logic works)
+    # REVERSAL
     # ============================================================
 
     def reverse_ledger_entry(self):
@@ -3189,6 +3140,9 @@ class ReceiptMaster(models.Model):
         reversal for each. A cancelled receipt leaves zero net
         effect on any ledger.
         """
+        from django.db import transaction
+        from django.utils import timezone
+
         originals = list(
             self.ledger_entries.filter(
                 is_cancelled=False, is_reversal=False
@@ -3198,32 +3152,38 @@ class ReceiptMaster(models.Model):
         if not originals:
             return
 
-        for original in originals:
-            if getattr(original, "reversed_by", None):
-                continue
+        reversal_date = timezone.now().date()
+        reversal_narration = f"Reversal of {self.receipt_number}"
 
-            original.is_cancelled = True
-            original.save(update_fields=["is_cancelled"])
+        with transaction.atomic():
+            for original in originals:
+                if getattr(original, "reversed_by", None):
+                    continue
 
-            opposite = (
-                "CREDIT"
-                if original.entry_type == "DEBIT"
-                else "DEBIT"
-            )
+                opposite = (
+                    "CREDIT"
+                    if original.entry_type == "DEBIT"
+                    else "DEBIT"
+                )
 
-            reversal = LedgerEntry.objects.create(
-                church=self.church,
-                ledger=original.ledger,
-                entry_type=opposite,
-                amount=original.amount,
-                entry_date=timezone.now().date(),
-                narration=f"Reversal of {self.receipt_number}",
-                receipt=self,
-                is_reversal=True,
-            )
+                # Create the reversal FIRST — if it fails, the original
+                # is still live and the receipt remains fully posted.
+                reversal = LedgerEntry.objects.create(
+                    church=self.church,
+                    ledger=original.ledger,
+                    entry_type=opposite,
+                    amount=original.amount,
+                    entry_date=reversal_date,
+                    narration=reversal_narration,
+                    receipt=self,
+                    is_reversal=True,
+                )
 
-            original.reversed_entry = reversal
-            original.save(update_fields=["reversed_entry"])
+                original.is_cancelled = True
+                original.reversed_entry = reversal
+                original.save(
+                    update_fields=["is_cancelled", "reversed_entry"]
+                )
 
 
 class ReceiptLine(models.Model):
@@ -3282,22 +3242,31 @@ class ReceiptLine(models.Model):
         )
     
 # NEW MODEL
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+# 2. UPDATE BankAccount
 class BankAccount(models.Model):
     church = models.ForeignKey(Church, on_delete=models.CASCADE, related_name="bank_accounts")
     bank_name = models.CharField(max_length=150)
     account_number = models.CharField(max_length=50)
-    masked_account_number = models.CharField(max_length=50, blank=True)  # auto-derived
+    masked_account_number = models.CharField(max_length=50, blank=True)
     ifsc_code = models.CharField(max_length=20, blank=True, null=True)
     branch = models.CharField(max_length=150, blank=True, null=True)
     is_active = models.BooleanField(default=True)
-    opening_balance = models.DecimalField(
-        max_digits=15, 
-        decimal_places=2, 
-        default=0.00,
-        help_text="Initial balance when the account was added"
+
+    ledger = models.OneToOneField(
+        'AccountLedgerMaster',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="linked_bank_account",
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+
+    opening_balance = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
+
+    created_at = models.DateTimeField(auto_now_add=True, null=True)   # ← NEW
+    updated_at = models.DateTimeField(auto_now=True, null=True)       # ← NEW
 
     class Meta:
         ordering = ["bank_name"]
@@ -3308,8 +3277,12 @@ class BankAccount(models.Model):
             self.masked_account_number = f"•••• {self.account_number[-4:]}"
         super().save(*args, **kwargs)
 
+    @property
+    def display_name(self):
+        return f"{self.bank_name} {self.masked_account_number}".strip()
+
     def __str__(self):
-        return f"{self.bank_name} {self.masked_account_number}"
+        return self.display_name
 
 class PaymentMaster(models.Model):
     PAYMENT_TYPE_CHOICES = (
@@ -3387,51 +3360,52 @@ class PaymentMaster(models.Model):
     # ============================================================
 
     def post_to_ledger(self):
-        """
-        Post TWO entries per payment:
-          1. DEBIT on the expense / party ledger
-          2. CREDIT on the Cash / Bank ledger (money out)
-
-        Idempotent.
-        """
-        if self.ledger_entries.filter(
-            is_cancelled=False, is_reversal=False
-        ).exists():
+        if self.ledger_entries.filter(is_cancelled=False, is_reversal=False).exists():
             return
 
-        # 1. Expense side
-        LedgerEntry.objects.create(
-            church=self.church,
-            ledger=self.account_ledger,
-            entry_type="DEBIT",
-            amount=self.amount,
-            entry_date=self.payment_date,
-            narration=self.narration or f"Payment {self.voucher_number}",
-            payment=self,
-        )
-
-        # 2. Cash / Bank side
         if self.payment_type == "CASH":
             cash_bank_ledger = get_cash_ledger(self.church)
+            bank_acc = None
         else:
-            cash_bank_ledger = get_bank_ledger(self.church)
+            # ✅ FIX: Use specific bank account's ledger
+            bank_acc = self.bank_account
+            if not bank_acc or not bank_acc.ledger:
+                raise ValidationError("Selected bank account has no configured ledger.")
+            cash_bank_ledger = bank_acc.ledger
 
-        if cash_bank_ledger:
+        if not cash_bank_ledger:
+            raise ValidationError("Cash/Bank ledger is not configured.")
+
+        narration = self.narration or f"Payment {self.voucher_number}"
+
+        with transaction.atomic():
             LedgerEntry.objects.create(
-                church=self.church,
-                ledger=cash_bank_ledger,
-                entry_type="CREDIT",   # money going out
-                amount=self.amount,
-                entry_date=self.payment_date,
-                narration=self.narration or f"Payment {self.voucher_number}",
-                payment=self,
+                church=self.church, ledger=self.account_ledger, entry_type="DEBIT",
+                amount=self.amount, entry_date=self.payment_date,
+                narration=narration, payment=self,
             )
+            LedgerEntry.objects.create(
+                church=self.church, ledger=cash_bank_ledger, bank_account=bank_acc,
+                entry_type="CREDIT", amount=self.amount, entry_date=self.payment_date,
+                narration=narration, payment=self,
+            )
+
+    # ============================================================
+    # REVERSAL
+    # ============================================================
 
     def reverse_ledger_entry(self):
         """
         On cancel: mark ALL existing unreversed entries as cancelled
         and create an opposite reversal for each.
+
+        Atomic — all legs succeed or none. Reversal entry is created
+        BEFORE the original is marked cancelled, so a failure leaves
+        the original live (no silent money loss).
         """
+        from django.db import transaction
+        from django.utils import timezone
+
         originals = list(
             self.ledger_entries.filter(
                 is_cancelled=False, is_reversal=False
@@ -3441,28 +3415,38 @@ class PaymentMaster(models.Model):
         if not originals:
             return
 
-        for original in originals:
-            if getattr(original, "reversed_by", None):
-                continue
+        reversal_date = timezone.now().date()
+        reversal_narration = f"Reversal of {self.voucher_number}"
 
-            original.is_cancelled = True
-            original.save(update_fields=["is_cancelled"])
+        with transaction.atomic():
+            for original in originals:
+                if getattr(original, "reversed_by", None):
+                    continue
 
-            opposite = "CREDIT" if original.entry_type == "DEBIT" else "DEBIT"
+                opposite = (
+                    "CREDIT"
+                    if original.entry_type == "DEBIT"
+                    else "DEBIT"
+                )
 
-            reversal = LedgerEntry.objects.create(
-                church=self.church,
-                ledger=original.ledger,
-                entry_type=opposite,
-                amount=original.amount,
-                entry_date=timezone.now().date(),
-                narration=f"Reversal of {self.voucher_number}",
-                payment=self,
-                is_reversal=True,
-            )
+                # Create the reversal FIRST — if it fails, the original
+                # is still live and the payment remains fully posted.
+                reversal = LedgerEntry.objects.create(
+                    church=self.church,
+                    ledger=original.ledger,
+                    entry_type=opposite,
+                    amount=original.amount,
+                    entry_date=reversal_date,
+                    narration=reversal_narration,
+                    payment=self,
+                    is_reversal=True,
+                )
 
-            original.reversed_entry = reversal
-            original.save(update_fields=["reversed_entry"])
+                original.is_cancelled = True
+                original.reversed_entry = reversal
+                original.save(
+                    update_fields=["is_cancelled", "reversed_entry"]
+                )
 
     def __str__(self):
         return f"{self.voucher_number} - {self.party_name} ({self.amount})"
@@ -3805,8 +3789,6 @@ class LegacyDeath(models.Model):
 
 
 # ----------------------------------------------------Contra--------------------------------------------------------------------
-
-
 class ContraMaster(models.Model):
     """
     Contra voucher — money movement between two of the church's own
@@ -3908,71 +3890,86 @@ class ContraMaster(models.Model):
 
         super().save(*args, **kwargs)
 
-    # ---- posting ----
+    # ============================================================
+    # LEDGER POSTING
+    # ============================================================
+
     def post_to_ledger(self):
-        """
-        DEBIT  destination ledger (money in)
-        CREDIT source ledger      (money out)
-        Idempotent.
-        """
-        if self.ledger_entries.filter(
-            is_cancelled=False, is_reversal=False
-        ).exists():
+        if self.ledger_entries.filter(is_cancelled=False, is_reversal=False).exists():
             return
 
+        # Contra uses from_ledger and to_ledger directly, which are already the specific bank ledgers 
+        # (We will update the serializer to inject these specific ledgers)
         narration = self.narration or f"Contra {self.voucher_number}"
 
-        # Destination — money comes in (DEBIT asset)
-        LedgerEntry.objects.create(
-            church=self.church,
-            ledger=self.to_ledger,
-            entry_type="DEBIT",
-            amount=self.amount,
-            entry_date=self.contra_date,
-            narration=narration,
-            contra=self,
-        )
+        with transaction.atomic():
+            LedgerEntry.objects.create(
+                church=self.church, ledger=self.to_ledger, 
+                bank_account=self.to_bank_account,
+                entry_type="DEBIT", amount=self.amount,
+                entry_date=self.contra_date, narration=narration, contra=self,
+            )
+            LedgerEntry.objects.create(
+                church=self.church, ledger=self.from_ledger,
+                bank_account=self.from_bank_account,
+                entry_type="CREDIT", amount=self.amount,
+                entry_date=self.contra_date, narration=narration, contra=self,
+            )
 
-        # Source — money goes out (CREDIT asset)
-        LedgerEntry.objects.create(
-            church=self.church,
-            ledger=self.from_ledger,
-            entry_type="CREDIT",
-            amount=self.amount,
-            entry_date=self.contra_date,
-            narration=narration,
-            contra=self,
-        )
+    # ============================================================
+    # REVERSAL
+    # ============================================================
 
-    # ---- reversal (same pattern as PaymentMaster) ----
     def reverse_ledger_entry(self):
+        """
+        Cancel: mark all live entries cancelled + create opposite reversals.
+
+        Atomic — all legs succeed or none. Reversal entry is created BEFORE
+        the original is marked cancelled, so a failure leaves the original
+        live (no silent money loss).
+        """
+        from django.db import transaction
+        from django.core.exceptions import ValidationError
+        from django.utils import timezone
+
         originals = list(
             self.ledger_entries.filter(
                 is_cancelled=False, is_reversal=False
             )
         )
+
         if not originals:
             return
 
-        for original in originals:
-            if getattr(original, "reversed_by", None):
-                continue
-
-            original.is_cancelled = True
-            original.save(update_fields=["is_cancelled"])
-
-            opposite = "CREDIT" if original.entry_type == "DEBIT" else "DEBIT"
-
-            reversal = LedgerEntry.objects.create(
-                church=self.church,
-                ledger=original.ledger,
-                entry_type=opposite,
-                amount=original.amount,
-                entry_date=timezone.now().date(),
-                narration=f"Reversal of {self.voucher_number}",
-                contra=self,
-                is_reversal=True,
+        if len(originals) != 2:
+            raise ValidationError(
+                f"Contra {self.voucher_number} has {len(originals)} posted entries "
+                f"(expected 2). Manual investigation required before cancelling."
             )
 
-            original.reversed_entry = reversal
-            original.save(update_fields=["reversed_entry"])
+        reversal_date = timezone.now().date()
+        reversal_narration = f"Reversal of {self.voucher_number}"
+
+        with transaction.atomic():
+            for original in originals:
+                if getattr(original, "reversed_by", None):
+                    continue
+
+                opposite = (
+                    "CREDIT" if original.entry_type == "DEBIT" else "DEBIT"
+                )
+
+                reversal = LedgerEntry.objects.create(
+                    church=self.church,
+                    ledger=original.ledger,
+                    entry_type=opposite,
+                    amount=original.amount,
+                    entry_date=reversal_date,
+                    narration=reversal_narration,
+                    contra=self,
+                    is_reversal=True,
+                )
+
+                original.is_cancelled = True
+                original.reversed_entry = reversal
+                original.save(update_fields=["is_cancelled", "reversed_entry"])
