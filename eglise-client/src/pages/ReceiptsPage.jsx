@@ -422,7 +422,7 @@ const ReceiptsPage = () => {
             </Box>
 
             <HStack gap={2} flexShrink={0}>
-              <Button
+              {/* <Button
                 variant="outline"
                 borderColor="#FF5A7D"
                 color={RED}
@@ -437,7 +437,7 @@ const ReceiptsPage = () => {
               >
                 <Icon as={LuDownload} mr={2} boxSize={4} />
                 Export
-              </Button>
+              </Button> */}
 
               <Button
                 bg={RED}

@@ -66,7 +66,9 @@ const isDebitNature = (nature) =>
 
 const balanceOnDebitSide = (amount, nature) => {
   const dn = isDebitNature(nature);
-  const positive = amount >= 0;
+  // Treat anything less than 1 paisa as exactly 0 to prevent floating point weirdness
+  const cleanAmount = Math.abs(amount) < 0.01 ? 0 : amount;
+  const positive = cleanAmount >= 0;
   return (dn && positive) || (!dn && !positive);
 };
 

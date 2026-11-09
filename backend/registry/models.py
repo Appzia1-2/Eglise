@@ -2171,7 +2171,7 @@ class Marriage(models.Model):
     )
 
     date = models.DateField()
-    register_number = models.CharField(max_length=50, unique=True)
+    register_number = models.CharField(max_length=50)
     
     # -------------------------
     # GROOM DETAILS

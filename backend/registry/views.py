@@ -3788,94 +3788,54 @@ class PaymentCancelAPIView(APIView):
             status=status.HTTP_200_OK
         )
 
-from decimal import Decimal
-from django.db.models import Count, Sum, Q, F
-from datetime import datetime, timedelta
+   
+
+from django.db.models import Sum, Q
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.generics import ListAPIView
+from accounts.permissions import IsChurchUser
+from .models import LedgerEntry, AccountLedgerMaster
+from .serializers import LedgerEntrySerializer
 
 class LedgerEntryListAPIView(ListAPIView):
-    """
-    List ledger entries with optional filters:
-
-      ?ledger=<id>
-      ?book=cash | bank
-      ?from=YYYY-MM-DD
-      ?to=YYYY-MM-DD
-      ?include_cancelled=true
-
-    Adds a `running_balance` field to each row.
-    """
     permission_classes = [IsAuthenticated, IsChurchUser]
     serializer_class = LedgerEntrySerializer
 
-    # ✅ Only the real cash/bank ledgers — no stale "Closing -"
-    CASH_LEDGERS = ["Cash in Hand"]
-    BANK_LEDGERS = [
-        "Balance in Savings Account",
-        "Balance in Deposit Account",
-        "Balance in Other Accounts",
-    ]
-    CASH_BANK_GROUP = "I. Opening Balances"
-
     def get_queryset(self):
         church = self.request.user.church
-
-        qs = LedgerEntry.objects.filter(
-            church=church
-        ).select_related(
-            "ledger",
-            "ledger__account_group",
-            "payment",
-            "receipt",
+        qs = LedgerEntry.objects.filter(church=church).select_related(
+            "ledger", "ledger__account_group", "payment", "receipt", "contra"
         )
 
-        # ---------- ledger filter ----------
         ledger_id = self.request.query_params.get("ledger")
         if ledger_id:
             qs = qs.filter(ledger_id=ledger_id)
 
-        # ---------- book filter ----------
         book = (self.request.query_params.get("book") or "").lower().strip()
+        if book in ("cash", "bank"):
+            if book == "cash":
+                target_names = ["Cash in Hand"]
+            else:
+                target_names = [
+                    "Balance in Savings Account",
+                    "Balance in Deposit Account",
+                    "Balance in Other Accounts",
+                ]
+                # Add specific bank ledgers
+                specific_banks = AccountLedgerMaster.objects.filter(
+                    church=church, linked_bank_account__isnull=False
+                ).values_list("ledger_name", flat=True)
+                target_names.extend(list(specific_banks))
+            qs = qs.filter(ledger__ledger_name__in=target_names)
 
-        if book == "cash":
-            target = self.CASH_LEDGERS
-        elif book == "bank":
-            target = self.BANK_LEDGERS
-        else:
-            target = None
-
-        if target:
-            matching_entries = LedgerEntry.objects.filter(
-                church=church,
-                ledger__ledger_name__in=target,
-                ledger__account_group__group_name=self.CASH_BANK_GROUP,
-            )
-
-            receipt_ids = matching_entries.exclude(
-                receipt_id__isnull=True
-            ).values_list('receipt_id', flat=True)
-            payment_ids = matching_entries.exclude(
-                payment_id__isnull=True
-            ).values_list('payment_id', flat=True)
-            contra_ids = matching_entries.exclude(
-                contra_id__isnull=True
-            ).values_list('contra_id', flat=True)
-
-            qs = qs.filter(
-                Q(receipt_id__in=receipt_ids)
-                | Q(payment_id__in=payment_ids)
-                | Q(contra_id__in=contra_ids)
-            )
-
-        # ---------- date range ----------
         date_from = self.request.query_params.get("from")
-        if date_from:
-            qs = qs.filter(entry_date__gte=date_from)
+        if date_from: qs = qs.filter(entry_date__gte=date_from)
 
         date_to = self.request.query_params.get("to")
-        if date_to:
-            qs = qs.filter(entry_date__lte=date_to)
+        if date_to: qs = qs.filter(entry_date__lte=date_to)
 
-        # ---------- cancelled / reversals ----------
         include_cancelled = self.request.query_params.get("include_cancelled")
         if include_cancelled not in ("true", "1", "yes"):
             qs = qs.filter(is_cancelled=False, is_reversal=False)
@@ -3884,108 +3844,70 @@ class LedgerEntryListAPIView(ListAPIView):
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
-
         running_map = self._compute_running_balances(queryset)
-
-        opening = 0.0
-        total_debit = 0.0
-        total_credit = 0.0
-        closing = 0.0
 
         ledger_id = self.request.query_params.get("ledger")
         date_from = self.request.query_params.get("from")
         date_to = self.request.query_params.get("to")
+        book = (self.request.query_params.get("book") or "").lower().strip()
 
+        # Identify which ledgers are in scope
         if ledger_id:
-            # ============ SINGLE LEDGER MODE ============
-            try:
-                ledger = AccountLedgerMaster.objects.get(
-                    id=ledger_id, church=request.user.church
-                )
-                opening = float(ledger.op_balance or 0)
-
-                agg = queryset.aggregate(
-                    debits=Sum("amount", filter=Q(entry_type="DEBIT")),
-                    credits=Sum("amount", filter=Q(entry_type="CREDIT")),
-                )
-                total_debit = float(agg["debits"] or 0)
-                total_credit = float(agg["credits"] or 0)
-
-                nature = (ledger.ledger_nature or "ASSET").upper()
-                if nature in ("ASSET", "EXPENSE"):
-                    closing = opening + total_debit - total_credit
-                else:
-                    closing = opening + total_credit - total_debit
-            except Exception:
-                pass
+            target_names = [
+                AccountLedgerMaster.objects.get(id=ledger_id, church=request.user.church).ledger_name
+            ]
+        elif book == "cash":
+            target_names = ["Cash in Hand"]
+        elif book == "bank":
+            target_names = [
+                "Balance in Savings Account",
+                "Balance in Deposit Account",
+                "Balance in Other Accounts",
+            ]
+            specific_banks = AccountLedgerMaster.objects.filter(
+                church=request.user.church, linked_bank_account__isnull=False
+            ).values_list("ledger_name", flat=True)
+            target_names.extend(list(specific_banks))
         else:
-            # ============ MULTI-LEDGER MODE (Day Book) ============
-            book_param = (self.request.query_params.get("book") or "").lower().strip()
+            target_names = []
 
-            if book_param == "cash":
-                scoped_ledgers = self.CASH_LEDGERS
-            elif book_param == "bank":
-                scoped_ledgers = self.BANK_LEDGERS
-            else:
-                scoped_ledgers = self.CASH_LEDGERS + self.BANK_LEDGERS
-
-            ledger_opening_total = sum(
-                float(l.op_balance or 0)
-                for l in AccountLedgerMaster.objects.filter(
-                    church=request.user.church,
-                    ledger_name__in=scoped_ledgers,
-                    account_group__group_name=self.CASH_BANK_GROUP,
-                )
+        opening = 0.0
+        if target_names:
+            opening_qs = LedgerEntry.objects.filter(
+                church=request.user.church,
+                ledger__ledger_name__in=target_names,
+                is_cancelled=False,
+                is_reversal=False,
             )
-
-            def get_book_balance(as_of_date):
-                if not as_of_date:
-                    return ledger_opening_total
-
-                agg = LedgerEntry.objects.filter(
-                    church=request.user.church,
-                    ledger__ledger_name__in=scoped_ledgers,
-                    ledger__account_group__group_name=self.CASH_BANK_GROUP,
-                    entry_date__lte=as_of_date,
-                    is_cancelled=False,
-                    is_reversal=False,
-                ).aggregate(
-                    debits=Sum("amount", filter=Q(entry_type="DEBIT")),
-                    credits=Sum("amount", filter=Q(entry_type="CREDIT")),
-                )
-
-                debits = float(agg["debits"] or 0)
-                credits = float(agg["credits"] or 0)
-                return ledger_opening_total + debits - credits
-
             if date_from:
-                try:
-                    dt_from = datetime.strptime(date_from, "%Y-%m-%d").date()
-                    day_before = dt_from - timedelta(days=1)
-                    opening = get_book_balance(day_before)
-                except (ValueError, TypeError):
-                    opening = ledger_opening_total
-            else:
-                opening = ledger_opening_total
+                opening_qs = opening_qs.filter(entry_date__lt=date_from)
 
-            # ✅ FIX: Calculate the closing balance as of the date_to
-            closing = get_book_balance(date_to)
+            # Get opening balance from Master
+            for name in target_names:
+                l = AccountLedgerMaster.objects.filter(church=request.user.church, ledger_name=name).first()
+                if l: opening += float(l.op_balance or 0)
 
-            # The total debit/credit for the period should ONLY be the filtered queryset
-            agg = queryset.aggregate(
+            # Add prior movements
+            agg_open = opening_qs.aggregate(
                 debits=Sum("amount", filter=Q(entry_type="DEBIT")),
                 credits=Sum("amount", filter=Q(entry_type="CREDIT")),
             )
-            total_debit = float(agg["debits"] or 0)
-            total_credit = float(agg["credits"] or 0)
+            opening += float(agg_open["debits"] or 0) - float(agg_open["credits"] or 0)
+
+        # Current period totals
+        agg = queryset.aggregate(
+            debits=Sum("amount", filter=Q(entry_type="DEBIT")),
+            credits=Sum("amount", filter=Q(entry_type="CREDIT")),
+        )
+        total_debit = float(agg["debits"] or 0)
+        total_credit = float(agg["credits"] or 0)
+        
+        # Assets: Closing = Opening + Debits - Credits
+        closing = opening + total_debit - total_credit
 
         serializer = self.get_serializer(
-            queryset,
-            many=True,
-            context={
-                **self.get_serializer_context(),
-                "running_balance_context": running_map,
-            },
+            queryset, many=True,
+            context={**self.get_serializer_context(), "running_balance_context": running_map},
         )
 
         data = list(serializer.data)
@@ -4002,19 +3924,10 @@ class LedgerEntryListAPIView(ListAPIView):
 
     def _compute_running_balances(self, queryset):
         from collections import defaultdict
-
         balances = defaultdict(lambda: None)
         ledger_ids = {e.ledger_id for e in queryset}
-
-        ledgers = {
-            l.id: l
-            for l in AccountLedgerMaster.objects.filter(id__in=ledger_ids)
-        }
+        ledgers = {l.id: l for l in AccountLedgerMaster.objects.filter(id__in=ledger_ids)}
         openings = {lid: float(l.op_balance or 0) for lid, l in ledgers.items()}
-        natures = {
-            lid: (l.ledger_nature or "ASSET").upper()
-            for lid, l in ledgers.items()
-        }
 
         result = {}
         for entry in queryset:
@@ -4023,16 +3936,10 @@ class LedgerEntryListAPIView(ListAPIView):
                 balances[lid] = openings.get(lid, 0.0)
 
             amt = float(entry.amount or 0)
-            nature = natures.get(lid, "ASSET")
-
-            if nature in ("ASSET", "EXPENSE"):
-                delta = amt if entry.entry_type == "DEBIT" else -amt
-            else:
-                delta = amt if entry.entry_type == "CREDIT" else -amt
-
+            # For Bank/Cash (Assets), DEBIT increases, CREDIT decreases
+            delta = amt if entry.entry_type == "DEBIT" else -amt
             balances[lid] += delta
             result[entry.id] = round(balances[lid], 2)
-
         return result
 
 
@@ -6052,6 +5959,12 @@ class ReceiptPaymentStatutoryAPIView(APIView):
             elif db_key and not is_group:
                 ledgers = AccountLedgerMaster.objects.filter(church=church, ledger_name__iexact=db_key)
                 
+                # ✅ FIX: Restrict the ledger nature to prevent mixing Income/Expense ledgers with identical names
+                if side == "INCOME":
+                    ledgers = ledgers.filter(ledger_nature="INCOME")
+                elif side == "EXPENSE":
+                    ledgers = ledgers.filter(ledger_nature__in=["EXPENSE", "ASSET", "LIABILITY"])
+
                 for led in ledgers:
                     is_closing = code in ("6100", "6200", "6300", "6400")
                     is_opening = code in ("1000", "1100", "1200", "1300")

@@ -520,7 +520,7 @@ const AddPaymentPage = () => {
                 <HStack gap={2}>
                   <Input
                     value={formData.voucher_number}
-                    isReadOnly
+                    readOnly
                     placeholder="Auto-generated"
                     bg="#F7F9FB"
                     h="40px"
@@ -662,7 +662,7 @@ const AddPaymentPage = () => {
                     </Text>
                     <Input
                       value="Not applicable for Cash"
-                      isReadOnly
+                      readOnly
                       bg="#F7F9FB"
                       color={SECONDARY_TEXT}
                       h="40px"

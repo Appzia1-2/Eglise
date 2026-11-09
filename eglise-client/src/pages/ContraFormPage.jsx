@@ -40,6 +40,19 @@ const TYPE_OPTIONS = [
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
+// ✅ Case-insensitive dedupe, keeping the first (lowest id) occurrence.
+const dedupeLedgers = (list) => {
+  const seen = new Set();
+  const out = [];
+  for (const l of list) {
+    const key = (l.ledger_name || "").trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(l);
+  }
+  return out;
+};
+
 const ContraFormPage = () => {
   const { id } = useParams();
   const isEdit = Boolean(id);
@@ -73,12 +86,35 @@ const ContraFormPage = () => {
         // Fetch ledgers for the Bank-to-Bank dropdowns
         const lRes = await listAccountLedgers();
         const raw = lRes.data?.results ?? lRes.data ?? [];
-        
-        // We only care about ASSET ledgers for contra
-        const assetLedgers = (Array.isArray(raw) ? raw : []).filter(
-          (l) => (l.ledger_nature || "").toUpperCase() === "ASSET" && l.status !== false
+
+        // ✅ Only ASSET ledgers that are actually backed by a
+        // BankAccount. If the backend hasn't been updated yet
+        // (no `has_bank_account` field), fall back to the old
+        // filter so the page still works.
+        const list = Array.isArray(raw) ? raw : [];
+
+        const backendHasFlag = list.some(
+          (l) => Object.prototype.hasOwnProperty.call(l, "has_bank_account")
         );
-        setLedgers(assetLedgers);
+
+        const assetLedgers = list.filter((l) => {
+          if ((l.ledger_nature || "").toUpperCase() !== "ASSET") return false;
+          if (l.status === false) return false;
+
+          if (backendHasFlag) {
+            return l.has_bank_account === true;
+          }
+
+          // Fallback (legacy backend): exclude anything that looks
+          // like cash. This still has the old problem of including
+          // non-bank asset ledgers, but the dedupe below at least
+          // hides duplicate names.
+          return !(l.ledger_name || "").toLowerCase().includes("cash");
+        });
+
+        // ✅ Defensive dedupe by name — hides duplicate rows
+        // even if the backend returned them.
+        setLedgers(dedupeLedgers(assetLedgers));
 
         if (isEdit) {
           const res = await getContra(id);
@@ -108,20 +144,20 @@ const ContraFormPage = () => {
   // ==========================================================
   const isBankToBank = form.contra_type === "BANK_TO_BANK";
 
-  // For Bank to Bank, the user picks specific ledgers.
-  // We filter out 'Cash in Hand' so they can only pick bank accounts.
-  const bankLedgers = useMemo(() => 
-    ledgers.filter(l => !l.ledger_name.toLowerCase().includes("cash")), 
-  [ledgers]);
+  // ✅ `ledgers` is already filtered to real bank ledgers and
+  // deduplicated, so we can use it directly.
+  const fromLedgerOptions = useMemo(
+    () => ledgers.map((l) => ({ value: l.id, label: l.ledger_name })),
+    [ledgers]
+  );
 
-  const fromLedgerOptions = useMemo(() => 
-    bankLedgers.map(l => ({ value: l.id, label: l.ledger_name })), 
-  [bankLedgers]);
-
-  const toLedgerOptions = useMemo(() => 
-    bankLedgers.filter(l => String(l.id) !== String(form.from_ledger))
-    .map(l => ({ value: l.id, label: l.ledger_name })), 
-  [bankLedgers, form.from_ledger]);
+  const toLedgerOptions = useMemo(
+    () =>
+      ledgers
+        .filter((l) => String(l.id) !== String(form.from_ledger))
+        .map((l) => ({ value: l.id, label: l.ledger_name })),
+    [ledgers, form.from_ledger]
+  );
 
   // ==========================================================
   // HANDLERS
@@ -141,7 +177,7 @@ const ContraFormPage = () => {
   const validate = () => {
     const errs = {};
     if (!form.contra_date) errs.contra_date = "Date is required.";
-    
+
     if (isBankToBank) {
       if (!form.from_ledger) errs.from_ledger = "Source bank ledger is required.";
       if (!form.to_ledger) errs.to_ledger = "Destination bank ledger is required.";
@@ -167,8 +203,6 @@ const ContraFormPage = () => {
       return;
     }
 
-    // ✅ If it's Bank to Bank, we send the selected ledgers.
-    // Otherwise, we send null and let the backend auto-resolve Cash/Bank.
     const payload = {
       contra_date: form.contra_date,
       contra_type: form.contra_type,
@@ -386,7 +420,6 @@ const ContraFormPage = () => {
 
             {/* BANK ACCOUNT SELECTION (Physical Bank Master) */}
             <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4} mb={4}>
-              {/* Show From Bank Account for Withdrawals and Bank-to-Bank */}
               {(form.contra_type === "BANK_TO_CASH" || form.contra_type === "BANK_TO_BANK") && (
                 <Box>
                   <BankAccountSelect
@@ -399,7 +432,6 @@ const ContraFormPage = () => {
                 </Box>
               )}
 
-              {/* Show To Bank Account for Deposits and Bank-to-Bank */}
               {(form.contra_type === "CASH_TO_BANK" || form.contra_type === "BANK_TO_BANK") && (
                 <Box>
                   <BankAccountSelect

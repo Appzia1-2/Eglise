@@ -287,6 +287,9 @@ const PrintStatutory = ({
     </tr>
   );
 
+  // Calculate the net difference for the print view
+  const diff = totalReceipts - totalPayments;
+
   return (
     <div style={{ fontFamily: "Georgia, 'Times New Roman', serif", width: "100%", fontSize: "10px" }}>
       <div style={{ textAlign: "center", marginBottom: 14 }}>
@@ -329,6 +332,28 @@ const PrintStatutory = ({
             <StatutoryRow key={`pp-${i}`} row={r} mode="print" />
           ))}
           {TotalRow("TOTAL PAYMENTS (V+VI+VII+VIII)", totalPayments)}
+        </tbody>
+      </table>
+
+      {/* ✅ ADDED: Net Closing Balance Row for Print */}
+      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", marginTop: "8px" }}>
+        <colgroup>
+          <col style={{ width: 55 }} />
+          <col style={{ width: "auto" }} />
+          <col style={{ width: 110 }} />
+          <col style={{ width: 110 }} />
+        </colgroup>
+        <tbody>
+          <tr style={{ background: "#F0F4FA", borderTop: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}` }}>
+            <td style={{ borderRight: `1px solid ${BORDER}` }} />
+            <td style={{ padding: "6px", fontWeight: 700, color: DARK_RED }}>
+              NET CLOSING BALANCE
+            </td>
+            <td style={{ padding: "6px", textAlign: "right", fontWeight: 700, color: DARK_RED }}>
+              {formatAmount(Math.abs(diff))} {diff >= 0 ? "(Dr)" : "(Cr)"}
+            </td>
+            <td style={{ padding: "6px", textAlign: "right", borderLeft: `1px solid ${BORDER}` }}></td>
+          </tr>
         </tbody>
       </table>
 

@@ -55,20 +55,26 @@ const formatDateDisplay = (dateStr) => {
 };
 
 // ============================================================
-// ALL FOUR CASH / BANK LEDGERS
+// CASH / BANK LEDGER DETECTOR
 // ============================================================
 
-const CASH_BANK_EXACT_NAMES = [
-  "cash in hand",
-  "balance in savings account",
-  "balance in deposit account",
-  "balance in other accounts",
-];
+const isCashLedger = (ledgerName) => {
+  const n = String(ledgerName || "").trim().toLowerCase();
+  return n === "cash in hand";
+};
+
+const isBankLedger = (ledgerName) => {
+  const n = String(ledgerName || "").trim().toLowerCase();
+  return (
+    n === "balance in savings account" ||
+    n === "balance in deposit account" ||
+    n === "balance in other accounts" ||
+    n.startsWith("bank - ") // ✅ Allows specific Bank Accounts (HDFC, SBI, etc.)
+  );
+};
 
 const isCashOrBankLedger = (ledgerName) => {
-  const n = String(ledgerName || "").trim().toLowerCase();
-  if (!n) return false;
-  return CASH_BANK_EXACT_NAMES.includes(n);
+  return isCashLedger(ledgerName) || isBankLedger(ledgerName);
 };
 
 // ============================================================
@@ -149,15 +155,23 @@ const groupLedgerEntries = (entries) => {
     const amt = toNumber(e.amount);
 
     if (isCashOrBankLedger(e.ledger_name)) {
-      g.cashBankAccount = e.ledger_name || "";
-      g.amount = amt;
+      // ✅ FIX: Prevent double-naming in Contra vouchers
+      if (!g.cashBankAccount) {
+        g.cashBankAccount = e.ledger_name || "";
+        g.amount = amt;
 
-      if (voucherType === "Receipt") {
-        g.direction = "CREDIT";
-      } else if (voucherType === "Payment") {
-        g.direction = "DEBIT";
+        if (voucherType === "Receipt") {
+          g.direction = "CREDIT";
+        } else if (voucherType === "Payment") {
+          g.direction = "DEBIT";
+        } else {
+          g.direction = e.entry_type === "DEBIT" ? "CREDIT" : "DEBIT";
+        }
       } else {
-        g.direction = e.entry_type;
+        // If the Cash/Bank column is already filled, this must be the other leg of a Contra
+        if (!g.particulars) {
+          g.particulars = e.ledger_name || "";
+        }
       }
     } else {
       if (!g.particulars) {
@@ -169,19 +183,20 @@ const groupLedgerEntries = (entries) => {
   });
 
   return Array.from(groups.values()).map((g) => {
+    // Fallback if no cash/bank ledger was found at all
     if (!g.cashBankAccount) {
       const anyLedger = g._entries.find((x) => x.ledger_name);
       g.cashBankAccount = anyLedger ? anyLedger.ledger_name : "—";
 
       if (g.amount === 0 && g._entries[0]) {
         g.amount = toNumber(g._entries[0].amount);
-
         if (g.voucherType === "Receipt") g.direction = "CREDIT";
         else if (g.voucherType === "Payment") g.direction = "DEBIT";
         else g.direction = g._entries[0].entry_type;
       }
     }
 
+    // Fallback for particulars
     if (!g.particulars) {
       const otherLedger = g._entries.find(
         (x) => !isCashOrBankLedger(x.ledger_name) && x.ledger_name
@@ -207,7 +222,7 @@ const groupLedgerEntries = (entries) => {
 };
 
 // ============================================================
-// PRINT TABLE — closing cash & bank balance only
+// PRINT TABLE
 // ============================================================
 
 const DayBookPrintTable = ({
@@ -358,7 +373,7 @@ const DayBookPrintTable = ({
             </td>
           </tr>
 
-          {/* Closing Balance — accurate label */}
+          {/* Closing Balance */}
           <tr style={{ background: "#FFF5F5" }}>
             <td
               colSpan={4}
@@ -400,7 +415,6 @@ const DayBookPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
 
-  // ✅ Default to TODAY
   const [dateFrom, setDateFrom] = useState(todayISO());
   const [dateTo, setDateTo] = useState(todayISO());
 
