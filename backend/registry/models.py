@@ -2781,6 +2781,16 @@ class AccountLedgerMaster(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        # 🛡️ PREVENTS DUPLICATE LEDGERS
+        # A ledger name can only appear once per church per group.
+        constraints = [
+            models.UniqueConstraint(
+                fields=["church", "ledger_name", "account_group"],
+                name="unique_ledger_per_church_group",
+            ),
+        ]
+
     def __str__(self):
         return self.ledger_name
 

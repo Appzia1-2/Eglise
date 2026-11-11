@@ -59,14 +59,11 @@ const toNumber = (v) => {
 };
 
 // ✅ Dr / Cr label based on nature + sign
-//   ASSET / EXPENSE  → +ve = Dr, -ve = Cr
-//   LIABILITY / INCOME / EQUITY → +ve = Cr, -ve = Dr
 const isDebitNature = (nature) =>
   nature === "ASSET" || nature === "EXPENSE";
 
 const balanceOnDebitSide = (amount, nature) => {
   const dn = isDebitNature(nature);
-  // Treat anything less than 1 paisa as exactly 0 to prevent floating point weirdness
   const cleanAmount = Math.abs(amount) < 0.01 ? 0 : amount;
   const positive = cleanAmount >= 0;
   return (dn && positive) || (!dn && !positive);
@@ -84,20 +81,13 @@ const formatBalanceWithSide = (amount, nature) => {
 // ============================================================
 
 const buildRowsWithParticulars = (entries) => {
+  // Group all entries by their voucher number to find the counter-leg
   const byVoucher = new Map();
   entries.forEach((e) => {
     const voucherNo =
       e.receipt_voucher || e.payment_voucher || e.contra_voucher || null;
     const key = voucherNo
-      ? `${
-          e.receipt_voucher
-            ? "R"
-            : e.payment_voucher
-            ? "P"
-            : e.contra_voucher
-            ? "C"
-            : "J"
-        }|${voucherNo}|${e.entry_date}`
+      ? `${voucherNo}|${e.entry_date}`
       : `ORPHAN|${e.id}`;
     if (!byVoucher.has(key)) byVoucher.set(key, []);
     byVoucher.get(key).push(e);
@@ -116,18 +106,11 @@ const buildRowsWithParticulars = (entries) => {
         ? "Contra"
         : "Journal";
       const key = voucherNo
-        ? `${
-            e.receipt_voucher
-              ? "R"
-              : e.payment_voucher
-              ? "P"
-              : e.contra_voucher
-              ? "C"
-              : "J"
-          }|${voucherNo}|${e.entry_date}`
+        ? `${voucherNo}|${e.entry_date}`
         : `ORPHAN|${e.id}`;
       const siblings = byVoucher.get(key) || [];
 
+      // Find the OTHER ledger in the same voucher (the counter-leg)
       const counterLeg = siblings.find(
         (s) =>
           String(s.ledger) !== String(e.ledger) &&
@@ -136,13 +119,13 @@ const buildRowsWithParticulars = (entries) => {
       );
 
       return {
-        key: e.id,
+        key: e.id, // Unique key based on the entry ID
         date: e.entry_date,
         voucherNo: voucherNo || "—",
         voucherType,
-        particulars:
-          counterLeg?.ledger_name || e.narration || e.ledger_name || "—",
-        account: e.ledger_name,
+        // If there's a counter-leg, show its name. Otherwise, fallback to narration.
+        particulars: counterLeg?.ledger_name || e.narration || "—",
+        account: e.ledger_name, // This is the ledger you selected
         amount: toNumber(e.amount),
         direction: e.entry_type === "DEBIT" ? "DEBIT" : "CREDIT",
       };
@@ -815,7 +798,6 @@ const GeneralLedgerPage = () => {
               showTotals
             />
 
-            {/* ✅ ADDED: Small Closing Balance design at the bottom */}
             {!isLoading && (
               <Flex
                 justify="flex-end"

@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Box, Button, Flex, Heading, HStack, Icon, Text } from "@chakra-ui/react";
-import { LuPrinter, LuFileText } from "react-icons/lu";
+import { LuPrinter, LuFileText, LuChevronDown } from "react-icons/lu";
 
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -12,7 +12,7 @@ import ReportLedgerTable from "../components/ReportLedgerTable";
 import ChurchPrintModal from "../components/ChurchPrintModal";
 
 import { toaster } from "../components/ui/toaster";
-import { listLedgerEntries, getMyChurch } from "../api/registryServices";
+import { listLedgerEntries, getMyChurch, listBankAccounts } from "../api/registryServices";
 
 const PRIMARY_MAROON = "var(--primary-maroon)";
 const RED = "#D7193F";
@@ -62,26 +62,21 @@ const groupLedgerEntries = (entries, book = "bank") => {
     if (isCashOrBankLedger(e.ledger_name)) {
       const matchesBook = (book === "bank" && isBankLedger(e.ledger_name)) || (book === "cash" && isCashLedger(e.ledger_name));
       
-      // ✅ FIX: Prevent double-naming in Contra vouchers
       if (matchesBook || !g.cashBankAccount) {
         if (!g.cashBankAccount) {
           g.cashBankAccount = e.ledger_name || "";
           g.amount = amt;
-          // Rely strictly on entry_type for direction (Dr = Money In, Cr = Money Out)
           g.direction = e.entry_type === "DEBIT" ? "CREDIT" : "DEBIT"; 
         } else if (matchesBook) {
-          // If we already have a cash/bank ledger but this one matches the book better
           g.cashBankAccount = e.ledger_name || "";
           g.amount = amt;
           g.direction = e.entry_type === "DEBIT" ? "CREDIT" : "DEBIT";
         } else {
-          // If the Cash/Bank column is already filled, this must be the other leg of a Contra
           if (!g.particulars) {
             g.particulars = e.ledger_name || "";
           }
         }
       } else {
-        // Doesn't match the book but is a cash/bank ledger
         if (!g.particulars) g.particulars = e.ledger_name || "";
       }
     } else {
@@ -112,8 +107,8 @@ const computeRunningBalances = (rowsAscending, openingBalance) => {
   let balance = toNumber(openingBalance);
   return rowsAscending.map((r) => {
     const amt = toNumber(r.amount);
-    if (r.direction === "CREDIT") balance += amt; // Money In
-    else if (r.direction === "DEBIT") balance -= amt; // Money Out
+    if (r.direction === "CREDIT") balance += amt;
+    else if (r.direction === "DEBIT") balance -= amt;
     return { ...r, running_balance: balance };
   });
 };
@@ -184,11 +179,21 @@ const BankBookPage = () => {
   const [church, setChurch] = useState({ name: "", address: "" });
   const [isPrintOpen, setIsPrintOpen] = useState(false);
 
+  const [banks, setBanks] = useState([]);
+  const [selectedBank, setSelectedBank] = useState("ALL");
+
   useEffect(() => {
     getMyChurch().then((res) => {
       const c = res?.data ?? res ?? {};
       setChurch({ name: c.name || "Church", address: c.full_address || c.address || "" });
     });
+
+    listBankAccounts()
+      .then((res) => {
+        const data = res?.data?.results ?? res?.data ?? [];
+        setBanks(Array.isArray(data) ? data : []);
+      })
+      .catch((err) => console.error("Failed to load banks", err));
   }, []);
 
   const load = async () => {
@@ -213,13 +218,24 @@ const BankBookPage = () => {
 
   const rows = useMemo(() => {
     let grouped = groupLedgerEntries(rawEntries, "bank");
+
+    if (selectedBank !== "ALL") {
+      const selectedObj = banks.find((b) => String(b.id) === String(selectedBank));
+      if (selectedObj) {
+        grouped = grouped.filter((r) => 
+          r.cashBankAccount.toLowerCase().includes(selectedObj.bank_name.toLowerCase()) || 
+          r.particulars.toLowerCase().includes(selectedObj.bank_name.toLowerCase())
+        );
+      }
+    }
+
     if (search) {
       const kw = search.toLowerCase();
       grouped = grouped.filter((r) => String(r.particulars).toLowerCase().includes(kw) || String(r.voucherNo).toLowerCase().includes(kw));
     }
     grouped.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     return computeRunningBalances(grouped, openingBalance ?? 0).reverse();
-  }, [rawEntries, search, openingBalance]);
+  }, [rawEntries, search, openingBalance, selectedBank, banks]);
 
   const totals = useMemo(() => {
     let credit = 0, debit = 0;
@@ -254,7 +270,48 @@ const BankBookPage = () => {
             </HStack>
           </Flex>
           <Box border={`1px solid ${BORDER}`} borderRadius="8px" p={3} bg="white">
-            <ReportFilterBar search={search} setSearch={setSearch} dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo} onReset={() => { setSearch(""); setDateFrom(firstDayOfMonthISO()); setDateTo(todayISO()); }} />
+            
+            {/* ✅ Replaced Chakra Select with standard HTML select for safety */}
+            <Box mb={3} maxW="300px">
+              <Text fontSize="11px" fontWeight="600" color={DARK} mb={1}>Filter by Bank</Text>
+              <Box position="relative">
+                <select
+                  value={selectedBank}
+                  onChange={(e) => setSelectedBank(e.target.value)}
+                  style={{
+                    width: "100%",
+                    height: "38px",
+                    fontSize: "12px",
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: "6px",
+                    padding: "0 10px",
+                    color: DARK,
+                    backgroundColor: "white",
+                    outline: "none",
+                    appearance: "none",
+                  }}
+                >
+                  <option value="ALL">All Banks</option>
+                  {banks.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.bank_name} {b.masked_account_number}
+                    </option>
+                  ))}
+                </select>
+                <Icon
+                  as={LuChevronDown}
+                  position="absolute"
+                  right="10px"
+                  top="50%"
+                  transform="translateY(-50%)"
+                  pointerEvents="none"
+                  color={DARK}
+                  boxSize={4}
+                />
+              </Box>
+            </Box>
+
+            <ReportFilterBar search={search} setSearch={setSearch} dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo} onReset={() => { setSearch(""); setDateFrom(firstDayOfMonthISO()); setDateTo(todayISO()); setSelectedBank("ALL"); }} />
             <ReportLedgerTable rows={rows} isLoading={isLoading} totals={totals} showTotals />
             {!isLoading && (
               <Flex justify="flex-end" align="center" mt={4} pt={3} borderTop={`1px solid ${BORDER}`}>
