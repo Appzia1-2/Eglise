@@ -1,32 +1,22 @@
-// src/pages/DayBookPage.jsx
-
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Box,
-  Button,
-  Flex,
-  Heading,
-  HStack,
-  Icon,
-  Text,
+  Box, Button, Flex, Heading, HStack, Icon, Text, Badge,
 } from "@chakra-ui/react";
-import { LuPrinter, LuFileText } from "react-icons/lu";
+import { LuPrinter, LuFileText, LuArrowLeft, LuChevronLeft, LuChevronRight } from "react-icons/lu";
 
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import ReportFilterBar from "../components/ReportFilterBar";
-import ReportLedgerTable from "../components/ReportLedgerTable";
 import ChurchPrintModal from "../components/ChurchPrintModal";
-
 import { toaster } from "../components/ui/toaster";
 import { listLedgerEntries, getMyChurch } from "../api/registryServices";
 
-const PRIMARY_MAROON = "var(--primary-maroon)";
 const RED = "#D7193F";
 const DARK = "#182338";
 const MUTED = "#60708C";
 const BORDER = "#DCE2EA";
+const BLUE = "#1A73E8";
 
 const todayISO = () => {
   const d = new Date();
@@ -54,93 +44,29 @@ const formatDateDisplay = (dateStr) => {
   return `${d}/${m}/${y}`;
 };
 
-// ============================================================
-// CASH / BANK LEDGER DETECTOR
-// ============================================================
-
-const isCashLedger = (ledgerName) => {
-  const n = String(ledgerName || "").trim().toLowerCase();
-  return n === "cash in hand";
-};
-
-const isBankLedger = (ledgerName) => {
-  const n = String(ledgerName || "").trim().toLowerCase();
-  return (
-    n === "balance in savings account" ||
-    n === "balance in deposit account" ||
-    n === "balance in other accounts" ||
-    n.startsWith("bank - ") // ✅ Allows specific Bank Accounts (HDFC, SBI, etc.)
-  );
-};
-
-const isCashOrBankLedger = (ledgerName) => {
-  return isCashLedger(ledgerName) || isBankLedger(ledgerName);
-};
-
-// ============================================================
-// EXTRACT MEMBER / PARTY NAME
-// ============================================================
-
 const extractMemberName = (entry) => {
   if (!entry) return "";
-  return (
-    entry.member_name ||
-    entry.memberName ||
-    entry.member?.name ||
-    entry.member?.full_name ||
-    entry.party_name ||
-    entry.partyName ||
-    entry.party?.name ||
-    entry.donor_name ||
-    entry.donorName ||
-    entry.contact_name ||
-    entry.contactName ||
-    entry.person_name ||
-    entry.personName ||
-    entry.name_of_member ||
-    entry.nameOfMember ||
-    ""
-  );
+  return entry.member_name || entry.memberName || entry.member?.name || entry.party_name || entry.partyName || "";
 };
 
 // ============================================================
 // GROUP LEDGER ENTRIES BY VOUCHER
 // ============================================================
-
 const groupLedgerEntries = (entries) => {
   const groups = new Map();
 
   entries.forEach((e) => {
     if (e.is_cancelled) return;
 
-    const voucherNo =
-      e.receipt_voucher || e.payment_voucher || e.contra_voucher || null;
-
-    const voucherType = e.receipt_voucher
-      ? "Receipt"
-      : e.payment_voucher
-      ? "Payment"
-      : e.contra_voucher
-      ? "Contra"
-      : "Journal";
-
-    const key = voucherNo
-      ? `${voucherType}|${voucherNo}|${e.entry_date}`
-      : `ORPHAN|${e.id}`;
+    const voucherNo = e.receipt_voucher || e.payment_voucher || e.contra_voucher || null;
+    const voucherType = e.receipt_voucher ? "Receipt" : e.payment_voucher ? "Payment" : e.contra_voucher ? "Contra" : "Journal";
+    const key = voucherNo ? `${voucherType}|${voucherNo}|${e.entry_date}` : `ORPHAN|${e.id}`;
 
     if (!groups.has(key)) {
       groups.set(key, {
-        key,
-        date: e.entry_date,
-        voucherNo: voucherNo || "—",
-        voucherType,
-        particulars: "",
-        cashBankAccount: "",
-        narration: e.narration || "",
-        amount: 0,
-        direction: "DEBIT",
-        memberName: "",
-        _entries: [],
+        key, date: e.entry_date, voucherNo: voucherNo || "—", voucherType,
+        particulars: "", cashBankAccount: "", narration: e.narration || "",
+        amount: 0, direction: "DEBIT", memberName: "", _entries: [],
       });
     }
 
@@ -153,67 +79,38 @@ const groupLedgerEntries = (entries) => {
     }
 
     const amt = toNumber(e.amount);
+    const isCashOrBank = e.ledger_name?.toLowerCase().includes("cash") || e.ledger_name?.toLowerCase().includes("bank") || e.ledger_name?.toLowerCase().includes("savings");
 
-    if (isCashOrBankLedger(e.ledger_name)) {
-      // ✅ FIX: Prevent double-naming in Contra vouchers
+    if (isCashOrBank) {
       if (!g.cashBankAccount) {
         g.cashBankAccount = e.ledger_name || "";
         g.amount = amt;
 
-        if (voucherType === "Receipt") {
-          g.direction = "CREDIT";
-        } else if (voucherType === "Payment") {
-          g.direction = "DEBIT";
-        } else {
-          g.direction = e.entry_type === "DEBIT" ? "CREDIT" : "DEBIT";
-        }
+        // ✅ FIX: Receipts DEBIT the bank. Payments CREDIT the bank.
+        if (voucherType === "Receipt") g.direction = "DEBIT";
+        else if (voucherType === "Payment") g.direction = "CREDIT";
+        else g.direction = e.entry_type === "DEBIT" ? "CREDIT" : "DEBIT";
       } else {
-        // If the Cash/Bank column is already filled, this must be the other leg of a Contra
-        if (!g.particulars) {
-          g.particulars = e.ledger_name || "";
-        }
+        if (!g.particulars) g.particulars = e.ledger_name || "";
       }
     } else {
-      if (!g.particulars) {
-        g.particulars = e.ledger_name || "";
-      }
+      if (!g.particulars) g.particulars = e.ledger_name || "";
     }
-
-    if (!g.narration && e.narration) g.narration = e.narration;
   });
 
   return Array.from(groups.values()).map((g) => {
-    // Fallback if no cash/bank ledger was found at all
     if (!g.cashBankAccount) {
       const anyLedger = g._entries.find((x) => x.ledger_name);
       g.cashBankAccount = anyLedger ? anyLedger.ledger_name : "—";
-
       if (g.amount === 0 && g._entries[0]) {
         g.amount = toNumber(g._entries[0].amount);
-        if (g.voucherType === "Receipt") g.direction = "CREDIT";
-        else if (g.voucherType === "Payment") g.direction = "DEBIT";
-        else g.direction = g._entries[0].entry_type;
+        g.direction = g._entries[0].entry_type;
       }
     }
 
-    // Fallback for particulars
     if (!g.particulars) {
-      const otherLedger = g._entries.find(
-        (x) => !isCashOrBankLedger(x.ledger_name) && x.ledger_name
-      );
-      g.particulars = otherLedger
-        ? otherLedger.ledger_name
-        : g._entries[0]?.ledger_name || "—";
-    }
-
-    if (!g.memberName) {
-      for (const entry of g._entries) {
-        const name = extractMemberName(entry);
-        if (name) {
-          g.memberName = name;
-          break;
-        }
-      }
+      const otherLedger = g._entries.find((x) => x.ledger_name && !x.ledger_name.toLowerCase().includes("cash") && !x.ledger_name.toLowerCase().includes("bank"));
+      g.particulars = otherLedger ? otherLedger.ledger_name : g._entries[0]?.ledger_name || "—";
     }
 
     delete g._entries;
@@ -224,179 +121,40 @@ const groupLedgerEntries = (entries) => {
 // ============================================================
 // PRINT TABLE
 // ============================================================
-
-const DayBookPrintTable = ({
-  rows,
-  totals,
-  closingBalance,
-  dateFrom,
-  dateTo,
-}) => {
-  const thStyle = {
-    border: "1px solid #F0C2C2",
-    padding: "10px 8px",
-    background: "#FCEAEC",
-    color: "#8B1A1A",
-    fontWeight: "bold",
-    fontSize: "13px",
-    fontFamily: "'Georgia', serif",
-    textAlign: "left",
-  };
-
-  const tdStyle = {
-    border: "1px solid #F0C2C2",
-    padding: "10px 8px",
-    fontSize: "13px",
-    color: "#333",
-    fontFamily: "'Georgia', serif",
-    verticalAlign: "top",
-  };
-
-  const numStyle = { ...tdStyle, textAlign: "right" };
-
-  const periodLabel =
-    dateFrom === dateTo
-      ? `For the day ${dateFrom || "—"}`
-      : `From ${dateFrom || "—"} to ${dateTo || "—"}`;
+const DayBookPrintTable = ({ rows, totals, closingBalance, dateFrom, dateTo }) => {
+  const thStyle = { border: "1px solid #F0C2C2", padding: "10px 8px", background: "#FCEAEC", color: "#8B1A1A", fontWeight: "bold", fontSize: "13px" };
+  const tdStyle = { border: "1px solid #F0C2C2", padding: "10px 8px", fontSize: "13px", color: "#333" };
 
   return (
     <Box fontFamily="'Georgia', serif">
-      <Text fontSize="12px" color="#555" mb={3} textAlign="center">
-        {periodLabel}
-      </Text>
-
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "20px" }}>
         <thead>
           <tr>
             <th style={thStyle}>Date</th>
-            <th style={thStyle}>Voucher Number</th>
+            <th style={thStyle}>Voucher No.</th>
+            <th style={thStyle}>Voucher Type</th>
             <th style={thStyle}>Particulars</th>
             <th style={thStyle}>Cash / Bank Account</th>
-            <th style={{ ...thStyle, textAlign: "right" }}>Receipt (₹)</th>
-            <th style={{ ...thStyle, textAlign: "right" }}>Payment (₹)</th>
+            <th style={{ ...thStyle, textAlign: "right" }}>Debit (₹)</th>
+            <th style={{ ...thStyle, textAlign: "right" }}>Credit (₹)</th>
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 ? (
-            <tr>
-              <td
-                colSpan={6}
-                style={{
-                  ...tdStyle,
-                  textAlign: "center",
-                  fontStyle: "italic",
-                  color: "#A05050",
-                }}
-              >
-                No transactions for the selected period.
-              </td>
+          {rows.map((r, i) => (
+            <tr key={r.key} style={{ background: i % 2 === 0 ? "#FFFFFF" : "#FFF9F9" }}>
+              <td style={tdStyle}>{formatDateDisplay(r.date)}</td>
+              <td style={tdStyle}>{r.voucherNo}</td>
+              <td style={tdStyle}>{r.voucherType}</td>
+              <td style={tdStyle}>{r.particulars}</td>
+              <td style={tdStyle}>{r.cashBankAccount}</td>
+              <td style={{ ...tdStyle, textAlign: "right", color: "#B71C1C" }}>{r.direction === "DEBIT" ? `₹${fmt(r.amount)}` : "—"}</td>
+              <td style={{ ...tdStyle, textAlign: "right", color: "#2E7D32" }}>{r.direction === "CREDIT" ? `₹${fmt(r.amount)}` : "—"}</td>
             </tr>
-          ) : (
-            rows.map((r, i) => (
-              <tr
-                key={r.key}
-                style={{
-                  background: i % 2 === 0 ? "#FFFFFF" : "#FFF9F9",
-                }}
-              >
-                <td style={tdStyle}>{r.date}</td>
-                <td style={tdStyle}>
-                  <div>{r.voucherNo}</div>
-                  <div style={{ fontSize: "11px", color: "#888" }}>
-                    {r.voucherType}
-                  </div>
-                </td>
-                <td style={{ ...tdStyle, color: "#8B1A1A" }}>
-                  <div>{r.particulars}</div>
-                  {r.memberName && (
-                    <div
-                      style={{
-                        fontSize: "11px",
-                        color: "#666",
-                        marginTop: "2px",
-                      }}
-                    >
-                      {r.memberName}
-                    </div>
-                  )}
-                </td>
-                <td style={tdStyle}>{r.cashBankAccount}</td>
-                <td style={{ ...numStyle, color: "#2E7D32" }}>
-                  {r.direction === "CREDIT"
-                    ? `₹${fmt(r.amount)}`
-                    : "—"}
-                </td>
-                <td style={{ ...numStyle, color: "#B71C1C" }}>
-                  {r.direction === "DEBIT"
-                    ? `₹${fmt(r.amount)}`
-                    : "—"}
-                </td>
-              </tr>
-            ))
-          )}
-
-          {/* Total */}
-          <tr
-            style={{
-              background: "#FCEAEC",
-              borderTop: "1px solid #F0C2C2",
-            }}
-          >
-            <td
-              colSpan={4}
-              style={{
-                ...tdStyle,
-                textAlign: "right",
-                fontWeight: "bold",
-                color: "#8B1A1A",
-              }}
-            >
-              Total
-            </td>
-            <td
-              style={{
-                ...numStyle,
-                fontWeight: "bold",
-                color: "#2E7D32",
-              }}
-            >
-              ₹{fmt(totals.credit)}
-            </td>
-            <td
-              style={{
-                ...numStyle,
-                fontWeight: "bold",
-                color: "#B71C1C",
-              }}
-            >
-              ₹{fmt(totals.debit)}
-            </td>
-          </tr>
-
-          {/* Closing Balance */}
-          <tr style={{ background: "#FFF5F5" }}>
-            <td
-              colSpan={4}
-              style={{
-                ...tdStyle,
-                textAlign: "right",
-                fontWeight: "bold",
-                color: "#8B1A1A",
-              }}
-            >
-              Cash &amp; Bank Balance as of{" "}
-              {formatDateDisplay(dateTo)}
-            </td>
-            <td
-              style={{
-                ...numStyle,
-                fontWeight: "bold",
-                color: "#8B1A1A",
-              }}
-            >
-              ₹{fmt(closingBalance)}
-            </td>
-            <td style={{ ...numStyle, color: "#8B1A1A" }}>—</td>
+          ))}
+          <tr style={{ background: "#FCEAEC" }}>
+            <td colSpan={5} style={{ ...tdStyle, textAlign: "right", fontWeight: "bold" }}>Total</td>
+            <td style={{ ...tdStyle, textAlign: "right", fontWeight: "bold", color: "#B71C1C" }}>₹{fmt(totals.debit)}</td>
+            <td style={{ ...tdStyle, textAlign: "right", fontWeight: "bold", color: "#2E7D32" }}>₹{fmt(totals.credit)}</td>
           </tr>
         </tbody>
       </table>
@@ -405,40 +163,29 @@ const DayBookPrintTable = ({
 };
 
 // ============================================================
-// PAGE
+// MAIN PAGE
 // ============================================================
-
 const DayBookPage = () => {
   const navigate = useNavigate();
-
   const [rawEntries, setRawEntries] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
-
   const [dateFrom, setDateFrom] = useState(todayISO());
   const [dateTo, setDateTo] = useState(todayISO());
-
   const [closingBalance, setClosingBalance] = useState(0);
-
   const [church, setChurch] = useState({ name: "", address: "" });
   const [isPrintOpen, setIsPrintOpen] = useState(false);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   useEffect(() => {
     const fetchChurch = async () => {
       try {
         const res = await getMyChurch();
         const c = res?.data ?? res ?? {};
-        setChurch({
-          name: c.name || "Church",
-          address:
-            c.full_address ||
-            c.address ||
-            [c.city, c.state, c.country].filter(Boolean).join(", ") ||
-            "",
-        });
-      } catch (err) {
-        console.error("Failed to fetch church info", err);
-      }
+        setChurch({ name: c.name || "Church", address: c.full_address || c.address || "" });
+      } catch (err) { console.error(err); }
     };
     fetchChurch();
   }, []);
@@ -456,228 +203,175 @@ const DayBookPage = () => {
       if (!Array.isArray(data)) data = [];
 
       setClosingBalance(Number(body.closing_balance ?? 0));
-
       setRawEntries(data);
     } catch (err) {
-      console.error(err);
-      toaster.create({
-        title: "Failed to load Day Book",
-        description: err?.response?.data?.detail || "Please try again.",
-        type: "error",
-      });
-      setRawEntries([]);
-      setClosingBalance(0);
+      toaster.create({ title: "Failed to load", type: "error" });
     } finally {
       setIsLoading(false);
     }
   };
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateFrom, dateTo]);
+  useEffect(() => { load(); }, [dateFrom, dateTo]);
 
   const rows = useMemo(() => {
     let grouped = groupLedgerEntries(rawEntries);
-
     if (search) {
       const kw = search.toLowerCase();
-      grouped = grouped.filter(
-        (r) =>
-          String(r.particulars || "").toLowerCase().includes(kw) ||
-          String(r.voucherNo || "").toLowerCase().includes(kw) ||
-          String(r.cashBankAccount || "").toLowerCase().includes(kw) ||
-          String(r.voucherType || "").toLowerCase().includes(kw) ||
-          String(r.narration || "").toLowerCase().includes(kw) ||
-          String(r.memberName || "").toLowerCase().includes(kw)
+      grouped = grouped.filter((r) => 
+        String(r.particulars || "").toLowerCase().includes(kw) ||
+        String(r.voucherNo || "").toLowerCase().includes(kw) ||
+        String(r.cashBankAccount || "").toLowerCase().includes(kw)
       );
     }
-
-    grouped.sort((a, b) => {
-      const da = new Date(a.date).getTime();
-      const db = new Date(b.date).getTime();
-      return db - da;
-    });
-
+    grouped.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     return grouped;
   }, [rawEntries, search]);
 
   const totals = useMemo(() => {
-    let credit = 0;
-    let debit = 0;
-
+    let credit = 0, debit = 0;
     rows.forEach((r) => {
       if (r.direction === "CREDIT") credit += r.amount;
       else if (r.direction === "DEBIT") debit += r.amount;
     });
-
-    return {
-      credit,
-      debit,
-      moneyIn: credit,
-      moneyOut: debit,
-      net: credit - debit,
-    };
+    return { credit, debit };
   }, [rows]);
 
-  const reset = () => {
-    setSearch("");
-    setDateFrom(todayISO());
-    setDateTo(todayISO());
-  };
-
-  const isToday = dateFrom === todayISO() && dateTo === todayISO();
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const paginatedRows = rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   return (
     <>
-      <Box minH="100vh" bg="white" display="flex" flexDirection="column">
+      <Box minH="100vh" bg="#F8F9FA" display="flex" flexDirection="column">
         <Navbar />
 
-        <Box flex="1" w="100%" px={{ base: 3, md: 4 }} py={{ base: 3, md: 4 }}>
-          <HStack gap={2} mb={3} color={MUTED} fontSize="12px">
-            <Text
-              color={PRIMARY_MAROON}
-              cursor="pointer"
-              onClick={() => navigate("/reports")}
-              fontWeight="500"
-            >
-              Reports
-            </Text>
+        <Box flex="1" w="100%" px={{ base: 3, md: 6 }} py={{ base: 4, md: 6 }}>
+          
+          <HStack gap={2} mb={4} color={MUTED} fontSize="12px">
+            <Text color={BLUE} cursor="pointer" onClick={() => navigate("/reports")}>Reports</Text>
             <Text>/</Text>
             <Text>Day Book</Text>
           </HStack>
 
-          <Flex
-            justify="space-between"
-            align={{ base: "flex-start", md: "center" }}
-            gap={3}
-            mb={5}
-            direction={{ base: "column", md: "row" }}
-          >
+          <Flex justify="space-between" align={{ base: "flex-start", md: "center" }} gap={3} mb={6} direction={{ base: "column", md: "row" }}>
             <Box>
-              <Text
-                fontSize="11px"
-                fontWeight="700"
-                color={RED}
-                mb={1}
-                letterSpacing="0.4px"
-              >
-                DAY BOOK REPORT
-              </Text>
-              <Heading
-                color={DARK}
-                fontSize={{ base: "26px", md: "30px" }}
-                mb={1}
-                fontWeight="700"
-              >
-                Day Book
-              </Heading>
-              <Text color={MUTED} fontSize="13px">
-                {isToday
-                  ? "Showing today's transactions."
-                  : "Showing transactions for the selected period."}
-              </Text>
+              <Text fontSize="12px" fontWeight="700" color={RED} mb={1}>DAY BOOK REPORT</Text>
+              <Heading color={DARK} fontSize="28px" mb={1}>Day Book</Heading>
+              <Text color={MUTED} fontSize="13px">View all cash and bank transactions for the selected date.</Text>
             </Box>
 
-            <HStack gap={3} flexWrap="wrap">
-              <Button
-                variant="outline"
-                borderColor="#FF5A7D"
-                color={RED}
-                bg="white"
-                h="40px"
-                px={5}
-                fontSize="13px"
-                fontWeight="600"
-                borderRadius="6px"
-                onClick={() => setIsPrintOpen(true)}
-                _hover={{ bg: "#FFF0F4" }}
-              >
-                <Icon as={LuPrinter} mr={2} boxSize={4} />
-                Print
+            <HStack gap={3}>
+              <Button variant="outline" borderColor={RED} color={RED} bg="white" h="40px" px={5} borderRadius="6px" onClick={() => navigate("/reports")}>
+                <Icon as={LuArrowLeft} mr={2} /> Back
               </Button>
-
-              <Button
-                variant="outline"
-                borderColor="#FF5A7D"
-                color={RED}
-                bg="white"
-                h="40px"
-                px={5}
-                fontSize="13px"
-                fontWeight="600"
-                borderRadius="6px"
-                onClick={() => setIsPrintOpen(true)}
-                _hover={{ bg: "#FFF0F4" }}
-              >
-                <Icon as={LuFileText} mr={2} boxSize={4} />
-                Generate PDF
+              <Button variant="outline" borderColor={RED} color={RED} bg="white" h="40px" px={5} borderRadius="6px" onClick={() => setIsPrintOpen(true)}>
+                <Icon as={LuPrinter} mr={2} /> Print
+              </Button>
+              <Button variant="outline" borderColor={RED} color={RED} bg="white" h="40px" px={5} borderRadius="6px" onClick={() => setIsPrintOpen(true)}>
+                <Icon as={LuFileText} mr={2} /> Generate PDF
               </Button>
             </HStack>
           </Flex>
 
-          <Box
-            border={`1px solid ${BORDER}`}
-            borderRadius="8px"
-            p={4}
-            bg="white"
-          >
+          <Box bg="white" borderRadius="8px" border="1px solid" borderColor={BORDER} p={4}>
+            
             <ReportFilterBar
-              search={search}
-              setSearch={setSearch}
-              dateFrom={dateFrom}
-              setDateFrom={setDateFrom}
-              dateTo={dateTo}
-              setDateTo={setDateTo}
-              onReset={reset}
+              search={search} setSearch={setSearch}
+              dateFrom={dateFrom} setDateFrom={setDateFrom}
+              dateTo={dateTo} setDateTo={setDateTo}
+              onReset={() => { setSearch(""); setDateFrom(todayISO()); setDateTo(todayISO()); }}
             />
 
-            <ReportLedgerTable
-              rows={rows}
-              isLoading={isLoading}
-              totals={totals}
-              showTotals
-            />
-
-            {!isLoading && rows.length === 0 && isToday && (
-              <Box
-                mt={4}
-                p={3}
-                borderRadius="6px"
-                bg="#FFF8E6"
-                border="1px solid #F5D97A"
-              >
-                <Text fontSize="12px" color="#8A6D00">
-                  No transactions were posted today. Pick a different
-                  date range to see older entries.
-                </Text>
+            <Box overflowX="auto" mt={4} border="1px solid" borderColor={BORDER} borderRadius="6px">
+              <Box as="table" width="100%" borderCollapse="collapse">
+                <Box as="thead" bg="#F8F9FA">
+                  <Box as="tr">
+                    <Box as="th" textAlign="left" px={4} py={3} fontSize="12px" color={DARK} borderBottom="1px solid" borderColor={BORDER}>Date</Box>
+                    <Box as="th" textAlign="left" px={4} py={3} fontSize="12px" color={DARK} borderBottom="1px solid" borderColor={BORDER}>Voucher No.</Box>
+                    <Box as="th" textAlign="left" px={4} py={3} fontSize="12px" color={DARK} borderBottom="1px solid" borderColor={BORDER}>Voucher Type</Box>
+                    <Box as="th" textAlign="left" px={4} py={3} fontSize="12px" color={DARK} borderBottom="1px solid" borderColor={BORDER}>Particulars</Box>
+                    <Box as="th" textAlign="left" px={4} py={3} fontSize="12px" color={DARK} borderBottom="1px solid" borderColor={BORDER}>Cash / Bank Account</Box>
+                    <Box as="th" textAlign="right" px={4} py={3} fontSize="12px" color={DARK} borderBottom="1px solid" borderColor={BORDER}>Debit (₹)</Box>
+                    <Box as="th" textAlign="right" px={4} py={3} fontSize="12px" color={DARK} borderBottom="1px solid" borderColor={BORDER}>Credit (₹)</Box>
+                  </Box>
+                </Box>
+                <Box as="tbody">
+                  {isLoading ? (
+                    <Box as="tr"><Box as="td" colSpan={7} textAlign="center" py={6} fontSize="13px">Loading...</Box></Box>
+                  ) : paginatedRows.length === 0 ? (
+                    <Box as="tr"><Box as="td" colSpan={7} textAlign="center" py={6} fontSize="13px" color={MUTED}>No records found for this period.</Box></Box>
+                  ) : (
+                    paginatedRows.map((r) => (
+                      <Box as="tr" key={r.key} _hover={{ bg: "#F8F9FA" }} borderBottom="1px solid" borderColor="#E6EAF0">
+                        <Box as="td" px={4} py={3} fontSize="13px" color={DARK} fontWeight="500">{formatDateDisplay(r.date)}</Box>
+                        <Box as="td" px={4} py={3} fontSize="13px" color={BLUE}>{r.voucherNo}</Box>
+                        <Box as="td" px={4} py={3} fontSize="13px">
+                          <Badge colorScheme={r.voucherType === "Receipt" ? "green" : r.voucherType === "Payment" ? "red" : "blue"} variant="subtle">
+                            {r.voucherType}
+                          </Badge>
+                        </Box>
+                        <Box as="td" px={4} py={3} fontSize="13px">
+                          <Text>{r.particulars}</Text>
+                          {r.memberName && <Text fontSize="11px" color={MUTED}>{r.memberName}</Text>}
+                        </Box>
+                        <Box as="td" px={4} py={3} fontSize="13px">{r.cashBankAccount}</Box>
+                        <Box as="td" px={4} py={3} fontSize="13px" textAlign="right" color={r.direction === "DEBIT" ? "#B71C1C" : "transparent"} fontWeight={r.direction === "DEBIT" ? "700" : "400"}>
+                          {r.direction === "DEBIT" ? `₹${fmt(r.amount)}` : "—"}
+                        </Box>
+                        <Box as="td" px={4} py={3} fontSize="13px" textAlign="right" color={r.direction === "CREDIT" ? "#2E7D32" : "transparent"} fontWeight={r.direction === "CREDIT" ? "700" : "400"}>
+                          {r.direction === "CREDIT" ? `₹${fmt(r.amount)}` : "—"}
+                        </Box>
+                      </Box>
+                    ))
+                  )}
+                  
+                  {!isLoading && paginatedRows.length > 0 && (
+                    <Box as="tr" bg="#F8F9FA" fontWeight="bold">
+                      <Box as="td" colSpan={5} textAlign="right" px={4} py={3} fontSize="13px" color={DARK}>Total</Box>
+                      <Box as="td" textAlign="right" px={4} py={3} fontSize="13px" color="#B71C1C">₹{fmt(totals.debit)}</Box>
+                      <Box as="td" textAlign="right" px={4} py={3} fontSize="13px" color="#2E7D32">₹{fmt(totals.credit)}</Box>
+                    </Box>
+                  )}
+                </Box>
               </Box>
-            )}
+            </Box>
 
-            {!isLoading && (
-              <Flex
-                justify="flex-end"
-                align="center"
-                mt={4}
-                pt={3}
-                borderTop={`1px solid ${BORDER}`}
-              >
-                <HStack gap={4}>
-                  <Text fontSize="13px" fontWeight="700" color={MUTED} letterSpacing="0.4px">
-                    CASH &amp; BANK BALANCE AS OF{" "}
-                    {formatDateDisplay(dateTo)}
-                  </Text>
-                  <Text fontSize="18px" fontWeight="800" color={DARK}>
-                    ₹{fmt(closingBalance)}
-                  </Text>
-                </HStack>
-              </Flex>
-            )}
-
-            <Text fontSize="11px" color={MUTED} mt={2} textAlign="right">
-              Showing {rows.length} entries
-            </Text>
+            <Flex justify="space-between" align="center" mt={4}>
+              <Text fontSize="12px" color={MUTED}>
+                Showing {rows.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}–{Math.min(currentPage * pageSize, rows.length)} of {rows.length} records
+              </Text>
+              
+              <HStack gap={1}>
+                <Button size="xs" variant="ghost" color={BLUE} disabled={currentPage === 1} onClick={() => setCurrentPage(c => c - 1)}>
+                  <Icon as={LuChevronLeft} /> Previous
+                </Button>
+                {Array.from({ length: totalPages }).map((_, i) => (
+                  <Button 
+                    key={i} size="xs" minW="24px" h="24px" p={0} 
+                    bg={currentPage === i + 1 ? RED : "transparent"} 
+                    color={currentPage === i + 1 ? "white" : DARK}
+                    onClick={() => setCurrentPage(i + 1)}
+                  >
+                    {i + 1}
+                  </Button>
+                ))}
+                <Button size="xs" variant="ghost" color={BLUE} disabled={currentPage === totalPages} onClick={() => setCurrentPage(c => c + 1)}>
+                  Next <Icon as={LuChevronRight} />
+                </Button>
+              </HStack>
+            </Flex>
           </Box>
+
+          <Box mt={6} bg="white" border="1px solid" borderColor={BORDER} borderRadius="8px" p={4}>
+            <Flex justify="flex-end" align="center" gap={4}>
+              <Text fontSize="13px" fontWeight="700" color={MUTED} letterSpacing="0.5px">
+                CLOSING BALANCE AS OF {formatDateDisplay(dateTo)}
+              </Text>
+              <Text fontSize="24px" fontWeight="800" color={DARK}>
+                ₹{fmt(closingBalance)}
+              </Text>
+            </Flex>
+          </Box>
+
         </Box>
 
         <Footer />
@@ -687,22 +381,12 @@ const DayBookPage = () => {
         isOpen={isPrintOpen}
         onClose={() => setIsPrintOpen(false)}
         title="DAY BOOK"
-        subtitle={
-          dateFrom === dateTo
-            ? `For the day ${dateFrom}`
-            : `From ${dateFrom || "—"} to ${dateTo || "—"}`
-        }
+        subtitle={`From ${dateFrom} to ${dateTo}`}
         church={church}
-        pdfFileName={`DayBook_${dateFrom || "from"}_${dateTo || "to"}.pdf`}
+        pdfFileName={`DayBook_${dateFrom}.pdf`}
         defaultOrientation="portrait"
       >
-        <DayBookPrintTable
-          rows={rows}
-          totals={totals}
-          closingBalance={closingBalance}
-          dateFrom={dateFrom}
-          dateTo={dateTo}
-        />
+        <DayBookPrintTable rows={rows} totals={totals} closingBalance={closingBalance} dateFrom={dateFrom} dateTo={dateTo} />
       </ChurchPrintModal>
     </>
   );

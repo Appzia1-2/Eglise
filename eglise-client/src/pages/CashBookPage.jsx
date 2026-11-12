@@ -2,33 +2,54 @@
 
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Box, Button, Flex, Heading, HStack, Icon, Text } from "@chakra-ui/react";
-import { LuPrinter, LuFileText } from "react-icons/lu";
+import {
+  Box,
+  Button,
+  Flex,
+  Heading,
+  HStack,
+  Icon,
+  Text,
+  Badge,
+} from "@chakra-ui/react";
+import { LuPrinter, LuFileText, LuArrowLeft } from "react-icons/lu";
 
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import ReportFilterBar from "../components/ReportFilterBar";
-import ReportLedgerTable from "../components/ReportLedgerTable";
 import ChurchPrintModal from "../components/ChurchPrintModal";
 
 import { toaster } from "../components/ui/toaster";
 import { listLedgerEntries, getMyChurch } from "../api/registryServices";
 
-const PRIMARY_MAROON = "var(--primary-maroon)";
 const RED = "#D7193F";
 const DARK = "#182338";
 const MUTED = "#60708C";
 const BORDER = "#DCE2EA";
+const BLUE = "#1A73E8";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const firstDayOfMonthISO = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 };
+
 const toNumber = (v) => {
   if (v === null || v === undefined || v === "") return 0;
   const n = Number(String(v).replace(/[₹,\s]/g, ""));
   return isNaN(n) ? 0 : n;
+};
+
+const fmt = (n) =>
+  Number(n || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+const formatDateDisplay = (dateStr) => {
+  if (!dateStr) return "—";
+  const [y, m, d] = dateStr.split("-");
+  return `${d}/${m}/${y}`;
 };
 
 const isCashLedger = (name) => String(name || "").trim().toLowerCase() === "cash in hand";
@@ -62,26 +83,21 @@ const groupLedgerEntries = (entries, book = "cash") => {
     if (isCashOrBankLedger(e.ledger_name)) {
       const matchesBook = (book === "bank" && isBankLedger(e.ledger_name)) || (book === "cash" && isCashLedger(e.ledger_name));
       
-      // ✅ FIX: Prevent double-naming in Contra vouchers
       if (matchesBook || !g.cashBankAccount) {
         if (!g.cashBankAccount) {
           g.cashBankAccount = e.ledger_name || "";
           g.amount = amt;
-          // Rely strictly on entry_type for direction (Dr = Money In, Cr = Money Out)
           g.direction = e.entry_type === "DEBIT" ? "CREDIT" : "DEBIT"; 
         } else if (matchesBook) {
-          // If we already have a cash/bank ledger but this one matches the book better
           g.cashBankAccount = e.ledger_name || "";
           g.amount = amt;
           g.direction = e.entry_type === "DEBIT" ? "CREDIT" : "DEBIT";
         } else {
-          // If the Cash/Bank column is already filled, this must be the other leg of a Contra
           if (!g.particulars) {
             g.particulars = e.ledger_name || "";
           }
         }
       } else {
-        // Doesn't match the book but is a cash/bank ledger
         if (!g.particulars) g.particulars = e.ledger_name || "";
       }
     } else {
@@ -118,8 +134,10 @@ const computeRunningBalances = (rowsAscending, openingBalance) => {
   });
 };
 
+// ============================================================
+// PRINT TABLE
+// ============================================================
 const CashBookPrintTable = ({ rows, totals, openingBalance }) => {
-  const fmt = (n) => Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const thStyle = { border: "1px solid #F0C2C2", padding: "10px 8px", background: "#FCEAEC", color: "#8B1A1A", fontWeight: "bold", fontSize: "13px", fontFamily: "'Georgia', serif", textAlign: "left" };
   const tdStyle = { border: "1px solid #F0C2C2", padding: "10px 8px", fontSize: "13px", color: "#333", fontFamily: "'Georgia', serif", verticalAlign: "top" };
   const numStyle = { ...tdStyle, textAlign: "right" };
@@ -133,38 +151,34 @@ const CashBookPrintTable = ({ rows, totals, openingBalance }) => {
           <tr>
             <th style={thStyle}>Date</th>
             <th style={thStyle}>Voucher Number</th>
-            <th style={thStyle}>Particulars</th>
-            <th style={thStyle}>Cash / Bank Account</th>
+            <th style={thStyle}>Voucher Type</th>
+            <th style={thStyle}>Ledger Account</th>
             <th style={{ ...thStyle, textAlign: "right" }}>Credit (₹)</th>
             <th style={{ ...thStyle, textAlign: "right" }}>Debit (₹)</th>
-            <th style={{ ...thStyle, textAlign: "right" }}>Balance (₹)</th>
           </tr>
         </thead>
         <tbody>
           <tr style={{ background: "#FFF5F5" }}>
             <td colSpan={5} style={{ ...tdStyle, fontWeight: "bold", color: "#8B1A1A" }}>Opening Balance</td>
-            <td style={{ ...numStyle, color: "#8B1A1A" }}>—</td>
             <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>₹{fmt(openingBalance)}</td>
           </tr>
           {rows.map((r, i) => (
             <tr key={r.key} style={{ background: i % 2 === 0 ? "#FFFFFF" : "#FFF9F9" }}>
-              <td style={tdStyle}>{r.date}</td>
+              <td style={tdStyle}>{formatDateDisplay(r.date)}</td>
               <td style={tdStyle}>{r.voucherNo}</td>
+              <td style={tdStyle}>{r.voucherType}</td>
               <td style={{ ...tdStyle, color: "#8B1A1A" }}>{r.particulars}</td>
-              <td style={tdStyle}>{r.cashBankAccount}</td>
               <td style={{ ...numStyle, color: "#2E7D32" }}>{r.direction === "CREDIT" ? `₹${fmt(r.amount)}` : "—"}</td>
               <td style={{ ...numStyle, color: "#B71C1C" }}>{r.direction === "DEBIT" ? `₹${fmt(r.amount)}` : "—"}</td>
-              <td style={{ ...numStyle, fontWeight: "600" }}>₹{fmt(r.running_balance)}</td>
             </tr>
           ))}
           <tr style={{ background: "#FCEAEC", borderTop: "1px solid #F0C2C2" }}>
             <td colSpan={4} style={{ ...tdStyle, textAlign: "right", fontWeight: "bold", color: "#8B1A1A" }}>Total</td>
             <td style={{ ...numStyle, fontWeight: "bold", color: "#2E7D32" }}>₹{fmt(totals.credit)}</td>
             <td style={{ ...numStyle, fontWeight: "bold", color: "#B71C1C" }}>₹{fmt(totals.debit)}</td>
-            <td style={numStyle}>—</td>
           </tr>
           <tr style={{ background: "#FFF5F5" }}>
-            <td colSpan={6} style={{ ...tdStyle, textAlign: "right", fontWeight: "bold", color: "#8B1A1A" }}>Closing Balance</td>
+            <td colSpan={5} style={{ ...tdStyle, textAlign: "right", fontWeight: "bold", color: "#8B1A1A" }}>Closing Balance</td>
             <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>₹{fmt(closingBalance)}</td>
           </tr>
         </tbody>
@@ -173,6 +187,9 @@ const CashBookPrintTable = ({ rows, totals, openingBalance }) => {
   );
 };
 
+// ============================================================
+// MAIN PAGE
+// ============================================================
 const CashBookPage = () => {
   const navigate = useNavigate();
   const [rawEntries, setRawEntries] = useState([]);
@@ -197,9 +214,11 @@ const CashBookPage = () => {
       const params = { book: "cash" };
       if (dateFrom) params.from = dateFrom;
       if (dateTo) params.to = dateTo;
+      
       const res = await listLedgerEntries(params);
       const body = res?.data ?? {};
-      setOpeningBalance(typeof body.opening_balance === "number" ? body.opening_balance : undefined);
+      
+      setOpeningBalance(typeof body.opening_balance === "number" ? body.opening_balance : 0);
       setRawEntries(Array.isArray(body.results) ? body.results : []);
     } catch (err) {
       toaster.create({ title: "Failed to load Cash Book", description: "Please try again.", type: "error" });
@@ -234,41 +253,122 @@ const CashBookPage = () => {
 
   return (
     <>
-      <Box minH="100vh" bg="white" display="flex" flexDirection="column">
+      <Box minH="100vh" bg="#F8F9FA" display="flex" flexDirection="column">
         <Navbar />
-        <Box flex="1" w="100%" px={{ base: 3, md: 4 }} py={{ base: 3, md: 4 }}>
-          <HStack gap={2} mb={2} color={MUTED} fontSize="11px">
-            <Text color={PRIMARY_MAROON} cursor="pointer" onClick={() => navigate("/reports")}>Reports</Text>
+        <Box flex="1" w="100%" px={{ base: 3, md: 6 }} py={{ base: 4, md: 6 }}>
+          
+          <HStack gap={2} mb={4} color={MUTED} fontSize="12px">
+            <Text color={BLUE} cursor="pointer" onClick={() => navigate("/reports")}>Reports</Text>
             <Text>/</Text>
             <Text>Cash Book</Text>
           </HStack>
-          <Flex justify="space-between" align={{ base: "flex-start", md: "center" }} gap={3} mb={3} direction={{ base: "column", md: "row" }}>
+
+          <Flex justify="space-between" align={{ base: "flex-start", md: "center" }} gap={3} mb={6} direction={{ base: "column", md: "row" }}>
             <Box>
-              <Text fontSize="10px" fontWeight="700" color={RED} mb={1}>CASH BOOK REPORT</Text>
-              <Heading color={DARK} fontSize={{ base: "22px", md: "26px" }} mb={1}>Cash Book</Heading>
+              <Text fontSize="12px" fontWeight="700" color={RED} mb={1}>CASH BOOK REPORT</Text>
+              <Heading color={DARK} fontSize="28px" mb={1}>Cash Book</Heading>
+              <Text color={MUTED} fontSize="13px">View all cash transactions for the selected date.</Text>
             </Box>
-            <HStack gap={2}>
-              <Button variant="outline" borderColor="#FF5A7D" color={RED} bg="white" h="38px" px={4} fontSize="12px" borderRadius="6px" onClick={() => setIsPrintOpen(true)} _hover={{ bg: "#FFF0F4" }}>
-                <Icon as={LuPrinter} mr={2} boxSize={4} /> Print
+
+            <HStack gap={3}>
+              <Button variant="outline" borderColor={RED} color={RED} bg="white" h="40px" px={5} borderRadius="6px" onClick={() => navigate("/reports")}>
+                <Icon as={LuArrowLeft} mr={2} /> Back
+              </Button>
+              <Button variant="outline" borderColor={RED} color={RED} bg="white" h="40px" px={5} borderRadius="6px" onClick={() => setIsPrintOpen(true)}>
+                <Icon as={LuPrinter} mr={2} /> Print
+              </Button>
+              <Button variant="outline" borderColor={RED} color={RED} bg="white" h="40px" px={5} borderRadius="6px" onClick={() => setIsPrintOpen(true)}>
+                <Icon as={LuFileText} mr={2} /> Generate PDF
               </Button>
             </HStack>
           </Flex>
-          <Box border={`1px solid ${BORDER}`} borderRadius="8px" p={3} bg="white">
-            <ReportFilterBar search={search} setSearch={setSearch} dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo} onReset={() => { setSearch(""); setDateFrom(firstDayOfMonthISO()); setDateTo(todayISO()); }} />
-            <ReportLedgerTable rows={rows} isLoading={isLoading} totals={totals} showTotals />
-            {!isLoading && (
-              <Flex justify="flex-end" align="center" mt={4} pt={3} borderTop={`1px solid ${BORDER}`}>
-                <HStack gap={3}>
-                  <Text fontSize="13px" fontWeight="700" color={MUTED}>CLOSING BALANCE:</Text>
-                  <Text fontSize="18px" fontWeight="800" color={DARK}>₹{Number(screenClosingBalance).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</Text>
-                </HStack>
-              </Flex>
-            )}
-            <Text fontSize="11px" color={MUTED} mt={2} textAlign="right">Showing {rows.length} entries</Text>
+
+          <Box bg="white" borderRadius="8px" border="1px solid" borderColor={BORDER} p={4}>
+            
+            <ReportFilterBar 
+              search={search} setSearch={setSearch} 
+              dateFrom={dateFrom} setDateFrom={setDateFrom} 
+              dateTo={dateTo} setDateTo={setDateTo} 
+              onReset={() => { setSearch(""); setDateFrom(firstDayOfMonthISO()); setDateTo(todayISO()); }} 
+            />
+
+            <Box overflowX="auto" mt={4} border="1px solid" borderColor={BORDER} borderRadius="6px">
+              <Box as="table" width="100%" borderCollapse="collapse">
+                <Box as="thead" bg="#F8F9FA">
+                  <Box as="tr">
+                    <Box as="th" textAlign="left" px={4} py={3} fontSize="12px" color={DARK} borderBottom="1px solid" borderColor={BORDER}>Date</Box>
+                    <Box as="th" textAlign="left" px={4} py={3} fontSize="12px" color={DARK} borderBottom="1px solid" borderColor={BORDER}>Voucher No.</Box>
+                    <Box as="th" textAlign="left" px={4} py={3} fontSize="12px" color={DARK} borderBottom="1px solid" borderColor={BORDER}>Voucher Type</Box>
+                    <Box as="th" textAlign="left" px={4} py={3} fontSize="12px" color={DARK} borderBottom="1px solid" borderColor={BORDER}>Particulars</Box>
+                    <Box as="th" textAlign="right" px={4} py={3} fontSize="12px" color={DARK} borderBottom="1px solid" borderColor={BORDER}>Credit (₹)</Box>
+                    <Box as="th" textAlign="right" px={4} py={3} fontSize="12px" color={DARK} borderBottom="1px solid" borderColor={BORDER}>Debit (₹)</Box>
+                  </Box>
+                </Box>
+                <Box as="tbody">
+                  
+                  {/* Opening Balance Row */}
+                  <Box as="tr" bg="#FFF5F5" borderBottom="1px solid" borderColor="#E6EAF0">
+                    <Box as="td" colSpan={5} textAlign="right" px={4} py={3} fontSize="13px" color={DARK} fontWeight="700">Opening Balance</Box>
+                    <Box as="td" textAlign="right" px={4} py={3} fontSize="13px" color={DARK} fontWeight="700">₹{fmt(openingBalance)}</Box>
+                  </Box>
+
+                  {isLoading ? (
+                    <Box as="tr"><Box as="td" colSpan={6} textAlign="center" py={6} fontSize="13px">Loading...</Box></Box>
+                  ) : rows.length === 0 ? (
+                    <Box as="tr"><Box as="td" colSpan={6} textAlign="center" py={6} fontSize="13px" color={MUTED}>No records found.</Box></Box>
+                  ) : (
+                    rows.map((r) => (
+                      <Box as="tr" key={r.key} _hover={{ bg: "#F8F9FA" }} borderBottom="1px solid" borderColor="#E6EAF0">
+                        <Box as="td" px={4} py={3} fontSize="13px" color={DARK} fontWeight="500">{formatDateDisplay(r.date)}</Box>
+                        <Box as="td" px={4} py={3} fontSize="13px" color={BLUE}>{r.voucherNo}</Box>
+                        <Box as="td" px={4} py={3} fontSize="13px">
+                          <Badge colorScheme={r.voucherType === "Receipt" ? "green" : r.voucherType === "Payment" ? "red" : "blue"} variant="subtle">
+                            {r.voucherType}
+                          </Badge>
+                        </Box>
+                        <Box as="td" px={4} py={3} fontSize="13px">
+                          <Text>{r.particulars}</Text>
+                        </Box>
+                        <Box as="td" px={4} py={3} fontSize="13px" textAlign="right" color={r.direction === "CREDIT" ? "#2E7D32" : "transparent"} fontWeight={r.direction === "CREDIT" ? "700" : "400"}>
+                          {r.direction === "CREDIT" ? `₹${fmt(r.amount)}` : "—"}
+                        </Box>
+                        <Box as="td" px={4} py={3} fontSize="13px" textAlign="right" color={r.direction === "DEBIT" ? "#B71C1C" : "transparent"} fontWeight={r.direction === "DEBIT" ? "700" : "400"}>
+                          {r.direction === "DEBIT" ? `₹${fmt(r.amount)}` : "—"}
+                        </Box>
+                      </Box>
+                    ))
+                  )}
+                  
+                  {/* Totals Row */}
+                  {!isLoading && rows.length > 0 && (
+                    <Box as="tr" bg="#F8F9FA" fontWeight="bold" borderBottom="1px solid" borderColor="#E6EAF0">
+                      <Box as="td" colSpan={4} textAlign="right" px={4} py={3} fontSize="13px" color={DARK}>Total</Box>
+                      <Box as="td" textAlign="right" px={4} py={3} fontSize="13px" color="#2E7D32">₹{fmt(totals.credit)}</Box>
+                      <Box as="td" textAlign="right" px={4} py={3} fontSize="13px" color="#B71C1C">₹{fmt(totals.debit)}</Box>
+                    </Box>
+                  )}
+
+                  {/* Closing Balance Row */}
+                  {!isLoading && (
+                    <Box as="tr" bg="#FFF5F5" borderTop="1px solid" borderColor={BORDER}>
+                      <Box as="td" colSpan={5} textAlign="right" px={4} py={4} fontSize="14px" color={DARK} fontWeight="800">Closing Balance</Box>
+                      <Box as="td" textAlign="right" px={4} py={4} fontSize="14px" color={DARK} fontWeight="800">₹{fmt(screenClosingBalance)}</Box>
+                    </Box>
+                  )}
+
+                </Box>
+              </Box>
+            </Box>
+
+            <Text fontSize="12px" color={MUTED} mt={4}>
+              Showing {rows.length} records
+            </Text>
+
           </Box>
         </Box>
         <Footer />
       </Box>
+
       <ChurchPrintModal isOpen={isPrintOpen} onClose={() => setIsPrintOpen(false)} title="CASH BOOK" subtitle={`From ${dateFrom} to ${dateTo}`} church={church} pdfFileName={`CashBook_${dateFrom}_${dateTo}.pdf`}>
         <CashBookPrintTable rows={rows} totals={totals} openingBalance={openingBalance} />
       </ChurchPrintModal>

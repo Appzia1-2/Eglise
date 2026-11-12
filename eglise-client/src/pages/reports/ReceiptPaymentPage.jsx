@@ -12,7 +12,7 @@ import ChurchPrintModal from "../../components/ChurchPrintModal";
 import { getReceiptPaymentStatutory, getMyChurch } from "../../api/registryServices";
 
 // ============================================================
-// THEME
+// THEME & CONSTANTS
 // ============================================================
 const PRIMARY_RED = "#D7193F";
 const DARK_RED    = "#A50F2E";
@@ -21,11 +21,16 @@ const SECONDARY   = "#60708C";
 const BORDER      = "#DCE2EA";
 const BLUE        = "#315AB5";
 
+const HATCH_CSS = "repeating-linear-gradient(45deg, #e2e8f0, #e2e8f0 2px, #ffffff 2px, #ffffff 4px)";
+
 // ============================================================
 // HELPERS
 // ============================================================
-const formatAmount = (n) =>
-  "₹" + Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 });
+const formatAmount = (n) => {
+  // Return empty string if value is null (used for parent bank rows)
+  if (n === null || n === undefined) return ""; 
+  return "₹" + Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 });
+};
 
 const today = () => new Date().toISOString().split("T")[0];
 const monthStart = () => {
@@ -49,213 +54,48 @@ const formatDateDisplay = (s) => {
 };
 
 // ============================================================
-// SHARED ROW RENDERER (For Print View)
+// PRINT ROW RENDERER
 // ============================================================
-const StatutoryRow = ({ row, mode = "screen" }) => {
+const StatutoryPrintRow = ({ row }) => {
   const { code, name, depth, row_type, current_year, previous_year, section } = row;
-  const isPrint = mode === "print";
 
   const isSection  = row_type === "section";
   const isSubTotal = row_type === "subtotal";
-  const isTotal    = ["total", "grand_total"].includes(row_type);
+  const isTotal    = row_type === "total" || row_type === "grand_total";
   const isGroup    = row_type === "group";
 
-  const weight =
-    isSection || isTotal || isGroup ? 700 : isSubTotal ? 600 : 400;
+  const weight = (isSection || isGroup || isTotal) ? 700 : isSubTotal ? 600 : 400;
+  const fontStyle = isSubTotal ? "italic" : "normal";
+  const color = (isSection || isGroup) ? "#000000" : (isTotal ? DARK_RED : TEXT_COLOR);
 
-  const color =
-    isSection || isTotal ? DARK_RED :
-    isGroup ? TEXT_COLOR :
-    TEXT_COLOR;
+  const cellBg = (isSection || isGroup) ? HATCH_CSS : (isTotal ? "#F0F4FA" : "white");
 
-  const bg =
-    isSection  ? "#F7F9FB" :
-    isTotal    ? "#F0F4FA" :
-    isSubTotal ? "#F7F9FB" :  
-    "white";
+  const indentMap = { 0: 0, 1: 20, 2: 40, 3: 60, 4: 80, 5: 100 };
+  const indentPx = indentMap[depth] ?? 80;
 
-  const indentPx = [0, 20, 40, 60, 80, 100][depth] ?? 100;
-  const prefix = (isSection && section && !name.startsWith(section)) ? `${section}.  ` : "";
+  // Add proper spacing for groups with letters like "A  Church Receipts"
+  const formattedName = name.replace(/^([A-Z])\s+/, "$1.  ");
 
-  const cellPad = isPrint ? "4px 6px" : "6px 8px";
-  const fontSize = isPrint ? "9.5px" : "11.5px";
-  const fontFam = isPrint ? "Georgia, 'Times New Roman', serif" : "inherit";
-
-  const showAmount = !isSection;
+  const prefix = (isSection && section && !formattedName.startsWith(section)) ? `${section}.  ` : "";
+  
+  // Hides the price for groups and the specific 2450 row
+  const showAmount = !isSection && !isGroup && code !== "2450";
 
   return (
-    <tr style={{ background: bg, borderBottom: `1px solid ${BORDER}` }}>
-      <td
-        style={{
-          width: 60,
-          padding: cellPad,
-          textAlign: "center",
-          borderRight: `1px solid ${BORDER}`,
-          fontSize,
-          fontWeight: weight,
-          color,
-          fontFamily: fontFam,
-        }}
-      >
+    <tr>
+      <td style={{ width: 50, padding: "4px 4px", textAlign: "left", border: `1px solid #000`, borderTop: "none", fontSize: "9px", fontWeight: weight, color, fontStyle, background: cellBg }}>
         {code || ""}
       </td>
-      <td
-        style={{
-          padding: cellPad,
-          paddingLeft: `${indentPx + (isPrint ? 4 : 8)}px`,
-          fontSize,
-          fontWeight: weight,
-          color,
-          fontFamily: fontFam,
-          textTransform: isSection || isTotal ? "uppercase" : "none",
-          letterSpacing: isSection ? "0.4px" : "normal",
-        }}
-      >
-        {prefix}{name}
+      <td style={{ padding: "4px 8px", paddingLeft: `${indentPx + 8}px`, fontSize: "9px", fontWeight: weight, color, textTransform: isSection ? "uppercase" : "none", fontStyle, border: `1px solid #000`, borderTop: "none", borderLeft: "none", background: cellBg }}>
+        {prefix}{formattedName}
       </td>
-      <td
-        style={{
-          width: 130,
-          padding: cellPad,
-          textAlign: "right",
-          fontSize,
-          fontWeight: weight,
-          color,
-          fontFamily: fontFam,
-        }}
-      >
-        {showAmount && row_type !== "group" ? formatAmount(current_year) : ""}
+      <td style={{ width: 90, padding: "4px 8px", textAlign: "right", fontSize: "9px", fontWeight: weight, fontStyle, border: `1px solid #000`, borderTop: "none", borderLeft: "none", background: cellBg }}>
+        {showAmount ? formatAmount(current_year) : ""}
       </td>
-      <td
-        style={{
-          width: 130,
-          padding: cellPad,
-          textAlign: "right",
-          borderLeft: `1px solid ${BORDER}`,
-          fontSize,
-          color: SECONDARY,
-          fontFamily: fontFam,
-        }}
-      >
-        {showAmount && row_type !== "group" ? formatAmount(previous_year) : ""}
+      <td style={{ width: 90, padding: "4px 8px", textAlign: "right", fontSize: "9px", color: SECONDARY, fontStyle, border: `1px solid #000`, borderTop: "none", borderLeft: "none", background: cellBg }}>
+        {showAmount ? formatAmount(previous_year) : ""}
       </td>
     </tr>
-  );
-};
-
-// ============================================================
-// SCREEN TWO-COLUMN VIEW (Single Combined Table)
-// ============================================================
-const ScreenStatutory = ({
-  receiptRows,
-  paymentRows,
-  totalReceipts,
-  totalPayments,
-  isBalanced,
-}) => {
-  // Find the longest array to ensure we render every row
-  const maxRows = Math.max(receiptRows.length, paymentRows.length);
-
-  const Header = () => (
-    <tr style={{ background: "#F7F9FB", borderBottom: `1px solid ${BORDER}` }}>
-      <th style={{ padding: "10px 6px", width: 60, borderRight: `1px solid ${BORDER}`, fontSize: "12px", textAlign: "center" }}>Code</th>
-      <th style={{ padding: "10px 6px", textAlign: "left", fontSize: "12px", width: "35%" }}>RECEIPTS</th>
-      <th style={{ padding: "10px 6px", textAlign: "right", width: 120, fontSize: "12px" }}>Current (₹)</th>
-      <th style={{ padding: "10px 6px", textAlign: "right", width: 120, borderRight: `2px solid ${BORDER}`, fontSize: "12px" }}>Previous (₹)</th>
-      
-      <th style={{ padding: "10px 6px", width: 60, borderRight: `1px solid ${BORDER}`, fontSize: "12px", textAlign: "center" }}>Code</th>
-      <th style={{ padding: "10px 6px", textAlign: "left", fontSize: "12px", width: "35%" }}>PAYMENTS</th>
-      <th style={{ padding: "10px 6px", textAlign: "right", width: 120, fontSize: "12px" }}>Current (₹)</th>
-      <th style={{ padding: "10px 6px", textAlign: "right", width: 120, fontSize: "12px" }}>Previous (₹)</th>
-    </tr>
-  );
-
-  const CombinedRow = ({ receipt, payment }) => {
-    const getStyle = (row) => {
-      if (!row) return { background: "white" };
-      const isSection = row.row_type === "section";
-      const isTotal = ["total", "grand_total"].includes(row.row_type);
-      const isSubTotal = row.row_type === "subtotal";
-      const isGroup = row.row_type === "group";
-      
-      return {
-        background: isSection ? "#F7F9FB" : isTotal ? "#F0F4FA" : isSubTotal ? "#F7F9FB" : "white",
-        fontWeight: isSection || isTotal || isGroup ? 700 : isSubTotal ? 600 : 400,
-        color: isSection || isTotal ? DARK_RED : TEXT_COLOR,
-      };
-    };
-
-    const rStyle = getStyle(receipt);
-    const pStyle = getStyle(payment);
-
-    const renderSide = (row, style, isPaymentSide = false) => {
-      if (!row) {
-        // Empty cells for alignment
-        return (
-          <>
-            <td style={{ borderRight: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}` }}></td>
-            <td style={{ borderBottom: `1px solid ${BORDER}` }}></td>
-            <td style={{ borderBottom: `1px solid ${BORDER}` }}></td>
-            <td style={{ borderRight: isPaymentSide ? "none" : `2px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}` }}></td>
-          </>
-        );
-      }
-      
-      const indentPx = [0, 20, 40, 60, 80, 100][row.depth] ?? 100;
-      const prefix = (row.row_type === "section" && row.section && !row.name.startsWith(row.section)) ? `${row.section}.  ` : "";
-      const showAmount = row.row_type !== "section" && row.row_type !== "group";
-
-      return (
-        <>
-          <td style={{ width: 60, padding: "6px 8px", textAlign: "center", borderRight: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}`, fontSize: "11.5px", ...style }}>
-            {row.code || ""}
-          </td>
-          <td style={{ padding: "6px 8px", paddingLeft: `${indentPx + 8}px`, borderBottom: `1px solid ${BORDER}`, fontSize: "11.5px", textTransform: row.row_type === "section" || row.row_type === "total" ? "uppercase" : "none", ...style }}>
-            {prefix}{row.name}
-          </td>
-          <td style={{ width: 120, padding: "6px 8px", textAlign: "right", borderBottom: `1px solid ${BORDER}`, fontSize: "11.5px", ...style }}>
-            {showAmount ? formatAmount(row.current_year) : ""}
-          </td>
-          <td style={{ width: 120, padding: "6px 8px", textAlign: "right", borderLeft: `1px solid ${BORDER}`, borderRight: isPaymentSide ? "none" : `2px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}`, fontSize: "11.5px", color: SECONDARY, ...style }}>
-            {showAmount ? formatAmount(row.previous_year) : ""}
-          </td>
-        </>
-      );
-    };
-
-    return (
-      <tr>
-        {renderSide(receipt, rStyle, false)}
-        {renderSide(payment, pStyle, true)}
-      </tr>
-    );
-  };
-
-  return (
-    <Box border={`1px solid ${BORDER}`} borderRadius="10px" overflowX="auto" background="white" mb={4}>
-      <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1000px" }}>
-        <thead><Header /></thead>
-        <tbody>
-          {/* Loop through max rows to render both sides simultaneously */}
-          {Array.from({ length: maxRows }).map((_, i) => (
-            <CombinedRow key={i} receipt={receiptRows[i]} payment={paymentRows[i]} />
-          ))}
-          
-          {/* Grand Total Row */}
-          <tr style={{ background: "#F0F4FA", borderTop: `2px solid ${BORDER}`, borderBottom: `2px solid ${BORDER}` }}>
-            <td style={{ borderRight: `1px solid ${BORDER}` }} />
-            <td style={{ padding: "10px", fontWeight: 700, color: DARK_RED, fontSize: "12px" }}>TOTAL</td>
-            <td style={{ padding: "10px", textAlign: "right", fontWeight: 700, color: DARK_RED, fontSize: "12px" }}>{formatAmount(totalReceipts)}</td>
-            <td style={{ padding: "10px", textAlign: "right", borderLeft: `1px solid ${BORDER}`, borderRight: `2px solid ${BORDER}`, fontSize: "12px" }}>{formatAmount(0)}</td>
-
-            <td style={{ borderRight: `1px solid ${BORDER}` }} />
-            <td style={{ padding: "10px", fontWeight: 700, color: DARK_RED, fontSize: "12px" }}>TOTAL</td>
-            <td style={{ padding: "10px", textAlign: "right", fontWeight: 700, color: DARK_RED, fontSize: "12px" }}>{formatAmount(totalPayments)}</td>
-            <td style={{ padding: "10px", textAlign: "right", borderLeft: `1px solid ${BORDER}`, fontSize: "12px" }}>{formatAmount(0)}</td>
-          </tr>
-        </tbody>
-      </table>
-    </Box>
   );
 };
 
@@ -268,116 +108,157 @@ const PrintStatutory = ({
   totalReceipts,
   totalPayments,
   dateTo,
+  church,
 }) => {
   const Header = ({ label }) => (
-    <tr style={{ background: "#F7F9FB", borderTop: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}` }}>
-      <th style={{ padding: "4px 6px", width: 55, borderRight: `1px solid ${BORDER}`, textAlign: "center" }}>Code</th>
-      <th style={{ padding: "4px 6px", textAlign: "left" }}>{label}</th>
-      <th style={{ padding: "4px 6px", textAlign: "right", borderLeft: `1px solid ${BORDER}` }}>Current (Rs.)</th>
-      <th style={{ padding: "4px 6px", textAlign: "right", borderLeft: `1px solid ${BORDER}` }}>Previous (Rs.)</th>
+    <tr style={{ background: "#FFFFFF", borderTop: `2px solid #000`, borderBottom: `1px solid #000` }}>
+      <th style={{ padding: "6px 4px", width: 50, borderRight: `1px solid #000`, textAlign: "left", fontSize: "10px" }}>Code</th>
+      <th style={{ padding: "6px 8px", textAlign: "left", fontSize: "10px" }}>{label}</th>
+      <th style={{ padding: "6px 8px", textAlign: "right", borderLeft: `1px solid #000`, fontSize: "10px", width: 90 }}>Current Year<br/><span style={{fontSize: "8px"}}>Rs.</span></th>
+      <th style={{ padding: "6px 8px", textAlign: "right", borderLeft: `1px solid #000`, fontSize: "10px", width: 90 }}>Previous Year<br/><span style={{fontSize: "8px"}}>Rs.</span></th>
     </tr>
   );
 
   const TotalRow = (label, amt) => (
-    <tr style={{ background: "#F0F4FA", borderTop: `2px solid ${BORDER}`, borderBottom: `2px solid ${BORDER}` }}>
-      <td style={{ borderRight: `1px solid ${BORDER}` }} />
-      <td style={{ padding: "6px", fontWeight: 700, color: DARK_RED }}>{label}</td>
-      <td style={{ padding: "6px", textAlign: "right", fontWeight: 700, color: DARK_RED }}>{formatAmount(amt)}</td>
-      <td style={{ padding: "6px", textAlign: "right", borderLeft: `1px solid ${BORDER}` }}>{formatAmount(0)}</td>
+    <tr style={{ background: "#F0F4FA", borderTop: `1px solid #000`, borderBottom: `2px solid #000` }}>
+      <td style={{ borderRight: `1px solid #000` }} />
+      <td style={{ padding: "6px 8px", fontWeight: 700, color: DARK_RED, fontSize: "10px", textAlign: "right" }}>{label}</td>
+      <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 700, color: DARK_RED, fontSize: "10px", borderLeft: `1px solid #000` }}>{formatAmount(amt)}</td>
+      <td style={{ padding: "6px 8px", textAlign: "right", borderLeft: `1px solid #000`, fontSize: "10px" }}>{formatAmount(0)}</td>
     </tr>
   );
 
-  // Calculate the net difference for the print view
-  const diff = totalReceipts - totalPayments;
-
   return (
     <div style={{ fontFamily: "Georgia, 'Times New Roman', serif", width: "100%", fontSize: "10px" }}>
-      <div style={{ textAlign: "center", marginBottom: 14 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: DARK_RED, letterSpacing: "0.5px" }}>
-          RECEIPTS AND PAYMENT ACCOUNT
-        </div>
-        <div style={{ fontSize: 11, color: SECONDARY }}>
-          FOR THE YEAR ENDED {dateTo?.toUpperCase()}
+      <div style={{ textAlign: "center", marginBottom: 16 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase" }}>{church.name || "CHURCH NAME"}</div>
+        <div style={{ fontSize: 11 }}>{church.address || "Church Address"}</div>
+        <div style={{ fontSize: 11 }}>{church.diocese ? `Under Diocese of ${church.diocese}` : ""}</div>
+        <div style={{ fontSize: 13, fontWeight: 700, marginTop: 8, letterSpacing: "0.5px", textDecoration: "underline" }}>
+          RECEIPTS AND PAYMENT ACCOUNT FOR THE YEAR ENDED {dateTo?.toUpperCase()}
         </div>
       </div>
 
-      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
-        <colgroup>
-          <col style={{ width: 55 }} />
-          <col style={{ width: "auto" }} />
-          <col style={{ width: 110 }} />
-          <col style={{ width: 110 }} />
-        </colgroup>
+      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", border: `1px solid #000` }}>
+        <colgroup><col style={{ width: 50 }} /><col style={{ width: "auto" }} /><col style={{ width: 90 }} /><col style={{ width: 90 }} /></colgroup>
         <thead><Header label="RECEIPTS" /></thead>
         <tbody>
-          {receiptRows.map((r, i) => (
-            <StatutoryRow key={`pr-${i}`} row={r} mode="print" />
-          ))}
-          {TotalRow("TOTAL RECEIPTS (I+II+III+IV)", totalReceipts)}
+          {receiptRows.map((r, i) => <StatutoryPrintRow key={`pr-${i}`} row={r} />)}
+          {/* ✅ Removed the extra TotalRow here */}
         </tbody>
       </table>
 
-      <div style={{ height: 16 }} />
+      <div style={{ height: 20 }} />
 
-      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
-        <colgroup>
-          <col style={{ width: 55 }} />
-          <col style={{ width: "auto" }} />
-          <col style={{ width: 110 }} />
-          <col style={{ width: 110 }} />
-        </colgroup>
+      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", border: `1px solid #000` }}>
+        <colgroup><col style={{ width: 50 }} /><col style={{ width: "auto" }} /><col style={{ width: 90 }} /><col style={{ width: 90 }} /></colgroup>
         <thead><Header label="PAYMENTS" /></thead>
         <tbody>
-          {paymentRows.map((r, i) => (
-            <StatutoryRow key={`pp-${i}`} row={r} mode="print" />
-          ))}
-          {TotalRow("TOTAL PAYMENTS (V+VI+VII+VIII)", totalPayments)}
+          {paymentRows.map((r, i) => <StatutoryPrintRow key={`pp-${i}`} row={r} />)}
+          {/* ✅ Removed the extra TotalRow here */}
         </tbody>
       </table>
 
-      {/* ✅ ADDED: Net Closing Balance Row for Print */}
-      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", marginTop: "8px" }}>
-        <colgroup>
-          <col style={{ width: 55 }} />
-          <col style={{ width: "auto" }} />
-          <col style={{ width: 110 }} />
-          <col style={{ width: 110 }} />
-        </colgroup>
-        <tbody>
-          <tr style={{ background: "#F0F4FA", borderTop: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}` }}>
-            <td style={{ borderRight: `1px solid ${BORDER}` }} />
-            <td style={{ padding: "6px", fontWeight: 700, color: DARK_RED }}>
-              NET CLOSING BALANCE
-            </td>
-            <td style={{ padding: "6px", textAlign: "right", fontWeight: 700, color: DARK_RED }}>
-              {formatAmount(Math.abs(diff))} {diff >= 0 ? "(Dr)" : "(Cr)"}
-            </td>
-            <td style={{ padding: "6px", textAlign: "right", borderLeft: `1px solid ${BORDER}` }}></td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div
-        className="print-footer-block"
-        style={{
-          marginTop: 30,
-          display: "flex",
-          justifyContent: "space-between",
-          fontSize: "11px",
-        }}
-      >
-        <div>
-          <div>Place: ______________________</div>
-          <div style={{ marginTop: 8 }}>Date: ______________________</div>
-        </div>
+      <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
+        <div><div>Place: ______________________</div><div style={{ marginTop: 10 }}>Date: ______________________</div></div>
         <div style={{ textAlign: "right" }}>
-          <div>As per our report of even date attached</div>
-          <br /><br />
+          <div>As per our report of even date attached</div><br /><br />
           <div style={{ fontWeight: 700 }}>Vicar</div>
-          <div style={{ fontWeight: 700, marginTop: 6 }}>Trustee</div>
+          <div style={{ fontWeight: 700, marginTop: 8 }}>Trustee</div>
         </div>
       </div>
     </div>
+  );
+};
+
+// ============================================================
+// SCREEN TWO-COLUMN TABLE (SIDE BY SIDE)
+// ============================================================
+const ScreenStatutory = ({ receiptRows, paymentRows }) => {
+
+  const getStyle = (row) => {
+    if (!row) return { background: "white", fontWeight: 400, color: TEXT_COLOR, fontStyle: "normal" };
+
+    const isSection = row.row_type === "section";
+    const isTotal = row.row_type === "total" || row.row_type === "grand_total";
+    const isSubTotal = row.row_type === "subtotal";
+    const isGroup = row.row_type === "group";
+    const isChild = row.row_type === "ledger_child";
+    const applyHatch = isSection || isGroup;
+
+    return {
+      background: applyHatch ? HATCH_CSS : isTotal ? "#F0F4FA" : isSubTotal ? "#F7F9FB" : "white",
+      fontWeight: isSection || isTotal || isGroup ? 700 : isSubTotal ? 600 : 400,
+      color: isSection || isTotal ? DARK_RED : isChild ? SECONDARY : TEXT_COLOR,
+      fontStyle: isSubTotal ? "italic" : "normal"
+    };
+  };
+
+  const renderRow = (row, index, isPaymentSide = false) => {
+    if (!row) return null;
+
+    const style = getStyle(row);
+    const indentMap = { 0: 0, 1: 20, 2: 40, 3: 60, 4: 80, 5: 100 };
+    const indentPx = indentMap[row.depth] ?? 80;
+    
+    const formattedName = row.name.replace(/^([A-Z])\s+/, "$1.  "); 
+    const prefix = (row.row_type === "section" && row.section && !formattedName.startsWith(row.section)) ? `${row.section}.  ` : "";
+
+    // Hides the price for groups and the specific 2450 row
+    const showAmount = row.row_type !== "section" && row.row_type !== "group" && row.code !== "2450";
+
+    return (
+      <tr key={`${row.row_type}-${index}`}>
+        <td style={{ width: 50, padding: "6px 6px", textAlign: "center", borderRight: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}`, fontSize: "11.5px", ...style }}>{row.code || ""}</td>
+        <td style={{ padding: "6px 6px", paddingLeft: `${indentPx + 8}px`, borderBottom: `1px solid ${BORDER}`, fontSize: "11.5px", textTransform: row.row_type === "section" ? "uppercase" : "none", ...style }}>{prefix}{formattedName}</td>
+        <td style={{ width: 100, padding: "6px 6px", textAlign: "right", borderBottom: `1px solid ${BORDER}`, fontSize: "11.5px", ...style }}>{showAmount ? formatAmount(row.current_year) : ""}</td>
+        <td style={{ width: 100, padding: "6px 6px", textAlign: "right", borderLeft: `1px solid ${BORDER}`, borderRight: isPaymentSide ? "none" : `2px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}`, fontSize: "11.5px", ...style, color: row.row_type === "ledger" || row.row_type === "subtotal" || row.row_type === "ledger_child" ? SECONDARY : style.color }}>{showAmount ? formatAmount(row.previous_year) : ""}</td>
+      </tr>
+    );
+  };
+
+  return (
+    <Box border={`1px solid ${BORDER}`} borderRadius="10px" background="white" mb={4} overflow="hidden">
+      <Flex w="100%" minW="1000px">
+
+        {/* LEFT SIDE: RECEIPTS */}
+        <Box flex="1" borderRight={`2px solid ${BORDER}`} overflowX="auto">
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: "#F7F9FB", borderBottom: `2px solid ${BORDER}` }}>
+                <th style={{ padding: "10px 6px", width: 50, borderRight: `1px solid ${BORDER}`, fontSize: "12px", textAlign: "center" }}>Code</th>
+                <th style={{ padding: "10px 6px", textAlign: "left", fontSize: "12px" }}>RECEIPTS</th>
+                <th style={{ padding: "10px 6px", textAlign: "right", width: 100, fontSize: "12px" }}>Current (₹)</th>
+                <th style={{ padding: "10px 6px", textAlign: "right", width: 100, borderRight: `1px solid ${BORDER}`, fontSize: "12px" }}>Previous (₹)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {receiptRows.map((r, i) => renderRow(r, i, false))}
+              {/* ✅ Removed the hardcoded TOTAL row here */}
+            </tbody>
+          </table>
+        </Box>
+
+        {/* RIGHT SIDE: PAYMENTS */}
+        <Box flex="1" overflowX="auto">
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: "#F7F9FB", borderBottom: `2px solid ${BORDER}` }}>
+                <th style={{ padding: "10px 6px", width: 50, borderRight: `1px solid ${BORDER}`, fontSize: "12px", textAlign: "center" }}>Code</th>
+                <th style={{ padding: "10px 6px", textAlign: "left", fontSize: "12px" }}>PAYMENTS</th>
+                <th style={{ padding: "10px 6px", textAlign: "right", width: 100, fontSize: "12px" }}>Current (₹)</th>
+                <th style={{ padding: "10px 6px", textAlign: "right", width: 100, fontSize: "12px" }}>Previous (₹)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paymentRows.map((r, i) => renderRow(r, i, true))}
+              {/* ✅ Removed the hardcoded TOTAL row here */}
+            </tbody>
+          </table>
+        </Box>
+
+      </Flex>
+    </Box>
   );
 };
 
@@ -391,7 +272,6 @@ const ReceiptPaymentPage = () => {
   const [dateTo, setDateTo]     = useState(today());
   const [prevFrom, setPrevFrom] = useState(lastYearMonthStart());
   const [prevTo, setPrevTo]     = useState(lastYearToday());
-  const [displayMode, setDisplayMode] = useState("Detailed");
   const [data, setData]         = useState(null);
   const [loading, setLoading]   = useState(false);
   const [pageError, setPageError] = useState("");
@@ -436,12 +316,7 @@ const ReceiptPaymentPage = () => {
   const paymentRows = data?.payments || [];
   const totalReceipts = data?.total_receipts || 0;
   const totalPayments = data?.total_payments || 0;
-  const isBalanced = data?.is_balanced ?? true;
-
   const hasData = receiptRows.length > 0 || paymentRows.length > 0;
-
-  // Calculate difference for the bottom summary
-  const diff = totalReceipts - totalPayments;
 
   return (
     <Box minH="100vh" bg="white" display="flex" flexDirection="column">
@@ -467,7 +342,7 @@ const ReceiptPaymentPage = () => {
               borderColor={PRIMARY_RED}
               color={PRIMARY_RED}
               onClick={() => setIsPrintOpen(true)}
-              isDisabled={!hasData}
+              disabled={!hasData}
             >
               Print
             </Button>
@@ -499,13 +374,6 @@ const ReceiptPaymentPage = () => {
               <Text fontSize="10px" fontWeight="600" color={TEXT_COLOR} mb={1}>Previous — To</Text>
               <Input type="date" value={prevTo} onChange={(e) => setPrevTo(e.target.value)} h="40px" fontSize="12px" />
             </Box>
-            <Box flex="1" minW="160px">
-              <Text fontSize="10px" fontWeight="600" color={TEXT_COLOR} mb={1}>Display Mode</Text>
-              <Box as="select" value={displayMode} onChange={(e) => setDisplayMode(e.target.value)} width="100%" height="40px" fontSize="12px" border={`1px solid ${BORDER}`} borderRadius="6px" px={2}>
-                <option value="Summary">Summary</option>
-                <option value="Detailed">Detailed</option>
-              </Box>
-            </Box>
             <Box>
               <Button h="40px" px={8} bg="white" border={`1px solid ${PRIMARY_RED}`} color={PRIMARY_RED} onClick={fetchData}>
                 Refresh
@@ -535,38 +403,12 @@ const ReceiptPaymentPage = () => {
               <Text fontSize="14px" fontWeight="700" color={TEXT_COLOR} letterSpacing="0.6px">
                 RECEIPTS &amp; PAYMENTS STATEMENT
               </Text>
-              {!isBalanced && (
-                <Text fontSize="11px" color={PRIMARY_RED} mt={1}>
-                  Note: Total Receipts ({formatAmount(totalReceipts)}) ≠ Total Payments ({formatAmount(totalPayments)})
-                </Text>
-              )}
             </Box>
 
             <ScreenStatutory
               receiptRows={receiptRows}
               paymentRows={paymentRows}
-              totalReceipts={totalReceipts}
-              totalPayments={totalPayments}
-              isBalanced={isBalanced}
             />
-
-            {/* ✅ ADDED: Small Closing Balance design at the bottom */}
-            <Flex
-              justify="flex-end"
-              align="center"
-              mt={4}
-              pt={3}
-              borderTop={`1px solid ${BORDER}`}
-            >
-              <HStack gap={3}>
-                <Text fontSize="13px" fontWeight="700" color={SECONDARY} letterSpacing="0.4px">
-                  NET CLOSING BALANCE:
-                </Text>
-                <Text fontSize="18px" fontWeight="800" color={diff >= 0 ? "#2E7D32" : PRIMARY_RED}>
-                  {formatAmount(Math.abs(diff))}
-                </Text>
-              </HStack>
-            </Flex>
           </>
         )}
       </Container>
@@ -588,6 +430,7 @@ const ReceiptPaymentPage = () => {
           totalReceipts={totalReceipts}
           totalPayments={totalPayments}
           dateTo={formatDateDisplay(dateTo)}
+          church={church}
         />
       </ChurchPrintModal>
     </Box>

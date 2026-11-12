@@ -191,8 +191,9 @@ const MENU_DATA = {
         "Bank Book",
         "General Ledger",
         "Member Ledger",
-        "Income Expenditure",
         "Receipt & Payments",
+        "Income Expenditure",
+        
         // "Balance Sheet",
         "Subscription Due List",
         "Donations Register",

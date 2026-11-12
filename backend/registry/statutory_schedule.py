@@ -39,8 +39,7 @@ INCOME_SCHEDULE = [
     ("A", None,   "Sub Total",                                   2, "subtotal",   "Bhandaram"),
 
     ("A", "2110", "Qurbana Income",                              1, "group",      "Qurbana Income"),
-    ("A", None,   "Sub Total",                                   2, "subtotal",   "Qurbana Income"),
-
+   
     ("A", "2120", "Offerings",                                   1, "group",      "Offerings"),
     ("A", "2121", "Church",                                      2, "ledger",     "Church"),
     ("A", "2122", "Kurishinthotti",                              2, "ledger",     "Kurishinthotti"),
@@ -191,13 +190,14 @@ INCOME_SCHEDULE = [
     # =============================================================
     ("K", "2981", "Profit on Sale of Fixed Assets",              0, "ledger",     "Profit on Sale of Fixed Assets"),
 
-    # =============================================================
+        # =============================================================
     # Grand total + balancing
     # =============================================================
     ("",  None,   "TOTAL INCOME (A+B+C+D+E+F+G+H+I+J+K)",        0, "grand_total", None),
     ("L", "2999", "Deficit - Excess of expenditure over income", 0, "adjustment", None),
-    ("",  None,   "TOTAL",                                       0, "grand_total_balanced", None),
-]
+
+]                                     
+
 
 
 EXPENDITURE_SCHEDULE = [
@@ -388,22 +388,27 @@ EXPENDITURE_SCHEDULE = [
     ("",  None,   "TOTAL",                                       0, "grand_total_balanced", None),
 ]
 
+# registry/statutory_schedule.py
+
 RECEIPTS_SCHEDULE_RP = [
     ("I", "Opening Balances", 0, None, False),
     ("1000", "Balance in savings account as per Schedule 1", 1, "BANK_1", False),
     ("1100", "Balance in deposit account as per Schedule 2", 1, "BANK_2", False),
     ("1200", "Balance in other accounts as per schedule 3", 1, "BANK_3", False),
     ("1300", "Cash in hand as per Schedule 4", 1, "Cash in Hand", False),
+    ("", "Total of Opening Balances", 1, "TOTAL_SECTION_I", False),
     
     ("II", "Revenue Receipts", 0, None, False),
-    ("2000", "A Church Receipts", 1, None, True),
+    ("2000", "A  Church Receipts", 1, None, True), 
     
     ("2100", "Bhandaram Collection", 2, None, True),
     ("2101", "Church", 3, "Church", False),
     ("2102", "Kurishinthotti", 3, "Kurishinthotti", False),
     ("2103", "Others (specify)", 3, "Others (specify)", False),
+    ("", "Sub Total", 2, None, False),
     
-    ("2110", "Qurbana Receipts", 2, "Qurbana Income", False),
+    ("2110", "Qurbana Receipts", 2, None, True),
+    
     
     ("2120", "Offerings Received", 2, None, True),
     ("2121", "Church", 3, "Church", False),
@@ -413,6 +418,7 @@ RECEIPTS_SCHEDULE_RP = [
     ("2125", "Birthday Contributions", 3, "Birthday Contributions", False),
     ("2126", "Other offerings", 3, "Other offerings", False),
     ("2127", "Offerings for Ritual Articles", 3, "Offerings for Ritual Articles", False),
+    ("", "Sub Total", 2, None, False),
     
     ("2160", "Receipts for Festivals", 2, None, True),
     ("2161", "July 3rd Festival", 3, "July 3rd Festival", False),
@@ -420,10 +426,12 @@ RECEIPTS_SCHEDULE_RP = [
     ("2163", "Church Festival", 3, "Church Festival", False),
     ("2164", "Parumala Festival", 3, "Parumala Festival", False),
     ("2165", "Others", 3, "Others", False),
+    ("", "Sub Total", 2, None, False),
     
     ("2170", "Receipts for Piligrimage", 2, None, True),
     ("2171", "Parumala", 3, "Parumala", False),
     ("2172", "Others:", 3, "Others:", False),
+    ("", "Sub Total", 2, None, False),
     
     ("2180", "Receipts for Spiritual Organizations", 2, None, True),
     ("2181", "Sunday School", 3, "Sunday school", False),
@@ -434,6 +442,7 @@ RECEIPTS_SCHEDULE_RP = [
     ("2186", "OVBS", 3, "OVBS", False),
     ("2187", "MGOCSM", 3, "MGOCSM", False),
     ("2188", "Other spiritual organisations", 3, "Other spiritual organisations", False),
+    ("", "Sub Total", 2, None, False),
     
     ("2210", "Members Subscriptions", 2, None, True),
     ("2211", "Monthly subscription", 3, "Monthly subscription", False),
@@ -441,11 +450,13 @@ RECEIPTS_SCHEDULE_RP = [
     ("2213", "Outstanding from previous year", 3, "Outstanding from previous year", False),
     ("2214", "Advance for next year", 3, "Advance for next year", False),
     ("2216", "Other subscriptions", 3, "Other subscriptions", False),
+    ("", "Sub Total", 2, None, False),
     
     ("2220", "Income from Church Buildings", 2, None, True),
     ("2221", "Rental income of Parish Hall", 3, None, True),
     ("", "a) GST Applicable Income", 4, "a) GST Applicable Income", False),
     ("", "b) GST not Applicable Income", 4, "b) GST not Applicable Income", False),
+    ("", "Sub Total", 2, None, False),
     
     ("2230", "Miscellaneous income", 2, None, True),
     ("2231", "Income from Publications", 3, "Income from publications", False),
@@ -453,8 +464,11 @@ RECEIPTS_SCHEDULE_RP = [
     ("2233", "Ambulance Charges", 3, "Ambulance Charges", False),
     ("2234", "Receipt from Tomb/Grave", 3, "Tomb charges", False),
     ("2235", "Other Receipts", 3, "Other Receipts", False),
+    ("", "Sub Total", 2, None, False),
     
-    ("2300", "B Donations", 1, None, True),
+    ("", "Total of Church Receipts", 1, "TOTAL_GROUP_2000", False),
+    
+    ("2300", "B  Donations", 1, None, True), 
     ("2301", "General Donations", 2, "General Donations", False),
     ("2302", "House Building Assistance Fund", 2, "House Building Assistance Fund", False),
     ("2303", "Marriage Assistance Fund", 2, "Marriage Assistance Fund", False),
@@ -473,20 +487,27 @@ RECEIPTS_SCHEDULE_RP = [
     ("2316", "Receipt of Agricultural Produces", 2, "Receipt of Agricultural Produces", False),
     ("2317", "Other Donations", 2, "Other Donations", False),
     
-    ("2400", "C Interest income", 1, None, True),
+    ("", "Total Donation Receipts", 1, "TOTAL_GROUP_2300", False),
+    ("", "Total Religious Receipts (A+B)", 1, "TOTAL_SECTION_II_AB", False),
+    
+    
     ("2401", "Bank SB Interest", 2, "Bank SB Interest", False),
     ("2402", "Bank FD Interest", 2, "Bank FD Interest", False),
     ("2403", "Other investment income", 2, "Other investment income", False),
+    ("", "Total of Interest and Income from Investments", 1, "TOTAL_GROUP_2400", False),
     
-    ("2450", "D Agricultural Income", 1, "Agricultural Income", False),
+    ("2450", "D  Agricultural Income", 1, "Agricultural Income", False),
     
-    ("2500", "E Income from Commercial Buildings", 1, None, True),
+    ("2500", "E  Income from Commercial Buildings", 1, None, True),
     ("2501", "Rental income from Commercial Building", 2, None, True),
     ("", "a) GST Applicable Income", 3, "a) GST Applicable Income", False),
     ("", "b) GST not Applicable Income", 3, "b) GST not Applicable Income", False),
+    ("", "Total of Income from Church Commercial Buildings", 1, "TOTAL_GROUP_2500", False),
     
-    ("2600", "F Hospital Collections", 1, "Hospital Collections", False),
-    ("2700", "G School/College Collections", 1, "School/College Collections", False),
+    ("2600", "F  Hospital Collections", 1, "Hospital Collections", False),
+    ("2700", "G  School/College Collections", 1, "School/College Collections", False),
+    
+    ("", "Total of Revenue Receipts (A+B+C+D+E+F+G)", 1, "TOTAL_SECTION_II", False),
     
     ("III", "Inter Church / Unit Accounts", 0, None, False),
     ("2800", "Special collections", 1, None, True),
@@ -499,53 +520,67 @@ RECEIPTS_SCHEDULE_RP = [
     ("2807", "Diocesan day collection", 2, "Diocesan day collection", False),
     ("2808", "Garbo Sunday Collection", 2, "Garbo Sunday Collection", False),
     ("2809", "Other collections", 2, "Other collections", False),
+    ("", "Sub Total", 2, None, False),
     
     ("2900", "Grant and Assistance From Diocese and HO", 1, None, True),
     ("2910", "Grant from Catholicate Office", 2, None, True),
     ("2911", "Capital Expenses", 3, "Capital Expenses", False),
     ("2912", "Grant for Revenue Expenditure", 3, "Grant for Revenue Expenditure", False),
+    ("", "Sub Total", 2, None, False),
+    
     ("2920", "Grant From Diocese", 2, None, True),
     ("2921", "Capital Expenses", 3, "Capital Expenses", False),
     ("2922", "Grant for Revenue Expenditure", 3, "Grant for Revenue Expenditure", False),
     ("2923", "Salary Fund", 3, "Salary Fund", False),
+    ("", "Sub Total", 2, None, False),
+    
+    ("", "Total of Inter Church Receipts", 1, "TOTAL_SECTION_III", False),
     
     ("IV", "Capital Receipts", 0, None, False),
-    ("3000", "A Corpus Donations", 1, None, True),
+    ("3000", "A  Corpus Donations", 1, None, True),
     ("3001", "Building and construction", 2, "Building and construction", False),
     ("3002", "Church articles", 2, "Church articles", False),
     ("3003", "Other donation for capital expenditute", 2, "Other donation for capital expenditute", False),
+    ("", "Total of Corpus Donations", 1, "TOTAL_GROUP_3000", False),
     
-    ("3100", "B Borrowings and Loans", 1, None, True),
+    ("3100", "B  Borrowings and Loans", 1, None, True),
     ("3101", "Loan from Banks", 2, "Loan from Banks", False),
     ("3102", "Loan from Others (Other Than Church Members)", 2, "Loan from Others (Other Than Church Members)", False),
     ("3103", "Loan from Church Members", 2, "Loan from Church Members", False),
+    ("", "Total of Borrowings", 1, "TOTAL_GROUP_3100", False),
     
-    ("3200", "C Advances", 1, None, True),
+    ("3200", "C  Advances", 1, None, True),
     ("3201", "Advance from Diocese (Inter accounts)", 2, "Advance from Diocese (Inter accounts)", False),
     ("3202", "Rent advance (Own property)", 2, "Rent advance (Own property)", False),
     ("3203", "Advances from Trustees", 2, "Advances from Trustees", False),
     ("3204", "Advance from others", 2, "Advance from others", False),
     ("3205", "Deposits/Bonds", 2, "Deposits/Bonds", False),
+    ("", "Total of Advances", 1, "TOTAL_GROUP_3200", False),
     
-    ("3300", "D Liabilities and Payables", 1, None, True),
+    ("3300", "D  Liabilities and Payables", 1, None, True),
     ("3301", "Expenses Payables", 2, "Expenses Payables", False),
     ("3302", "Advances Returned", 2, "Advances Returned", False),
     ("3303", "Other Liabilities", 2, "Other Liabilities", False),
     ("3304", "Rent Deposits", 2, "Rent Deposits", False),
+    ("", "Total of Liabilities and Advances", 1, "TOTAL_GROUP_3300", False),
     
-    ("3350", "E Return of Deposits and Investments", 1, None, True),
+    ("3350", "E  Return of Deposits and Investments", 1, None, True),
     ("3351", "Deposits", 2, "Deposits", False),
     ("3352", "Investments", 2, "Investments", False),
+    ("", "Total of Security Deposits Returned", 1, "TOTAL_GROUP_3350", False),
     
-    ("3400", "F Endowment Receipts", 1, "Endowment Receipts", False),
-    ("3500", "G Sale of Fixed Assets", 1, "Sale of Fixed Assets", False),
+    ("3400", "F  Endowment Receipts", 1, "Endowment Receipts", False),
+    ("3500", "G  Sale of Fixed Assets", 1, "Sale of Fixed Assets", False),
     
-    ("3650", "H Taxes and Refund", 1, None, True),
+    ("3650", "H  Taxes and Refund", 1, None, True),
     ("3651", "Refund of Taxes", 2, "Refund of Taxes", False),
     ("3652", "G S T Collected", 2, "GST Collected", False),
     ("3653", "Collection of TDS Payable (Cr)", 2, "Collection of TDS Payable (Cr)", False),
+    ("", "Total of Taxes and Refund", 1, "TOTAL_GROUP_3650", False),
     
-    ("3700", "I Other Capital Receipts", 1, "Other Capital Receipts", False),
+    ("3700", "I  Other Capital Receipts", 1, "Other Capital Receipts", False),
+    
+    ("", "Total of Capital Receipts (A+B+C+D+E+F+G+H+I)", 1, "TOTAL_SECTION_IV", False),
 ]
 
 
@@ -555,29 +590,38 @@ PAYMENTS_SCHEDULE_RP = [
     ("", "To Malankara Metropolitan", 2, None, True),
     ("4001", "Catholicate Day Collection", 3, "Catholicate Day Collection", False),
     ("4002", "Recceessa", 3, "Recceessa", False),
+    ("", "Sub Total", 3, None, False),
+    
     ("", "To Diocession Office", 2, None, True),
     ("4003", "Diocesan day collection", 3, "Diocesan day collection", False),
     ("4004", "Vivaha Kaimuthu", 3, "Vivaha Kaimuthu", False),
     ("4005", "Hossana Kanikka", 3, "Hossana Kanikka", False),
     ("4006", "Kohene Kanikka", 3, "Kohene Kanikka", False),
     ("4008", "Other Collections", 3, "Other Collections", False),
+    ("", "Sub Total", 3, None, False),
+    
     ("", "To Other Offices", 2, None, True),
     ("4009", "Mission Sunday collection", 3, "Mission Sunday collection", False),
     ("4010", "Sunday school day collection", 3, "Sunday school day collection", False),
     ("4011", "Seminary day collection", 3, "Seminary day collection", False),
     ("4012", "Gerbo Sunday Collection", 3, "Gerbo Sunday Collection", False),
     ("4013", "Other collections", 3, "Other collections", False),
+    ("", "Sub Total", 3, None, False),
     
     ("4030", "Inter Accounts Payments to Diocese", 1, None, True),
     ("4031", "Priest salary Paid to Diocese", 2, "Priest salary Paid to Diocese", False),
     ("4032", "Methrasana Vihitham", 2, "Methrasana Vihitham", False),
+    ("", "Total Inter Accounts Payments", 1, "TOTAL_GROUP_4030", False),
     
     ("4100", "Grant and Assistance (Inter accounts)", 1, None, True),
     ("4102", "Grant to Spiritual Organisations", 2, "Grant to Spiritual Organisations", False),
     ("4103", "Other grants", 2, "Other grants", False),
+    ("", "Sub Total", 2, None, False),
+    
+    ("", "Total of Inter Church Payments", 1, "TOTAL_SECTION_V", False),
     
     ("VI", "Revenue Payments", 0, None, False),
-    ("4200", "A Religious Payments", 1, None, True),
+    ("4200", "A  Religious Payments", 1, None, True),
     ("4201", "Church Expenses", 2, None, True),
     ("4202", "Holy Qurbana Allowances", 3, "Holy Qurbana Allowances", False),
     ("4203", "Church Consumables/ Daily Expenses", 3, "Church Consumables/ Daily Expenses", False),
@@ -591,6 +635,7 @@ PAYMENTS_SCHEDULE_RP = [
     ("4211", "Electricity Charges", 3, "Electricity Charges", False),
     ("4212", "Fuel and Water Charges", 3, "Fuel and Water Charges", False),
     ("4213", "Others", 3, "Others", False),
+    ("", "Sub Total", 2, None, False),
     
     ("4230", "Salary and Allowances", 2, None, True),
     ("4231", "Allowances to Priest", 3, "Salary and allowances to priest", False),
@@ -599,6 +644,7 @@ PAYMENTS_SCHEDULE_RP = [
     ("4234", "Staff welfare fund contribution", 3, "Staff welfare fund contribution", False),
     ("4235", "Allowances to Kapyar", 3, "Allowances to Kapyar", False),
     ("4236", "Honorarium", 3, "Honorarium", False),
+    ("", "Sub Total", 2, None, False),
     
     ("4250", "Miscellaneous Expenses", 2, None, True),
     ("4251", "Wages and Cooly", 3, "Wages and Cooly", False),
@@ -609,6 +655,7 @@ PAYMENTS_SCHEDULE_RP = [
     ("4256", "Tomb Construction", 3, "Tomb Construction", False),
     ("4257", "Vehicle Running and Maintenance Expenses", 3, "Vehicle Running and Maintenance Expenses", False),
     ("4258", "Others", 3, "Others", False),
+    ("", "Sub Total", 2, None, False),
     
     ("4260", "Perunnal expenses", 2, None, True),
     ("4261", "July 3rd Festival", 3, "July 3rd Festival", False),
@@ -617,6 +664,7 @@ PAYMENTS_SCHEDULE_RP = [
     ("4264", "Parumala Festival", 3, "Parumala Festival", False),
     ("4265", "Others", 3, "Others", False),
     ("4266", "Pilgrimage Expenses", 3, "Pilgrimage Expenses", False),
+    ("", "Sub Total", 2, None, False),
     
     ("4270", "Repairs and maintenance", 2, None, True),
     ("4271", "Buildings", 3, "Buildings", False),
@@ -624,6 +672,7 @@ PAYMENTS_SCHEDULE_RP = [
     ("4273", "Computers", 3, "Computers", False),
     ("4274", "Vehicles", 3, "Vehicles", False),
     ("4275", "Others", 3, "Others", False),
+    ("", "Sub Total", 2, None, False),
     
     ("4280", "Other Payments", 2, None, True),
     ("4281", "Publication", 3, "Publication", False),
@@ -631,8 +680,11 @@ PAYMENTS_SCHEDULE_RP = [
     ("4283", "Celebration expenses:", 3, "Celebration expenses:", False),
     ("4284", "Christmas", 3, "Christmas", False),
     ("4285", "Others", 3, "Others", False),
+    ("", "Sub Total", 2, None, False),
     
-    ("4300", "B Charity Payments", 1, None, True),
+    ("", "Total of Religious Payments", 1, "TOTAL_GROUP_4200", False),
+    
+    ("4300", "B  Charity Payments", 1, None, True),
     ("4301", "B1 Spiritual Organisations Expenses", 2, None, True),
     ("4302", "Sunday School", 3, "Sunday School", False),
     ("4303", "Youth Movement", 3, "Youth Movement", False),
@@ -655,24 +707,28 @@ PAYMENTS_SCHEDULE_RP = [
     ("4319", "Gifts and Compliments", 3, "Gifts and Compliments", False),
     ("4320", "Scholarships", 3, "Scholarships", False),
     
-    ("4330", "C Agricultural Expenses", 1, "Agricultural Expenses", False),
+    ("", "Total Charity Payments", 1, "TOTAL_GROUP_4300", False),
     
-    ("4340", "D Taxes and Penalty", 1, None, True),
+    ("4330", "C  Agricultural Expenses", 1, "Agricultural Expenses", False),
+    
+    ("4340", "D  Taxes and Penalty", 1, None, True),
     ("4341", "Land Tax", 2, "Land Tax", False),
     ("4342", "Building Tax", 2, "Building Tax", False),
     ("4343", "Building Tax on Let out Properties", 2, "Building Tax on Let out Properties", False),
     ("4344", "Penalty", 2, "Penalty", False),
     ("4345", "Others", 2, "Others", False),
+    ("", "Total Taxes and Penalties", 1, "TOTAL_GROUP_4340", False),
     
-    ("4350", "E Hospital Expenses", 1, "Hospital Expenses", False),
-    ("4400", "F School/College Expenses", 1, "School/College Expenses", False),
+    ("4350", "E  Hospital Expenses", 1, "Hospital Expenses", False),
+    ("4400", "F  School/College Expenses", 1, "School/College Expenses", False),
     
-    ("4500", "G Finance charges", 1, None, True),
+    ("4500", "G  Finance charges", 1, None, True),
     ("4501", "Interest on Bank loans", 2, "Interest on Bank loans", False),
     ("4502", "Interest on other loans and advances", 2, "Interest on other loans and advances", False),
     ("4503", "Bank Charges", 2, "Bank Charges", False),
+    ("", "Total of Finance Charges", 1, "TOTAL_GROUP_4500", False),
     
-    ("4550", "H Administrative expenses", 1, None, True),
+    ("4550", "H  Administrative expenses", 1, None, True),
     ("4551", "Travelling Expenses", 2, "Travelling Expenses", False),
     ("4552", "Auditors Remuneration", 2, "Auditors Remuneration", False),
     ("4553", "Postage and Telephone", 2, "Postage and Telephone", False),
@@ -683,9 +739,12 @@ PAYMENTS_SCHEDULE_RP = [
     ("4558", "Insurance Charges", 2, "Insurance Charges", False),
     ("4559", "Advertisement Expenses", 2, "Advertisement Expenses", False),
     ("4560", "Other Expenses", 2, "Other Expenses", False),
+    ("", "Total of Administrative Expenses", 1, "TOTAL_GROUP_4550", False),
+    
+    ("", "Total of Revenue Payments (A+B+C+D+E+F+G+H)", 1, "TOTAL_SECTION_VI", False),
     
     ("VII", "Capital Payments", 0, None, False),
-    ("4600", "A Fixed Assets", 1, None, True),
+    ("4600", "A  Fixed Assets", 1, None, True),
     ("4601", "Land", 2, "Land", False),
     ("4602", "Land Development", 2, "Land Development", False),
     ("4603", "Well and Tubewell", 2, "Well and Tubewell", False),
@@ -713,28 +772,32 @@ PAYMENTS_SCHEDULE_RP = [
     ("4625", "Sound System", 2, "Sound System", False),
     ("4626", "Books", 2, "Books", False),
     ("4627", "Building under Construction", 2, "Building under Construction", False),
+    ("", "Total of Fixed Assets Addition", 1, "TOTAL_GROUP_4600", False),
     
-    ("4700", "B Investments", 1, None, True),
+    ("4700", "B  Investments", 1, None, True),
     ("4701", "Deposits/ Bonds", 2, "Deposits/ Bonds", False),
     ("4702", "Mutual Funds", 2, "Mutual Funds", False),
     ("4703", "Investment of Endowment fund", 2, "Investment of Endowment fund", False),
     ("4704", "Other investments", 2, "Other investments", False),
+    ("", "Total of Investments", 1, "TOTAL_GROUP_4700", False),
     
-    ("4750", "C Loans and Advances", 1, None, True),
+    ("4750", "C  Loans and Advances", 1, None, True),
     ("4751", "Advance to spiritual organisations", 2, "Advance to spiritual organisations", False),
     ("4752", "Advance for Land", 2, "Advance for Land", False),
     ("4753", "Advances to MOSC Institutions", 2, "Advances to MOSC Institutions", False),
     ("4754", "Advance to Contractors", 2, "Advance to Contractors", False),
     ("4755", "Other Advances", 2, "Other Advances", False),
+    ("", "Total of Loans and Advances", 1, "TOTAL_GROUP_4750", False),
     
-    ("4800", "D Security Deposits", 1, None, True),
+    ("4800", "D  Security Deposits", 1, None, True),
     ("4801", "Rent Deposits", 2, "Rent Deposits", False),
     ("4802", "Electricity Deposit", 2, "Electricity Deposit", False),
     ("4803", "Telephone Deposit", 2, "Telephone Deposit", False),
     ("4804", "LPG Cylinder Deposit", 2, "LPG Cylinder Deposit", False),
     ("4805", "Other Security Deposits", 2, "Other Security Deposits", False),
+    ("", "Total of Security Deposits", 1, "TOTAL_GROUP_4800", False),
     
-    ("4850", "E Repayment of Borrowings and Loans", 1, None, True),
+    ("4850", "E  Repayment of Borrowings and Loans", 1, None, True),
     ("4851", "Loan from Banks", 2, "Loan from Banks", False),
     ("4852", "Loan from Others(Other than Church Members)", 2, "Loan from Others(Other than Church Members)", False),
     ("4853", "Advance from Diocese (Inter accounts)", 2, "Advance from Diocese (Inter accounts)", False),
@@ -742,19 +805,24 @@ PAYMENTS_SCHEDULE_RP = [
     ("4855", "Advances from others", 2, "Advances from others", False),
     ("4856", "Deposits/Bonds", 2, "Deposits/Bonds", False),
     ("4857", "Loan from Church Members", 2, "Loan from Church Members", False),
+    ("", "Total of Repayment of Loans", 1, "TOTAL_GROUP_4850", False),
     
-    ("4900", "F Taxes and Penalty", 1, None, True),
+    ("4900", "F  Taxes and Penalty", 1, None, True),
     ("4901", "Payment of TDS collected", 2, "Payment of TDS collected", False),
     ("4902", "Tax Deducted at Source (TDS)", 2, "Tax Deducted at Source (TDS)", False),
     ("4903", "G S T Paid", 2, "GST Paid", False),
+    ("", "Total of Taxes and Penalty", 1, "TOTAL_GROUP_4900", False),
     
-    ("4940", "G Payment of Sundries Payable", 1, "Payment of Sundries Payable", False),
-    ("4950", "H Payment from Endowment Fund", 1, "Payment from Endowment Fund", False),
-    ("4955", "I Other Capital Payments", 1, "Other Capital Payments", False),
+    ("4940", "G  Payment of Sundries Payable", 1, "Payment of Sundries Payable", False),
+    ("4950", "H  Payment from Endowment Fund", 1, "Payment from Endowment Fund", False),
+    ("4955", "I  Other Capital Payments", 1, "Other Capital Payments", False),
+    
+    ("", "Total of Capital Payments (A+B+C+D+E+F+G+H+I)", 1, "TOTAL_SECTION_VII", False),
     
     ("VIII", "Closing Balances", 0, None, False),
     ("6100", "Balance in savings account as per Schedule 5", 1, "BANK_CLOSE_1", False),
     ("6200", "Balance in deposit account as per Schedule 6", 1, "BANK_CLOSE_2", False),
     ("6300", "Balance in other accounts as per Schedule 7", 1, "BANK_CLOSE_3", False),
     ("6400", "Cash in hand as per Schedule 8", 1, "Cash in Hand", False),
+    ("", "Total of Closing Balances", 1, "TOTAL_SECTION_VIII", False),
 ]

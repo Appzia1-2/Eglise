@@ -28,6 +28,9 @@ const SECONDARY   = "#60708C";
 const BORDER      = "#DCE2EA";
 const BLUE        = "#315AB5";
 
+const HATCH_CSS =
+  "repeating-linear-gradient(45deg, #e2e8f0, #e2e8f0 2px, #ffffff 2px, #ffffff 4px)";
+
 // ============================================================
 // HELPERS
 // ============================================================
@@ -67,12 +70,12 @@ const StatutoryRow = ({ row, mode = "screen" }) => {
   const isPrint = mode === "print";
 
   const isSection  = row_type === "section";
+  const isGroup    = row_type === "group";
   const isSubTotal = row_type === "subtotal";
   const isTotal    = ["total", "grand_total", "grand_total_balanced"].includes(row_type);
   const isAdj      = row_type === "adjustment";
 
-  const weight =
-    isSection || isTotal ? 700 : isSubTotal ? 600 : 400;
+  const weight = isSection || isGroup || isTotal ? 700 : isSubTotal ? 600 : 400;
 
   const color =
     isSection || isTotal ? DARK_RED :
@@ -80,44 +83,44 @@ const StatutoryRow = ({ row, mode = "screen" }) => {
     TEXT_COLOR;
 
   const bg =
-    isSection  ? "#F7F9FB" :
-    isTotal    ? "#F0F4FA" :
-    isSubTotal ? "#FAFBFC" :
+    isSection || isGroup ? HATCH_CSS :
+    isTotal              ? "#F0F4FA" :
+    isSubTotal           ? "#F7F9FB" :
     "white";
 
   const indentPx = [0, 20, 40, 60][depth] ?? 40;
   const prefix   = isSection && section ? `${section}.  ` : "";
 
-  const cellPad  = isPrint ? "4px 6px" : "6px 8px";
-  const fontSize = isPrint ? "9.5px"  : "11.5px";
-  const fontFam  = isPrint ? "Georgia, 'Times New Roman', serif" : "inherit";
+  const cellPad   = isPrint ? "4px 6px" : "6px 8px";
+  const fontSize  = isPrint ? "9.5px"  : "11.5px";
+  const fontFam   = isPrint ? "Georgia, 'Times New Roman', serif" : "inherit";
+  const fontStyle = isSubTotal ? "italic" : "normal";
 
-  const showAmount = !isSection || row_type === "grand_total";
+  // groups and sections are header-only; everything else shows amounts
+  const showAmount = (!isSection && !isGroup) || row_type === "grand_total";
+
+  const base = { fontSize, fontWeight: weight, fontFamily: fontFam, fontStyle, background: bg };
 
   return (
-    <tr style={{ background: bg, borderBottom: `1px solid ${BORDER}` }}>
+    <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
       <td
         style={{
+          ...base,
+          color,
           width: 60,
           padding: cellPad,
           textAlign: "center",
           borderRight: `1px solid ${BORDER}`,
-          fontSize,
-          fontWeight: weight,
-          color,
-          fontFamily: fontFam,
         }}
       >
         {code || ""}
       </td>
       <td
         style={{
+          ...base,
+          color,
           padding: cellPad,
           paddingLeft: `${indentPx + (isPrint ? 4 : 8)}px`,
-          fontSize,
-          fontWeight: weight,
-          color,
-          fontFamily: fontFam,
           textTransform: isSection || isTotal ? "uppercase" : "none",
           letterSpacing: isSection ? "0.4px" : "normal",
         }}
@@ -126,26 +129,23 @@ const StatutoryRow = ({ row, mode = "screen" }) => {
       </td>
       <td
         style={{
+          ...base,
+          color,
           width: 130,
           padding: cellPad,
           textAlign: "right",
-          fontSize,
-          fontWeight: weight,
-          color,
-          fontFamily: fontFam,
         }}
       >
         {showAmount ? formatAmount(current_year) : ""}
       </td>
       <td
         style={{
+          ...base,
+          color: SECONDARY,
           width: 130,
           padding: cellPad,
           textAlign: "right",
           borderLeft: `1px solid ${BORDER}`,
-          fontSize,
-          color: SECONDARY,
-          fontFamily: fontFam,
         }}
       >
         {showAmount ? formatAmount(previous_year) : ""}
@@ -472,7 +472,7 @@ const IncomeExpenditurePage = () => {
               borderColor={PRIMARY_RED}
               color={PRIMARY_RED}
               onClick={() => setIsPrintOpen(true)}
-              isDisabled={!hasData}
+              disabled={!hasData}
             >
               Print
             </Button>
@@ -593,7 +593,6 @@ const IncomeExpenditurePage = () => {
               isSurplus={isSurplus}
             />
 
-            {/* ✅ ADDED: Small Closing Balance design at the bottom */}
             <Flex
               justify="flex-end"
               align="center"

@@ -450,7 +450,7 @@ const BankAccountsPage = () => {
               <Box
                 as="table"
                 width="100%"
-                minW="950px"
+                minW="1200px" // Increased width for the extra columns
                 borderCollapse="collapse"
               >
                 <Box as="thead">
@@ -460,6 +460,8 @@ const BankAccountsPage = () => {
                       "Account No.",
                       "IFSC",
                       "Branch",
+                      "Opening Balance",  // ✅ ADDED
+                      "Current Balance",  // ✅ ADDED
                       "Status",
                       "Last Updated",
                       "Actions",
@@ -488,7 +490,7 @@ const BankAccountsPage = () => {
                     <Box as="tr">
                       <Box
                         as="td"
-                        colSpan={7}
+                        colSpan={9} // ✅ Changed to 9
                         textAlign="center"
                         height="48px"
                         color={MUTED}
@@ -501,7 +503,7 @@ const BankAccountsPage = () => {
                     <Box as="tr">
                       <Box
                         as="td"
-                        colSpan={7}
+                        colSpan={9} // ✅ Changed to 9
                         textAlign="center"
                         height="48px"
                         color={MUTED}
@@ -569,6 +571,42 @@ const BankAccountsPage = () => {
                           whiteSpace="nowrap"
                         >
                           {account.branch || "-"}
+                        </Box>
+
+                        {/* ✅ OPENING BALANCE COLUMN */}
+                        <Box
+                          as="td"
+                          px={4}
+                          py={1}
+                          fontSize="12px"
+                          fontWeight="600"
+                          color="#344054"
+                          borderBottom="1px solid #E6EAF0"
+                          whiteSpace="nowrap"
+                        >
+                          ₹
+                          {Number(account.opening_balance || 0).toLocaleString(
+                            "en-IN",
+                            { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+                          )}
+                        </Box>
+
+                        {/* ✅ CURRENT BALANCE COLUMN */}
+                        <Box
+                          as="td"
+                          px={4}
+                          py={1}
+                          fontSize="12px"
+                          fontWeight="700"
+                          color={Number(account.current_balance || 0) >= 0 ? "#2E7D32" : "#B71C1C"}
+                          borderBottom="1px solid #E6EAF0"
+                          whiteSpace="nowrap"
+                        >
+                          ₹
+                          {Number(account.current_balance || 0).toLocaleString(
+                            "en-IN",
+                            { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+                          )}
                         </Box>
 
                         <Box

@@ -4765,10 +4765,11 @@ from .models import get_bank_ledger
 from decimal import Decimal
 from django.utils import timezone
 from django.db import transaction
-
-
 class BankAccountSerializer(serializers.ModelSerializer):
     display_name = serializers.CharField(read_only=True)
+    
+    # ✅ ADDED: Field to show dynamic balance in the UI
+    current_balance = serializers.SerializerMethodField()
 
     class Meta:
         model = BankAccount
@@ -4781,6 +4782,7 @@ class BankAccountSerializer(serializers.ModelSerializer):
             "ifsc_code",
             "branch",
             "opening_balance",
+            "current_balance",  # ✅ ADDED
             "is_active",
             "created_at",
             "updated_at",
@@ -4794,6 +4796,12 @@ class BankAccountSerializer(serializers.ModelSerializer):
             "branch": {"required": True, "allow_blank": False},
             "opening_balance": {"required": True, "allow_null": False},
         }
+
+    # ✅ ADDED: Calculate the dynamic balance
+    def get_current_balance(self, obj):
+        if obj.ledger:
+            return round(obj.ledger.get_current_balance(), 2)
+        return 0.0
 
     def validate_bank_name(self, value):
         if not value or not value.strip():
@@ -4848,8 +4856,6 @@ class BankAccountSerializer(serializers.ModelSerializer):
                 "opening_balance": "Bank ledger is not configured for this account."
             })
 
-        # ✅ CRITICAL FIX: Post to an Income/Capital Receipt ledger, NOT Equity
-        # This ensures the R&P report balances.
         capital_ledger = AccountLedgerMaster.objects.filter(
             church=church,
             ledger_name__iexact="Other donation for capital expenditute",
@@ -4868,17 +4874,15 @@ class BankAccountSerializer(serializers.ModelSerializer):
         narration = f"Opening Balance for {bank_account.bank_name} ({bank_account.masked_account_number})"
 
         with transaction.atomic():
-            # DEBIT specific Bank Ledger
             LedgerEntry.objects.create(
                 church=church,
                 ledger=bank_ledger,
-                bank_account=bank_account, # ✅ Tag it
+                bank_account=bank_account,
                 entry_type="DEBIT",
                 amount=opening,
                 entry_date=timezone.now().date(),
                 narration=narration,
             )
-            # CREDIT Capital Receipt
             LedgerEntry.objects.create(
                 church=church,
                 ledger=capital_ledger,
@@ -4895,7 +4899,6 @@ class BankAccountSerializer(serializers.ModelSerializer):
 
         bank_account = super().create(validated_data)
 
-        # ✅ Auto-create dedicated ledger
         from .models import AccountGroupMaster, AccountLedgerMaster
         opening_group = AccountGroupMaster.objects.get(church=church, group_name="I. Opening Balances")
         
@@ -4906,7 +4909,7 @@ class BankAccountSerializer(serializers.ModelSerializer):
             ledger_nature="ASSET",
             status=True,
             reserved=False,
-            ledger_code=1000, # Or your preferred logic
+            ledger_code=1000, 
         )
         
         bank_account.ledger = bank_ledger
@@ -4917,26 +4920,10 @@ class BankAccountSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def update(self, instance, validated_data):
-        """
-        Update a bank account.
-
-        Opening balance is LOCKED after the account is created. Changing
-        it would require reversing the existing pair and re-posting, which
-        the model can't do safely. Instead:
-
-          * If old == 0 and new > 0 → allowed (first-time set; covers
-            legacy accounts created before opening-balance posting existed).
-            Posts the pair once.
-          * If old > 0 and new != old → rejected with a clear message.
-            User must correct via a contra entry.
-
-        Other fields (bank_name, IFSC, branch, is_active) update freely.
-        """
         old_opening = float(instance.opening_balance or 0)
         new_opening_value = validated_data.get("opening_balance", instance.opening_balance)
         new_opening = float(new_opening_value or 0)
 
-        # Block changing an existing opening balance
         if old_opening > 0 and new_opening != old_opening:
             raise serializers.ValidationError({
                 "opening_balance": (
@@ -4948,10 +4935,8 @@ class BankAccountSerializer(serializers.ModelSerializer):
                 )
             })
 
-        # Save the basic changes
         bank_account = super().update(instance, validated_data)
 
-        # First-time set: old was 0, new is > 0 → post once
         if old_opening == 0 and new_opening > 0:
             self._post_opening_balance(bank_account)
 
