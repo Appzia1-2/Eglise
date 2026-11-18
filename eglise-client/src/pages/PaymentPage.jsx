@@ -1,3 +1,5 @@
+// src/pages/PaymentPage.jsx
+
 import React, { useState, useEffect, useRef } from "react";
 import RegistryTable from "../components/RegistryTable";
 import {
@@ -6,10 +8,13 @@ import {
   updatePayment,
   deletePayment,
   listAccountLedgers,
+  cancelPayment, // ✅ Imported cancel API
 } from "../api/registryServices";
 import { Box, Button, HStack, Flex, Spacer } from "@chakra-ui/react";
-import { LuPrinter } from "react-icons/lu";
+import { LuPrinter, LuX } from "react-icons/lu";
 import apiClient from "../api/apiClient";
+import CancelPaymentModal from "../components/CancelPaymentModal"; // ✅ Import your modal
+import { toaster } from "../components/ui/toaster";
 
 const PAYMENT_MODE_OPTIONS = [
   { value: "CASH", label: "Cash" },
@@ -33,6 +38,12 @@ const PaymentPage = () => {
   const [printData, setPrintData] = useState(null);
   const [printMode, setPrintMode] = useState(null);
   const printContentRef = useRef(null);
+
+  // ✅ State for Cancellation
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const fetchOptions = async () => {
@@ -258,7 +269,6 @@ const PaymentPage = () => {
     }
   };
 
-  // Individual Print Handler - prints directly
   const handlePrintIndividual = (item) => {
     setPrintData({ type: 'individual', data: item });
     setPrintMode('individual');
@@ -271,7 +281,6 @@ const PaymentPage = () => {
     }, 100);
   };
 
-  // Print All Handler - prints directly
   const handlePrintAll = async () => {
     try {
       const response = await listPaymentsEnriched();
@@ -291,7 +300,51 @@ const PaymentPage = () => {
     }
   };
 
-  // Custom actions for individual print
+  // ✅ Cancel Handlers
+  const openCancel = (item) => {
+    if (item.is_cancelled) {
+      toaster.create({ 
+        title: "Already Cancelled", 
+        description: "This payment is already cancelled.", 
+        type: "warning" 
+      });
+      return;
+    }
+    setCancelTarget(item);
+    setCancelOpen(true);
+  };
+
+  const closeCancel = () => {
+    if (cancelling) return;
+    setCancelOpen(false);
+    setCancelTarget(null);
+  };
+
+  const submitCancel = async (data) => {
+    if (!cancelTarget) return;
+    setCancelling(true);
+    try {
+      await cancelPayment(cancelTarget.id, data);
+      toaster.create({ 
+        title: "Payment cancelled", 
+        description: "The voucher was reversed successfully.", 
+        type: "success" 
+      });
+      closeCancel();
+      setRefreshKey(prev => prev + 1); // ✅ Force table reload
+    } catch (err) {
+      const msg = err?.response?.data ? Object.values(err.response.data)[0] : "Cancel failed.";
+      toaster.create({ 
+        title: "Cancel failed", 
+        description: String(msg), 
+        type: "error" 
+      });
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  // ✅ Extra actions now include Cancel
   const extraActions = [
     {
       label: "Print",
@@ -300,33 +353,38 @@ const PaymentPage = () => {
       title: "Print Payment Receipt",
       onClick: handlePrintIndividual,
     },
+    {
+      label: "Cancel",
+      icon: LuX,
+      color: "red.500",
+      title: "Cancel Payment",
+      onClick: openCancel, // Connects to modal
+    },
   ];
 
-  // Custom top content with Print All button positioned with flex
   const topContent = (
     <Flex mb={4} className="no-print" alignItems="center" justifyContent="space-between">
       <Box>
         {/* This space is for the Add Payment button that's already in RegistryTable */}
       </Box>
      <Button
-  leftIcon={<LuPrinter />}
-  variant="outline"
-  borderColor="black"
-  color="black"
-  size="sm"
-  _hover={{
-    bg: "transparent",
-    borderColor: "black",
-    color: "black",
-  }}
-  onClick={handlePrintAll}
->
-  Print All Payments
-</Button>
+      leftIcon={<LuPrinter />}
+      variant="outline"
+      borderColor="black"
+      color="black"
+      size="sm"
+      _hover={{
+        bg: "transparent",
+        borderColor: "black",
+        color: "black",
+      }}
+      onClick={handlePrintAll}
+    >
+      Print All Payments
+    </Button>
     </Flex>
   );
 
-  // Render print content
   const renderPrintContent = () => {
     if (!printData) return null;
 
@@ -460,6 +518,7 @@ const PaymentPage = () => {
   return (
     <>
       <RegistryTable
+        key={refreshKey} // ✅ Forces table to reload after cancel
         title="Payments"
         addLabel="Add Payment"
         nameKey="party_name"
@@ -471,11 +530,21 @@ const PaymentPage = () => {
         updateFn={updatePayment}
         deleteFn={deletePayment}
         fields={paymentFields}
-        extraActions={extraActions}
+        extraActions={extraActions} // ✅ Includes both Print and Cancel
         topContent={topContent}
         isMaster={true} 
       />
+      
       {renderPrintContent()}
+
+      {/* ✅ Render the Modal */}
+      <CancelPaymentModal
+        isOpen={cancelOpen}
+        onClose={closeCancel}
+        payment={cancelTarget}
+        onConfirm={submitCancel}
+        saving={cancelling}
+      />
     </>
   );
 };

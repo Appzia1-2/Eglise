@@ -23,12 +23,12 @@ from .views_api import (
     SubscriptionActivateAPIView,
     SubscriptionCancelAPIView,
     UpgradeRequestListAPIView,
-    UpgradeRequestApproveAPIView,
+    UpgradeRequestApproveAPIView,UpgradeRequestDetailAPIView,
     UpgradeRequestRejectAPIView,
     TaxTypeListAPIView,TaxRateListAPIView,TaxTypeCreateAPIView,
     TaxTypeDetailAPIView,TaxRateCreateAPIView,TaxRateDetailAPIView,
     BillListAPIView,
-    BillCreateAPIView,
+    BillCreateAPIView,UpgradeRequestMarkContactedAPIView,
     BillDetailAPIView,
     BillMarkPaidAPIView, BillReceiptPDFAPIView,
 )
@@ -91,4 +91,10 @@ urlpatterns = [
     path('upgrade-requests/', UpgradeRequestListAPIView.as_view(), name='upgrade-request-list'),
     path('upgrade-requests/<int:pk>/approve/', UpgradeRequestApproveAPIView.as_view(), name='upgrade-request-approve'),
     path('upgrade-requests/<int:pk>/reject/', UpgradeRequestRejectAPIView.as_view(), name='upgrade-request-reject'),
+     path("upgrade-requests/<int:pk>/", UpgradeRequestDetailAPIView.as_view(), name="admin-upgrade-request-detail"),
+     path(
+    'upgrade-requests/<int:pk>/contacted/',
+    UpgradeRequestMarkContactedAPIView.as_view(),
+    name='upgrade-request-contacted',
+),
 ]

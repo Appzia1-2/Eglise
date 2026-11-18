@@ -82,6 +82,8 @@ import EditPriestPage from "./pages/EditPriestPage";
 import ViewPriestPage from "./pages/ViewPriestPage";
 
 import RegisterSettingsPage from "./pages/RegisterSettingsPage";
+import RegistrationConfigForm from "./pages/RegistrationConfigForm";
+import RegistrationConfigView from './pages/RegistrationConfigView';
 
 import DeathRegisterPage from "./pages/DeathRegisterPage";
 import DeathAddPage from "./pages/DeathAddPage";
@@ -180,6 +182,14 @@ import SubscriptionPaidListPage from "./pages/reports/SubscriptionPaidListPage";
 import DonationRegisterPage from "./pages/reports/DonationRegisterPage";
 import ReceiptPaymentPage from "./pages/reports/ReceiptPaymentPage";
 import BalanceSheetPage from "./pages/reports/BalanceSheetPage";
+
+
+import FinancialYearSettingsPage from "./pages/FinancialYearSettingsPage";
+import PreviousFinancialYearsPage from "./pages/PreviousFinancialYearsPage";
+
+import BillsPage from "./pages/BillsPage";
+
+import UpgradePackagePage from "./pages/UpgradePackagePage";
 
 // =========================================================
 // CONTRA ROUTES
@@ -538,6 +548,25 @@ function App() {
             </ProtectedRoute>
           }
         />
+                {/* =========================================================
+            FINANCIAL YEARS
+        ========================================================= */}
+        <Route
+          path="/financial-years/settings"
+          element={
+            <ProtectedRoute>
+              <FinancialYearSettingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/financial-years"
+          element={
+            <ProtectedRoute>
+              <PreviousFinancialYearsPage />
+            </ProtectedRoute>
+          }
+        />
 
         {/* =========================================================
             TOMB TYPE MASTER ROUTES
@@ -679,6 +708,30 @@ function App() {
           element={
             <ProtectedRoute>
               <RegisterSettingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/register-settings/create"
+          element={
+            <ProtectedRoute>
+              <RegistrationConfigForm  />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="register-settings/:id/edit"
+          element={
+            <ProtectedRoute>
+              <RegistrationConfigForm  />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/register-settings/:id"
+          element={
+            <ProtectedRoute>
+              <RegistrationConfigView  />
             </ProtectedRoute>
           }
         />
@@ -1418,6 +1471,23 @@ function App() {
   element={
     <ProtectedRoute>
       <BalanceSheetPage />
+    </ProtectedRoute>
+  }
+/>
+
+  <Route
+  path="/bills"
+  element={
+    <ProtectedRoute>
+      <BillsPage />
+    </ProtectedRoute>
+  }
+/>
+  <Route
+  path="/upgrade"
+  element={
+    <ProtectedRoute>
+      <UpgradePackagePage />
     </ProtectedRoute>
   }
 />

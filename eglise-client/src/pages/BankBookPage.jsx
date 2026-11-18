@@ -57,11 +57,13 @@ const isBankLedger = (name) => {
   return n === "balance in savings account" || n === "balance in deposit account" || n === "balance in other accounts" || n.startsWith("bank - ");
 };
 
+// ✅ FIXED: Prevent double-counting by only capturing the BANK side of the entry
 const groupLedgerEntries = (entries, book = "bank") => {
   const groups = new Map();
 
   entries.forEach((e) => {
     if (e.is_cancelled) return;
+    
     const voucherNo = e.receipt_voucher || e.payment_voucher || e.contra_voucher || null;
     const voucherType = e.receipt_voucher ? "Receipt" : e.payment_voucher ? "Payment" : e.contra_voucher ? "Contra" : "Journal";
     const key = voucherNo ? `${voucherType}|${voucherNo}|${e.entry_date}` : `ORPHAN|${e.id}`;
@@ -76,21 +78,24 @@ const groupLedgerEntries = (entries, book = "bank") => {
 
     const g = groups.get(key);
     g._entries.push(e);
-    const amt = toNumber(e.amount);
-
+    
+    // We only care about the Bank side for the Bank Book
     if (isBankLedger(e.ledger_name)) {
-      if (!g.cashBankAccount) {
-        g.cashBankAccount = e.ledger_name || "";
-        g.amount = amt;
-        g.direction = e.entry_type === "DEBIT" ? "CREDIT" : "DEBIT"; 
-      } else {
-        g.cashBankAccount = e.ledger_name || "";
-        g.amount = amt;
-        g.direction = e.entry_type === "DEBIT" ? "CREDIT" : "DEBIT";
+      g.cashBankAccount = e.ledger_name || "";
+      g.amount = toNumber(e.amount);
+      
+      // In accounting:
+      // Bank gets Debited when money comes IN (Receipt) -> We show this as CREDIT column in UI
+      // Bank gets Credited when money goes OUT (Payment) -> We show this as DEBIT column in UI
+      if (e.entry_type === "DEBIT") {
+        g.direction = "CREDIT"; 
+      } else if (e.entry_type === "CREDIT") {
+        g.direction = "DEBIT";
       }
     } else {
       if (!g.particulars) g.particulars = e.ledger_name || "";
     }
+    
     if (!g.narration && e.narration) g.narration = e.narration;
   });
 
@@ -98,10 +103,6 @@ const groupLedgerEntries = (entries, book = "bank") => {
     if (!g.cashBankAccount) {
       const anyLedger = g._entries.find((x) => x.ledger_name);
       g.cashBankAccount = anyLedger ? anyLedger.ledger_name : "—";
-      if (g.amount === 0 && g._entries[0]) {
-        g.amount = toNumber(g._entries[0].amount);
-        g.direction = g._entries[0].entry_type === "DEBIT" ? "CREDIT" : "DEBIT";
-      }
     }
     if (!g.particulars) {
       const other = g._entries.find((x) => !isBankLedger(x.ledger_name) && x.ledger_name);
@@ -145,8 +146,9 @@ const BankBookPrintTable = ({ rows, totals, openingBalance, closingBalance }) =>
         </thead>
         <tbody>
           <tr style={{ background: "#FFF5F5" }}>
-            <td colSpan={5} style={{ ...tdStyle, fontWeight: "bold", color: "#8B1A1A" }}>Opening Balance</td>
+            <td colSpan={4} style={{ ...tdStyle, textAlign: "right", fontWeight: "bold", color: "#8B1A1A" }}>Opening Balance</td>
             <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>₹{fmt(openingBalance)}</td>
+            <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>—</td>
           </tr>
           {rows.map((r, i) => (
             <tr key={r.key} style={{ background: i % 2 === 0 ? "#FFFFFF" : "#FFF9F9" }}>
@@ -164,8 +166,9 @@ const BankBookPrintTable = ({ rows, totals, openingBalance, closingBalance }) =>
             <td style={{ ...numStyle, fontWeight: "bold", color: "#B71C1C" }}>₹{fmt(totals.debit)}</td>
           </tr>
           <tr style={{ background: "#FFF5F5" }}>
-            <td colSpan={5} style={{ ...tdStyle, textAlign: "right", fontWeight: "bold", color: "#8B1A1A" }}>Closing Balance</td>
+            <td colSpan={4} style={{ ...tdStyle, textAlign: "right", fontWeight: "bold", color: "#8B1A1A" }}>Closing Balance</td>
             <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>₹{fmt(closingBalance)}</td>
+            <td style={{ ...numStyle, fontWeight: "bold", color: "#8B1A1A" }}>—</td>
           </tr>
         </tbody>
       </table>
@@ -333,8 +336,9 @@ const BankBookPage = () => {
                   
                   {/* Opening Balance Row */}
                   <Box as="tr" bg="#FFF5F5" borderBottom="1px solid" borderColor="#E6EAF0">
-                    <Box as="td" colSpan={5} textAlign="right" px={4} py={3} fontSize="13px" color={DARK} fontWeight="700">Opening Balance</Box>
+                    <Box as="td" colSpan={4} textAlign="right" px={4} py={3} fontSize="13px" color={DARK} fontWeight="700">Opening Balance</Box>
                     <Box as="td" textAlign="right" px={4} py={3} fontSize="13px" color={DARK} fontWeight="700">₹{fmt(openingBalance)}</Box>
+                    <Box as="td" textAlign="right" px={4} py={3} fontSize="13px" color={DARK} fontWeight="700">—</Box>
                   </Box>
 
                   {isLoading ? (
@@ -376,8 +380,9 @@ const BankBookPage = () => {
                   {/* Closing Balance Row */}
                   {!isLoading && (
                     <Box as="tr" bg="#FFF5F5" borderTop="1px solid" borderColor={BORDER}>
-                      <Box as="td" colSpan={5} textAlign="right" px={4} py={4} fontSize="14px" color={DARK} fontWeight="800">Closing Balance</Box>
+                      <Box as="td" colSpan={4} textAlign="right" px={4} py={4} fontSize="14px" color={DARK} fontWeight="800">Closing Balance</Box>
                       <Box as="td" textAlign="right" px={4} py={4} fontSize="14px" color={DARK} fontWeight="800">₹{fmt(screenClosingBalance)}</Box>
+                      <Box as="td" textAlign="right" px={4} py={4} fontSize="14px" color={DARK} fontWeight="800">—</Box>
                     </Box>
                   )}
 

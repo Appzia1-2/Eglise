@@ -548,6 +548,7 @@ export const updateVicar = (id, formData) => {
 // ============================================================
 // REGISTER SETTINGS
 // ============================================================
+// src/api/registryServices.js
 
 export const listRegisterSettings = () =>
   apiClient.get(
@@ -569,6 +570,11 @@ export const updateRegisterSettings = (
     data
   );
 
+export const previewRegisterSetting = (data) =>
+  apiClient.post(
+    "/api/registry/register-settings/preview/",
+    data
+  );
 
 // ============================================================
 // EVENTS
@@ -1213,3 +1219,70 @@ export const getReceiptPaymentStatutory = async ({
   );
   return res;
 };
+
+
+// ============================================================
+// FINANCIAL YEARS
+// ============================================================
+
+export const listFinancialYears = () =>
+  apiClient.get("/api/registry/financial-years/");
+
+export const createFinancialYear = (data) =>
+  apiClient.post("/api/registry/financial-years/", data);
+
+export const updateFinancialYear = (id, data) =>
+  apiClient.patch(`/api/registry/financial-years/${id}/`, data);
+
+export const closeFinancialYear = (id) =>
+  apiClient.post(`/api/registry/financial-years/${id}/close/`);
+
+
+// ============================================================
+// CHURCH SUBSCRIPTION / UPGRADE
+// ============================================================
+
+/**
+ * List packages available for the current church.
+ * Backend filters to only packages with member_limit > current capacity.
+ */
+export const listAvailablePackages = () =>
+  apiClient.get("/api/registry/packages/");
+
+/**
+ * Create an upgrade bill for the current church.
+ * @param {Object} data - { package_id, billing_cycle, capacity? }
+ */
+export const createUpgradeEnquiry = (data) =>
+  apiClient.post("/api/registry/subscriptions/upgrade-request/", data);
+
+/**
+ * List the current church's bills (including UNPAID upgrade bills).
+ * Optional params: { status: "UNPAID" | "PAID" }
+ */
+export const listChurchBills = (params = {}) =>
+  apiClient.get("/api/registry/bills/", { params });
+
+/**
+ * Get bill detail (includes breakdown.apply for upgrade bills).
+ */
+export const getChurchBill = (id) =>
+  apiClient.get(`/api/registry/bills/${id}/`);
+
+
+// ============================================================
+// CHURCH UPGRADE REQUESTS
+// ============================================================
+
+/**
+ * List the current church's own upgrade requests
+ * (PENDING / CONTACTED / APPROVED / REJECTED).
+ */
+export const listChurchUpgradeRequests = (params = {}) =>
+  apiClient.get("/api/registry/subscriptions/upgrade-request/", { params });
+
+/**
+ * Get a single upgrade request by ID.
+ */
+export const getChurchUpgradeRequest = (id) =>
+  apiClient.get(`/api/registry/subscriptions/upgrade-request/${id}/`);

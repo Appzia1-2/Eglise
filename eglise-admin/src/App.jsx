@@ -45,7 +45,7 @@ import PaymentDetailPage from "./admin/pages/PaymentDetailPage";
 import PaymentAddPage from "./admin/pages/PaymentAddPage";
 // import PaymentEditPage from "./admin/pages/PaymentEditPage";
 import InvoicePreviewPage from "./admin/pages/InvoicePreviewPage";
-
+import UpgradeRequestDetailPage from "./admin/pages/UpgradeRequestDetailPage";
 import UpgradeRequestsPage from "./admin/pages/UpgradeRequestsPage";
 import AdminProtectedRoute from "./admin/routes/ProtectedRoute";
 import { Toaster } from "./components/ui/toaster";
@@ -304,6 +304,14 @@ function App() {
           element={
             <AdminProtectedRoute>
               <UpgradeRequestsPage />
+            </AdminProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/upgrade-requests/view/:id"
+          element={
+            <AdminProtectedRoute>
+              <UpgradeRequestDetailPage  />
             </AdminProtectedRoute>
           }
         />

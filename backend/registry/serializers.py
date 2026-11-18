@@ -1,7 +1,7 @@
 from datetime import date
 
 from rest_framework import serializers
-from .models import Baptism, Bill, Church, DeathRegister, Designation, DheshaKuri, Diocese, Events,ReceiptMaster, ContraMaster,  ReceiptLine, LedgerEntry,  Grade,BankAccount, Priest,  RegisterSetting, Relationship, TombFee, TombType, UpgradeRequest,  Ward, Family, Member, Offering, VisitorMaster, Subscription, AccountGroupMaster, AccountLedgerMaster, PaymentMaster,  QurbanaReceipts, CommitteeMaster, LegacyBaptism, LegacyMarriage, LegacyDeath
+from .models import Baptism, Bill, Church, DeathRegister, Designation, DheshaKuri, Diocese,FinancialYear, Events,ReceiptMaster, ContraMaster,  ReceiptLine, LedgerEntry,  Grade,BankAccount, Priest,  RegisterSetting, Relationship, TombFee, TombType, UpgradeRequest,  Ward, Family, Member, Offering, VisitorMaster, Subscription, AccountGroupMaster, AccountLedgerMaster, PaymentMaster,  QurbanaReceipts, CommitteeMaster, LegacyBaptism, LegacyMarriage, LegacyDeath
 from .services import can_add_member, generate_folio_number, generate_register_number
 from rest_framework import serializers
 from .models import Package
@@ -14,6 +14,7 @@ from registry.models import Diocese
 from django.db.models import Sum
 from rest_framework import serializers
 from registry.models import Diocese
+from decimal import Decimal
 
 class DioceseSerializer(serializers.ModelSerializer):
     country_name = serializers.SerializerMethodField()
@@ -2027,7 +2028,6 @@ class MemberProfileSerializer(serializers.ModelSerializer):
             "church",
         ]
 
-
 class BillListSerializer(serializers.ModelSerializer):
     package_name = serializers.CharField(
         source="subscription.package.name",
@@ -2038,6 +2038,7 @@ class BillListSerializer(serializers.ModelSerializer):
         model = Bill
         fields = [
             "id",
+            "bill_number",        # ← added
             "bill_type",
             "package_name",
             "billing_cycle",
@@ -2045,6 +2046,7 @@ class BillListSerializer(serializers.ModelSerializer):
             "amount",
             "status",
             "created_at",
+            "paid_at",            # ← added
             "breakdown",
             "payment_receipt",
         ]
@@ -2065,6 +2067,7 @@ class BillDetailSerializer(serializers.ModelSerializer):
         model = Bill
         fields = [
             "id",
+            "bill_number",        # ← added for consistency
             "church_name",
             "package_name",
             "bill_type",
@@ -2091,13 +2094,37 @@ class SubscriptionExpirySerializer(serializers.Serializer):
 # registry/serializers.py
 
 class UpgradeRequestSerializer(serializers.ModelSerializer):
+    # ---------------------------------------------------------
+    # Write field (PK input for create)
+    # ---------------------------------------------------------
     requested_package = serializers.PrimaryKeyRelatedField(
-        queryset=Package.objects.filter(is_active=True)  # Changed from is_trial=False
+        queryset=Package.objects.filter(is_active=True)
     )
-    
-    church_name = serializers.CharField(source='church.name', read_only=True)
-    current_package_name = serializers.CharField(source='current_package.name', read_only=True)
-    requested_package_name = serializers.CharField(source='requested_package.name', read_only=True)
+
+    # ---------------------------------------------------------
+    # Read-only display fields — MUST be declared explicitly
+    # ---------------------------------------------------------
+    church_name = serializers.CharField(source="church.name", read_only=True)
+    current_package = serializers.CharField(
+        source="current_package.name", read_only=True,
+    )
+    current_package_name = serializers.CharField(
+        source="current_package.name", read_only=True,
+    )
+    requested_package_name = serializers.CharField(
+        source="requested_package.name", read_only=True,
+    )
+
+    # Admin table expects "billing_cycle" and "amount".
+    # Map them to the enquiry-time quote we stored on the model.
+    billing_cycle = serializers.CharField(
+        source="requested_billing_cycle", read_only=True,
+    )
+    amount = serializers.DecimalField(
+        source="quoted_amount",
+        max_digits=12, decimal_places=2,
+        read_only=True,
+    )
 
     class Meta:
         model = UpgradeRequest
@@ -2110,18 +2137,33 @@ class UpgradeRequestSerializer(serializers.ModelSerializer):
             "requested_package",
             "requested_package_name",
             "requested_capacity",
+            "requested_billing_cycle",
+            "billing_cycle",
+            "quoted_amount",
+            "amount",
+            "contact_person",
+            "mobile",
+            "email",
+            "preferred_contact",
+            "preferred_date",
             "reason",
             "status",
-            "admin_notes",
+            "admin_note",
+            "reviewed_by",
+            "reviewed_at",
+            
             "created_at",
-            "updated_at",
+           
         ]
         read_only_fields = [
             "id",
             "church",
             "status",
+            "reviewed_by",
+            "reviewed_at",
+          
             "created_at",
-            "updated_at",
+           
         ]
 
     def validate(self, attrs):
@@ -2661,20 +2703,31 @@ class FamilyHeadCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         church = self.context["church"]
 
-        with transaction.atomic():
-            register_no = generate_register_number(church, "HEAD")
-            folio_no = generate_folio_number(church)
+        from django.db import transaction, IntegrityError
 
-            validated_data["church"] = church
-            validated_data["is_family_head"] = True
-            validated_data["is_active"] = True
-            validated_data["expired"] = False
-            validated_data["register_number"] = register_no
-            validated_data["folio_number"] = folio_no
+        last_error = None
+        for attempt in range(5):
+            try:
+                with transaction.atomic():
+                    register_no = generate_register_number(church, "HEAD")
+                    folio_no = generate_folio_number(church)
 
-            head = Member.objects.create(**validated_data)
+                    validated_data["church"] = church
+                    validated_data["is_family_head"] = True
+                    validated_data["is_active"] = True
+                    validated_data["expired"] = False
+                    validated_data["register_number"] = register_no
+                    validated_data["folio_number"] = folio_no
 
-        return head
+                    head = Member.objects.create(**validated_data)
+                return head
+            except IntegrityError as e:
+                last_error = e
+                validated_data.pop("register_number", None)
+                validated_data.pop("folio_number", None)
+                if attempt == 4:
+                    raise last_error
+                continue
     
 # ============================================================
 # FAMILY MEMBER SERIALIZER
@@ -4377,14 +4430,144 @@ class FamilyHeadUpdateSerializer(serializers.ModelSerializer):
                     user.save(update_fields=["email", "username"])
 
         return member
-    
+
 
 class RegisterSettingSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = RegisterSetting
         fields = "__all__"
-        read_only_fields = ("church",)
+        read_only_fields = (
+            "church",
+            "next_register_number",
+            "next_folio_number",
+            "current_financial_year_label",
+            "created_at",
+            "updated_at",
+        )
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["church_code"] = (
+            instance.church.code if instance.church else None
+        )
+        return data
+
+    def validate_separator(self, value):
+        if value and len(value) > 5:
+            raise serializers.ValidationError(
+                "Separator must be 5 characters or fewer."
+            )
+        return value
+
+    def validate(self, attrs):
+        instance = self.instance
+        if instance is None:
+            return attrs
+
+        new_next = attrs.get(
+            "next_register_number", instance.next_register_number
+        )
+        if new_next < instance.next_register_number:
+            raise serializers.ValidationError({
+                "next_register_number": (
+                    "The counter cannot be lowered. Already-issued "
+                    "numbers would collide."
+                )
+            })
+
+        new_folio = attrs.get(
+            "next_folio_number", instance.next_folio_number
+        )
+        if new_folio < instance.next_folio_number:
+            raise serializers.ValidationError({
+                "next_folio_number": (
+                    "The folio counter cannot be lowered."
+                )
+            })
+
+        return attrs
+
+
+class RegisterSettingCreateSerializer(serializers.ModelSerializer):
+    starting_number = serializers.IntegerField(
+        write_only=True, required=False, min_value=1, default=1
+    )
+
+    class Meta:
+        model = RegisterSetting
+        fields = "__all__"
+        read_only_fields = (
+            "church",
+            "next_register_number",
+            "next_folio_number",
+            "created_at",
+            "updated_at",
+        )
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["church_code"] = (
+            instance.church.code if instance.church else None
+        )
+        return data
+
+    def validate_separator(self, value):
+        if value and len(value) > 5:
+            raise serializers.ValidationError(
+                "Separator must be 5 characters or fewer."
+            )
+        return value
+
+    def validate_register_padding(self, value):
+        if value is not None and (value < 1 or value > 10):
+            raise serializers.ValidationError(
+                "Padding must be between 1 and 10 digits."
+            )
+        return value
+
+    def create(self, validated_data):
+        starting = validated_data.pop("starting_number", 1)
+        return RegisterSetting.objects.create(
+            **validated_data,
+            next_register_number=starting,
+            next_folio_number=starting,
+        )
+
+
+class RegisterSettingPreviewSerializer(serializers.Serializer):
+    """
+    Accepts a draft RegisterSetting (unsaved) and returns the string
+    that generate_register_number() would actually produce. Never
+    touches the DB.
+    """
+    register_type = serializers.ChoiceField(
+        choices=RegisterSetting.REGISTER_TYPES
+    )
+    register_prefix = serializers.CharField(
+        required=False, allow_blank=True, max_length=20
+    )
+    register_suffix = serializers.CharField(
+        required=False, allow_blank=True, max_length=20
+    )
+    register_padding = serializers.IntegerField(
+        required=False, min_value=1, max_value=10, default=4
+    )
+    separator = serializers.CharField(
+        required=False, allow_blank=True, max_length=5, default="/"
+    )
+    include_parish_code = serializers.BooleanField(default=True)
+    include_leading_zeros = serializers.BooleanField(default=True)
+    use_financial_year = serializers.BooleanField(default=False)
+    financial_year_start_month = serializers.IntegerField(
+        required=False, allow_null=True, min_value=1, max_value=12
+    )
+    financial_year_format = serializers.CharField(
+        required=False, allow_blank=True, max_length=20, default="YYYY-YY"
+    )
+    next_register_number = serializers.IntegerField(
+        required=False, min_value=1, default=1
+    )
 
 #priest master 
 class PriestNameSerializer(serializers.ModelSerializer):
@@ -6106,15 +6289,22 @@ class ReceiptCancelSerializer(serializers.Serializer):
         return value
 
 # ----------------------------------------------------Contra--------------------------------------------------------------------
+
 class ContraMasterSerializer(serializers.ModelSerializer):
     from_ledger_name = serializers.SerializerMethodField()
     to_ledger_name = serializers.SerializerMethodField()
+
     contra_type_label = serializers.CharField(
-        source="get_contra_type_display", read_only=True
+        source="get_contra_type_display",
+        read_only=True,
     )
+
     cancel_reason_label = serializers.CharField(
-        source="get_cancel_reason_display", read_only=True, allow_null=True
+        source="get_cancel_reason_display",
+        read_only=True,
+        allow_null=True,
     )
+
     status_label = serializers.SerializerMethodField()
 
     class Meta:
@@ -6126,168 +6316,304 @@ class ContraMasterSerializer(serializers.ModelSerializer):
             "ref_no",
             "contra_type",
             "contra_type_label",
-            "from_ledger", "from_ledger_name",
-            "to_ledger", "to_ledger_name",
-            "from_bank_account", "to_bank_account",
+            "from_ledger",
+            "from_ledger_name",
+            "to_ledger",
+            "to_ledger_name",
+            "from_bank_account",
+            "to_bank_account",
             "amount",
             "narration",
-            "is_cancelled", "cancel_reason", "cancel_reason_label",
-            "cancel_remarks", "cancelled_at",
+            "is_cancelled",
+            "cancel_reason",
+            "cancel_reason_label",
+            "cancel_remarks",
+            "cancelled_at",
             "status_label",
-            "created_at", "updated_at",
+            "created_at",
+            "updated_at",
         ]
-        read_only_fields = (
+
+        read_only_fields = [
             "voucher_number",
-            "is_cancelled", "cancel_reason", "cancel_remarks", "cancelled_at",
-            "created_at", "updated_at",
-        )
+            "is_cancelled",
+            "cancel_reason",
+            "cancel_remarks",
+            "cancelled_at",
+            "created_at",
+            "updated_at",
+        ]
+
         extra_kwargs = {
-            "from_ledger": {"required": False, "allow_null": True},
-            "to_ledger": {"required": False, "allow_null": True},
+            "from_ledger": {
+                "required": False,
+                "allow_null": True,
+            },
+            "to_ledger": {
+                "required": False,
+                "allow_null": True,
+            },
+            "from_bank_account": {
+                "required": False,
+                "allow_null": True,
+            },
+            "to_bank_account": {
+                "required": False,
+                "allow_null": True,
+            },
         }
 
     # ---------------------------------------------------------
-    # NULL-SAFE LEDGER NAMES
+    # DISPLAY METHODS
     # ---------------------------------------------------------
+
     def get_from_ledger_name(self, obj):
-        return obj.from_ledger.ledger_name if obj.from_ledger_id else None
+        return (
+            obj.from_ledger.ledger_name
+            if obj.from_ledger_id else None
+        )
 
     def get_to_ledger_name(self, obj):
-        return obj.to_ledger.ledger_name if obj.to_ledger_id else None
+        return (
+            obj.to_ledger.ledger_name
+            if obj.to_ledger_id else None
+        )
 
     def get_status_label(self, obj):
         return "Cancelled" if obj.is_cancelled else "Posted"
 
     # ---------------------------------------------------------
-    # AMOUNT
+    # AMOUNT VALIDATION
     # ---------------------------------------------------------
-    def validate_amount(self, value):
-        if value is None:
-            value = getattr(self.instance, "amount", None)
 
-        if value is None or value <= 0:
+    def validate_amount(self, value):
+        if value is None or value <= Decimal("0.00"):
             raise serializers.ValidationError(
                 "Amount must be greater than zero."
             )
+
         return value
 
     # ---------------------------------------------------------
     # MAIN VALIDATION
     # ---------------------------------------------------------
+
     def validate(self, data):
+
         church = self.context.get("church")
-        contra_type = data.get("contra_type")
 
-        from_ledger = data.get("from_ledger")
-        to_ledger = data.get("to_ledger")
-        from_bank = data.get("from_bank_account")
-        to_bank = data.get("to_bank_account")
+        if not church:
+            raise serializers.ValidationError({
+                "detail": "Church context is missing."
+            })
 
-        amount = data.get("amount", getattr(self.instance, "amount", None))
+        if self.instance and self.instance.is_cancelled:
+            raise serializers.ValidationError({
+                "detail": "Cancelled contra vouchers cannot be edited."
+            })
 
-        # Helper to fetch or create the ledger for a bank
-        def ensure_ledger(bank_acc):
-            if not bank_acc:
-                return None
-            
-            from registry.models import BankAccount, AccountGroupMaster, AccountLedgerMaster
-            # Re-fetch from DB to ensure we have the latest state
-            bank = BankAccount.objects.get(id=bank_acc.id)
-            
-            if bank.ledger:
-                return bank.ledger
-            
-            # Auto-create if missing
-            group = AccountGroupMaster.objects.filter(
-                church=church, group_name="I. Opening Balances"
-            ).first()
-            
-            if not group:
-                raise serializers.ValidationError({"detail": "Missing 'I. Opening Balances' group."})
-                
-            led = AccountLedgerMaster.objects.create(
-                church=church,
-                ledger_name=f"Bank - {bank.bank_name} {bank.masked_account_number}",
-                account_group=group,
-                ledger_nature="ASSET",
-                status=True,
-                reserved=False
-            )
-            bank.ledger = led
-            bank.save(update_fields=["ledger"])
-            return led
+        # Merge existing values for PATCH requests.
+        contra_type = data.get(
+            "contra_type",
+            getattr(self.instance, "contra_type", None),
+        )
+
+        from_bank = data.get(
+            "from_bank_account",
+            getattr(self.instance, "from_bank_account", None),
+        )
+
+        to_bank = data.get(
+            "to_bank_account",
+            getattr(self.instance, "to_bank_account", None),
+        )
+
+        amount = data.get(
+            "amount",
+            getattr(self.instance, "amount", None),
+        )
+
+        if not contra_type:
+            raise serializers.ValidationError({
+                "contra_type": "Contra type is required."
+            })
 
         # -----------------------------------------------------
-        # RESOLVE LEDGERS FROM THE CONTRA TYPE
+        # BANK ACCOUNT VALIDATION
         # -----------------------------------------------------
-        if contra_type:
-            cash = get_cash_ledger(church) if church else None
-            
-            # Fallback for cash if the primary group search fails
-            if not cash and church:
-                from registry.models import AccountLedgerMaster
-                cash = AccountLedgerMaster.objects.filter(
-                    church=church, ledger_name__iexact="Cash in Hand", status=True
-                ).first()
 
-            if contra_type == "CASH_TO_BANK":
-                from_ledger = cash
-                to_ledger = ensure_ledger(to_bank)  # ✅ Auto-heals
-            elif contra_type == "BANK_TO_CASH":
-                from_ledger = ensure_ledger(from_bank)  # ✅ Auto-heals
-                to_ledger = cash
-            elif contra_type == "BANK_TO_BANK":
-                from_ledger = ensure_ledger(from_bank)
-                to_ledger = ensure_ledger(to_bank)
+        def resolve_bank_ledger(bank, field_name):
 
-            if not from_ledger or not to_ledger:
+            if not bank:
                 raise serializers.ValidationError({
-                    "detail": (
-                        "Ledgers could not be resolved. Ensure Cash in Hand "
-                        "and your bank accounts are configured."
+                    field_name: "Select a bank account."
+                })
+
+            # Ensure bank belongs to the logged-in church.
+            if bank.church_id != church.id:
+                raise serializers.ValidationError({
+                    field_name: (
+                        "This bank account does not belong to your church."
                     )
                 })
 
-            data["from_ledger"] = from_ledger
-            data["to_ledger"] = to_ledger
+            if not bank.is_active:
+                raise serializers.ValidationError({
+                    field_name: "This bank account is inactive."
+                })
+
+            # Do not create ledgers during validation.
+            if not bank.ledger_id:
+                raise serializers.ValidationError({
+                    field_name: (
+                        f"No ledger is linked to {bank.bank_name}. "
+                        "Please configure its bank ledger first."
+                    )
+                })
+
+            ledger = bank.ledger
+
+            if ledger.church_id != church.id:
+                raise serializers.ValidationError({
+                    field_name: "Bank ledger belongs to another church."
+                })
+
+            if not ledger.status:
+                raise serializers.ValidationError({
+                    field_name: "The linked bank ledger is inactive."
+                })
+
+            if (ledger.ledger_nature or "").upper() != "ASSET":
+                raise serializers.ValidationError({
+                    field_name: "Bank ledger must have Asset nature."
+                })
+
+            return ledger
 
         # -----------------------------------------------------
-        # SANITY CHECKS
+        # RESOLVE CASH LEDGER
         # -----------------------------------------------------
-        if from_ledger is None or to_ledger is None:
+
+        cash_ledger = get_cash_ledger(church)
+
+        if not cash_ledger:
+            cash_ledger = AccountLedgerMaster.objects.filter(
+                church=church,
+                ledger_name__iexact="Cash in Hand",
+                status=True,
+            ).first()
+
+        if not cash_ledger:
             raise serializers.ValidationError({
-                "detail": "from_ledger and to_ledger are required."
+                "detail": "Cash in Hand ledger is not configured."
             })
 
-        if from_ledger.id == to_ledger.id:
+        if cash_ledger.church_id != church.id:
             raise serializers.ValidationError({
-                "to_ledger": (
+                "detail": "Cash ledger belongs to another church."
+            })
+
+        if not cash_ledger.status:
+            raise serializers.ValidationError({
+                "detail": "Cash ledger is inactive."
+            })
+
+        if (cash_ledger.ledger_nature or "").upper() != "ASSET":
+            raise serializers.ValidationError({
+                "detail": "Cash ledger must have Asset nature."
+            })
+
+        # -----------------------------------------------------
+        # RESOLVE SOURCE AND DESTINATION
+        # -----------------------------------------------------
+
+        if contra_type == "CASH_TO_BANK":
+
+            from_ledger = cash_ledger
+            to_ledger = resolve_bank_ledger(
+                to_bank,
+                "to_bank_account",
+            )
+
+            from_bank = None
+
+        elif contra_type == "BANK_TO_CASH":
+
+            from_ledger = resolve_bank_ledger(
+                from_bank,
+                "from_bank_account",
+            )
+
+            to_ledger = cash_ledger
+            to_bank = None
+
+        elif contra_type == "BANK_TO_BANK":
+
+            from_ledger = resolve_bank_ledger(
+                from_bank,
+                "from_bank_account",
+            )
+
+            to_ledger = resolve_bank_ledger(
+                to_bank,
+                "to_bank_account",
+            )
+
+        else:
+            raise serializers.ValidationError({
+                "contra_type": "Invalid contra type."
+            })
+
+        # -----------------------------------------------------
+        # LEDGER SANITY CHECKS
+        # -----------------------------------------------------
+
+        if from_ledger.pk == to_ledger.pk:
+            raise serializers.ValidationError({
+                "to_bank_account": (
                     "Source and destination ledgers must be different."
                 )
             })
 
-        for ledger, field in (
-            (from_ledger, "from_ledger"),
-            (to_ledger, "to_ledger"),
-        ):
-            if (ledger.ledger_nature or "").upper() != "ASSET":
-                raise serializers.ValidationError({
-                    field: (
-                        "Contra is only allowed between Asset "
-                        "(Cash/Bank) ledgers."
-                    )
-                })
-            if church and ledger.church_id != church.id:
-                raise serializers.ValidationError({
-                    field: "Ledger does not belong to this church."
-                })
+        if from_ledger.church_id != church.id:
+            raise serializers.ValidationError({
+                "detail": "Source ledger belongs to another church."
+            })
+
+        if to_ledger.church_id != church.id:
+            raise serializers.ValidationError({
+                "detail": "Destination ledger belongs to another church."
+            })
+
+        # Store the resolved values.
+        data["contra_type"] = contra_type
+        data["from_ledger"] = from_ledger
+        data["to_ledger"] = to_ledger
+        data["from_bank_account"] = from_bank
+        data["to_bank_account"] = to_bank
 
         # -----------------------------------------------------
-        # BALANCE CHECK ON THE SOURCE SIDE
+        # DECIMAL BALANCE VALIDATION
         # -----------------------------------------------------
-        if amount and amount > 0:
-            available = from_ledger.get_current_balance()
-            if float(amount) > available:
+
+        if amount is not None:
+
+            amount = Decimal(str(amount))
+
+            available = Decimal(
+                str(from_ledger.get_current_balance())
+            )
+
+            # During editing, add back the old voucher amount
+            # if the source ledger remains unchanged.
+            if (
+                self.instance
+                and self.instance.from_ledger_id == from_ledger.pk
+            ):
+                available += Decimal(str(self.instance.amount))
+
+            if amount > available:
+
                 raise serializers.ValidationError({
                     "amount": (
                         f"Insufficient balance in "
@@ -6299,9 +6625,16 @@ class ContraMasterSerializer(serializers.ModelSerializer):
 
         return data
 
+    # ---------------------------------------------------------
+    # CREATE
+    # ---------------------------------------------------------
+
     def create(self, validated_data):
+
         validated_data["church"] = self.context["church"]
+
         return super().create(validated_data)
+
 
 
 class ContraCancelSerializer(serializers.Serializer):
@@ -6315,3 +6648,44 @@ class ContraCancelSerializer(serializers.Serializer):
                 "You must acknowledge that this record will remain in the audit history."
             )
         return value
+
+
+from rest_framework import serializers
+from .models import FinancialYear
+from django.utils import timezone
+
+class FinancialYearSerializer(serializers.ModelSerializer):
+    # Map updated_at to last_updated for the UI
+    last_updated = serializers.DateTimeField(source="updated_at", format="%d %b %Y, %I:%M %p", read_only=True)
+    
+    class Meta:
+        model = FinancialYear
+        fields = "__all__"
+        read_only_fields = ("church", "closed_on", "closed_by", "last_updated")
+
+    def validate(self, data):
+        start_date = data.get("start_date", getattr(self.instance, "start_date", None))
+        end_date = data.get("end_date", getattr(self.instance, "end_date", None))
+
+        if start_date and end_date and start_date >= end_date:
+            raise serializers.ValidationError({
+                "end_date": "End date must be after start date."
+            })
+
+        # Prevent overlapping years for the same church
+        church = self.context.get("church")
+        if church and start_date and end_date:
+            overlaps = FinancialYear.objects.filter(
+                church=church,
+                start_date__lte=end_date,
+                end_date__gte=start_date
+            )
+            if self.instance:
+                overlaps = overlaps.exclude(pk=self.instance.pk)
+            
+            if overlaps.exists():
+                raise serializers.ValidationError(
+                    "This date range overlaps with an existing financial year."
+                )
+
+        return data

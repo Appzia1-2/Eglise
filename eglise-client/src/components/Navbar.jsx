@@ -40,6 +40,10 @@ const ROUTE_MAP = {
   Designation: "/designation",
   "Priest Master": "/priest-master",
 
+  // ✅ NEW: Financial Year Settings
+  "Financial Year Settings": "/financial-years/settings",
+  "Previous Financial Years": "/financial-years",
+
   Events: "/events",
   "Member Offers": "/offerings",
   "Visitor Management": "/visitors",
@@ -109,7 +113,13 @@ const MENU_DATA = {
     },
     {
       title: "Accounts",
-      items: ["Account Ledger", "Ledger Group", "Bank Accounts"],
+      items: [
+        "Financial Year Settings", // ✅ Added here
+        "Previous Financial Years", // ✅ Added here
+        "Account Ledger", 
+        "Ledger Group", 
+        "Bank Accounts"
+      ],
       subSections: [
         {
           title: "Sunday School",

@@ -1983,82 +1983,342 @@ class SubscriptionDetailAPIView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-
 class SubscriptionMarkPaidAPIView(APIView):
-    """Mark subscription as paid"""
     permission_classes = [IsAuthenticated, IsAdminUser]
 
     def post(self, request, pk):
         try:
-            subscription = ChurchSubscription.objects.select_related('church').get(pk=pk)
+            now = timezone.now()
+            email_sent = False
+            user_created = False
+            bill = None
+            applied_package = None
 
-            if subscription.payment_status == 'PAID':
-                return Response({
-                    "error": "Subscription is already paid"
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-            church = subscription.church
-
-            # 🔥 FIX 5: password reset + email must be atomic. If the email
-            # fails after set_password() commits, the old password is gone
-            # and the new one was never delivered — locking the church out.
+            # =====================================================
+            # PAYMENT + UPGRADE: ONE DATABASE TRANSACTION
+            # =====================================================
             with transaction.atomic():
-                subscription.payment_status = 'PAID'
+
+                subscription = (
+                    ChurchSubscription.objects
+                    .select_for_update()
+                    .select_related("church", "package")
+                    .get(pk=pk)
+                )
+
+                church = subscription.church
+
+                # Lock the latest unpaid bill.
+                bill = (
+                    Bill.objects
+                    .select_for_update()
+                    .filter(
+                        subscription=subscription,
+                        status="UNPAID",
+                    )
+                    .order_by("-created_at")
+                    .first()
+                )
+
+                if subscription.payment_status == "PAID" and not bill:
+                    return Response(
+                        {
+                            "error": (
+                                "Subscription is already paid "
+                                "and no pending bill exists."
+                            )
+                        },
+                        status=400,
+                    )
+
+                # =================================================
+                # APPLY UPGRADE BEFORE MARKING BILL PAID
+                # =================================================
+                if bill and bill.bill_type == "UPGRADE":
+
+                    apply_block = (bill.breakdown or {}).get("apply") or {}
+
+                    package_id = apply_block.get("package_id")
+
+                    if not package_id:
+                        raise ValueError(
+                            "Upgrade bill has no target package ID."
+                        )
+
+                    try:
+                        new_package = Package.objects.get(pk=package_id)
+                    except Package.DoesNotExist:
+                        raise ValueError(
+                            f"Target package ID {package_id} does not exist."
+                        )
+
+                    if new_package.member_limit is None:
+                        raise ValueError(
+                            "Target package has no member limit."
+                        )
+
+                    if (
+                        apply_block.get("billing_cycle")
+                        not in ("MONTHLY", "YEARLY")
+                    ):
+                        raise ValueError(
+                            "Invalid billing cycle in upgrade bill."
+                        )
+
+                    if int(apply_block.get("duration_months") or 0) <= 0:
+                        raise ValueError(
+                            "Invalid subscription duration in upgrade bill."
+                        )
+
+                    custom_capacity = apply_block.get("custom_capacity")
+
+                    if custom_capacity is not None:
+                        custom_capacity = int(custom_capacity)
+
+                        if custom_capacity <= 0:
+                            raise ValueError(
+                                "Custom capacity must be greater than zero."
+                            )
+
+                        if custom_capacity > new_package.member_limit:
+                            raise ValueError(
+                                "Custom capacity exceeds package member limit."
+                            )
+
+                    # Apply the new package.
+                    subscription.package = new_package
+
+                    subscription.billing_cycle = apply_block[
+                        "billing_cycle"
+                    ]
+
+                    subscription.duration_months = int(
+                        apply_block["duration_months"]
+                    )
+
+                    subscription.custom_capacity = custom_capacity
+
+                    # Reset previous package pricing snapshots.
+                    subscription.locked_rate = None
+                    subscription.locked_capacity = None
+                    subscription.locked_package_name = ""
+
+                    subscription.pricing_origin = "UPGRADE"
+                    subscription.upgrade_date = now.date()
+
+                    applied_package = new_package.name
+
+                    # Update the corresponding upgrade request.
+                    upgrade_request_id = (
+                        bill.breakdown or {}
+                    ).get("upgrade_request_id")
+
+                    if upgrade_request_id:
+                        updated = UpgradeRequest.objects.filter(
+                            pk=upgrade_request_id,
+                            church=church,
+                        ).update(
+                            status="APPROVED",
+                            reviewed_at=now,
+                            linked_bill=bill,
+                        )
+
+                        if not updated:
+                            raise ValueError(
+                                "Linked upgrade request was not found "
+                                "for this church."
+                            )
+
+                # =================================================
+                # MARK BILL PAID INSIDE THE SAME TRANSACTION
+                # =================================================
+                if bill:
+                    bill.status = "PAID"
+                    bill.paid_at = now
+
+                    bill.save(
+                        update_fields=[
+                            "status",
+                            "paid_at",
+                        ]
+                    )
+
+                # =================================================
+                # ACTIVATE SUBSCRIPTION AND CHURCH
+                # =================================================
+                subscription.payment_status = "PAID"
                 subscription.is_active = True
                 subscription.save()
 
-                church.is_active = True
-                church.save()
+                if not church.is_active:
+                    church.is_active = True
+                    church.save(update_fields=["is_active"])
 
-                user = User.objects.filter(email=church.email).first()
+                # =================================================
+                # CREATE / UPDATE CHURCH USER
+                # =================================================
+                user = User.objects.filter(
+                    email=church.email
+                ).first()
+
                 password = generate_random_password()
 
                 if user:
                     user.is_active = True
-                    user.role = 'CHURCH'
+                    user.role = "CHURCH"
                     user.church = church
                     user.set_password(password)
+
                     user.save()
+
                     user_created = False
+
                 else:
                     user = User.objects.create(
                         username=church.email,
                         email=church.email,
                         church=church,
-                        role='CHURCH',
+                        role="CHURCH",
                         is_active=True,
                     )
+
                     user.set_password(password)
                     user.save()
+
                     user_created = True
 
-                email_sent = send_church_credentials(church, password, user)
+                # Capture the username before leaving the transaction.
+                username = user.username
 
-            return Response({
-                "status": "success",
-                "message": "Subscription marked as paid. Church activated.",
-                "data": {
-                    "subscription_id": subscription.id,
-                    "church_id": church.id,
-                    "church_name": church.name,
-                    "credentials_sent": email_sent,
-                    "username": user.username,
-                    "user_created": user_created,
-                }
-            }, status=status.HTTP_200_OK)
+            # =====================================================
+            # SEND CREDENTIALS AFTER DATABASE COMMIT
+            # Email failure must NOT undo a successful payment.
+            # =====================================================
+            try:
+                email_sent = send_church_credentials(
+                    church,
+                    password,
+                    user,
+                )
+            except Exception as email_error:
+                logger.error(
+                    "Church credential email failed for %s: %s",
+                    church.name,
+                    str(email_error),
+                    exc_info=True,
+                )
+                email_sent = False
+
+            # Refresh subscription data.
+            subscription.refresh_from_db()
+            church.refresh_from_db()
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": (
+                        "Payment recorded successfully. "
+                        + (
+                            f"Upgrade applied to {applied_package}. "
+                            if applied_package
+                            else ""
+                        )
+                        + "Church activated."
+                    ),
+                    "data": {
+                        "subscription_id": subscription.id,
+                        "church_id": church.id,
+                        "church_name": church.name,
+                        "credentials_sent": email_sent,
+                        "user_created": user_created,
+                        "username": username,
+                        "applied_bill_id": bill.id if bill else None,
+                        "applied_bill_type": (
+                            bill.bill_type if bill else None
+                        ),
+                        "package_id": subscription.package_id,
+                        "new_package": (
+                            subscription.package.name
+                            if subscription.package
+                            else None
+                        ),
+                        "capacity": subscription.get_capacity(),
+                        "billing_cycle": subscription.billing_cycle,
+                        "duration_months": subscription.duration_months,
+                        "payment_status": subscription.payment_status,
+                        "upgrade_date": subscription.upgrade_date,
+                    },
+                },
+                status=200,
+            )
 
         except ChurchSubscription.DoesNotExist:
             return Response(
                 {"error": "Subscription not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        except Exception as e:
-            logger.error(f"Error marking subscription {pk} as paid: {str(e)}", exc_info=True)
-            return Response(
-                {"error": f"Failed to mark subscription as paid: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=404,
             )
 
+        except (ValueError, TypeError) as e:
+            logger.error(
+                "Payment/upgrade validation failed for subscription %s: %s",
+                pk,
+                str(e),
+                exc_info=True,
+            )
+            return Response(
+                {"error": str(e)},
+                status=400,
+            )
+
+        except Exception as e:
+            logger.error(
+                "Error marking subscription %s as paid: %s",
+                pk,
+                str(e),
+                exc_info=True,
+            )
+            return Response(
+                {
+                    "error": "Failed to process payment and subscription.",
+                    "detail": str(e),
+                },
+                status=500,
+            )
+
+class UpgradeRequestMarkContactedAPIView(APIView):
+    """
+    Mark a PENDING request as CONTACTED (admin has reached out to the church,
+    but the decision is still pending).
+    """
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def post(self, request, pk):
+        try:
+            upgrade = UpgradeRequest.objects.get(pk=pk)
+        except UpgradeRequest.DoesNotExist:
+            return Response({"error": "Upgrade request not found"}, status=404)
+
+        if upgrade.status not in ("PENDING", "CONTACTED"):
+            return Response(
+                {"error": f"Request is already {upgrade.status.lower()}."},
+                status=400,
+            )
+
+        upgrade.status = "CONTACTED"
+        upgrade.reviewed_by = request.user.get_full_name() or request.user.email
+        upgrade.reviewed_at = timezone.now()
+        if request.data.get("admin_note"):
+            upgrade.admin_note = request.data["admin_note"]
+        upgrade.save(update_fields=["status", "reviewed_by", "reviewed_at", "admin_note"])
+
+        return Response(
+            {
+                "status": "success",
+                "message": "Request marked as contacted.",
+                "data": UpgradeRequestSerializer(upgrade).data,
+            },
+            status=200,
+        )
 
 class SubscriptionActivateAPIView(APIView):
     """Activate a subscription"""
@@ -2772,699 +3032,458 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 # logger
 
 
+# ============ BILL (PAYMENT) VIEWS ============
+
+from decimal import Decimal, InvalidOperation
+
+from django.utils import timezone
+from django.db import transaction
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+
+
 class BillCreateAPIView(APIView):
     """
-    Create a new bill.
-
-    Supports:
-    - JSON requests
-    - multipart/form-data requests
-    - payment_receipt image upload
-
-    IMPORTANT:
-    - ChurchSubscription calculates the PRE-TAX subscription amount.
-    - Bill selects the tax.
-    - Bill.save() calculates tax_amount and total_amount.
+    Record a payment (creates a new bill OR marks an existing one paid)
+    and — when the bill is an UPGRADE bill — apply the package switch
+    to the subscription in the same transaction.
     """
 
     permission_classes = [IsAuthenticated, IsAdminUser]
-
-    parser_classes = [
-        MultiPartParser,
-        FormParser,
-        JSONParser,
-    ]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def post(self, request):
-
         try:
-            # ============================================================
-            # REQUEST DATA
-            # ============================================================
-
-            church_id = request.data.get(
-                'church_id'
+            existing_bill_id = request.data.get("bill_id")
+            mark_as_paid = str(request.data.get("mark_as_paid", "true")).lower() in (
+                "true", "1", "yes",
             )
-
-            subscription_id = request.data.get(
-                'subscription_id'
-            )
-
-            bill_type = request.data.get(
-                'bill_type',
-                'NEW'
-            )
-
-            billing_cycle = request.data.get(
-                'billing_cycle'
-            )
-
-            duration_months = request.data.get(
-                'duration_months'
-            )
-
-            # Amount can be supplied by frontend for verification,
-            # but the backend calculates the real amount.
-            requested_amount = request.data.get(
-                'amount'
-            )
-
-            payment_method = request.data.get(
-                'payment_method',
-                'CASH'
-            )
-
-            transaction_id = request.data.get(
-                'transaction_id'
-            )
-
-            note = request.data.get(
-                'note'
-            )
+            payment_method = request.data.get("payment_method", "CASH")
+            transaction_id = request.data.get("transaction_id")
+            note = request.data.get("note")
+            payment_receipt = request.FILES.get("payment_receipt")
 
             # ============================================================
-            # PAYMENT RECEIPT
+            # CASE 2 — recording payment against an existing bill
             # ============================================================
-
-            # Existing Bill.payment_receipt ImageField.
-            #
-            # For multipart/form-data this comes from request.FILES.
-            # For normal JSON requests this will simply be None.
-            payment_receipt = request.FILES.get(
-                'payment_receipt'
-            )
-
-            tax_type_id = request.data.get(
-                'tax_type_id'
-            )
-
-            tax_rate_id = request.data.get(
-                'tax_rate_id'
-            )
+            if existing_bill_id:
+                return self._record_payment_for_existing_bill(
+                    request=request,
+                    bill_id=existing_bill_id,
+                    payment_method=payment_method,
+                    transaction_id=transaction_id,
+                    note=note,
+                    payment_receipt=payment_receipt,
+                )
 
             # ============================================================
-            # BASIC VALIDATION
+            # CASE 1 — creating a new bill
             # ============================================================
+            church_id = request.data.get("church_id")
+            subscription_id = request.data.get("subscription_id")
+            bill_type = request.data.get("bill_type", "NEW")
+            billing_cycle = request.data.get("billing_cycle")
+            duration_months = request.data.get("duration_months")
+            requested_amount = request.data.get("amount")
+            tax_type_id = request.data.get("tax_type_id")
+            tax_rate_id = request.data.get("tax_rate_id")
 
             if not church_id:
-                return Response(
-                    {
-                        "error": "church_id is required"
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
+                return Response({"error": "church_id is required"}, status=400)
             if not subscription_id:
-                return Response(
-                    {
-                        "error": "subscription_id is required"
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            if bill_type not in [
-                'NEW',
-                'UPGRADE',
-                'EXTENSION',
-                'RENEW'
-            ]:
-                return Response(
-                    {
-                        "error": "Invalid bill_type"
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # ============================================================
-            # GET CHURCH
-            # ============================================================
+                return Response({"error": "subscription_id is required"}, status=400)
+            if bill_type not in ["NEW", "UPGRADE", "EXTENSION", "RENEW"]:
+                return Response({"error": "Invalid bill_type"}, status=400)
 
             try:
-                church = Church.objects.get(
-                    id=church_id,
-                    is_deleted=False
-                )
-
+                church = Church.objects.get(id=church_id, is_deleted=False)
             except Church.DoesNotExist:
-                return Response(
-                    {
-                        "error": "Church not found"
-                    },
-                    status=status.HTTP_404_NOT_FOUND
-                )
-
-            # ============================================================
-            # GET SUBSCRIPTION
-            # ============================================================
+                return Response({"error": "Church not found"}, status=404)
 
             try:
                 subscription = (
                     ChurchSubscription.objects
-                    .select_related('package')
+                    .select_related("package")
                     .get(id=subscription_id)
                 )
-
             except ChurchSubscription.DoesNotExist:
-                return Response(
-                    {
-                        "error": "Subscription not found"
-                    },
-                    status=status.HTTP_404_NOT_FOUND
-                )
-
-            # ============================================================
-            # VERIFY SUBSCRIPTION BELONGS TO CHURCH
-            # ============================================================
+                return Response({"error": "Subscription not found"}, status=404)
 
             if subscription.church_id != church.id:
                 return Response(
-                    {
-                        "error": (
-                            "Subscription does not belong "
-                            "to the selected church"
-                        )
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"error": "Subscription does not belong to the selected church"},
+                    status=400,
                 )
 
-            # ============================================================
-            # BILLING DETAILS
-            # ============================================================
-
-            # If billing_cycle was not supplied,
-            # use subscription billing cycle.
             if not billing_cycle:
                 billing_cycle = subscription.billing_cycle
-
-            if billing_cycle not in [
-                'MONTHLY',
-                'YEARLY'
-            ]:
-                return Response(
-                    {
-                        "error": "Invalid billing_cycle"
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # If duration was not supplied,
-            # use subscription duration.
+            if billing_cycle not in ["MONTHLY", "YEARLY"]:
+                return Response({"error": "Invalid billing_cycle"}, status=400)
             if duration_months is None:
                 duration_months = subscription.duration_months
 
-            # ============================================================
-            # CALCULATE PRE-TAX AMOUNT
-            # ============================================================
-
-            amount = Decimal('0')
-
-            # ------------------------------------------------------------
-            # NEW SUBSCRIPTION
-            # ------------------------------------------------------------
-
-            if bill_type == 'NEW':
-
-                amount = Decimal(
-                    subscription.get_total_price()
-                )
-
-            # ------------------------------------------------------------
-            # RENEWAL
-            # ------------------------------------------------------------
-
-            elif bill_type == 'RENEW':
-
-                amount = Decimal(
-                    subscription.get_total_price()
-                )
-
-            # ------------------------------------------------------------
-            # EXTENSION
-            # ------------------------------------------------------------
-
-            elif bill_type == 'EXTENSION':
-
-                # Currently uses subscription price.
-                amount = Decimal(
-                    subscription.get_total_price()
-                )
-
-            # ------------------------------------------------------------
-            # UPGRADE
-            # ------------------------------------------------------------
-
-            elif bill_type == 'UPGRADE':
-
-                # For an upgrade, frontend must send
-                # the new package ID.
-                new_package_id = request.data.get(
-                    'new_package_id'
-                )
-
+            amount = Decimal("0")
+            if bill_type in ("NEW", "RENEW", "EXTENSION"):
+                amount = Decimal(subscription.get_total_price())
+            elif bill_type == "UPGRADE":
+                new_package_id = request.data.get("new_package_id")
                 if not new_package_id:
                     return Response(
-                        {
-                            "error": (
-                                "new_package_id is required "
-                                "for upgrade"
-                            )
-                        },
-                        status=status.HTTP_400_BAD_REQUEST
+                        {"error": "new_package_id is required for upgrade"},
+                        status=400,
                     )
-
                 try:
-                    new_package = Package.objects.get(
-                        id=new_package_id
-                    )
-
+                    new_package = Package.objects.get(id=new_package_id)
                 except Package.DoesNotExist:
-                    return Response(
-                        {
-                            "error": "New package not found"
-                        },
-                        status=status.HTTP_404_NOT_FOUND
-                    )
-
-                # Calculate upgrade price.
-                upgrade_data = (
-                    subscription.calculate_upgrade_cost(
-                        new_package=new_package,
-                        new_billing_cycle=billing_cycle
-                    )
+                    return Response({"error": "New package not found"}, status=404)
+                upgrade_data = subscription.calculate_upgrade_cost(
+                    new_package=new_package,
+                    new_billing_cycle=billing_cycle,
                 )
-
-                amount = Decimal(
-                    str(
-                        upgrade_data['final_amount']
-                    )
-                )
-
-            # ============================================================
-            # AMOUNT VALIDATION
-            # ============================================================
+                amount = Decimal(str(upgrade_data["final_amount"]))
 
             if amount < 0:
-                amount = Decimal('0')
+                amount = Decimal("0")
 
-            # Frontend amount is only verified.
-            # Backend calculated amount remains authoritative.
             if requested_amount is not None:
-
                 try:
-                    requested_amount_decimal = Decimal(
-                        str(requested_amount)
-                    )
-
+                    requested_amount_decimal = Decimal(str(requested_amount))
                     if requested_amount_decimal != amount:
-
                         return Response(
                             {
                                 "error": "Amount mismatch",
-                                "message": (
-                                    "The submitted amount does not "
-                                    "match the calculated subscription amount."
-                                ),
-                                "calculated_amount": float(
-                                    amount
-                                )
+                                "message": "The submitted amount does not match the calculated amount.",
+                                "calculated_amount": float(amount),
                             },
-                            status=status.HTTP_400_BAD_REQUEST
+                            status=400,
                         )
-
-                except (
-                    InvalidOperation,
-                    ValueError
-                ):
-                    return Response(
-                        {
-                            "error": "Invalid amount"
-                        },
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-            # ============================================================
-            # TAX
-            # ============================================================
+                except (InvalidOperation, ValueError):
+                    return Response({"error": "Invalid amount"}, status=400)
 
             tax_type = None
             tax_rate = None
-
-            # ------------------------------------------------------------
-            # TAX TYPE
-            # ------------------------------------------------------------
-
             if tax_type_id:
-
                 try:
-                    tax_type = TaxType.objects.get(
-                        id=tax_type_id
-                    )
-
+                    tax_type = TaxType.objects.get(id=tax_type_id)
                 except TaxType.DoesNotExist:
-                    return Response(
-                        {
-                            "error": "Tax type not found"
-                        },
-                        status=status.HTTP_404_NOT_FOUND
-                    )
-
-            # ------------------------------------------------------------
-            # TAX RATE
-            # ------------------------------------------------------------
-
+                    return Response({"error": "Tax type not found"}, status=404)
             if tax_rate_id:
-
                 try:
-                    tax_rate = TaxRate.objects.get(
-                        id=tax_rate_id
-                    )
-
+                    tax_rate = TaxRate.objects.get(id=tax_rate_id)
                 except TaxRate.DoesNotExist:
-                    return Response(
-                        {
-                            "error": "Tax rate not found"
-                        },
-                        status=status.HTTP_404_NOT_FOUND
-                    )
-
-            # ------------------------------------------------------------
-            # REQUIRE TAX TYPE AND RATE TOGETHER
-            # ------------------------------------------------------------
-
+                    return Response({"error": "Tax rate not found"}, status=404)
             if tax_type and not tax_rate:
                 return Response(
-                    {
-                        "error": (
-                            "tax_rate_id is required when "
-                            "tax_type_id is supplied"
-                        )
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"error": "tax_rate_id is required when tax_type_id is supplied"},
+                    status=400,
                 )
-
             if tax_rate and not tax_type:
                 return Response(
-                    {
-                        "error": (
-                            "tax_type_id is required when "
-                            "tax_rate_id is supplied"
-                        )
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"error": "tax_type_id is required when tax_rate_id is supplied"},
+                    status=400,
                 )
-
-            # ------------------------------------------------------------
-            # VERIFY TAX RATE BELONGS TO TAX TYPE
-            # ------------------------------------------------------------
-
-            if tax_rate and tax_type:
-
-                if tax_rate.tax_type_id != tax_type.id:
-
-                    return Response(
-                        {
-                            "error": (
-                                "Selected tax rate does not belong "
-                                "to the selected tax type"
-                            )
-                        },
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-            # ============================================================
-            # PAYMENT RECEIPT VALIDATION
-            # ============================================================
+            if tax_rate and tax_type and tax_rate.tax_type_id != tax_type.id:
+                return Response(
+                    {"error": "Selected tax rate does not belong to the selected tax type"},
+                    status=400,
+                )
 
             if payment_receipt:
-
-                # Allow only image files.
-                content_type = getattr(
-                    payment_receipt,
-                    'content_type',
-                    ''
-                )
-
-                allowed_types = [
-                    'image/jpeg',
-                    'image/jpg',
-                    'image/png',
-                    'image/webp',
-                ]
-
-                if content_type not in allowed_types:
+                content_type = getattr(payment_receipt, "content_type", "")
+                allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
+                if content_type not in allowed:
                     return Response(
-                        {
-                            "error": (
-                                "Invalid payment receipt. "
-                                "Only JPG, JPEG, PNG and WEBP "
-                                "images are allowed."
-                            )
-                        },
-                        status=status.HTTP_400_BAD_REQUEST
+                        {"error": "Invalid payment receipt. Only JPG, JPEG, PNG and WEBP images are allowed."},
+                        status=400,
                     )
-
-                # Maximum 5 MB.
-                max_size = 5 * 1024 * 1024
-
-                if payment_receipt.size > max_size:
+                if payment_receipt.size > 5 * 1024 * 1024:
                     return Response(
-                        {
-                            "error": (
-                                "Payment receipt image must "
-                                "be 5 MB or smaller."
-                            )
-                        },
-                        status=status.HTTP_400_BAD_REQUEST
+                        {"error": "Payment receipt image must be 5 MB or smaller."},
+                        status=400,
                     )
-
-            # ============================================================
-            # BREAKDOWN
-            # ============================================================
 
             breakdown = {
-                'church_name': church.name,
-
-                'package_name': (
-                    subscription.package.name
-                    if subscription.package
-                    else None
+                "church_name": church.name,
+                "package_name": (
+                    subscription.package.name if subscription.package else None
                 ),
-
-                'billing_cycle': billing_cycle,
-
-                'duration_months': duration_months,
-
-                # PRE-TAX AMOUNT
-                'amount': float(amount),
-
-                'payment_method': payment_method,
-
-                'transaction_id': transaction_id,
-
-                'bill_type': bill_type,
-
-                # Tax snapshot information
-                'tax_type_id': (
-                    tax_type.id
-                    if tax_type
-                    else None
-                ),
-
-                'tax_type_name': (
-                    str(tax_type)
-                    if tax_type
-                    else None
-                ),
-
-                'tax_rate_id': (
-                    tax_rate.id
-                    if tax_rate
-                    else None
-                ),
-
-                'tax_percentage': (
-                    float(
-                        tax_rate.rate_percentage
-                    )
-                    if tax_rate
-                    else 0
+                "billing_cycle": billing_cycle,
+                "duration_months": duration_months,
+                "amount": float(amount),
+                "payment_method": payment_method,
+                "transaction_id": transaction_id,
+                "bill_type": bill_type,
+                "tax_type_id": tax_type.id if tax_type else None,
+                "tax_type_name": str(tax_type) if tax_type else None,
+                "tax_rate_id": tax_rate.id if tax_rate else None,
+                "tax_percentage": (
+                    float(tax_rate.rate_percentage) if tax_rate else 0
                 ),
             }
 
-            # ============================================================
-            # CREATE BILL
-            # ============================================================
+            with transaction.atomic():
+                bill = Bill.objects.create(
+                    church=church,
+                    subscription=subscription,
+                    bill_type=bill_type,
+                    billing_cycle=billing_cycle,
+                    duration_months=duration_months,
+                    amount=amount,
+                    payment_method=payment_method,
+                    transaction_id=transaction_id,
+                    note=note,
+                    payment_receipt=payment_receipt,
+                    tax_type=tax_type,
+                    tax_rate=tax_rate,
+                    status="PAID" if mark_as_paid else "UNPAID",
+                    paid_at=timezone.now() if mark_as_paid else None,
+                    breakdown=breakdown,
+                )
 
-            bill = Bill.objects.create(
-                church=church,
+                if bill_type == "UPGRADE" and mark_as_paid:
+                    apply_block = (bill.breakdown or {}).get("apply") or {}
+                    package_id = apply_block.get("package_id")
+                    if package_id:
+                        try:
+                            new_package = Package.objects.get(id=package_id)
+                        except Package.DoesNotExist:
+                            new_package = None
+                        if new_package:
+                            subscription.package = new_package
+                            subscription.billing_cycle = apply_block.get(
+                                "billing_cycle", subscription.billing_cycle
+                            )
+                            subscription.duration_months = apply_block.get(
+                                "duration_months", subscription.duration_months
+                            )
+                            subscription.custom_capacity = apply_block.get(
+                                "custom_capacity"
+                            )
+                            subscription.locked_rate = None
+                            subscription.locked_capacity = None
+                            subscription.locked_package_name = ""
+                            subscription.pricing_origin = "UPGRADE"
+                            subscription.upgrade_date = timezone.now().date()
+                            subscription.payment_status = "PAID"
+                            subscription.is_active = True
+                            subscription.save()
 
-                subscription=subscription,
+                            upgrade_request_id = (bill.breakdown or {}).get(
+                                "upgrade_request_id"
+                            )
+                            if upgrade_request_id:
+                                UpgradeRequest.objects.filter(
+                                    id=upgrade_request_id
+                                ).update(
+                                    status="APPROVED",
+                                    reviewed_at=timezone.now(),
+                                    linked_bill=bill,
+                                )
 
-                bill_type=bill_type,
-
-                billing_cycle=billing_cycle,
-
-                duration_months=duration_months,
-
-                # IMPORTANT:
-                # This is BEFORE TAX.
-                amount=amount,
-
-                payment_method=payment_method,
-
-                transaction_id=transaction_id,
-
-                note=note,
-
-                # EXISTING IMAGE FIELD
-                payment_receipt=payment_receipt,
-
-                tax_type=tax_type,
-
-                tax_rate=tax_rate,
-
-                status='UNPAID',
-
-                breakdown=breakdown
-            )
-
-            # ============================================================
-            # PAYMENT RECEIPT URL
-            # ============================================================
+                            if not church.is_active:
+                                church.is_active = True
+                                church.save(update_fields=["is_active"])
 
             payment_receipt_url = None
-
             if bill.payment_receipt:
-
                 try:
-                    payment_receipt_url = (
-                        request.build_absolute_uri(
-                            bill.payment_receipt.url
-                        )
+                    payment_receipt_url = request.build_absolute_uri(
+                        bill.payment_receipt.url
                     )
-
                 except Exception:
                     payment_receipt_url = None
-
-            # ============================================================
-            # RESPONSE
-            # ============================================================
 
             return Response(
                 {
                     "status": "success",
-
-                    "message": (
-                        "Bill created successfully"
-                    ),
-
+                    "message": "Bill created successfully",
                     "data": {
-                        'id': bill.id,
-
-                        'bill_number': bill.bill_number,
-
-                        'invoice_number': bill.invoice_number,
-
-                        'church_id': (
-                            church.id
-                        ),
-
-                        'church_name': (
-                            church.name
-                        ),
-
-                        'subscription_id': (
-                            subscription.id
-                        ),
-
-                        'package_name': (
+                        "id": bill.id,
+                        "bill_number": bill.bill_number,
+                        "invoice_number": bill.invoice_number,
+                        "church_id": church.id,
+                        "church_name": church.name,
+                        "subscription_id": subscription.id,
+                        "package_name": (
                             subscription.package.name
                             if subscription.package
                             else None
                         ),
-
-                        'bill_type': (
-                            bill.bill_type
-                        ),
-
-                        'billing_cycle': (
-                            bill.billing_cycle
-                        ),
-
-                        'duration_months': (
-                            bill.duration_months
-                        ),
-
-                        # BEFORE TAX
-                        'amount': float(
-                            bill.amount
-                        ),
-
-                        # SELECTED TAX
-                        'tax_type': (
-                            str(bill.tax_type)
-                            if bill.tax_type
-                            else None
-                        ),
-
-                        'tax_rate': (
-                            str(bill.tax_rate)
-                            if bill.tax_rate
-                            else None
-                        ),
-
-                        'tax_percentage': float(
-                            bill.tax_percentage
-                        ),
-
-                        'tax_amount': float(
-                            bill.tax_amount
-                        ),
-
-                        # FINAL AMOUNT INCLUDING TAX
-                        'total_amount': float(
-                            bill.total_amount
-                        ),
-
-                        'status': (
-                            bill.status
-                        ),
-
-                        'payment_method': (
-                            bill.payment_method
-                        ),
-
-                        'transaction_id': (
-                            bill.transaction_id
-                        ),
-
-                        # PAYMENT RECEIPT
-                        'payment_receipt': (
-                            payment_receipt_url
-                        ),
-
-                        'created_at': (
-                            bill.created_at
-                        ),
-                    }
+                        "bill_type": bill.bill_type,
+                        "billing_cycle": bill.billing_cycle,
+                        "duration_months": bill.duration_months,
+                        "amount": float(bill.amount),
+                        "tax_type": str(bill.tax_type) if bill.tax_type else None,
+                        "tax_rate": str(bill.tax_rate) if bill.tax_rate else None,
+                        "tax_percentage": float(bill.tax_percentage),
+                        "tax_amount": float(bill.tax_amount),
+                        "total_amount": float(bill.total_amount),
+                        "status": bill.status,
+                        "payment_method": bill.payment_method,
+                        "transaction_id": bill.transaction_id,
+                        "payment_receipt": payment_receipt_url,
+                        "created_at": bill.created_at,
+                        "paid_at": bill.paid_at,
+                    },
                 },
-                status=status.HTTP_201_CREATED
+                status=status.HTTP_201_CREATED,
             )
 
         except Exception as e:
+            logger.error(f"Error creating bill: {str(e)}", exc_info=True)
+            return Response({"error": str(e)}, status=400)
 
-            logger.error(
-                f"Error creating bill: {str(e)}",
-                exc_info=True
+    # ================================================================
+    # CASE 2 helper — record payment against an existing bill + switch
+    # ================================================================
+    def _record_payment_for_existing_bill(
+        self,
+        request,
+        bill_id,
+        payment_method,
+        transaction_id,
+        note,
+        payment_receipt,
+    ):
+        try:
+            bill = (
+                Bill.objects
+                .select_related("church", "subscription__package")
+                .get(pk=bill_id)
             )
+        except Bill.DoesNotExist:
+            return Response({"error": "Bill not found"}, status=404)
 
+        if bill.status == "PAID":
+            return Response({"error": "This bill is already paid"}, status=400)
+
+        subscription = bill.subscription
+        church = bill.church
+        if not subscription:
             return Response(
-                {
-                    "error": str(e)
-                },
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Bill has no linked subscription"},
+                status=400,
             )
 
+        if payment_receipt:
+            content_type = getattr(payment_receipt, "content_type", "")
+            allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
+            if content_type not in allowed:
+                return Response(
+                    {"error": "Invalid payment receipt. Only JPG, JPEG, PNG and WEBP images are allowed."},
+                    status=400,
+                )
+            if payment_receipt.size > 5 * 1024 * 1024:
+                return Response(
+                    {"error": "Payment receipt image must be 5 MB or smaller."},
+                    status=400,
+                )
+
+        with transaction.atomic():
+            bill.status = "PAID"
+            bill.paid_at = timezone.now()
+            bill.payment_method = payment_method or bill.payment_method
+            bill.transaction_id = transaction_id or bill.transaction_id
+            if note:
+                bill.note = note
+            if payment_receipt:
+                bill.payment_receipt = payment_receipt
+            bill.save(
+                update_fields=[
+                    "status", "paid_at", "payment_method",
+                    "transaction_id", "note", "payment_receipt",
+                ]
+            )
+
+            apply_block = (bill.breakdown or {}).get("apply") or {}
+            package_id = apply_block.get("package_id")
+
+            applied_package = None
+            if bill.bill_type == "UPGRADE" and package_id:
+                try:
+                    new_package = Package.objects.get(id=package_id)
+                except Package.DoesNotExist:
+                    new_package = None
+                if new_package:
+                    subscription.package = new_package
+                    subscription.billing_cycle = apply_block.get(
+                        "billing_cycle", subscription.billing_cycle
+                    )
+                    subscription.duration_months = apply_block.get(
+                        "duration_months", subscription.duration_months
+                    )
+                    subscription.custom_capacity = apply_block.get(
+                        "custom_capacity"
+                    )
+                    subscription.locked_rate = None
+                    subscription.locked_capacity = None
+                    subscription.locked_package_name = ""
+                    subscription.pricing_origin = "UPGRADE"
+                    subscription.upgrade_date = timezone.now().date()
+                    subscription.payment_status = "PAID"
+                    subscription.is_active = True
+                    subscription.save()
+                    applied_package = new_package.name
+
+            upgrade_request_id = (bill.breakdown or {}).get("upgrade_request_id")
+            if upgrade_request_id:
+                UpgradeRequest.objects.filter(id=upgrade_request_id).update(
+                    status="APPROVED",
+                    reviewed_at=timezone.now(),
+                    linked_bill=bill,
+                )
+
+            if not church.is_active:
+                church.is_active = True
+                church.save(update_fields=["is_active"])
+
+        payment_receipt_url = None
+        if bill.payment_receipt:
+            try:
+                payment_receipt_url = request.build_absolute_uri(
+                    bill.payment_receipt.url
+                )
+            except Exception:
+                payment_receipt_url = None
+
+        return Response(
+            {
+                "status": "success",
+                "message": (
+                    "Payment recorded. "
+                    + (f"Upgraded to {applied_package}." if applied_package else "")
+                ),
+                "data": {
+                    "id": bill.id,
+                    "bill_number": bill.bill_number,
+                    "invoice_number": bill.invoice_number,
+                    "church_id": church.id,
+                    "church_name": church.name,
+                    "subscription_id": subscription.id,
+                    "package_name": (
+                        subscription.package.name
+                        if subscription.package
+                        else None
+                    ),
+                    "billing_cycle": bill.billing_cycle,
+                    "duration_months": bill.duration_months,
+                    "amount": float(bill.amount),
+                    "total_amount": float(bill.total_amount),
+                    "status": bill.status,
+                    "paid_at": bill.paid_at,
+                    "payment_method": bill.payment_method,
+                    "transaction_id": bill.transaction_id,
+                    "payment_receipt": payment_receipt_url,
+                    "upgraded": bool(applied_package),
+                    "new_package": applied_package,
+                },
+            },
+            status=200,
+        )
+    
 class BillDetailAPIView(APIView):
     """Get bill details"""
     permission_classes = [IsAuthenticated, IsAdminUser]
@@ -3998,75 +4017,155 @@ class BillReceiptPDFAPIView(APIView):
 
 # ============ UPGRADE REQUEST VIEWS ============
 
+from registry.serializers import UpgradeRequestSerializer
+from registry.services import calculate_prorated_upgrade_amount
+
+
 class UpgradeRequestListAPIView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
 
     def get(self, request):
+        qs = UpgradeRequest.objects.select_related(
+            "church", "current_package", "requested_package",
+        ).order_by("-created_at")
+
+        status_filter = request.query_params.get("status")
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+
+        return Response(UpgradeRequestSerializer(qs, many=True).data, status=200)
+
+class UpgradeRequestDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request, pk):
         try:
-            requests = UpgradeRequest.objects.select_related(
-                'church', 'current_package', 'requested_package'
-            ).order_by('-created_at')
+            obj = UpgradeRequest.objects.select_related(
+                "church", "current_package", "requested_package",
+            ).get(pk=pk)
+        except UpgradeRequest.DoesNotExist:
+            return Response({"error": "Upgrade request not found"}, status=404)
 
-            data = []
-            for req in requests:
-                data.append({
-                    'id': req.id,
-                    'church': req.church.id,
-                    'church_name': req.church.name,
-                    'current_package_name': req.current_package.name,
-                    'requested_package_name': req.requested_package.name,
-                    'requested_capacity': req.requested_capacity,
-                    'status': req.status,
-                    'reason': req.reason,
-                    'created_at': req.created_at.strftime('%Y-%m-%d %H:%M'),
-                    'reviewed_at': req.reviewed_at.strftime('%Y-%m-%d %H:%M') if req.reviewed_at else None,
-                })
-
-            return Response({
-                "status": "success",
-                "count": len(data),
-                "data": data
-            }, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            logger.error(f"Error fetching upgrade requests: {str(e)}", exc_info=True)
-            return Response(
-                {"error": "Failed to fetch upgrade requests"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        return Response(UpgradeRequestSerializer(obj).data, status=200)
 
 
 class UpgradeRequestApproveAPIView(APIView):
+    """
+    Approve a pending upgrade request.
+
+    Creates an UPGRADE Bill in UNPAID state. Does NOT switch the
+    subscription — that happens when the bill is marked paid
+    (see SubscriptionMarkPaidAPIView).
+    """
     permission_classes = [IsAuthenticated, IsAdminUser]
 
     def post(self, request, pk):
         try:
-            upgrade_request = UpgradeRequest.objects.get(pk=pk, status='PENDING')
-
-            upgrade_request.status = 'APPROVED'
-            # 🔥 FIX 6: the model field is `reviewed_at`. The old code set
-            # `reviewed_date` and `reviewed_by`, neither of which exists —
-            # Python allowed the assignment, so it silently never saved and
-            # approvals recorded no timestamp at all.
-            upgrade_request.reviewed_at = timezone.now()
-            upgrade_request.save(update_fields=['status', 'reviewed_at'])
-
-            return Response({
-                "status": "success",
-                "message": f"Upgrade request #{upgrade_request.id} approved successfully"
-            }, status=status.HTTP_200_OK)
-
+            upgrade = UpgradeRequest.objects.select_related(
+                "church", "current_package", "requested_package",
+            ).get(pk=pk)
         except UpgradeRequest.DoesNotExist:
+            return Response({"error": "Upgrade request not found"}, status=404)
+
+        if upgrade.status in ("APPROVED", "REJECTED"):
             return Response(
-                {"error": "Upgrade request not found or already processed"},
-                status=status.HTTP_404_NOT_FOUND
+                {"error": f"Request already {upgrade.status.lower()}."},
+                status=400,
             )
-        except Exception as e:
-            logger.error(f"Error approving upgrade request {pk}: {str(e)}", exc_info=True)
+
+        subscription = getattr(upgrade.church, "subscription", None)
+        if not subscription:
+            return Response({"error": "Church has no subscription."}, status=400)
+
+        if subscription.is_expired():
             return Response(
-                {"error": "Failed to approve upgrade request"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Church subscription is expired. Renew instead."},
+                status=400,
             )
+
+        if Bill.objects.filter(subscription=subscription, status="UNPAID").exists():
+            return Response(
+                {"error": "Church has unpaid bills. Clear them first."},
+                status=400,
+            )
+
+        target = upgrade.requested_package
+        if target.member_limit is None:
+            return Response(
+                {"error": "Target package has no member limit."}, status=400,
+            )
+
+        capacity = upgrade.requested_capacity or target.member_limit
+        billing_cycle = upgrade.requested_billing_cycle or subscription.billing_cycle
+
+        # Re-quote server-side
+        quote = calculate_prorated_upgrade_amount(
+            subscription=subscription,
+            target_package=target,
+            target_billing_cycle=billing_cycle,
+            target_capacity=capacity,
+        )
+
+        if quote["amount"] <= 0:
+            return Response(
+                {"error": "Computed upgrade amount is zero; nothing to bill."},
+                status=400,
+            )
+
+        new_duration = 12 if billing_cycle == "YEARLY" else 1
+
+        with transaction.atomic():
+            bill = Bill.objects.create(
+                church=upgrade.church,
+                subscription=subscription,
+                bill_type="UPGRADE",
+                billing_cycle=billing_cycle,
+                duration_months=new_duration,
+                amount=quote["amount"],
+                status="UNPAID",
+                breakdown={
+                    "items": [quote["breakdown"]],
+                    "grand_total": float(quote["amount"]),
+                    "credit_generated": float(quote["credit"]),
+                    "package_name": target.name,
+                    "source": "ADMIN_APPROVED_UPGRADE_REQUEST",
+                    "upgrade_request_id": upgrade.id,
+                    "apply": {
+                        "package_id": target.id,
+                        "billing_cycle": billing_cycle,
+                        "duration_months": new_duration,
+                        "custom_capacity": (
+                            capacity
+                            if capacity != target.member_limit
+                            else None
+                        ),
+                    },
+                },
+            )
+
+            upgrade.status = "APPROVED"
+            upgrade.reviewed_by = (
+                request.user.get_full_name() or request.user.email
+            )
+            upgrade.reviewed_at = timezone.now()
+            upgrade.admin_note = request.data.get("admin_note", "")
+            upgrade.quoted_amount = quote["amount"]
+            upgrade.linked_bill = bill
+            upgrade.save(update_fields=[
+                "status", "reviewed_by", "reviewed_at",
+                "admin_note", "quoted_amount", "linked_bill",
+            ])
+
+        return Response(
+            {
+                "status": "success",
+                "message": "Upgrade approved. Bill generated.",
+                "bill_id": bill.id,
+                "amount": float(quote["amount"]),
+                "data": UpgradeRequestSerializer(upgrade).data,
+            },
+            status=200,
+        )
 
 
 class UpgradeRequestRejectAPIView(APIView):
@@ -4074,43 +4173,33 @@ class UpgradeRequestRejectAPIView(APIView):
 
     def post(self, request, pk):
         try:
-            upgrade_request = UpgradeRequest.objects.get(pk=pk, status='PENDING')
-
-            upgrade_request.status = 'REJECTED'
-            # 🔥 FIX 6: `reviewed_at` is the real field name. The rejection
-            # note also has nowhere to live — the model has no `notes` field,
-            # only `reason` (which holds the church's original request text).
-            # Appending keeps both without a schema change.
-            upgrade_request.reviewed_at = timezone.now()
-
-            rejection_reason = request.data.get('reason')
-            update_fields = ['status', 'reviewed_at']
-
-            if rejection_reason:
-                existing = upgrade_request.reason or ''
-                upgrade_request.reason = (
-                    f"{existing}\n\n[Admin rejection note] {rejection_reason}".strip()
-                )
-                update_fields.append('reason')
-
-            upgrade_request.save(update_fields=update_fields)
-
-            return Response({
-                "status": "success",
-                "message": f"Upgrade request #{upgrade_request.id} rejected successfully"
-            }, status=status.HTTP_200_OK)
-
+            upgrade = UpgradeRequest.objects.get(pk=pk)
         except UpgradeRequest.DoesNotExist:
+            return Response({"error": "Upgrade request not found"}, status=404)
+
+        if upgrade.status in ("APPROVED", "REJECTED"):
             return Response(
-                {"error": "Upgrade request not found or already processed"},
-                status=status.HTTP_404_NOT_FOUND
+                {"error": f"Request already {upgrade.status.lower()}."},
+                status=400,
             )
-        except Exception as e:
-            logger.error(f"Error rejecting upgrade request {pk}: {str(e)}", exc_info=True)
-            return Response(
-                {"error": "Failed to reject upgrade request"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+
+        upgrade.status = "REJECTED"
+        upgrade.reviewed_by = request.user.get_full_name() or request.user.email
+        upgrade.reviewed_at = timezone.now()
+        upgrade.admin_note = request.data.get("admin_note", "")
+        upgrade.save(update_fields=[
+            "status", "reviewed_by", "reviewed_at", "admin_note",
+        ])
+
+        return Response(
+            {
+                "status": "success",
+                "message": "Upgrade request rejected.",
+                "data": UpgradeRequestSerializer(upgrade).data,
+            },
+            status=200,
+        )
+
 
 class PackageUpdateAPIView(PackageDetailAPIView):
     """Alias — same put/patch as PackageDetailAPIView."""

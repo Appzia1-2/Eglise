@@ -21,6 +21,36 @@ from django.utils.dateparse import parse_date
 from datetime import date, datetime, time, timedelta
 from django.db import models, transaction, IntegrityError
 
+
+
+class FinancialYearLockMixin:
+    """
+    Mixin to enforce financial year locking.
+    Checks if the entry_date falls within a closed financial year.
+    """
+    def validate_financial_year(self):
+        from django.core.exceptions import ValidationError
+        
+        # Determine the date field to check
+        entry_date = getattr(self, "entry_date", None) or getattr(self, "payment_date", None) or getattr(self, "receipt_date", None) or getattr(self, "contra_date", None)
+        
+        if not entry_date or not self.church_id:
+            return
+
+        # Find if this date falls in a closed year
+        closed_year = FinancialYear.objects.filter(
+            church_id=self.church_id,
+            start_date__lte=entry_date,
+            end_date__gte=entry_date,
+            is_closed=True
+        ).first()
+
+        if closed_year:
+            raise ValidationError(
+                f"The financial year '{closed_year.name}' is closed. "
+                f"Cannot post transactions dated {entry_date}."
+            )
+
 # ============================================================
 # LEDGER RESOLUTION HELPERS
 # ============================================================
@@ -1830,6 +1860,12 @@ class Member(models.Model):
         auto_now=True
     )
 
+    class Meta:
+        unique_together = [
+            ("church", "register_number"),
+            ("church", "folio_number"),
+        ]
+
     # ============================================================
     # SAVE
     # ============================================================
@@ -1966,52 +2002,70 @@ class Bill(models.Model):
     def __str__(self):
         return f"Bill #{self.bill_number} - {self.church.name}"
 
-
 class UpgradeRequest(models.Model):
     STATUS_CHOICES = (
         ("PENDING", "Pending"),
+        ("CONTACTED", "Contacted"),
         ("APPROVED", "Approved"),
         ("REJECTED", "Rejected"),
     )
 
     church = models.ForeignKey(
-        Church,
-        on_delete=models.CASCADE,
-        related_name="upgrade_requests"
+        Church, on_delete=models.CASCADE, related_name="upgrade_requests"
     )
-
     current_package = models.ForeignKey(
-        Package,
-        on_delete=models.PROTECT,
-        related_name="+"
+        Package, on_delete=models.PROTECT, related_name="+"
     )
-
     requested_package = models.ForeignKey(
-        Package,
-        on_delete=models.PROTECT,
-        related_name="+"
+        Package, on_delete=models.PROTECT, related_name="+"
     )
 
     requested_capacity = models.PositiveIntegerField(
-        null=True,
-        blank=True,
-        help_text="Only for custom or higher member request"
+        null=True, blank=True,
+        help_text="Only for custom or higher member request",
+    )
+    requested_billing_cycle = models.CharField(
+        max_length=10,
+        choices=(("MONTHLY", "Monthly"), ("YEARLY", "Yearly")),
+        default="YEARLY",
+    )
+    quoted_amount = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text="Prorated amount quoted to the church when they enquired.",
     )
 
-    reason = models.TextField(blank=True)
+    # Contact / enquiry fields
+    contact_person = models.CharField(max_length=150, blank=True)
+    mobile = models.CharField(max_length=20, blank=True)
+    email = models.EmailField(blank=True)
+    preferred_contact = models.CharField(
+        max_length=20, blank=True, default="Phone Call"
+    )
+    preferred_date = models.DateField(null=True, blank=True)
+    reason = models.TextField(blank=True, help_text="Requirements / Message")
 
+    # Workflow
     status = models.CharField(
-        max_length=10,
-        choices=STATUS_CHOICES,
-        default="PENDING"
+        max_length=10, choices=STATUS_CHOICES, default="PENDING"
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)   # only once
+    reviewed_by = models.CharField(max_length=150, blank=True, null=True)
+    admin_note = models.TextField(blank=True, null=True)
+
+    # Link to the bill generated on approval
+    linked_bill = models.ForeignKey(
+        "Bill",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="upgrade_request",
+        help_text="Bill generated when admin approves this request.",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
-    reviewed_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)   
 
     def __str__(self):
         return f"{self.church.name} → {self.requested_package.name}"
-
 
 #Baptism
 class Baptism(models.Model):
@@ -2106,39 +2160,22 @@ class Baptism(models.Model):
     class Meta:
         unique_together = ("church", "register_number")
 
-    def save(self, *args, **kwargs):
+    def save(self, *args, **kwargs):              # ← CORRECT: on Baptism
         if self.register_number:
             super().save(*args, **kwargs)
             return
 
         from django.db import transaction, IntegrityError
         from registry.services import generate_register_number
-        
+
         for attempt in range(5):
             try:
                 with transaction.atomic():
-                    # Lock the setting row
-                    setting = RegisterSetting.objects.select_for_update().filter(
-                        church=self.church, register_type="BAPTISM"
-                    ).first()
-                    
-                    # Self-Healing
-                    highest_existing = Baptism.objects.filter(
-                        church=self.church, register_number__startswith="BAP-"
-                    ).order_by('-id').first()
-                    
-                    if highest_existing and highest_existing.register_number:
-                        try:
-                            last_num = int(highest_existing.register_number.split("-")[-1])
-                            if setting and setting.next_register_number <= last_num:
-                                setting.next_register_number = last_num + 1
-                                setting.save()
-                        except (ValueError, IndexError):
-                            pass
-
-                    self.register_number = generate_register_number(self.church, "BAPTISM")
+                    self.register_number = generate_register_number(
+                        self.church, "BAPTISM"
+                    )
                     super().save(*args, **kwargs)
-                break
+                return
             except IntegrityError:
                 if attempt == 4:
                     raise
@@ -2242,48 +2279,22 @@ class Marriage(models.Model):
         unique_together = ("church", "register_number")
         ordering = ["-date"]
 
-    def save(self, *args, **kwargs):
+    def save(self, *args, **kwargs):                  # ← dedented to 4 spaces
         if self.register_number:
             super().save(*args, **kwargs)
             return
 
         from django.db import transaction, IntegrityError
-        from django.utils import timezone
-        from .models import RegisterSetting
         from registry.services import generate_register_number
-        
+
         for attempt in range(5):
             try:
                 with transaction.atomic():
-                    # 1. Safely get or create the setting
-                    setting, _ = RegisterSetting.objects.select_for_update().get_or_create(
-                        church=self.church,
-                        register_type="MARRIAGE",
-                        defaults={
-                            "register_prefix": "MAR-",
-                            "register_padding": 4,
-                            "next_register_number": 1,
-                        }
+                    self.register_number = generate_register_number(
+                        self.church, "MARRIAGE"
                     )
-                    
-                    # 2. Self-healing check
-                    highest_existing = Marriage.objects.filter(
-                        church=self.church, register_number__startswith="MAR-"
-                    ).order_by('-id').first()
-                    
-                    if highest_existing and highest_existing.register_number:
-                        try:
-                            last_num = int(highest_existing.register_number.split("-")[-1])
-                            if setting.next_register_number <= last_num:
-                                setting.next_register_number = last_num + 1
-                                setting.save()
-                        except (ValueError, IndexError):
-                            pass
-
-                    # 3. Generate and save
-                    self.register_number = generate_register_number(self.church, "MARRIAGE")
                     super().save(*args, **kwargs)
-                break
+                return
             except IntegrityError:
                 if attempt == 4:
                     raise
@@ -2391,85 +2402,70 @@ class DeathRegister(models.Model):
  
     created_at = models.DateTimeField(auto_now_add=True)
  
-    class Meta:
-        unique_together = ("church", "reg_no")
-        ordering = ["-created_at"]
- 
-    def __str__(self):
+    class Meta:                                            # 4  ← MUST be 4
+        unique_together = ("church", "reg_no")             # 8
+        ordering = ["-created_at"]                         # 8
+
+    def __str__(self):                                     # 4
         return f"{self.member.name} ({self.reg_no or 'No Reg No'})"
- 
+
     @property
-    def tomb_charge(self):
+    def tomb_charge(self):                                 # 4
         return self.tomb_fee.tomb_fees if self.tomb_fee else None
-    
+
     @property
-    def tomb_type(self):
+    def tomb_type(self):                                   # 4
         return self.tomb_fee.tomb_type if self.tomb_fee else None
- 
-    def save(self, *args, **kwargs):
+
+    def save(self, *args, **kwargs):                       # 4  ← MUST be 4
         self._clean_dates()
-        
+
         if self.reg_no:
             super().save(*args, **kwargs)
             return
 
         from django.db import transaction, IntegrityError
         from registry.services import generate_register_number
-        
+
         for attempt in range(5):
             try:
                 with transaction.atomic():
-                    # Lock the setting row
-                    setting = RegisterSetting.objects.select_for_update().filter(
-                        church=self.church, register_type="DEATH"
-                    ).first()
-                    
-                    # Self-Healing
-                    highest_existing = DeathRegister.objects.filter(
-                        church=self.church, reg_no__startswith="DEA-"
-                    ).order_by('-id').first()
-                    
-                    if highest_existing and highest_existing.reg_no:
-                        try:
-                            last_num = int(highest_existing.reg_no.split("-")[-1])
-                            if setting and setting.next_register_number <= last_num:
-                                setting.next_register_number = last_num + 1
-                                setting.save()
-                        except (ValueError, IndexError):
-                            pass
-
-                    self.reg_no = generate_register_number(self.church, "DEATH")
+                    self.reg_no = generate_register_number(
+                        self.church, "DEATH"
+                    )
                     super().save(*args, **kwargs)
-                break
+                return
             except IntegrityError:
                 if attempt == 4:
                     raise
                 self.reg_no = None
                 continue
- 
-    def _clean_dates(self):
+
+    def _clean_dates(self):                                # 4
         if self.died_on and isinstance(self.died_on, str):
             parsed = parse_date(self.died_on)
             if parsed:
                 self.died_on = parsed
-        
+
         if self.funeral_on and isinstance(self.funeral_on, str):
             parsed = parse_date(self.funeral_on)
             if parsed:
                 self.funeral_on = parsed
-    
-    def get_days_since_death(self):
+
+    def get_days_since_death(self):                        # 4
         if self.died_on:
             today = date.today()
             return (today - self.died_on).days
         return None
-    
-    def get_days_since_funeral(self):
+
+    def get_days_since_funeral(self):                      # 4
         if self.funeral_on:
             today = date.today()
             return (today - self.funeral_on).days
         return None
  
+
+# models.py
 
 class RegisterSetting(models.Model):
 
@@ -2514,6 +2510,24 @@ class RegisterSetting(models.Model):
         help_text="Example: 0001"
     )
 
+    # ---------- ✅ NEW FIELDS ----------
+    separator = models.CharField(
+        max_length=5,
+        default="/",
+        blank=True,
+        help_text="Separator between parts, e.g. '/', '-', '_'"
+    )
+
+    include_parish_code = models.BooleanField(
+        default=True,
+        help_text="Include the church code (e.g. CHR-0012) in the register number."
+    )
+
+    include_leading_zeros = models.BooleanField(
+        default=True,
+        help_text="Pad the sequence with leading zeros to the configured length."
+    )
+
     # ---------- FOLIO NUMBER (for HEAD register) ----------
     folio_prefix = models.CharField(
         max_length=20,
@@ -2541,21 +2555,21 @@ class RegisterSetting(models.Model):
     )
 
     financial_year = models.PositiveIntegerField(
-    null=True,
-    blank=True,
-    help_text="Example: 2025 for FY 2025-26"
+        null=True,
+        blank=True,
+        help_text="Example: 2025 for FY 2025-26"
     )
 
     financial_year_start_month = models.PositiveIntegerField(
-    null=True,
-    blank=True,
-    help_text="Start month (1-12)"
+        null=True,
+        blank=True,
+        help_text="Start month (1-12)"
     )
 
     financial_year_end_month = models.PositiveIntegerField(
-    null=True,
-    blank=True,
-    help_text="End month (1-12)"
+        null=True,
+        blank=True,
+        help_text="End month (1-12)"
     )
 
     financial_year_format = models.CharField(
@@ -2564,6 +2578,17 @@ class RegisterSetting(models.Model):
         help_text="Example: 2025-26"
     )
 
+    current_financial_year_label = models.CharField(     # ← NEW
+        max_length=20,
+        blank=True,
+        default="",
+        help_text=(
+            "The FY label (e.g. '2026-27') that was active when the "
+            "counter was last reset. Used to detect year rollover."
+        ),
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -2571,6 +2596,51 @@ class RegisterSetting(models.Model):
 
     def __str__(self):
         return f"{self.church.name} - {self.register_type}"
+
+
+
+class FinancialYear(models.Model):
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="financial_years"
+    )
+    name = models.CharField(max_length=50, help_text="e.g. 2026 - 2027")
+    start_date = models.DateField()
+    end_date = models.DateField()
+    
+    # New fields from UI
+    description = models.TextField(blank=True, null=True)
+    set_by = models.CharField(max_length=150, blank=True, null=True)
+    
+    is_current = models.BooleanField(default=False)
+    is_closed = models.BooleanField(default=False)
+    
+    # Financial Controls (New)
+    carry_forward_closing_balances = models.BooleanField(default=True)
+    allow_backdated_entries = models.BooleanField(default=False)
+    lock_entries_after_closure = models.BooleanField(default=True)
+
+    closed_on = models.DateTimeField(null=True, blank=True)
+    closed_by = models.CharField(max_length=150, blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-start_date"]
+        unique_together = ("church", "name")
+
+    def __str__(self):
+        return f"{self.name} ({'Closed' if self.is_closed else 'Open'})"
+
+    def save(self, *args, **kwargs):
+        if self.is_current:
+            FinancialYear.objects.filter(
+                church=self.church
+            ).exclude(pk=self.pk).update(is_current=False)
+        super().save(*args, **kwargs)
+
 
 class Events(models.Model):
 
@@ -2833,7 +2903,7 @@ class AccountLedgerMaster(models.Model):
     def current_balance(self):
         return self.get_current_balance()
     
-class LedgerEntry(models.Model):
+class LedgerEntry(FinancialYearLockMixin,models.Model):
     """
     Single-entry ledger posting.
 
@@ -2933,6 +3003,10 @@ class LedgerEntry(models.Model):
     def __str__(self):
         return f"{self.entry_type} {self.amount} - {self.ledger.ledger_name}"
 
+    def save(self, *args, **kwargs):
+        self.validate_financial_year()  # <-- ADD THIS LINE
+        super().save(*args, **kwargs)
+
     @staticmethod
     def resolve_entry_type(ledger, is_payment_out=True):
         """
@@ -2947,7 +3021,7 @@ class LedgerEntry(models.Model):
 
         return entry_type
 
-class ReceiptMaster(models.Model):
+class ReceiptMaster(FinancialYearLockMixin, models.Model):
     """
     Receipt header. Money coming IN.
 
@@ -3069,6 +3143,8 @@ class ReceiptMaster(models.Model):
     # ============================================================
 
     def save(self, *args, **kwargs):
+        self.validate_financial_year()  # <-- ADD THIS LINE (at the very top)
+
         if not self.receipt_number:
             from django.db import transaction
 
@@ -3294,7 +3370,7 @@ class BankAccount(models.Model):
     def __str__(self):
         return self.display_name
 
-class PaymentMaster(models.Model):
+class PaymentMaster(FinancialYearLockMixin, models.Model):
     PAYMENT_TYPE_CHOICES = (
         ("BANK", "Bank"),
         ("CASH", "Cash"),
@@ -3349,6 +3425,8 @@ class PaymentMaster(models.Model):
         unique_together = [("church", "voucher_number")]
 
     def save(self, *args, **kwargs):
+        self.validate_financial_year()  # <-- ADD THIS LINE (at the very top)
+
         if not self.voucher_number:
             year = timezone.now().year
             last = PaymentMaster.objects.filter(
@@ -3799,7 +3877,7 @@ class LegacyDeath(models.Model):
 
 
 # ----------------------------------------------------Contra--------------------------------------------------------------------
-class ContraMaster(models.Model):
+class ContraMaster(FinancialYearLockMixin, models.Model):
     """
     Contra voucher — money movement between two of the church's own
     Cash / Bank ledgers. Not income, not expense.
@@ -3881,6 +3959,8 @@ class ContraMaster(models.Model):
 
     # ---- numbering (same pattern as PaymentMaster) ----
     def save(self, *args, **kwargs):
+        self.validate_financial_year()  # <-- ADD THIS LINE (at the very top)
+
         if not self.voucher_number:
             year = timezone.now().year
             last = ContraMaster.objects.filter(
@@ -3899,7 +3979,6 @@ class ContraMaster(models.Model):
             self.voucher_number = f"CON-{year}-{str(n).zfill(5)}"
 
         super().save(*args, **kwargs)
-
     # ============================================================
     # LEDGER POSTING
     # ============================================================
@@ -3930,48 +4009,66 @@ class ContraMaster(models.Model):
     # REVERSAL
     # ============================================================
 
+    
     def reverse_ledger_entry(self):
         """
-        Cancel: mark all live entries cancelled + create opposite reversals.
+        Reverse the two live ledger entries of a Contra voucher.
 
-        Atomic — all legs succeed or none. Reversal entry is created BEFORE
-        the original is marked cancelled, so a failure leaves the original
-        live (no silent money loss).
+        Original entries are preserved and marked cancelled.
+        Reversal entries retain their original bank-account references.
         """
+
         from django.db import transaction
         from django.core.exceptions import ValidationError
         from django.utils import timezone
 
-        originals = list(
-            self.ledger_entries.filter(
-                is_cancelled=False, is_reversal=False
-            )
-        )
-
-        if not originals:
-            return
-
-        if len(originals) != 2:
-            raise ValidationError(
-                f"Contra {self.voucher_number} has {len(originals)} posted entries "
-                f"(expected 2). Manual investigation required before cancelling."
-            )
-
-        reversal_date = timezone.now().date()
-        reversal_narration = f"Reversal of {self.voucher_number}"
-
         with transaction.atomic():
+
+            originals = list(
+                self.ledger_entries.select_for_update().filter(
+                    is_cancelled=False,
+                    is_reversal=False,
+                )
+            )
+
+            if not originals:
+                return
+
+            if len(originals) != 2:
+                raise ValidationError(
+                    f"Contra {self.voucher_number} has "
+                    f"{len(originals)} live original entries. "
+                    "Expected exactly 2. Manual investigation required."
+                )
+
+            reversal_date = timezone.localdate()
+
+            reversal_narration = (
+                f"Reversal of {self.voucher_number}"
+            )
+
             for original in originals:
-                if getattr(original, "reversed_by", None):
-                    continue
+
+                # A live original should never already have a reversal.
+                if original.reversed_entry_id:
+                    raise ValidationError(
+                        f"Ledger entry {original.id} already has "
+                        "a linked reversal. Manual investigation required."
+                    )
 
                 opposite = (
-                    "CREDIT" if original.entry_type == "DEBIT" else "DEBIT"
+                    "CREDIT"
+                    if original.entry_type == "DEBIT"
+                    else "DEBIT"
                 )
 
                 reversal = LedgerEntry.objects.create(
                     church=self.church,
                     ledger=original.ledger,
+
+                    # Preserve the original bank account.
+                    bank_account=original.bank_account,
+
                     entry_type=opposite,
                     amount=original.amount,
                     entry_date=reversal_date,
@@ -3982,4 +4079,10 @@ class ContraMaster(models.Model):
 
                 original.is_cancelled = True
                 original.reversed_entry = reversal
-                original.save(update_fields=["is_cancelled", "reversed_entry"])
+
+                original.save(
+                    update_fields=[
+                        "is_cancelled",
+                        "reversed_entry",
+                    ]
+                )

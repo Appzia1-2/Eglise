@@ -76,9 +76,11 @@ from .views import (
     LegacyMarriageDetailAPIView,
     LegacyDeathListCreateAPIView,
     LegacyDeathDetailAPIView,LedgerEntryListAPIView,ReceiptListCreateAPIView,
-    ReceiptDetailAPIView,
+    ReceiptDetailAPIView,RegisterSettingPreviewAPIView,
     ReceiptCancelAPIView,
-    LedgerBalanceAPIView,MemberLedgerReportAPIView,
+    LedgerBalanceAPIView,MemberLedgerReportAPIView, FinancialYearListCreateAPIView,
+    FinancialYearDetailAPIView,
+    FinancialYearCloseAPIView,
     IncomeExpenditureReportAPIView,
     DonationRegisterReportAPIView,SubscriptionDueListAPIView,BalanceSheetAPIView ,
     SubscriptionPaidListAPIView,ChurchDashboardMetricsAPIView,ReceiptPaymentCombinedAPIView,ContraMasterListCreateView, ContraMasterDetailView,ContraCancelAPIView 
@@ -195,7 +197,13 @@ path("death-registers/<int:pk>/", DeathRegisterUpdateAPIView.as_view(), name="de
     #settingsregister
     path("register-settings/",RegisterSettingListAPIView.as_view(),name="register-settings-list"),
     path("register-settings/create/",RegisterSettingCreateAPIView.as_view(),name="register-settings-create"),
+    path(
+    "register-settings/preview/",
+    RegisterSettingPreviewAPIView.as_view(),
+    name="register-settings-preview",
+    ),
     path("register-settings/<str:register_type>/",RegisterSettingUpdateAPIView.as_view(),name="register-settings-update"),
+    
     path("priests/dropdown/",PriestDropdownAPIView.as_view(),name="priests-dropdown"),
     path("members/family-heads/",FamilyHeadListAPIView.as_view(),name="family-head-list"),
     path("events/", EventListCreateAPIView.as_view(), name="event-list-create"),
@@ -347,4 +355,12 @@ path(
     ReceiptPaymentStatutoryAPIView.as_view(),
     name="receipts-payments-statutory",
 ),
+
+
+
+# Financial Years
+    path("financial-years/", FinancialYearListCreateAPIView.as_view(), name="financial-year-list"),
+    path("financial-years/<int:pk>/", FinancialYearDetailAPIView.as_view(), name="financial-year-detail"),
+    path("financial-years/<int:pk>/close/", FinancialYearCloseAPIView.as_view(), name="financial-year-close"),
+
 ]

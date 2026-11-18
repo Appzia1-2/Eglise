@@ -21,6 +21,7 @@ import {
   LuPrinter,
   LuUserRound,
   LuUsers,
+  LuUserCheck, // ✅ Added icon for Leadership
 } from "react-icons/lu";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -316,7 +317,7 @@ const CommitteeViewPage = () => {
     return d.designation_name || d.name || `Designation #${designationId}`;
   };
 
-    // ==========================================================
+  // ==========================================================
   // PRINT / PDF
   // ==========================================================
 
@@ -682,6 +683,28 @@ const CommitteeViewPage = () => {
                 <FieldRow
                   label="Committee Name"
                   value={committee.committee_name}
+                />
+              </Box>
+
+              {/* ✅ NEW: COMMITTEE LEADERSHIP */}
+              <Box
+                border={`1px solid ${BORDER}`}
+                borderRadius="10px"
+                bg="white"
+                p={{ base: 4, md: 5 }}
+              >
+                <CardHeader
+                  icon={LuUserCheck}
+                  title="Committee Leadership"
+                />
+
+                <FieldRow
+                  label="President (Vicar)"
+                  value={committee.president_name || "Not Assigned"}
+                />
+                <FieldRow
+                  label="Vice President"
+                  value={committee.vice_president_name || "Not Assigned"}
                 />
               </Box>
 

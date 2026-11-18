@@ -182,54 +182,40 @@ const adminApi = {
   updateChurch: async (id, data) => {
   try {
     const token = getAdminToken();
-    
-    // Build FormData to handle file uploads properly
     const formData = new FormData();
-    
-    // Add all fields to FormData
+
     for (const [key, value] of Object.entries(data)) {
       if (value instanceof File) {
-        // Handle file uploads
         formData.append(key, value);
       } else if (value === null || value === undefined) {
-        // Send null/undefined as 'null' string for clarity
-        formData.append(key, 'null');
+        continue;  // ✅ omit instead of sending "null"
       } else {
-        // Convert everything else to string
         formData.append(key, String(value));
       }
     }
- 
-    console.log("Sending FormData to PATCH /api/admin/churches/", id);
-    
-    const response = await apiClient.patch(`/api/admin/churches/${id}/`, formData, {
-      headers: { 
-        Authorization: `Bearer ${token}`,
-        // DO NOT set Content-Type - let browser handle multipart/form-data
-      }
-    });
-    
-    console.log("Church updated successfully:", response.data);
+
+    const response = await apiClient.patch(
+      `/api/admin/churches/${id}/`, formData,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
     return response.data;
-    
   } catch (error) {
-    // Detailed error logging
-    console.error("API Error - Update Church:");
-    console.error("Status:", error.response?.status);
-    console.error("Status Text:", error.response?.statusText);
-    console.error("Error Data:", error.response?.data);
-    console.error("Full Error:", error);
-    
-    // Log specific error fields
-    if (error.response?.data) {
-      if (error.response.data.error) {
-        console.error("Backend error message:", error.response.data.error);
-      }
-      if (error.response.data.detail) {
-        console.error("Backend detail:", error.response.data.detail);
-      }
-    }
-    
+    console.error("API Error - Update Church:", error.response?.data || error.message);
+    throw error;
+  }
+},
+
+markUpgradeContacted: async (id, adminNote = "") => {
+  try {
+    const token = getAdminToken();
+    const response = await apiClient.post(
+      `/api/admin/upgrade-requests/${id}/contacted/`,
+      { admin_note: adminNote },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    return response.data;
+  } catch (error) {
+    console.error("API Error - Mark Contacted:", error.response?.data || error.message);
     throw error;
   }
 },
@@ -447,14 +433,13 @@ const adminApi = {
   deleteSubscription: async (id) => {
   try {
     const token = getAdminToken();
-    const response = await apiClient.post(
-      `/api/admin/subscriptions/${id}/cancel/`,
-      {},
+    const response = await apiClient.delete(
+      `/api/admin/subscriptions/${id}/`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
     return response.data;
   } catch (error) {
-    console.error("API Error - Cancel Subscription:", error.response?.data || error.message);
+    console.error("API Error - Delete Subscription:", error.response?.data || error.message);
     throw error;
   }
 },

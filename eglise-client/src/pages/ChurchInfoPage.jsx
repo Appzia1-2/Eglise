@@ -1,3 +1,4 @@
+// frontend/src/church/pages/ChurchInfoPage.jsx
 import React, { useEffect, useState } from "react";
 
 import {
@@ -36,6 +37,7 @@ import {
   LuSettings,
   LuEye,
   LuUpload,
+  LuRefreshCw,
 } from "react-icons/lu";
 
 import { useNavigate } from "react-router-dom";
@@ -43,8 +45,6 @@ import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 
-// ✅ Correct imports: getChurchDashboard from churchServices,
-// updateMyChurch + getPriestMaster from registryServices
 import { getChurchDashboard } from "../api/churchServices";
 import {
   updateMyChurch,
@@ -57,10 +57,8 @@ import {
 
 const getMediaUrl = (url) => {
   if (!url) return null;
-
   const value = String(url).trim();
   if (!value) return null;
-
   if (
     value.startsWith("http://") ||
     value.startsWith("https://") ||
@@ -68,13 +66,10 @@ const getMediaUrl = (url) => {
   ) {
     return value;
   }
-
   const apiBase =
     import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
-
   const cleanBase = apiBase.replace(/\/+$/, "");
   const cleanUrl = value.replace(/^\/+/, "");
-
   return `${cleanBase}/${cleanUrl}`;
 };
 
@@ -84,11 +79,9 @@ const getMediaUrl = (url) => {
 
 const formatDate = (date, options = {}) => {
   if (!date) return "N/A";
-
   try {
     const parsedDate = new Date(date);
     if (Number.isNaN(parsedDate.getTime())) return "N/A";
-
     return parsedDate.toLocaleDateString("en-IN", options);
   } catch {
     return "N/A";
@@ -102,10 +95,8 @@ const formatDate = (date, options = {}) => {
 const addMonths = (dateInput, months) => {
   const d = new Date(dateInput);
   if (Number.isNaN(d.getTime())) return null;
-
   const day = d.getDate();
   d.setMonth(d.getMonth() + months);
-
   if (d.getDate() < day) {
     d.setDate(0);
   }
@@ -140,7 +131,6 @@ const SectionCard = ({ title, icon, children, action }) => {
           >
             <Icon as={icon} boxSize={4} />
           </Circle>
-
           <Heading
             size="md"
             color="var(--primary-maroon)"
@@ -149,10 +139,8 @@ const SectionCard = ({ title, icon, children, action }) => {
             {title}
           </Heading>
         </HStack>
-
         {action}
       </Flex>
-
       <Box px={{ base: 3, md: 4 }} pb={3}>
         {children}
       </Box>
@@ -182,7 +170,6 @@ const DetailRow = ({ label, value }) => {
       >
         {label}
       </Text>
-
       <Text
         flex="1"
         fontSize="sm"
@@ -220,7 +207,6 @@ const AdminDetail = ({ label, value, isLast = false }) => {
       <Text fontSize="xs" color="var(--dark-text)" mb={1}>
         {label}
       </Text>
-
       <Text
         fontSize="sm"
         fontWeight="600"
@@ -266,7 +252,6 @@ const EditChurchDialog = ({
 
   useEffect(() => {
     if (!open) return;
-
     setForm({
       name: initialChurch?.name || "",
       established_year: initialChurch?.established_year || "",
@@ -280,7 +265,6 @@ const EditChurchDialog = ({
       phone_number: initialChurch?.phone_number || "",
       website: initialChurch?.website || "",
     });
-
     setLogoFile(null);
     setError("");
     setSaving(false);
@@ -294,10 +278,8 @@ const EditChurchDialog = ({
   const handleSubmit = async () => {
     setSaving(true);
     setError("");
-
     try {
       const fd = new FormData();
-
       Object.entries(form).forEach(([key, value]) => {
         if (value === null || value === undefined) return;
         const trimmed =
@@ -305,11 +287,8 @@ const EditChurchDialog = ({
         if (trimmed === "") return;
         fd.append(key, trimmed);
       });
-
       if (logoFile) fd.append("logo", logoFile);
-
       const res = await updateMyChurch(fd);
-
       if (onSaved) onSaved(res?.data || null);
       onClose();
     } catch (err) {
@@ -488,17 +467,12 @@ const EditChurchDialog = ({
                         accept="image/*"
                         hidden
                         onChange={(e) =>
-                          setLogoFile(
-                            e.target.files?.[0] || null
-                          )
+                          setLogoFile(e.target.files?.[0] || null)
                         }
                       />
                     </Button>
-
                     <Text fontSize="sm" color="var(--light-gray)">
-                      {logoFile
-                        ? logoFile.name
-                        : "No file chosen"}
+                      {logoFile ? logoFile.name : "No file chosen"}
                     </Text>
                   </HStack>
                 </Field.Root>
@@ -513,7 +487,6 @@ const EditChurchDialog = ({
               >
                 Cancel
               </Button>
-
               <Button
                 bg="var(--primary-maroon)"
                 color="white"
@@ -540,6 +513,7 @@ const ChurchInfoPage = () => {
 
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [logoError, setLogoError] = useState(false);
   const [vicarName, setVicarName] = useState(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -547,7 +521,6 @@ const ChurchInfoPage = () => {
   // =======================================================
   // FETCH CHURCH DASHBOARD
   // =======================================================
-
   const loadChurch = async () => {
     try {
       const response = await getChurchDashboard();
@@ -562,29 +535,23 @@ const ChurchInfoPage = () => {
   };
 
   // =======================================================
-  // FETCH VICAR — Extracts the MAIN vicar safely
+  // FETCH VICAR
   // =======================================================
-
   const loadVicar = async () => {
     try {
       const res = await getPriestMaster();
       const payload = res?.data || {};
-      
-      // Look inside `current`, `upcoming`, and `previous` for the MAIN vicar
       const allPriests = [
         ...(payload.current || []),
         ...(payload.upcoming || []),
         ...(payload.previous || []),
       ];
-
       const mainVicar = allPriests.find(
         (p) => String(p.designation).toUpperCase() === "MAIN"
       );
-
       if (mainVicar && mainVicar.name) {
         setVicarName(mainVicar.name);
       } else if (payload.current && payload.current.length > 0) {
-        // Fallback to whoever is currently active
         setVicarName(payload.current[0]?.name || null);
       } else {
         setVicarName(null);
@@ -595,16 +562,49 @@ const ChurchInfoPage = () => {
     }
   };
 
+  // Initial load
   useEffect(() => {
     (async () => {
       await Promise.all([loadChurch(), loadVicar()]);
     })();
   }, []);
 
+  // Re-fetch when the user returns to this tab/window.
+  // This makes the page reflect upgrades done in the admin panel
+  // without requiring a hard browser refresh.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        loadChurch();
+        loadVicar();
+      }
+    };
+    const onFocus = () => {
+      loadChurch();
+      loadVicar();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Manual refresh (header button)
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([loadChurch(), loadVicar()]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   // =======================================================
   // LOADING
   // =======================================================
-
   if (isLoading) {
     return (
       <Box
@@ -614,25 +614,20 @@ const ChurchInfoPage = () => {
         flexDirection="column"
       >
         <Navbar />
-
         <Container maxW="container.xl" flex="1" py={4}>
           <VStack gap={4} align="stretch">
             <Skeleton height="48px" borderRadius="8px" />
             <Skeleton height="105px" borderRadius="10px" />
-
             <SimpleGrid columns={{ base: 1, lg: 2 }} gap={4}>
               <Skeleton height="400px" borderRadius="10px" />
-
               <VStack gap={4} align="stretch">
                 <Skeleton height="235px" borderRadius="10px" />
                 <Skeleton height="160px" borderRadius="10px" />
               </VStack>
             </SimpleGrid>
-
             <Skeleton height="105px" borderRadius="10px" />
           </VStack>
         </Container>
-
         <Footer />
       </Box>
     );
@@ -641,35 +636,17 @@ const ChurchInfoPage = () => {
   // =======================================================
   // SAFE DATA
   // =======================================================
-
   const church = data?.church || {};
   const subscription = data?.subscription || {};
   const members = data?.members || {};
 
-  // =======================================================
-  // CHURCH INFORMATION
-  // =======================================================
-
-  const churchName =
-    church?.name || church?.church_name || "Church Name";
-
-  const churchCode =
-    church?.code || church?.church_code || "N/A";
-
-  const diocese =
-    church?.diocese || church?.diocese_name || "N/A";
-
+  const churchName = church?.name || church?.church_name || "Church Name";
+  const churchCode = church?.code || church?.church_code || "N/A";
+  const diocese = church?.diocese || church?.diocese_name || "N/A";
   const city = church?.city || church?.location || "N/A";
-
-  const phone =
-    church?.phone_number || church?.phone || "N/A";
-
-  const email =
-    church?.email || church?.official_email || "N/A";
-
-  const address =
-    church?.full_address || church?.address || "N/A";
-
+  const phone = church?.phone_number || church?.phone || "N/A";
+  const email = church?.email || church?.official_email || "N/A";
+  const address = church?.full_address || church?.address || "N/A";
   const establishedYear =
     church?.established_year ??
     church?.establishedYear ??
@@ -677,36 +654,20 @@ const ChurchInfoPage = () => {
     church?.establishmentYear ??
     "N/A";
 
-  // =======================================================
-  // VICAR
-  // =======================================================
-
   const vicarPriest = vicarName || "N/A";
-
-  // =======================================================
-  // ADMINISTRATIVE DETAILS
-  // =======================================================
 
   const registrationNumber =
     church?.registration_number ||
     church?.registration_no ||
     church?.reg_number ||
     "N/A";
-
   const financialYear =
     church?.financial_year ||
     church?.financial_year_name ||
     "N/A";
-
   const currency =
     church?.currency || church?.default_currency || "INR (₹)";
-
-  const timezone =
-    church?.timezone || "Asia/Kolkata";
-
-  // =======================================================
-  // LOGO
-  // =======================================================
+  const timezone = church?.timezone || "Asia/Kolkata";
 
   const churchLogo =
     church?.logo ||
@@ -714,12 +675,7 @@ const ChurchInfoPage = () => {
     church?.image ||
     church?.image_url ||
     null;
-
   const logoUrl = getMediaUrl(churchLogo);
-
-  // =======================================================
-  // SUBSCRIPTION
-  // =======================================================
 
   const packageName =
     subscription?.package_name ||
@@ -727,12 +683,8 @@ const ChurchInfoPage = () => {
     subscription?.plan ||
     subscription?.package_title ||
     "Standard";
-
   const billingCycleRaw =
-    subscription?.billing_cycle ||
-    subscription?.billingCycle ||
-    "Monthly";
-
+    subscription?.billing_cycle || subscription?.billingCycle || "Monthly";
   const billingCycle = String(billingCycleRaw);
 
   const memberLimit = Number(
@@ -749,10 +701,6 @@ const ChurchInfoPage = () => {
     subscription?.created_at ||
     null;
 
-  // =======================================================
-  // RENEWAL DATE — respect MONTHLY vs YEARLY
-  // =======================================================
-
   let renewalDate =
     subscription?.end_date ||
     subscription?.renewal_date ||
@@ -766,15 +714,9 @@ const ChurchInfoPage = () => {
   ) {
     const start = new Date(subscribedOn);
     const end = new Date(renewalDate);
-
-    if (
-      !Number.isNaN(start.getTime()) &&
-      !Number.isNaN(end.getTime())
-    ) {
+    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
       const days =
-        (end.getTime() - start.getTime()) /
-        (1000 * 60 * 60 * 24);
-
+        (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
       if (days >= 60) {
         const computed = addMonths(start, 1);
         if (computed) renewalDate = computed.toISOString();
@@ -782,12 +724,7 @@ const ChurchInfoPage = () => {
     }
   }
 
-  // =======================================================
-  // SUBSCRIPTION STATUS
-  // =======================================================
-
   let subscriptionStatus = "Active";
-
   if (subscription?.status) {
     subscriptionStatus = subscription.status;
   } else if (subscription?.payment_status) {
@@ -796,36 +733,21 @@ const ChurchInfoPage = () => {
     subscriptionStatus = "Inactive";
   }
 
-  // =======================================================
-  // MEMBERS
-  // =======================================================
-
   const currentMembers = Number(
-    members?.current_count ??
-      members?.active_count ??
-      members?.count ??
-      0
+    members?.current_count ?? members?.active_count ?? members?.count ?? 0
   );
-
   const allowedMembers = Number(memberLimit || 0);
-
   const memberPercentage =
     allowedMembers > 0
       ? Math.min((currentMembers / allowedMembers) * 100, 100)
       : 0;
-
   const remainingMembers =
     members?.remaining != null
       ? Number(members.remaining)
       : Math.max(allowedMembers - currentMembers, 0);
 
-  // =======================================================
-  // OPEN EDIT
-  // =======================================================
-
   const openEdit = () => setIsEditOpen(true);
   const closeEdit = () => setIsEditOpen(false);
-
   const handleSaved = async () => {
     await Promise.all([loadChurch(), loadVicar()]);
   };
@@ -833,7 +755,6 @@ const ChurchInfoPage = () => {
   // =======================================================
   // RETURN
   // =======================================================
-
   return (
     <Box
       minH="100vh"
@@ -851,13 +772,7 @@ const ChurchInfoPage = () => {
           py={{ base: 2, md: 3 }}
         >
           {/* PAGE HEADER */}
-
-          <Flex
-            justify="space-between"
-            align="center"
-            mb={3}
-            gap={3}
-          >
+          <Flex justify="space-between" align="center" mb={3} gap={3}>
             <HStack gap={2}>
               <Circle
                 size="44px"
@@ -869,7 +784,6 @@ const ChurchInfoPage = () => {
               >
                 <Icon as={LuHouse} boxSize={5} />
               </Circle>
-
               <Box>
                 <Heading
                   size={{ base: "md", md: "lg" }}
@@ -879,38 +793,48 @@ const ChurchInfoPage = () => {
                 >
                   Church Information
                 </Heading>
-
-                <Text
-                  fontSize="xs"
-                  color="var(--light-gray)"
-                  mt={0.5}
-                >
-                  View and manage your church profile and
-                  subscription
+                <Text fontSize="xs" color="var(--light-gray)" mt={0.5}>
+                  View and manage your church profile and subscription
                 </Text>
               </Box>
             </HStack>
 
-            <Button
-              variant="outline"
-              borderColor="var(--primary-maroon)"
-              color="var(--primary-maroon)"
-              borderRadius="6px"
-              size="sm"
-              px={3}
-              h="34px"
-              fontWeight="600"
-              flexShrink={0}
-              _hover={{ bg: "rgba(174, 32, 80, 0.05)" }}
-              onClick={openEdit}
-            >
-              <Icon as={LuPencil} mr={2} />
-              Edit Church Info
-            </Button>
+            <HStack gap={2} flexShrink={0}>
+              <Button
+                variant="ghost"
+                color="var(--primary-maroon)"
+                borderRadius="6px"
+                size="sm"
+                px={3}
+                h="34px"
+                fontWeight="600"
+                _hover={{ bg: "rgba(174, 32, 80, 0.05)" }}
+                onClick={handleRefresh}
+                isLoading={isRefreshing}
+              >
+                <Icon as={LuRefreshCw} mr={2} />
+                Refresh
+              </Button>
+
+              <Button
+                variant="outline"
+                borderColor="var(--primary-maroon)"
+                color="var(--primary-maroon)"
+                borderRadius="6px"
+                size="sm"
+                px={3}
+                h="34px"
+                fontWeight="600"
+                _hover={{ bg: "rgba(174, 32, 80, 0.05)" }}
+                onClick={openEdit}
+              >
+                <Icon as={LuPencil} mr={2} />
+                Edit Church Info
+              </Button>
+            </HStack>
           </Flex>
 
           {/* CHURCH SUMMARY */}
-
           <Box
             border="1px solid"
             borderColor="var(--border-color)"
@@ -973,7 +897,6 @@ const ChurchInfoPage = () => {
                   >
                     {churchCode}
                   </Text>
-
                   <Badge
                     colorPalette="green"
                     variant="subtle"
@@ -982,11 +905,7 @@ const ChurchInfoPage = () => {
                     py="2px"
                     fontSize="xs"
                   >
-                    <Icon
-                      as={LuCircleCheck}
-                      mr={1}
-                      boxSize={3}
-                    />
+                    <Icon as={LuCircleCheck} mr={1} boxSize={3} />
                     {subscriptionStatus}
                   </Badge>
                 </HStack>
@@ -998,7 +917,6 @@ const ChurchInfoPage = () => {
                   fontSize="xs"
                 >
                   <Icon as={LuMapPin} boxSize={3.5} />
-
                   <Text truncate>
                     {diocese}
                     {city && city !== "N/A" ? ` • ${city}` : ""}
@@ -1009,7 +927,6 @@ const ChurchInfoPage = () => {
           </Box>
 
           {/* TWO COLUMN CONTENT */}
-
           <SimpleGrid
             columns={{ base: 1, lg: 2 }}
             gap={3}
@@ -1036,14 +953,8 @@ const ChurchInfoPage = () => {
                 <DetailRow label="Church Name" value={churchName} />
                 <DetailRow label="Church Code" value={churchCode} />
                 <DetailRow label="Diocese" value={diocese} />
-                <DetailRow
-                  label="Established Year"
-                  value={establishedYear}
-                />
-                <DetailRow
-                  label="Vicar / Priest"
-                  value={vicarPriest}
-                />
+                <DetailRow label="Established Year" value={establishedYear} />
+                <DetailRow label="Vicar / Priest" value={vicarPriest} />
                 <DetailRow label="Phone" value={phone} />
                 <DetailRow label="Email" value={email} />
                 <DetailRow label="Address" value={address} />
@@ -1052,16 +963,13 @@ const ChurchInfoPage = () => {
 
             <VStack gap={3} align="stretch">
               {/* SUBSCRIPTION */}
-
               <SectionCard
                 title="Subscription Details"
                 icon={LuCreditCard}
                 action={
                   <Badge
                     colorPalette={
-                      subscription?.is_active === false
-                        ? "red"
-                        : "green"
+                      subscription?.is_active === false ? "red" : "green"
                     }
                     variant="subtle"
                     borderRadius="5px"
@@ -1090,7 +998,6 @@ const ChurchInfoPage = () => {
                     >
                       Current Plan
                     </Text>
-
                     <Text
                       fontSize="sm"
                       fontWeight="600"
@@ -1108,12 +1015,7 @@ const ChurchInfoPage = () => {
                         : "N/A"
                     }
                   />
-
-                  <DetailRow
-                    label="Billing Cycle"
-                    value={billingCycle}
-                  />
-
+                  <DetailRow label="Billing Cycle" value={billingCycle} />
                   <DetailRow
                     label="Subscribed On"
                     value={formatDate(subscribedOn, {
@@ -1122,7 +1024,6 @@ const ChurchInfoPage = () => {
                       year: "numeric",
                     })}
                   />
-
                   <DetailRow
                     label="Renewal Date"
                     value={formatDate(renewalDate, {
@@ -1132,38 +1033,45 @@ const ChurchInfoPage = () => {
                     })}
                   />
 
-                  {/* ✅ Button is visible but not clickable */}
-                  <Button
-                    variant="outline"
-                    borderColor="var(--primary-maroon)"
-                    color="var(--primary-maroon)"
-                    mt={2}
-                    w="full"
-                    h="34px"
-                    size="sm"
-                    borderRadius="5px"
-                    fontWeight="600"
-                    pointerEvents="none"
-                    cursor="default"
-                    opacity={0.7}
-                  >
-                    <Icon as={LuEye} mr={2} />
-                    View Subscription
-                  </Button>
+                  <HStack mt={2} gap={2}>
+                    <Button
+                      variant="outline"
+                      borderColor="var(--primary-maroon)"
+                      color="var(--primary-maroon)"
+                      flex="1"
+                      h="34px"
+                      size="sm"
+                      borderRadius="5px"
+                      fontWeight="600"
+                      _hover={{ bg: "rgba(174, 32, 80, 0.05)" }}
+                      onClick={() => navigate("/upgrade")}
+                    >
+                      <Icon as={LuEye} mr={2} />
+                      View & Upgrade
+                    </Button>
+                    <Button
+                      variant="outline"
+                      borderColor="var(--primary-maroon)"
+                      color="var(--primary-maroon)"
+                      flex="1"
+                      h="34px"
+                      size="sm"
+                      borderRadius="5px"
+                      fontWeight="600"
+                      _hover={{ bg: "rgba(174, 32, 80, 0.05)" }}
+                      onClick={() => navigate("/bills")}
+                    >
+                      <Icon as={LuCreditCard} mr={2} />
+                      Recent Payments
+                    </Button>
+                  </HStack>
                 </VStack>
               </SectionCard>
 
               {/* MEMBER CAPACITY */}
-
-              <SectionCard
-                title="Member Capacity"
-                icon={LuUsers}
-              >
+              <SectionCard title="Member Capacity" icon={LuUsers}>
                 <VStack align="stretch" gap={2}>
-                  <Flex
-                    justify="space-between"
-                    align="flex-end"
-                  >
+                  <Flex justify="space-between" align="flex-end">
                     <Box>
                       <Text
                         fontSize="2xl"
@@ -1173,16 +1081,10 @@ const ChurchInfoPage = () => {
                       >
                         {currentMembers.toLocaleString()}
                       </Text>
-
-                      <Text
-                        fontSize="xs"
-                        color="var(--light-gray)"
-                        mt={0.5}
-                      >
+                      <Text fontSize="xs" color="var(--light-gray)" mt={0.5}>
                         Active Members
                       </Text>
                     </Box>
-
                     <Box textAlign="right">
                       <Text
                         fontSize="2xl"
@@ -1192,12 +1094,7 @@ const ChurchInfoPage = () => {
                       >
                         {allowedMembers.toLocaleString()}
                       </Text>
-
-                      <Text
-                        fontSize="xs"
-                        color="var(--light-gray)"
-                        mt={0.5}
-                      >
+                      <Text fontSize="xs" color="var(--light-gray)" mt={0.5}>
                         Limit
                       </Text>
                     </Box>
@@ -1225,14 +1122,9 @@ const ChurchInfoPage = () => {
                     gap={1.5}
                     flexWrap="wrap"
                   >
-                    <Text
-                      fontSize="xs"
-                      color="var(--light-gray)"
-                    >
-                      {remainingMembers.toLocaleString()} member
-                      slots available
+                    <Text fontSize="xs" color="var(--light-gray)">
+                      {remainingMembers.toLocaleString()} member slots available
                     </Text>
-
                     <Badge
                       colorPalette={
                         memberPercentage >= 100
@@ -1249,7 +1141,6 @@ const ChurchInfoPage = () => {
                     >
                       {Math.round(memberPercentage)}% Used
                     </Badge>
-
                     <Button
                       variant="ghost"
                       color="var(--primary-maroon)"
@@ -1267,17 +1158,9 @@ const ChurchInfoPage = () => {
           </SimpleGrid>
 
           {/* ADMINISTRATIVE DETAILS */}
-
           <Box mt={3}>
-            <SectionCard
-              title="Administrative Details"
-              icon={LuSettings}
-            >
-              <SimpleGrid
-                columns={{ base: 2, md: 4 }}
-                gap={0}
-                py={1}
-              >
+            <SectionCard title="Administrative Details" icon={LuSettings}>
+              <SimpleGrid columns={{ base: 2, md: 4 }} gap={0} py={1}>
                 <AdminDetail
                   label="Registration Number"
                   value={registrationNumber}
@@ -1302,8 +1185,6 @@ const ChurchInfoPage = () => {
       </Box>
 
       <Footer />
-
-      {/* EDIT DIALOG */}
 
       <EditChurchDialog
         open={isEditOpen}

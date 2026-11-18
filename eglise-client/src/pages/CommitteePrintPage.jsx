@@ -13,7 +13,7 @@ import {
 } from "../api/registryServices";
 
 // ============================================================
-// COLORS (same palette as Death Certificate)
+// COLORS
 // ============================================================
 
 const PRIMARY_RED = "#B40000";
@@ -33,18 +33,6 @@ const getArrayData = (response) => {
   if (Array.isArray(data?.results)) return data.results;
   if (Array.isArray(data?.data)) return data.data;
   return [];
-};
-
-const isNotEmpty = (value) => {
-  if (value === null || value === undefined) return false;
-  if (typeof value === "string") {
-    const v = value.trim();
-    if (v === "") return false;
-    if (v.toLowerCase() === "null" || v.toLowerCase() === "undefined")
-      return false;
-    return true;
-  }
-  return true;
 };
 
 const formatDate = (value) => {
@@ -67,7 +55,7 @@ const formatDate = (value) => {
 };
 
 // ============================================================
-// STYLES (adapted from DeathRegisterPrintModal)
+// STYLES
 // ============================================================
 
 const CERTIFICATE_STYLES = `
@@ -406,9 +394,6 @@ const CommitteePrintPage = () => {
   const [designations, setDesignations] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // ==========================================================
-  // INJECT STYLES
-  // ==========================================================
   useEffect(() => {
     const STYLE_ID = "committee-cert-styles";
     let styleTag = document.getElementById(STYLE_ID);
@@ -424,9 +409,6 @@ const CommitteePrintPage = () => {
     };
   }, []);
 
-  // ==========================================================
-  // LOAD DATA
-  // ==========================================================
   useEffect(() => {
     const load = async () => {
       try {
@@ -448,9 +430,6 @@ const CommitteePrintPage = () => {
     if (id) load();
   }, [id]);
 
-  // ==========================================================
-  // LOOKUPS
-  // ==========================================================
   const getMemberName = (memberId) => {
     const m = members.find((x) => Number(x.id) === Number(memberId));
     if (!m) return `Member #${memberId}`;
@@ -471,9 +450,6 @@ const CommitteePrintPage = () => {
     return d.designation_name || d.name || `Designation #${designationId}`;
   };
 
-  // ==========================================================
-  // PRINT
-  // ==========================================================
   const handlePrint = () => {
     const element = printRef.current;
     if (!element) return;
@@ -521,16 +497,11 @@ const CommitteePrintPage = () => {
     }, 700);
   };
 
-  // ==========================================================
-  // DOWNLOAD PDF
-  // ==========================================================
   const handleDownloadPDF = async () => {
     const element = printRef.current;
     if (!element) return;
 
-    const fileName = `Committee-Register-${
-      committee?.id || "Record"
-    }.pdf`;
+    const fileName = `Committee-Register-${committee?.id || "Record"}.pdf`;
 
     const options = {
       margin: 0,
@@ -561,9 +532,6 @@ const CommitteePrintPage = () => {
     }
   };
 
-  // ==========================================================
-  // LOADING
-  // ==========================================================
   if (loading || !committee) {
     return (
       <Box p={8}>
@@ -580,24 +548,16 @@ const CommitteePrintPage = () => {
     ? committee.members
     : [];
 
-  // ==========================================================
-  // CERTIFICATE MARKUP
-  // ==========================================================
   const renderCertificate = () => (
     <div className="certificate-page">
-      {/* OUTER BORDER */}
       <div className="outer-border" />
-
-      {/* INNER BORDER */}
       <div className="inner-border" />
 
-      {/* CORNERS */}
       <div className="corner tl">❧</div>
       <div className="corner tr">❧</div>
       <div className="corner bl">❧</div>
       <div className="corner br">❧</div>
 
-      {/* HEADER */}
       <div className="header">
         <div className="header-inner">
           <div className="logo-space" />
@@ -609,16 +569,13 @@ const CommitteePrintPage = () => {
         </div>
       </div>
 
-      {/* TITLE */}
       <div className="title-area">
         <div className="title-banner">
           <div className="title-text">Committee Register</div>
         </div>
       </div>
 
-      {/* CONTENT */}
       <div className="content">
-        {/* META */}
         <table className="top-table">
           <tbody>
             <tr>
@@ -646,14 +603,12 @@ const CommitteePrintPage = () => {
           </tbody>
         </table>
 
-        {/* WATERMARK */}
         <div className="watermark">
           <div className="watermark-text">
             MALANKARA ORTHODOX SYRIAN CHURCH
           </div>
         </div>
 
-        {/* MEMBERS TABLE */}
         <table className="details-table">
           <thead>
             <tr>
@@ -664,6 +619,20 @@ const CommitteePrintPage = () => {
             </tr>
           </thead>
           <tbody>
+            {/* ✅ FIX: President and Vice President injected as first 2 rows */}
+            <tr>
+              <td className="col-sl">1</td>
+              <td>{committee.president_name || "Not Assigned"}</td>
+              <td>President (Vicar)</td>
+              <td>-</td>
+            </tr>
+            <tr>
+              <td className="col-sl">2</td>
+              <td>{committee.vice_president_name || "Not Assigned"}</td>
+              <td>Vice President (Asst. Vicar)</td>
+              <td>-</td>
+            </tr>
+
             {memberList.length === 0 ? (
               <tr>
                 <td
@@ -674,13 +643,13 @@ const CommitteePrintPage = () => {
                     color: "#666",
                   }}
                 >
-                  No members added.
+                  No other members added.
                 </td>
               </tr>
             ) : (
               memberList.map((m, i) => (
                 <tr key={i}>
-                  <td className="col-sl">{i + 1}</td>
+                  <td className="col-sl">{i + 3}</td>
                   <td>{getMemberName(m.member)}</td>
                   <td>{getDesignationName(m.designation)}</td>
                   <td>{m.phone || "-"}</td>
@@ -691,15 +660,12 @@ const CommitteePrintPage = () => {
         </table>
       </div>
 
-      {/* CERTIFICATION */}
       <div className="certificate-text">
         This is a computer-generated committee register.
       </div>
 
-      {/* STAMP / SIGN GAP */}
       <div className="stamp-sign-gap" />
 
-      {/* FOOTER */}
       <div className="footer">
         <div className="footer-grid">
           <div className="footer-item">
@@ -722,9 +688,6 @@ const CommitteePrintPage = () => {
     </div>
   );
 
-  // ==========================================================
-  // RENDER
-  // ==========================================================
   return (
     <Box
       minH="100vh"
@@ -732,7 +695,6 @@ const CommitteePrintPage = () => {
       display="flex"
       flexDirection="column"
     >
-      {/* TOOLBAR */}
       <Box
         h="58px"
         bg="#FFFFFF"
@@ -797,7 +759,6 @@ const CommitteePrintPage = () => {
         </HStack>
       </Box>
 
-      {/* PREVIEW AREA */}
       <Box
         flex="1"
         overflow="auto"

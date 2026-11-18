@@ -264,11 +264,11 @@ const PaymentDetailPage = () => {
                 <Icon as={LuPrinter} mr={2} boxSize={4} /> Print
               </Button>
               
-              {!isCancelled && (
+              {/* {!isCancelled && (
                 <Button bg={RED} color="white" h="38px" px={5} fontSize="12px" borderRadius="6px" onClick={() => navigate(`/payments/${id}/edit`)} _hover={{ bg: "#B0143A" }}>
                   <Icon as={LuPencil} mr={2} boxSize={4} /> Edit Payment
                 </Button>
-              )}
+              )} */}
             </HStack>
           </Flex>
 

@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+﻿from datetime import date, timedelta
 from django.shortcuts import get_object_or_404
 from rest_framework import generics
 from rest_framework.generics import (
@@ -46,9 +46,9 @@ from .models import (
     ReceiptMaster,
     ReceiptLine,
     LedgerEntry,
-    ContraMaster,
+    ContraMaster,FinancialYear,
 )
-from .serializers import BaptismSerializer, BillDetailSerializer, BillListSerializer,LedgerEntrySerializer, ChurchDetailSerializer,MemberDetailSerializer, ChurchListSerializer, DeathRegisterSerializer, DesignationSerializer, DheshaKuriSerializer, DioceseSerializer, EventSerializer, FamilyHeadCreateSerializer, FamilyHeadUpdateSerializer, FamilyMemberSerializer, GradeSerializer, InactiveMemberSerializer, MarriageCertificateSerializer, MarriageSerializer, MemberProfileSerializer, MobileFamilyBaptismSerializer, MobileFamilyDetailSerializer, MobileFamilyListSerializer, MobileFamilyMemberSerializer,  PriestNameSerializer,PriestSerializer, RegisterSettingSerializer, RelationshipSerializer, SubscriptionExpirySerializer, TombFeeSerializer, TombTypeSerializer, UpgradeSerializer,  WardSerializer, FamilySerializer, MemberSerializer,PackageSerializer, WardWithFamilyCountSerializer, OfferingSerializer, VisitorMasterSerializer, SubscriptionSerializer, AccountGroupMasterSerializer, AccountLedgerMasterSerializer, PaymentMasterSerializer, QurbanaReceiptsSerializer, CommitteeMasterSerializer, MemberDirectorySerializer, LegacyBaptismSerializer, LegacyMarriageSerializer, LegacyDeathSerializer, LegacyBaptismListSerializer, LegacyMarriageListSerializer, LegacyDeathListSerializer,ReceiptMasterSerializer, ReceiptMasterListSerializer, ReceiptCancelSerializer, ContraMasterSerializer
+from .serializers import BaptismSerializer, BillDetailSerializer, BillListSerializer, FinancialYearSerializer, LedgerEntrySerializer,RegisterSettingCreateSerializer, ChurchDetailSerializer,MemberDetailSerializer, ChurchListSerializer, DeathRegisterSerializer, DesignationSerializer, DheshaKuriSerializer, DioceseSerializer, EventSerializer, FamilyHeadCreateSerializer, FamilyHeadUpdateSerializer, FamilyMemberSerializer, GradeSerializer, InactiveMemberSerializer, MarriageCertificateSerializer, MarriageSerializer, MemberProfileSerializer, MobileFamilyBaptismSerializer, MobileFamilyDetailSerializer, MobileFamilyListSerializer, MobileFamilyMemberSerializer,  PriestNameSerializer,PriestSerializer, RegisterSettingSerializer, RelationshipSerializer, SubscriptionExpirySerializer, TombFeeSerializer, TombTypeSerializer, UpgradeSerializer,  WardSerializer, FamilySerializer, MemberSerializer,PackageSerializer, WardWithFamilyCountSerializer, OfferingSerializer, VisitorMasterSerializer, SubscriptionSerializer, AccountGroupMasterSerializer, AccountLedgerMasterSerializer, PaymentMasterSerializer, QurbanaReceiptsSerializer, CommitteeMasterSerializer, MemberDirectorySerializer, LegacyBaptismSerializer, LegacyMarriageSerializer, LegacyDeathSerializer, LegacyBaptismListSerializer, LegacyMarriageListSerializer, LegacyDeathListSerializer,ReceiptMasterSerializer, ReceiptMasterListSerializer, ReceiptCancelSerializer, ContraMasterSerializer
 from rest_framework.generics import ListAPIView
 from .models import ChurchSubscription
 from .serializers import SubscribeSerializer,UpgradeRequestSerializer
@@ -388,7 +388,7 @@ class FamilyDetailAPIView(
 
         members = family.members.filter(is_active=True)
 
-        # ❌ More than one member → block delete
+        # âŒ More than one member â†’ block delete
         if members.count() > 1:
             return Response(
                 {
@@ -400,7 +400,7 @@ class FamilyDetailAPIView(
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # ❌ Single member but not head → block delete
+        # âŒ Single member but not head â†’ block delete
         if members.exists() and not members.first().is_family_head:
             return Response(
                 {
@@ -412,7 +412,7 @@ class FamilyDetailAPIView(
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # ✅ Safe to delete
+        # âœ… Safe to delete
         return super().destroy(request, *args, **kwargs)
 
 # registry/views.py - Update FamilyHeadCreateAPIView
@@ -511,7 +511,7 @@ class MemberDetailAPIView(
         instance = self.get_object()
         validated_data = serializer.validated_data
 
-        # 🔥 Prevent promoting to head here
+        # ðŸ”¥ Prevent promoting to head here
         if (
             "is_family_head" in validated_data
             and validated_data["is_family_head"] is True
@@ -521,7 +521,7 @@ class MemberDetailAPIView(
                 "Use family head API to promote a member to head."
             )
 
-        # 🔥 If member is NOT head → block ward & image
+        # ðŸ”¥ If member is NOT head â†’ block ward & image
         if not instance.is_family_head:
             if "ward" in validated_data:
                 raise ValidationError({
@@ -538,12 +538,12 @@ class MemberDetailAPIView(
     def destroy(self, request, *args, **kwargs):
         member = self.get_object()
 
-        # 🔥 Prevent deleting head if dependents exist in SAME HOUSE
+        # ðŸ”¥ Prevent deleting head if dependents exist in SAME HOUSE
         if member.is_family_head:
             other_members = Member.objects.filter(
                 family=member.family,
                 house_name=member.house_name,
-                house_sequence=member.house_sequence,  # 🔥 FIX: Include house_sequence
+                house_sequence=member.house_sequence,  # ðŸ”¥ FIX: Include house_sequence
                 is_active=True
             ).exclude(pk=member.pk)
 
@@ -570,10 +570,43 @@ from django.shortcuts import get_object_or_404
 from .models import Package, ChurchSubscription, Bill
 from .serializers import SubscribeSerializer, PackageSerializer
 
+def get_upgrade_baseline(subscription):
+    """
+    Capacity a target package must strictly exceed to count as an upgrade.
+    Uses the largest of: purchased package limit, locked capacity,
+    and the effective (custom) capacity.
+    """
+    return max(
+        subscription.locked_capacity or 0,
+        subscription.package.member_limit or 0,
+        subscription.get_capacity() or 0,
+    )
+
+
+# ------------------------------------------------------------
+# 1. PACKAGE LIST (only real upgrades, never the current plan)
+# ------------------------------------------------------------
 class PackageListAPIView(ListAPIView):
     permission_classes = [IsAuthenticated, IsChurchAuthenticated]
-    queryset = Package.objects.filter(is_active=True)
     serializer_class = PackageSerializer
+
+    def get_queryset(self):
+        church = self.request.user.church
+        qs = Package.objects.filter(is_active=True)
+
+        subscription = getattr(church, "subscription", None)
+
+        if subscription:
+            # Expired â†’ must renew, not upgrade
+            if subscription.is_expired():
+                return Package.objects.none()
+
+            qs = qs.exclude(id=subscription.package_id).filter(
+                member_limit__gt=get_upgrade_baseline(subscription)
+            )
+
+        return qs.order_by("member_limit")
+
 
 class SubscribeAPIView(APIView):
     permission_classes = [IsAuthenticated, IsChurchAuthenticated]
@@ -582,7 +615,7 @@ class SubscribeAPIView(APIView):
     def post(self, request):
         church = request.user.church
 
-        if hasattr(church, "churchsubscription"):
+        if hasattr(church, "subscription"):
             return Response(
                 {"detail": "Subscription already exists"},
                 status=status.HTTP_400_BAD_REQUEST
@@ -599,7 +632,7 @@ class SubscribeAPIView(APIView):
         capacity = serializer.validated_data.get("capacity")
 
         duration_months = 12 if billing_cycle == "YEARLY" else 1
-        
+
         if capacity:
             resolved_capacity = capacity
         else:
@@ -615,8 +648,6 @@ class SubscribeAPIView(APIView):
             is_active=False,
         )
 
-        # ✅ FIXED: Use subscription.get_total_price()
-        # Does NOT multiply by duration_months
         amount = subscription.get_total_price()
 
         bill = Bill.objects.create(
@@ -629,9 +660,8 @@ class SubscribeAPIView(APIView):
             breakdown={
                 "items": [{
                     "type": "NEW",
-                    # ✅ FIXED: Shows correct calculation
                     "calculation": (
-                        f"{resolved_capacity} × {subscription.get_rate()}"
+                        f"{resolved_capacity} Ã— {subscription.get_rate()}"
                     ),
                     "total": float(amount),
                 }],
@@ -655,13 +685,14 @@ class SubscribeAPIView(APIView):
             status=status.HTTP_201_CREATED
         )
 
+
 class UpgradeAPIView(APIView):
     permission_classes = [IsAuthenticated, IsChurchUser]
 
     @transaction.atomic
     def post(self, request):
         church = request.user.church
-        subscription = getattr(church, "churchsubscription", None)
+        subscription = getattr(church, "subscription", None)
 
         # -------------------------------------------------
         # BASIC GUARDS
@@ -669,16 +700,19 @@ class UpgradeAPIView(APIView):
         if not subscription or not subscription.is_active:
             return Response(
                 {"detail": "No active subscription"},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if Bill.objects.filter(
-            subscription=subscription,
-            status="UNPAID"
-        ).exists():
+        if subscription.is_expired():
+            return Response(
+                {"detail": "Your subscription has expired. Please renew before upgrading."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if Bill.objects.filter(subscription=subscription, status="UNPAID").exists():
             return Response(
                 {"detail": "Please clear pending bill first"},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # -------------------------------------------------
@@ -691,26 +725,63 @@ class UpgradeAPIView(APIView):
         if not package_id or not billing_cycle:
             return Response(
                 {"detail": "package_id and billing_cycle are required"},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         target_package = get_object_or_404(Package, id=package_id, is_active=True)
 
         # -------------------------------------------------
+        # CANNOT PICK THE CURRENT PACKAGE
+        # -------------------------------------------------
+        if target_package.id == subscription.package_id:
+            return Response(
+                {"detail": "You are already on this package."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # -------------------------------------------------
+        # TARGET MUST BE HIGHER
+        # -------------------------------------------------
+        baseline = get_upgrade_baseline(subscription)
+        if baseline >= target_package.member_limit:
+            return Response(
+                {
+                    "detail": (
+                        f"Target package ({target_package.member_limit} "
+                        f"members) must be larger than current "
+                        f"({int(baseline)})."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # -------------------------------------------------
         # CAPACITY VALIDATION
         # -------------------------------------------------
         if capacity:
-            capacity = int(capacity)
-            if target_package.member_limit and capacity > target_package.member_limit:
+            try:
+                capacity = int(capacity)
+            except (ValueError, TypeError):
                 return Response(
-                    {"detail": f"Capacity exceeds package limit of {target_package.member_limit}"},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"detail": "Invalid capacity"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if capacity > target_package.member_limit:
+                return Response(
+                    {
+                        "detail": (
+                            f"Capacity exceeds package limit of "
+                            f"{target_package.member_limit}"
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
         else:
             capacity = target_package.member_limit
 
         # -------------------------------------------------
-        # CALCULATE UPGRADE WITH PRO-RATA
+        # CALCULATE PRORATED UPGRADE
         # -------------------------------------------------
         result = calculate_prorated_upgrade_amount(
             subscription=subscription,
@@ -722,30 +793,37 @@ class UpgradeAPIView(APIView):
         if result["amount"] <= 0:
             return Response(
                 {"detail": "No payable upgrade amount"},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # -------------------------------------------------
         # CREATE BILL
         # -------------------------------------------------
+        new_duration = 12 if billing_cycle == "YEARLY" else 1
+
         bill = Bill.objects.create(
             church=church,
             subscription=subscription,
             bill_type="UPGRADE",
             billing_cycle=billing_cycle,
-            duration_months=subscription.duration_months,
+            duration_months=new_duration,
             amount=result["amount"],
             breakdown={
                 "items": [result["breakdown"]],
                 "grand_total": float(result["amount"]),
                 "credit_generated": float(result["credit"]),
+                "package_name": target_package.name,
                 "apply": {
                     "package_id": target_package.id,
                     "billing_cycle": billing_cycle,
-                    "duration_months": subscription.duration_months,
-                    "custom_capacity": capacity,
+                    "duration_months": new_duration,
+                    "custom_capacity": (
+                        capacity
+                        if capacity != target_package.member_limit
+                        else None
+                    ),
                 },
-            }
+            },
         )
 
         return Response(
@@ -755,7 +833,7 @@ class UpgradeAPIView(APIView):
                 "amount": bill.amount,
                 "payment_status": bill.status,
             },
-            status=status.HTTP_201_CREATED
+            status=status.HTTP_201_CREATED,
         )
     
 class ChurchDashboardAPIView(APIView):
@@ -797,9 +875,9 @@ class ChurchDashboardAPIView(APIView):
                 "code": getattr(church, "code", None),
 
                 "city": getattr(church, "city", None),
-                "state": getattr(church, "state", None),               # ✅ ADDED
-                "postal_code": getattr(church, "postal_code", None),   # ✅ ADDED
-                "address_line1": getattr(church, "address_line1", None), # ✅ ADDED
+                "state": getattr(church, "state", None),               # âœ… ADDED
+                "postal_code": getattr(church, "postal_code", None),   # âœ… ADDED
+                "address_line1": getattr(church, "address_line1", None), # âœ… ADDED
 
                 "diocese": (
                     church.diocese.name
@@ -896,49 +974,22 @@ class ChurchDashboardAPIView(APIView):
                 package = subscription.package
 
                 subscription_data = {
-                    "package": package.name
-                    if package else None,
-
-                    "package_name": package.name
-                    if package else None,
-
-                    "package_code": package.code
-                    if package else None,
-
-                    "member_limit": (
-                        package.member_limit
-                        if package else 0
-                    ),
-
-                    "billing_cycle": (
-                        subscription.get_billing_cycle_display()
-                    ),
-
+                    "package": package.name if package else None,
+                    "package_name": package.name if package else None,
+                    "package_id": package.id if package else None,          # NEW
+                    "package_code": package.code if package else None,
+                    "member_limit": package.member_limit if package else 0,
+                    "billing_cycle": subscription.get_billing_cycle_display(),
                     "start_date": subscription.start_date,
-
                     "end_date": subscription.end_date,
-
                     "renewal_date": subscription.end_date,
-
-                    "payment_status": (
-                        subscription.payment_status
-                    ),
-
-                    "is_active": (
-                        subscription.is_active
-                    ),
-
-                    "capacity": (
-                        subscription.get_capacity()
-                    ),
-
-                    "allowed_limit": (
-                        subscription.get_capacity()
-                    ),
-
-                    "days_remaining": (
-                        subscription.get_remaining_days()
-                    ),
+                    "payment_status": subscription.payment_status,
+                    "is_active": subscription.is_active,
+                    "is_expired": subscription.is_expired(),                 # NEW
+                    "status": subscription.get_status(),                     # NEW
+                    "capacity": subscription.get_capacity(),
+                    "allowed_limit": subscription.get_capacity(),
+                    "days_remaining": subscription.get_remaining_days(),
                 }
 
                 allowed_limit = (
@@ -1076,7 +1127,7 @@ class ChurchBillDetailAPIView(APIView):
                 "subscription__package",
             ),
             pk=pk,
-            church=church,  # 🔒 critical security check
+            church=church,  # ðŸ”’ critical security check
         )
 
         serializer = BillDetailSerializer(bill)
@@ -1092,7 +1143,7 @@ class SubscriptionExpiryAPIView(APIView):
 
     def get(self, request):
         church = request.user.church
-        subscription = getattr(church, "churchsubscription", None)
+        subscription = getattr(church, "subscription", None)
 
         if not subscription or not subscription.end_date:
             return Response(
@@ -1123,36 +1174,62 @@ class SubscriptionExpiryAPIView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-
 class UpgradeRequestAPIView(APIView):
     permission_classes = [IsAuthenticated, IsChurchUser]
 
     def post(self, request):
         church = request.user.church
-        subscription = getattr(church, "churchsubscription", None)
+        subscription = getattr(church, "subscription", None)
 
         if not subscription or not subscription.is_active:
+            return Response({"detail": "No active subscription"}, status=400)
+
+        if subscription.is_expired():
             return Response(
-                {"detail": "No active subscription"},
-                status=400
+                {"detail": "Your current subscription has expired. Please renew to upgrade."},
+                status=400,
             )
 
-        serializer = UpgradeRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        package_id = request.data.get("package_id")
+        if not package_id:
+            return Response({"detail": "package_id is required"}, status=400)
+
+        try:
+            requested_package = Package.objects.get(id=package_id, is_active=True)
+        except Package.DoesNotExist:
+            return Response({"detail": "Package not found"}, status=404)
+
+        # Cannot enquire about the plan already held
+        if requested_package.id == subscription.package_id:
+            return Response(
+                {"detail": "You are already on this package."},
+                status=400,
+            )
+
+        if get_upgrade_baseline(subscription) >= requested_package.member_limit:
+            return Response(
+                {"detail": "Target package must be larger than current."},
+                status=400,
+            )
 
         UpgradeRequest.objects.create(
             church=church,
             current_package=subscription.package,
-            requested_package=serializer.validated_data["requested_package"],
-            requested_capacity=serializer.validated_data.get("requested_capacity"),
-            reason=serializer.validated_data.get("reason", ""),
+            requested_package=requested_package,
+            requested_capacity=request.data.get("expected_members") or None,
+            contact_person=request.data.get("contact_person", ""),
+            mobile=request.data.get("mobile", ""),
+            email=request.data.get("email", ""),
+            preferred_contact=request.data.get("preferred_contact", ""),
+            preferred_date=request.data.get("preferred_date") or None,
+            reason=request.data.get("requirements", ""),
+            status="PENDING",
         )
 
         return Response(
-            {"detail": "Upgrade request sent to admin"},
-            status=201
+            {"detail": "Upgrade enquiry sent successfully. Admin will contact you."},
+            status=201,
         )
-
 
 #change family head
 class ChangeFamilyHeadAPIView(APIView):
@@ -1258,7 +1335,7 @@ class BaptismAPIView(APIView):
             ):
                 main_member = baptism.main_member
 
-                # 🔥 STRICT VALIDATION
+                # ðŸ”¥ STRICT VALIDATION
                 if not main_member.is_family_head:
                     raise ValidationError(
                     "Main member must be a family head."
@@ -1272,8 +1349,8 @@ class BaptismAPIView(APIView):
                 member = Member.objects.create(
                     church=baptism.church,
                     family=baptism.family,
-                    house_name=main_member.house_name,  # ✅ CRITICAL
-                    ward=main_member.ward,              # ✅ CRITICAL
+                    house_name=main_member.house_name,  # âœ… CRITICAL
+                    ward=main_member.ward,              # âœ… CRITICAL
                     name=baptism.name,
                     baptismal_name=baptism.baptismal_name,
                     gender=baptism.gender,
@@ -1407,7 +1484,7 @@ class BaptismCertificateAPIView(APIView):
 
     def get(self, request, pk):
 
-        # 🔒 Ensure logged-in user is a family head
+        # ðŸ”’ Ensure logged-in user is a family head
         member = getattr(request.user, "member", None)
 
         if not member or not member.is_family_head:
@@ -1416,7 +1493,7 @@ class BaptismCertificateAPIView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # 🔒 Fetch baptism only inside same family + house
+        # ðŸ”’ Fetch baptism only inside same family + house
         baptism = get_object_or_404(
             Baptism.objects.select_related(
                 "church",
@@ -1605,16 +1682,16 @@ class FamilyMembersAPIView(APIView):
             church=request.user.church
         )
 
-        # 🔥 Option 1: Show ONLY the family head
+        # ðŸ”¥ Option 1: Show ONLY the family head
         members = Member.objects.filter(
             family=family,
             house_name=house_name,
             is_active=True,
             expired=False,
-            is_family_head=True  # 🔥 Only heads
+            is_family_head=True  # ðŸ”¥ Only heads
         ).order_by("name")
 
-        # 🔥 Option 2: Show head first, then dependents (if you want both)
+        # ðŸ”¥ Option 2: Show head first, then dependents (if you want both)
         # members = Member.objects.filter(
         #     family=family,
         #     house_name=house_name,
@@ -1738,7 +1815,7 @@ class FamilyBaptismsMobileAPIView(APIView):
 
     def get(self, request):
 
-        # 🔒 Must be family head
+        # ðŸ”’ Must be family head
         if request.user.role != "USER":
             return Response(
                 {"detail": "Only family members allowed."},
@@ -1813,7 +1890,7 @@ class MarriageListCreateAPIView(ListCreateAPIView):
     List all marriages or create a new marriage.
     Create handles both ADD_BRIDE and TRANSFER_BRIDE types.
 
-    ✅ @transaction.atomic on perform_create ensures that
+    âœ… @transaction.atomic on perform_create ensures that
        generate_register_number() and the Marriage INSERT
        commit or roll back together. Without this, the
        register counter could advance even when the INSERT
@@ -2061,7 +2138,7 @@ class InactiveMembersAPIView(ListAPIView):
 class DeathRegisterFinalizeView(APIView):
     """
     Finalize a death registration.
-    Kept as an alias — prefer DeathRegisterCreateAPIView.
+    Kept as an alias â€” prefer DeathRegisterCreateAPIView.
     """
     permission_classes = [IsAuthenticated, IsChurchUser]
 
@@ -2198,9 +2275,9 @@ class PromoteFamilyHeadAPIView(APIView):
                 # 1. If a previous head exists, demote them cleanly
                 if existing_head:
                     existing_head.is_family_head = False
-                    existing_head.register_number = None  # ✅ Clear old register number
-                    existing_head.folio_number = None     # ✅ Clear old folio number
-                    existing_head.relationship = None     # ✅ Clear relationship
+                    existing_head.register_number = None  # âœ… Clear old register number
+                    existing_head.folio_number = None     # âœ… Clear old folio number
+                    existing_head.relationship = None     # âœ… Clear relationship
                     existing_head.save(update_fields=[
                         "is_family_head", 
                         "register_number", 
@@ -2701,7 +2778,7 @@ class DesignationDetailView(generics.RetrieveUpdateDestroyAPIView):
         context["request"] = self.request
         return context
 
-    # ✅ Block update on reserved
+    # âœ… Block update on reserved
     def perform_update(self, serializer):
         if serializer.instance.reserved:
             raise ValidationError(
@@ -2709,7 +2786,7 @@ class DesignationDetailView(generics.RetrieveUpdateDestroyAPIView):
             )
         serializer.save()
 
-    # ✅ Block delete on reserved
+    # âœ… Block delete on reserved
     def perform_destroy(self, instance):
         if instance.reserved:
             raise ValidationError(
@@ -2961,60 +3038,156 @@ class PriestDetailView(generics.RetrieveUpdateDestroyAPIView):
         church = instance.church
         instance.delete()
         reseal_vicar_windows(church)
+# ============================================================
+# REGISTER SETTINGS
+# ============================================================
 
-#Registersettings
 class RegisterSettingCreateAPIView(APIView):
     permission_classes = [IsAuthenticated, IsChurchUser]
 
     def post(self, request):
-
         church = request.user.church
         register_type = request.data.get("register_type")
 
-        # prevent duplicate settings
+        if not register_type:
+            return Response(
+                {"register_type": "This field is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         if RegisterSetting.objects.filter(
-            church=church,
-            register_type=register_type
+            church=church, register_type=register_type
         ).exists():
             return Response(
                 {"error": "Settings already exist for this register type."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        serializer = RegisterSettingSerializer(
-            data=request.data
-        )
-
+        serializer = RegisterSettingCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
         serializer.save(church=church)
 
         return Response(
             {
                 "message": "Register settings created successfully.",
-                "data": serializer.data
+                "data": serializer.data,
             },
-            status=status.HTTP_201_CREATED
+            status=status.HTTP_201_CREATED,
         )
-    
+
+
 class RegisterSettingListAPIView(ListAPIView):
     serializer_class = RegisterSettingSerializer
     permission_classes = [IsAuthenticated, IsChurchUser]
 
     def get_queryset(self):
-        return RegisterSetting.objects.filter(
-            church=self.request.user.church
+        return (
+            RegisterSetting.objects
+            .filter(church=self.request.user.church)
+            .select_related("church")            # avoids N+1 for church_code
+            .order_by("register_type")           # deterministic order
         )
-    
+
+
 class RegisterSettingUpdateAPIView(UpdateAPIView):
     serializer_class = RegisterSettingSerializer
     permission_classes = [IsAuthenticated, IsChurchUser]
     lookup_field = "register_type"
+    http_method_names = ["patch", "options", "head"]   # PATCH only
 
     def get_queryset(self):
         return RegisterSetting.objects.filter(
             church=self.request.user.church
         )
+
+    def get_serializer(self, *args, **kwargs):
+        # Counters are owned by the numbering service. Never accept
+        # them from this endpoint, so a stale tab cannot break saves.
+        data = kwargs.get("data")
+        if data is not None and hasattr(data, "copy"):
+            data = data.copy()
+            data.pop("next_register_number", None)
+            data.pop("next_folio_number", None)
+            kwargs["data"] = data
+        return super().get_serializer(*args, **kwargs)
+
+
+class RegisterSettingPreviewAPIView(APIView):
+    """
+    POST /api/registry/register-settings/preview/
+
+    Builds an in-memory RegisterSetting from the draft, then runs
+    _financial_year_label() + _assemble() â€” the exact functions the
+    real numbering path uses. Returns the resulting string.
+
+    Never writes to the DB.
+    """
+    permission_classes = [IsAuthenticated, IsChurchUser]
+
+    def post(self, request):
+        from .serializers import RegisterSettingPreviewSerializer
+        from .services import _assemble, _financial_year_label
+
+        serializer = RegisterSettingPreviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        church = request.user.church
+
+        draft = RegisterSetting(
+            church=church,
+            register_type=data["register_type"],
+            register_prefix=data.get("register_prefix") or "",
+            register_suffix=data.get("register_suffix") or "",
+            register_padding=data.get("register_padding") or 4,
+            separator=(
+                data.get("separator")
+                if data.get("separator") is not None
+                else "/"
+            ),
+            include_parish_code=data.get("include_parish_code", True),
+            include_leading_zeros=data.get("include_leading_zeros", True),
+            use_financial_year=data.get("use_financial_year", False),
+            financial_year_start_month=data.get("financial_year_start_month"),
+            financial_year_format=(
+                data.get("financial_year_format") or "YYYY-YY"
+            ),
+        )
+
+        parish_code = (
+            (church.code or "") if draft.include_parish_code else ""
+        )
+        fy = _financial_year_label(draft)
+        number = data.get("next_register_number") or 1
+
+        preview = _assemble(
+            prefix=draft.register_prefix,
+            parish_code=parish_code,
+            fy=fy,
+            number=number,
+            suffix=draft.register_suffix,
+            separator=draft.separator,
+            include_zeros=draft.include_leading_zeros,
+            padding=draft.register_padding,
+        )
+
+        return Response({
+            "preview": preview,
+            "parts": {
+                "prefix": draft.register_prefix or None,
+                "parish_code": parish_code or None,
+                "financial_year": fy or None,
+                "sequence": (
+                    str(number).zfill(draft.register_padding)
+                    if draft.include_leading_zeros
+                    else str(number)
+                ),
+                "suffix": draft.register_suffix or None,
+            },
+            "parish_code": church.code,
+        })
+
+
 #priest GET
 from django.db import models
 from django.db.models import Q, Case, When, Value, IntegerField, CharField
@@ -3102,14 +3275,14 @@ class MarkMemberDeadAPIView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # 🔥 Prevent duplicate death marking
+        # ðŸ”¥ Prevent duplicate death marking
         if member.expired:
             return Response(
                 {"error": "Member is already marked as deceased"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # 🔥 Call service (no head assignment anymore)
+        # ðŸ”¥ Call service (no head assignment anymore)
         try:
             handle_member_death(member)
         except ValueError as e:
@@ -3118,7 +3291,7 @@ class MarkMemberDeadAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # 🔥 Create or get death register
+        # ðŸ”¥ Create or get death register
         death, created = DeathRegister.objects.get_or_create(
             member=member,
             defaults={
@@ -3457,7 +3630,7 @@ class MembersUnderHeadAPIView(ListAPIView):
                 pk=head_id,
                 church=church,
                 is_family_head=True,
-                # ✅ REMOVED: is_active=True, (so inactive heads don't throw 404)
+                # âœ… REMOVED: is_active=True, (so inactive heads don't throw 404)
                 expired=False
             )
         except Member.DoesNotExist:
@@ -3779,7 +3952,7 @@ class PaymentCancelAPIView(APIView):
                 "updated_at",
             ])
 
-            # 🔥 Reverse the ledger entry
+            # ðŸ”¥ Reverse the ledger entry
             payment.reverse_ledger_entry()
 
         return Response(
@@ -3856,7 +4029,7 @@ class LedgerEntryListAPIView(ListAPIView):
                 target_names.extend(list(specific_banks))
                 qs = qs.filter(ledger__ledger_name__in=target_names)
 
-        # ✅ hide the auto-created opening-balance entries
+        # âœ… hide the auto-created opening-balance entries
         qs = qs.exclude(self.OPENING_ENTRY_Q)
 
         date_from = self.request.query_params.get("from")
@@ -3937,7 +4110,7 @@ class LedgerEntryListAPIView(ListAPIView):
                 else:
                     opening += float(l.op_balance or 0)
 
-        # ✅ movements before the From date (all banks AND single bank),
+        # âœ… movements before the From date (all banks AND single bank),
         #    excluding the auto "Opening Balance" entries
         if date_from:
             opening_qs = LedgerEntry.objects.filter(
@@ -4650,7 +4823,7 @@ class ReceiptCancelAPIView(APIView):
 
 
 # ============================================================
-# REPORTS — MEMBER LEDGER
+# REPORTS â€” MEMBER LEDGER
 # ============================================================
 
 class MemberLedgerReportAPIView(APIView):
@@ -4685,7 +4858,7 @@ class MemberLedgerReportAPIView(APIView):
         if date_from:
             opening_qs = opening_qs.filter(receipt__receipt_date__lt=date_from)
 
-        # ✅ In a member account, payments (receipts) are CREDITS
+        # âœ… In a member account, payments (receipts) are CREDITS
         opening_credit = opening_qs.aggregate(s=Sum("amount"))["s"] or Decimal("0")
 
         # ----- Rows in range
@@ -4712,7 +4885,7 @@ class MemberLedgerReportAPIView(APIView):
             rcp = line.receipt
             amount = line.amount or Decimal("0")
 
-            # ✅ Receipts are Credits to the member's account
+            # âœ… Receipts are Credits to the member's account
             credit = amount
             debit = Decimal("0")
             total_credit += amount
@@ -4760,7 +4933,7 @@ class MemberLedgerReportAPIView(APIView):
 
 
 # ============================================================
-# REPORTS — INCOME & EXPENDITURE
+# REPORTS â€” INCOME & EXPENDITURE
 # ============================================================
 from .statutory_schedule import INCOME_SCHEDULE, EXPENDITURE_SCHEDULE
 class IncomeExpenditureReportAPIView(APIView):
@@ -4777,7 +4950,7 @@ class IncomeExpenditureReportAPIView(APIView):
     INCOME_ROOTS = ["II. Revenue Receipts", "III. Inter Church / Unit Accounts"]
     EXPENSE_ROOTS = ["V. Inter Church / Unit Payments", "VI. Revenue Payments"]
 
-    # Statutory adjustment ledgers — handled at the report level,
+    # Statutory adjustment ledgers â€” handled at the report level,
     # never summed into the tree. Names must match DEFAULT_LEDGERS exactly.
     ADJUSTMENT_LEDGER_NAMES = (
         "Advance for next year",        # 2214 (LIABILITY)
@@ -5008,174 +5181,418 @@ class IncomeExpenditureReportAPIView(APIView):
         return out
 
 # ============================================================
-# REPORTS — INCOME & EXPENDITURE (STATUTORY FIXED SCHEDULE)
+# REPORTS â€” INCOME & EXPENDITURE (STATUTORY FIXED SCHEDULE)
 # ============================================================
+
 
 class IncomeExpenditureStatutoryAPIView(APIView):
     permission_classes = [IsAuthenticated, IsChurchUser]
 
     def get(self, request):
-        church    = request.user.church
+        church = request.user.church
+
         date_from = request.query_params.get("from")
-        date_to   = request.query_params.get("to")
+        date_to = request.query_params.get("to")
         prev_from = request.query_params.get("prev_from")
-        prev_to   = request.query_params.get("prev_to")
+        prev_to = request.query_params.get("prev_to")
 
+        # --------------------------------------------------
+        # BUILD SCHEDULES
+        # --------------------------------------------------
         income_rows = self._build(
-            church, INCOME_SCHEDULE,
-            date_from, date_to, prev_from, prev_to, side="INCOME",
+            church,
+            INCOME_SCHEDULE,
+            date_from,
+            date_to,
+            prev_from,
+            prev_to,
+            side="INCOME",
         )
+
         exp_rows = self._build(
-            church, EXPENDITURE_SCHEDULE,
-            date_from, date_to, prev_from, prev_to, side="EXPENSE",
+            church,
+            EXPENDITURE_SCHEDULE,
+            date_from,
+            date_to,
+            prev_from,
+            prev_to,
+            side="EXPENSE",
         )
 
-        total_income = 0.0
-        for r in income_rows:
-            if r["row_type"] == "grand_total":
-                total_income = r["current_year"]
-                break
+        # --------------------------------------------------
+        # GET UNADJUSTED GRAND TOTALS
+        # --------------------------------------------------
+        def get_grand_total(rows):
+            for row in rows:
+                if row["row_type"] == "grand_total":
+                    return (
+                        round(row["current_year"], 2),
+                        round(row["previous_year"], 2),
+                    )
+            return 0.0, 0.0
 
-        total_exp = 0.0
-        for r in exp_rows:
-            if r["row_type"] == "grand_total":
-                total_exp = r["current_year"]
-                break
+        total_income, prev_income = get_grand_total(income_rows)
+        total_exp, prev_exp = get_grand_total(exp_rows)
 
-        net        = round(total_income - total_exp, 2)
+        # --------------------------------------------------
+        # SURPLUS / DEFICIT
+        # --------------------------------------------------
+        net = round(total_income - total_exp, 2)
+        prev_net = round(prev_income - prev_exp, 2)
+
         is_surplus = net >= 0
 
-        for r in income_rows:
-            if r["code"] == "2999":
-                r["current_year"] = round(abs(net), 2) if not is_surplus else 0.0
-                r["previous_year"] = 0.0
-        for r in exp_rows:
-            if r["code"] == "4999":
-                r["current_year"] = round(abs(net), 2) if is_surplus else 0.0
-                r["previous_year"] = 0.0
+        current_surplus = round(max(net, 0), 2)
+        current_deficit = round(max(-net, 0), 2)
 
+        previous_surplus = round(max(prev_net, 0), 2)
+        previous_deficit = round(max(-prev_net, 0), 2)
+
+        # --------------------------------------------------
+        # INCOME: DEFICIT 2999 AND BALANCED TOTAL
+        # --------------------------------------------------
+        for row in income_rows:
+            if row["code"] == "2999":
+                row["current_year"] = current_deficit
+                row["previous_year"] = previous_deficit
+
+            elif row["row_type"] == "grand_total_balanced":
+                row["current_year"] = round(
+                    total_income + current_deficit, 2
+                )
+                row["previous_year"] = round(
+                    prev_income + previous_deficit, 2
+                )
+
+        # --------------------------------------------------
+        # EXPENDITURE: SURPLUS 4999 AND BALANCED TOTAL
+        # --------------------------------------------------
+        for row in exp_rows:
+            if row["code"] == "4999":
+                row["current_year"] = current_surplus
+                row["previous_year"] = previous_surplus
+
+            elif row["row_type"] == "grand_total_balanced":
+                row["current_year"] = round(
+                    total_exp + current_surplus, 2
+                )
+                row["previous_year"] = round(
+                    prev_exp + previous_surplus, 2
+                )
+
+        # --------------------------------------------------
+        # RESPONSE
+        # --------------------------------------------------
         return Response({
             "from": date_from,
             "to": date_to,
+            "prev_from": prev_from,
+            "prev_to": prev_to,
             "income": income_rows,
             "expenditure": exp_rows,
             "total_income": round(total_income, 2),
             "total_expenditure": round(total_exp, 2),
             "net": net,
             "is_surplus": is_surplus,
+            "current_surplus": current_surplus,
+            "current_deficit": current_deficit,
+            "previous_surplus": previous_surplus,
+            "previous_deficit": previous_deficit,
         })
 
-    def _build(self, church, schedule, date_from, date_to,
-               prev_from, prev_to, side):
+    # ======================================================
+    # BUILD STATUTORY SCHEDULE
+    # ======================================================
+    def _build(
+        self,
+        church,
+        schedule,
+        date_from,
+        date_to,
+        prev_from,
+        prev_to,
+        side,
+    ):
         from django.db.models import Sum, Q
         from .models import LedgerEntry
 
-        def movement(code, db_key, d1, d2):
+        # --------------------------------------------------
+        # LEDGER MOVEMENT
+        # Supports four-digit and six-digit ledger codes.
+        # Example: 2101 matches 2101 and 210100.
+        # --------------------------------------------------
+        def movement(code, db_key, d1, d2, parent_group_code=None):
             try:
                 code_int = int(code)
             except (ValueError, TypeError):
                 code_int = None
 
-            if code_int is not None:
-                qs = LedgerEntry.objects.filter(
-                    church=church,
-                    ledger__ledger_code=code_int,
-                    is_cancelled=False,
-                    is_reversal=False,
-                )
-            else:
-                qs = LedgerEntry.objects.filter(
-                    church=church,
-                    ledger__ledger_name=db_key,
-                    is_cancelled=False,
-                    is_reversal=False,
-                )
-
-            if d1: qs = qs.filter(entry_date__gte=d1)
-            if d2: qs = qs.filter(entry_date__lte=d2)
-
-            agg = qs.aggregate(
-                debits=Sum("amount", filter=Q(entry_type="DEBIT")),
-                credits=Sum("amount", filter=Q(entry_type="CREDIT")),
+            qs = LedgerEntry.objects.filter(
+                church=church,
+                is_cancelled=False,
+                is_reversal=False,
+                ledger__ledger_nature=side,
             )
-            d = float(agg["debits"]  or 0)
-            c = float(agg["credits"] or 0)
 
-            amt = (c - d) if side == "INCOME" else (d - c)
-            if amt < 0:
-                amt = 0.0
-            return amt
+            if code_int is not None:
 
-        rows          = []
-        group_cur     = {}
-        group_prev    = {}
-        section_cur   = {}
-        section_prev  = {}
-        current_group = None          
+                if len(str(abs(code_int))) == 4:
+                    qs = qs.filter(
+                        Q(ledger__ledger_code=code_int)
+                        | Q(ledger__ledger_code=code_int * 100)
+                    )
+                else:
+                    qs = qs.filter(
+                        ledger__ledger_code=code_int
+                    )
+
+            elif db_key:
+                qs = qs.filter(
+                    ledger__ledger_name=db_key
+                )
+
+                if parent_group_code is not None:
+                    qs = qs.filter(
+                        ledger__account_group__account_code=parent_group_code
+                    )
+
+            else:
+                return 0.0
+
+            # Date filters
+            if d1:
+                qs = qs.filter(entry_date__gte=d1)
+
+            if d2:
+                qs = qs.filter(entry_date__lte=d2)
+
+            # Debit / Credit totals
+            agg = qs.aggregate(
+                debits=Sum(
+                    "amount",
+                    filter=Q(entry_type="DEBIT"),
+                ),
+                credits=Sum(
+                    "amount",
+                    filter=Q(entry_type="CREDIT"),
+                ),
+            )
+
+            debits = float(agg["debits"] or 0)
+            credits = float(agg["credits"] or 0)
+
+            if side == "INCOME":
+                return round(credits - debits, 2)
+
+            return round(debits - credits, 2)
+
+        # --------------------------------------------------
+        # INITIALISE TOTALS
+        # --------------------------------------------------
+        rows = []
+
+        section_cur = {}
+        section_prev = {}
+
+        group_cur = {}
+        group_prev = {}
+
+        active_groups = []
+
+        # --------------------------------------------------
+        # PROCESS SCHEDULE
+        # --------------------------------------------------
+        previous_letter = None
 
         for letter, code, name, depth, rtype, key in schedule:
-            cur  = 0.0
+
+            # Prevent groups from carrying into another section.
+            if letter and letter != previous_letter:
+                active_groups = []
+
+            if letter:
+                previous_letter = letter
+
+            cur = 0.0
             prev = 0.0
 
-            # ----- LEDGER / ADJUSTMENT -----
-            if rtype in ("ledger", "adjustment"):
-                cur  = movement(code, key, date_from, date_to)
-                prev = movement(code, key, prev_from, prev_to) if (prev_from or prev_to) else 0.0
+            # ----------------------------------------------
+            # GROUP HEADER
+            # ----------------------------------------------
+            if rtype == "group":
 
-                if current_group:
-                    group_cur[current_group]  += cur
-                    group_prev[current_group] += prev
-                if letter:
-                    section_cur[letter]  = section_cur.get(letter,  0.0) + cur
-                    section_prev[letter] = section_prev.get(letter, 0.0) + prev
+                active_groups = [
+                    group for group in active_groups
+                    if group["depth"] < depth
+                ]
 
-            # ----- GROUP HEADER -----
-            elif rtype == "group":
-                current_group = f"{code}|{name}"      
-                group_cur[current_group]  = 0.0
-                group_prev[current_group] = 0.0
+                group_id = (letter, key or name, code)
 
-            # ----- SUBTOTAL -----
-            elif rtype == "subtotal":
-                if current_group:
-                    cur  = group_cur.get(current_group, 0.0)
-                    prev = group_prev.get(current_group, 0.0)
-                current_group = None                  
+                group_cur[group_id] = 0.0
+                group_prev[group_id] = 0.0
 
-            # ----- TOTAL -----
-            elif rtype == "total":
-                lk = letter or ""
-                if lk in section_cur:
-                    cur  = section_cur[lk]
-                    prev = section_prev.get(lk, 0.0)
+                active_groups.append({
+                    "id": group_id,
+                    "code": code,
+                    "name": key or name,
+                    "depth": depth,
+                })
+
+            # ----------------------------------------------
+            # LEDGER / ADJUSTMENT
+            # ----------------------------------------------
+            elif rtype in ("ledger", "adjustment"):
+
+                if code in ("2999", "4999"):
+                    cur = 0.0
+                    prev = 0.0
+
                 else:
-                    cur  = sum(section_cur.values())
-                    prev = sum(section_prev.values())
+                    parent_group_code = (
+                        active_groups[-1]["code"]
+                        if active_groups
+                        else None
+                    )
 
-            # ----- GRAND TOTAL -----
+                    cur = movement(
+                        code,
+                        key,
+                        date_from,
+                        date_to,
+                        parent_group_code,
+                    )
+
+                    prev = (
+                        movement(
+                            code,
+                            key,
+                            prev_from,
+                            prev_to,
+                            parent_group_code,
+                        )
+                        if (prev_from or prev_to)
+                        else 0.0
+                    )
+
+                    # Subscription advance deduction.
+                    if code == "2214":
+                        cur = -cur
+                        prev = -prev
+
+                    # Add movement to enclosing groups.
+                    for group in active_groups:
+                        group_id = group["id"]
+
+                        group_cur[group_id] = (
+                            group_cur.get(group_id, 0.0) + cur
+                        )
+
+                        group_prev[group_id] = (
+                            group_prev.get(group_id, 0.0) + prev
+                        )
+
+                    # Add movement once to section total.
+                    if letter:
+                        section_cur[letter] = (
+                            section_cur.get(letter, 0.0) + cur
+                        )
+
+                        section_prev[letter] = (
+                            section_prev.get(letter, 0.0) + prev
+                        )
+
+            # ----------------------------------------------
+            # SUBTOTAL
+            # ----------------------------------------------
+            elif rtype == "subtotal":
+
+                matching_group = next(
+                    (
+                        group for group in reversed(active_groups)
+                        if group["name"] == key
+                    ),
+                    None,
+                )
+
+                if matching_group:
+                    group_id = matching_group["id"]
+
+                    cur = group_cur.get(group_id, 0.0)
+                    prev = group_prev.get(group_id, 0.0)
+
+                    closing_depth = matching_group["depth"]
+
+                    active_groups = [
+                        group for group in active_groups
+                        if group["depth"] < closing_depth
+                    ]
+
+                else:
+                    cur = section_cur.get(letter, 0.0)
+                    prev = section_prev.get(letter, 0.0)
+
+            # ----------------------------------------------
+            # SECTION / GROUP TOTAL
+            # ----------------------------------------------
+            elif rtype == "total":
+
+                matching_group = next(
+                    (
+                        group for group in reversed(active_groups)
+                        if group["name"] == key
+                    ),
+                    None,
+                )
+
+                if matching_group:
+                    group_id = matching_group["id"]
+
+                    cur = group_cur.get(group_id, 0.0)
+                    prev = group_prev.get(group_id, 0.0)
+
+                else:
+                    cur = section_cur.get(letter, 0.0)
+                    prev = section_prev.get(letter, 0.0)
+
+            # ----------------------------------------------
+            # GRAND TOTAL
+            # ----------------------------------------------
             elif rtype == "grand_total":
-                cur  = round(sum(section_cur.values()), 2)
+
+                cur = round(sum(section_cur.values()), 2)
                 prev = round(sum(section_prev.values()), 2)
 
-            # ----- SECTION / BALANCING -----
-            else:
-                cur  = 0.0
+            # ----------------------------------------------
+            # BALANCED GRAND TOTAL
+            # ----------------------------------------------
+            elif rtype == "grand_total_balanced":
+                cur = 0.0
                 prev = 0.0
 
+            # ----------------------------------------------
+            # OTHER HEADINGS
+            # ----------------------------------------------
+            else:
+                cur = 0.0
+                prev = 0.0
+
+            # ----------------------------------------------
+            # APPEND ROW
+            # ----------------------------------------------
             rows.append({
-                "section":       letter or "",
-                "code":          code,
-                "name":          name,
-                "depth":         depth,
-                "row_type":      rtype,
-                "current_year":  round(cur, 2),
+                "section": letter or "",
+                "code": code,
+                "name": name,
+                "depth": depth,
+                "row_type": rtype,
+                "current_year": round(cur, 2),
                 "previous_year": round(prev, 2),
             })
 
         return rows
 
 # ============================================================
-# REPORTS — DONATION REGISTER
+# REPORTS â€” DONATION REGISTER
 # ============================================================
 
 class DonationRegisterReportAPIView(APIView):
@@ -5255,7 +5672,7 @@ class DonationRegisterReportAPIView(APIView):
         if ledger_id:
             qs = qs.filter(ledger_id=ledger_id)
             
-        # ✅ Correct mode filtering (Cash vs Bank)
+        # âœ… Correct mode filtering (Cash vs Bank)
         if mode:
             if mode == "CASH":
                 qs = qs.filter(receipt__payment_type="CASH")
@@ -5299,11 +5716,11 @@ class DonationRegisterReportAPIView(APIView):
                 "family_name": (
                     rcp.member.family.family_name
                     if rcp.member and rcp.member.family
-                    else "—"
+                    else "â€”"
                 ),
                 "donation_type": line.ledger.ledger_name,
                 "payment_mode": payment_mode,
-                "reference_number": rcp.ref_no or "—",
+                "reference_number": rcp.ref_no or "â€”",
                 "amount": amount,
             })
 
@@ -5368,7 +5785,7 @@ def _get_paid_amount(church, member, ledger, month_start, month_end):
     return qs.aggregate(t=Sum("amount"))["t"] or 0
 
 # ============================================================
-# REPORTS — SUBSCRIPTION DUE LIST
+# REPORTS â€” SUBSCRIPTION DUE LIST
 # ============================================================
 
 class SubscriptionDueListAPIView(APIView):
@@ -5414,10 +5831,10 @@ class SubscriptionDueListAPIView(APIView):
                 if not s.ledger:
                     continue
 
-                # 🛡️ FIX: Skip if the subscription hasn't started yet
+                # ðŸ›¡ï¸ FIX: Skip if the subscription hasn't started yet
                 if s.start_date and s.start_date > month_end:
                     continue
-                # 🛡️ FIX: Skip if the subscription ended before this month
+                # ðŸ›¡ï¸ FIX: Skip if the subscription ended before this month
                 if s.end_date and s.end_date < month_start:
                     continue
 
@@ -5434,7 +5851,7 @@ class SubscriptionDueListAPIView(APIView):
                     )
                 ))
                 
-                # 🛡️ If they paid more than expected, they have 0 due.
+                # ðŸ›¡ï¸ If they paid more than expected, they have 0 due.
                 remaining = max(Decimal("0"), expected - paid)
 
                 # If they have 0 due, don't add this ledger to their list
@@ -5493,7 +5910,7 @@ class SubscriptionDueListAPIView(APIView):
             "ledgers": sorted(list(all_ledgers)),
         })
 # ============================================================
-# REPORTS — SUBSCRIPTION PAID LIST
+# REPORTS â€” SUBSCRIPTION PAID LIST
 # ============================================================
 
 class SubscriptionPaidListAPIView(APIView):
@@ -5851,11 +6268,12 @@ class ReceiptPaymentCombinedAPIView(APIView):
 
 
 # ============================================================
-# REPORTS — RECEIPTS & PAYMENTS (STATUTORY)
+# REPORTS â€” RECEIPTS & PAYMENTS (STATUTORY)
 # ============================================================
 from .statutory_schedule import RECEIPTS_SCHEDULE_RP, PAYMENTS_SCHEDULE_RP
 from django.db.models import Sum, Q
 from .models import LedgerEntry, BankAccount, AccountLedgerMaster
+
 
 class ReceiptPaymentStatutoryAPIView(APIView):
     permission_classes = [IsAuthenticated, IsChurchUser]
@@ -5864,350 +6282,1037 @@ class ReceiptPaymentStatutoryAPIView(APIView):
     CLOSING_CODES = {"6100", "6200", "6300", "6400"}
 
     def get(self, request):
-        church     = request.user.church
-        date_from  = request.query_params.get("from")
-        date_to    = request.query_params.get("to")
-        prev_from  = request.query_params.get("prev_from")
-        prev_to    = request.query_params.get("prev_to")
+        church = request.user.church
+
+        date_from = request.query_params.get("from")
+        date_to = request.query_params.get("to")
+        prev_from = request.query_params.get("prev_from")
+        prev_to = request.query_params.get("prev_to")
 
         receipts_rows = self._build_side(
-            church, RECEIPTS_SCHEDULE_RP, date_from, date_to,
-            prev_from, prev_to, side="INCOME"
+            church,
+            RECEIPTS_SCHEDULE_RP,
+            date_from,
+            date_to,
+            prev_from,
+            prev_to,
+            side="INCOME",
         )
+
         payments_rows = self._build_side(
-            church, PAYMENTS_SCHEDULE_RP, date_from, date_to,
-            prev_from, prev_to, side="EXPENSE"
+            church,
+            PAYMENTS_SCHEDULE_RP,
+            date_from,
+            date_to,
+            prev_from,
+            prev_to,
+            side="EXPENSE",
         )
 
         def _sum_by_codes(rows, code_set, include=True):
-            return round(sum(
-                (r["current_year"] or 0.0) for r in rows
-                if r["row_type"] == "ledger"
-                and ((r["code"] in code_set) == include)
-            ), 2)
+            return round(
+                sum(
+                    (r["current_year"] or 0.0)
+                    for r in rows
+                    if r["row_type"] == "ledger"
+                    and ((r["code"] in code_set) == include)
+                ),
+                2,
+            )
 
         def _sum_by_codes_prev(rows, code_set, include=True):
-            return round(sum(
-                (r["previous_year"] or 0.0) for r in rows
-                if r["row_type"] == "ledger"
-                and ((r["code"] in code_set) == include)
-            ), 2)
+            return round(
+                sum(
+                    (r["previous_year"] or 0.0)
+                    for r in rows
+                    if r["row_type"] == "ledger"
+                    and ((r["code"] in code_set) == include)
+                ),
+                2,
+            )
 
-        opening_current = _sum_by_codes(receipts_rows, self.OPENING_CODES, include=True)
-        opening_prev    = _sum_by_codes_prev(receipts_rows, self.OPENING_CODES, include=True)
+        # -----------------------------------------
+        # OPENING BALANCES
+        # -----------------------------------------
+        opening_current = _sum_by_codes(
+            receipts_rows,
+            self.OPENING_CODES,
+            include=True,
+        )
 
-        receipts_current = _sum_by_codes(receipts_rows, self.OPENING_CODES, include=False)
-        receipts_prev    = _sum_by_codes_prev(receipts_rows, self.OPENING_CODES, include=False)
+        opening_prev = _sum_by_codes_prev(
+            receipts_rows,
+            self.OPENING_CODES,
+            include=True,
+        )
 
-        payments_current = _sum_by_codes(payments_rows, self.CLOSING_CODES, include=False)
-        payments_prev    = _sum_by_codes_prev(payments_rows, self.CLOSING_CODES, include=False)
+        # -----------------------------------------
+        # REVENUE AND CAPITAL RECEIPTS
+        # -----------------------------------------
+        receipts_current = _sum_by_codes(
+            receipts_rows,
+            self.OPENING_CODES,
+            include=False,
+        )
 
-        closing_current  = _sum_by_codes(payments_rows, self.CLOSING_CODES, include=True)
-        closing_prev     = _sum_by_codes_prev(payments_rows, self.CLOSING_CODES, include=True)
+        receipts_prev = _sum_by_codes_prev(
+            receipts_rows,
+            self.OPENING_CODES,
+            include=False,
+        )
 
-        lhs_current = round(opening_current + receipts_current, 2)
-        lhs_prev    = round(opening_prev + receipts_prev, 2)
-        rhs_current = round(payments_current + closing_current, 2)
-        rhs_prev    = round(payments_prev + closing_prev, 2)
+        # -----------------------------------------
+        # REVENUE AND CAPITAL PAYMENTS
+        # -----------------------------------------
+        payments_current = _sum_by_codes(
+            payments_rows,
+            self.CLOSING_CODES,
+            include=False,
+        )
+
+        payments_prev = _sum_by_codes_prev(
+            payments_rows,
+            self.CLOSING_CODES,
+            include=False,
+        )
+
+        # -----------------------------------------
+        # CLOSING BALANCES
+        # -----------------------------------------
+        closing_current = _sum_by_codes(
+            payments_rows,
+            self.CLOSING_CODES,
+            include=True,
+        )
+
+        closing_prev = _sum_by_codes_prev(
+            payments_rows,
+            self.CLOSING_CODES,
+            include=True,
+        )
+
+        # -----------------------------------------
+        # TOTAL RECEIPTS
+        # Opening + Revenue/Capital Receipts
+        # -----------------------------------------
+        lhs_current = round(
+            opening_current + receipts_current,
+            2,
+        )
+
+        lhs_prev = round(
+            opening_prev + receipts_prev,
+            2,
+        )
+
+        # -----------------------------------------
+        # TOTAL PAYMENTS
+        # Revenue/Capital Payments + Closing
+        # -----------------------------------------
+        rhs_current = round(
+            payments_current + closing_current,
+            2,
+        )
+
+        rhs_prev = round(
+            payments_prev + closing_prev,
+            2,
+        )
+
         is_balanced = abs(lhs_current - rhs_current) < 0.01
 
         receipts_rows.append({
-            "section": "", "code": "", "name": "TOTAL RECEIPTS (I+II+III+IV)", "depth": 0, "row_type": "grand_total",
-            "current_year": lhs_current, "previous_year": lhs_prev,
+            "section": "",
+            "code": "",
+            "name": "TOTAL RECEIPTS (I+II+III+IV)",
+            "depth": 0,
+            "row_type": "grand_total",
+            "current_year": lhs_current,
+            "previous_year": lhs_prev,
         })
+
         payments_rows.append({
-            "section": "", "code": "", "name": "TOTAL PAYMENTS (V+VI+VII+VIII)", "depth": 0, "row_type": "grand_total",
-            "current_year": rhs_current, "previous_year": rhs_prev,
+            "section": "",
+            "code": "",
+            "name": "TOTAL PAYMENTS (V+VI+VII+VIII)",
+            "depth": 0,
+            "row_type": "grand_total",
+            "current_year": rhs_current,
+            "previous_year": rhs_prev,
         })
 
         return Response({
-            "from": date_from, "to": date_to,
-            "receipts": receipts_rows, "payments": payments_rows,
-            "total_receipts": receipts_current, "total_payments": payments_current,
-            "opening_balance": opening_current, "closing_balance": closing_current,
+            "from": date_from,
+            "to": date_to,
+            "receipts": receipts_rows,
+            "payments": payments_rows,
+            "total_receipts": receipts_current,
+            "total_payments": payments_current,
+            "opening_balance": opening_current,
+            "closing_balance": closing_current,
             "is_balanced": is_balanced,
-            "difference": {"current_year": round(lhs_current - rhs_current, 2), "previous_year": round(lhs_prev - rhs_prev, 2)},
-            "summary": self._summary(church, date_from, date_to),
+            "difference": {
+                "current_year": round(
+                    lhs_current - rhs_current,
+                    2,
+                ),
+                "previous_year": round(
+                    lhs_prev - rhs_prev,
+                    2,
+                ),
+            },
+            "summary": self._summary(
+                church,
+                date_from,
+                date_to,
+            ),
         })
 
-    def _build_side(self, church, schedule, date_from, date_to, prev_from, prev_to, side):
+    # =================================================
+    # BUILD RECEIPTS / PAYMENTS SIDE
+    # =================================================
+    def _build_side(
+        self,
+        church,
+        schedule,
+        date_from,
+        date_to,
+        prev_from,
+        prev_to,
+        side,
+    ):
         rows = []
-        
-        # 1. Fetch and Group Bank Accounts
-        active_banks = BankAccount.objects.filter(church=church, is_active=True).select_related('ledger')
-        banks_by_type = { "1000": [], "1100": [], "1200": [] }
-        
-        for bank in active_banks:
-            lname = bank.ledger.ledger_name.lower() if bank.ledger else ""
-            if "deposit" in lname: banks_by_type["1100"].append(bank)
-            elif "other" in lname: banks_by_type["1200"].append(bank)
-            else: banks_by_type["1000"].append(bank)
 
-        # 2. State Tracking
+        active_banks = (
+            BankAccount.objects
+            .filter(
+                church=church,
+                is_active=True,
+            )
+            .select_related("ledger")
+        )
+
+                # All active bank accounts must be classified
+        # under Savings Account in the statutory report.
+        banks_by_type = {
+            "1000": [],
+            "1100": [],
+            "1200": [],
+        }
+
+        for bank in active_banks:
+            if bank.ledger:
+                banks_by_type["1000"].append(bank)
+
         section_totals = {}
         group_totals = {}
-        sub_group_totals = {}
-
         current_section = None
-        current_group = None
-        current_sub_group = None
+
+        active_groups = []
+
+        # Prevent the same database ledger from being
+        # counted under multiple report rows.
+        used_ledger_ids = set()
+
+        group_total_names = {
+            "Total of Church Receipts": "2000",
+            "Total Donation Receipts": "2300",
+            "Total of Interest and Income from Investments": "2400",
+            "Total of Income from Church Commercial Buildings": "2500",
+            "Total of Corpus Donations": "3000",
+            "Total of Borrowings": "3100",
+            "Total of Advances": "3200",
+            "Total of Liabilities and Advances": "3300",
+            "Total of Security Deposits Returned": "3350",
+            "Total of Taxes and Refund": "3650",
+            "Total Inter Accounts Payments": "4030",
+            "Total of Religious Payments": "4200",
+            "Total Charity Payments": "4300",
+            "Total Taxes and Penalties": "4340",
+            "Total of Finance Charges": "4500",
+            "Total of Administrative Expenses": "4550",
+            "Total of Fixed Assets Addition": "4600",
+            "Total of Investments": "4700",
+            "Total of Loans and Advances": "4750",
+            "Total of Security Deposits": "4800",
+            "Total of Repayment of Loans": "4850",
+            "Total of Taxes and Penalty": "4900",
+        }
+
+        section_total_names = {
+            "Total of Opening Balances": "I",
+            "Total of Revenue Receipts (A+B+C+D+E+F+G)": "II",
+            "Total of Inter Church Receipts": "III",
+            "Total of Capital Receipts (A+B+C+D+E+F+G+H+I)": "IV",
+            "Total of Inter Church Payments": "V",
+            "Total of Revenue Payments (A+B+C+D+E+F+G+H)": "VI",
+            "Total of Capital Payments (A+B+C+D+E+F+G+H+I)": "VII",
+            "Total of Closing Balances": "VIII",
+        }
 
         for code, name, depth, db_key, is_group in schedule:
-            cur, prev = 0.0, 0.0
-            is_section_row = code in ("I", "II", "III", "IV", "V", "VI", "VII", "VIII")
-            is_bank_row = db_key and db_key.startswith("BANK")
-            
-            # Strictly follow the schedule. If it's a new group, reset the current group tracker.
+            cur = 0.0
+            prev = 0.0
+
+            is_section_row = code in (
+                "I",
+                "II",
+                "III",
+                "IV",
+                "V",
+                "VI",
+                "VII",
+                "VIII",
+            )
+
+            is_bank_row = bool(
+                db_key and db_key.startswith("BANK")
+            )
+
+            is_subtotal_row = name == "Sub Total"
+            is_total_row = name.startswith("Total")
+
+            # -----------------------------------------
+            # SECTION ROW
+            # -----------------------------------------
             if is_section_row:
                 current_section = code
-                section_totals.setdefault(current_section, [0.0, 0.0])
-                current_group = None
-                current_sub_group = None
-            elif is_group:
-                current_group = code
-                group_totals.setdefault(current_group, [0.0, 0.0])
-                current_sub_group = None
-            elif depth == 2 and code: 
-                current_sub_group = code
-                sub_group_totals.setdefault(current_sub_group, [0.0, 0.0])
 
-            # ---------------------------------------------
-            # CALCULATE VALUES
-            # ---------------------------------------------
-            child_banks = []
+                section_totals.setdefault(
+                    code,
+                    [0.0, 0.0],
+                )
+
+                active_groups = []
+
+            # -----------------------------------------
+            # GROUP ROW
+            # -----------------------------------------
+            elif is_group:
+                active_groups = [
+                    group
+                    for group in active_groups
+                    if group["depth"] < depth
+                ]
+
+                group = {
+                    "code": code,
+                    "name": name,
+                    "depth": depth,
+                    "current": 0.0,
+                    "previous": 0.0,
+                }
+
+                active_groups.append(group)
+
+                if code:
+                    group_totals.setdefault(
+                        code,
+                        [0.0, 0.0],
+                    )
+
             bank_group_sum_cur = 0.0
             bank_group_sum_prev = 0.0
 
+            # -----------------------------------------
+            bank_child_rows = []
+            # BANK ACCOUNT ROWS
+            # -----------------------------------------
             if is_bank_row:
-                is_closing = db_key.startswith("BANK_CLOSE")
-                b_type = "1000" if db_key.endswith("_1") else "1100" if db_key.endswith("_2") else "1200"
-                
-                for bank in banks_by_type[b_type]:
-                    if bank.ledger:
-                        if is_closing:
-                            b_cur = self._running_balance(church, bank.ledger, date_to, inclusive=True)
-                            b_prev = self._running_balance(church, bank.ledger, prev_to, inclusive=True) if prev_to else 0.0
-                        else:
-                            b_cur = float(bank.opening_balance or 0)
-                            b_prev = 0.0
-                        
-                        bank_group_sum_cur += b_cur
-                        bank_group_sum_prev += b_prev
-                        child_banks.append({"name": bank.bank_name, "cur": b_cur, "prev": b_prev})
-                
-                cur = None
-                prev = None
+                is_closing = db_key.startswith(
+                    "BANK_CLOSE"
+                )
 
+                b_type = (
+                    "1000" if db_key.endswith("_1")
+                    else "1100" if db_key.endswith("_2")
+                    else "1200"
+                )
+
+                for bank in banks_by_type[b_type]:
+                    if not bank.ledger:
+                        continue
+
+                    if is_closing:
+                        # Closing balance up to report end date.
+                        b_cur = self._running_balance(
+                            church,
+                            bank.ledger,
+                            date_to,
+                            inclusive=True,
+                        )
+
+                        b_prev = (
+                            self._running_balance(
+                                church,
+                                bank.ledger,
+                                prev_to,
+                                inclusive=True,
+                            )
+                            if prev_to
+                            else 0.0
+                        )
+
+                    else:
+                        # Include opening entries posted during the
+                        # reporting period as brought-forward balances.
+                        b_cur = self._bank_opening_balance(
+                            church,
+                            bank.ledger,
+                            date_from,
+                            date_to,
+                        )
+
+                        b_prev = (
+                            self._bank_opening_balance(
+                                church,
+                                bank.ledger,
+                                prev_from,
+                                prev_to,
+                            )
+                            if prev_from
+                            else 0.0
+                        )
+
+                    bank_group_sum_cur += b_cur
+                    bank_group_sum_prev += b_prev
+
+                    bank_child_rows.append({
+                        "section": "",
+                        "code": "",
+                        "name": bank.bank_name,
+                        "depth": depth + 1,
+                        "row_type": "ledger_child",
+                        "current_year": round(b_cur, 2),
+                        "previous_year": round(b_prev, 2),
+                    })
+
+                # Include standalone Savings Account ledgers that
+                # are not linked to a BankAccount record.
+                # These are asset balances, not additional receipts.
+                if b_type == "1000":
+                    linked_bank_ledger_ids = [
+                        bank.ledger_id
+                        for bank in active_banks
+                        if bank.ledger_id
+                    ]
+
+                    other_savings_ledgers = (
+                        AccountLedgerMaster.objects
+                        .filter(
+                            church=church,
+                            ledger_code="1000",
+                            ledger_nature="ASSET",
+                        )
+                        .exclude(
+                            id__in=linked_bank_ledger_ids
+                        )
+                    )
+
+                    for savings_ledger in other_savings_ledgers:
+                        if is_closing:
+                            savings_cur = self._running_balance(
+                                church,
+                                savings_ledger,
+                                date_to,
+                                inclusive=True,
+                            )
+                            savings_prev = (
+                                self._running_balance(
+                                    church,
+                                    savings_ledger,
+                                    prev_to,
+                                    inclusive=True,
+                                )
+                                if prev_to else 0.0
+                            )
+                        else:
+                            savings_cur = (
+                                self._running_balance(
+                                    church,
+                                    savings_ledger,
+                                    date_from,
+                                    inclusive=False,
+                                )
+                                if date_from else 0.0
+                            )
+                            savings_prev = (
+                                self._running_balance(
+                                    church,
+                                    savings_ledger,
+                                    prev_from,
+                                    inclusive=False,
+                                )
+                                if prev_from else 0.0
+                            )
+
+                        bank_group_sum_cur += savings_cur
+                        bank_group_sum_prev += savings_prev
+
+                        # Display standalone savings ledger only
+                        # when it has a non-zero balance.
+                        if (
+                            abs(savings_cur) > 0.005
+                            or abs(savings_prev) > 0.005
+                        ):
+                            bank_child_rows.append({
+                                "section": "",
+                                "code": "",
+                                "name": savings_ledger.ledger_name,
+                                "depth": depth + 1,
+                                "row_type": "ledger_child",
+                                "current_year": round(savings_cur, 2),
+                                "previous_year": round(savings_prev, 2),
+                            })
+
+                cur = bank_group_sum_cur
+                prev = bank_group_sum_prev
+
+            # -----------------------------------------
+            # NORMAL LEDGER ROWS
+            # -----------------------------------------
             elif db_key and not is_group:
-                ledgers = AccountLedgerMaster.objects.filter(church=church, ledger_name__iexact=db_key)
-                for led in ledgers:
+
+                ledger_queryset = AccountLedgerMaster.objects.filter(
+                    church=church,
+                )
+
+                # -----------------------------------------
+                # MATCH SCHEDULE LEDGER
+                # -----------------------------------------
+                try:
+                    schedule_ledger_code = int(code)
+                except (TypeError, ValueError):
+                    schedule_ledger_code = None
+
+                if schedule_ledger_code is not None:
+
+                    # -----------------------------------------
+                    # PAYMENT SCHEDULE TO SOURCE LEDGER MAPPING
+                    # -----------------------------------------
+                    # Loan from Church Members:
+                    # Receipt schedule 3103 uses ledger 3103 CREDIT.
+                    # Payment schedule 4857 uses ledger 3103 DEBIT.
+                    ledger_code_to_match = schedule_ledger_code
+
+                    if side == "EXPENSE":
+                        payment_ledger_code_map = {
+                            4851: 3101,  # Loan from Banks repayment
+                            4857: 3103,  # Loan from Church Members repayment
+                            6400: 1300,  # Closing cash balance
+                        }
+
+                        ledger_code_to_match = (
+                            payment_ledger_code_map.get(
+                                schedule_ledger_code,
+                                schedule_ledger_code,
+                            )
+                        )
+
+                    # Match exact 4-digit or 6-digit ledger code.
+                    ledgers = ledger_queryset.filter(
+                        ledger_code__in=[
+                            ledger_code_to_match,
+                            ledger_code_to_match * 100,
+                        ]
+                    ).exclude(
+                        id__in=used_ledger_ids
+                    )
+
+                else:
+
+                    # Blank-code rows, such as GST entries,
+                    # must match both ledger name and the
+                    # currently active statutory parent group.
+                    ledgers = ledger_queryset.filter(
+                        ledger_name__iexact=db_key
+                    ).exclude(
+                        id__in=used_ledger_ids
+                    )
+
+                    if active_groups:
+                        parent_code = active_groups[-1]["code"]
+
+                        try:
+                            parent_code = int(parent_code)
+                        except (TypeError, ValueError):
+                            parent_code = None
+
+                        if parent_code is not None:
+
+                            matching_ledger_ids = []
+
+                            for candidate in ledgers:
+                                try:
+                                    candidate_code = int(
+                                        candidate.ledger_code
+                                    )
+                                except (TypeError, ValueError):
+                                    continue
+
+                                # A six-digit ledger code belongs
+                                # to its first four-digit schedule
+                                # group. A four-digit code is already
+                                # in schedule format.
+                                normalized_code = (
+                                    candidate_code // 100
+                                    if candidate_code >= 100000
+                                    else candidate_code
+                                )
+
+                                if normalized_code == parent_code:
+                                    matching_ledger_ids.append(
+                                        candidate.id
+                                    )
+
+                            ledgers = ledgers.filter(
+                                id__in=matching_ledger_ids
+                            )
+
+                    else:
+                        # Do not guess when a blank-code row has
+                        # no active parent group.
+                        ledgers = ledgers.none()
+
+                for ledger in ledgers:
+
+                    # Do not count one ledger twice.
+                    if ledger.id in used_ledger_ids:
+                        continue
+
+                    used_ledger_ids.add(ledger.id)
+
                     is_closing = code in self.CLOSING_CODES
                     is_opening = code in self.OPENING_CODES
+
                     if is_closing:
-                        cur += self._running_balance(church, led, date_to, inclusive=True)
-                        prev += self._running_balance(church, led, prev_to, inclusive=True) if prev_to else 0.0
+                        cur += self._running_balance(
+                            church,
+                            ledger,
+                            date_to,
+                            inclusive=True,
+                        )
+
+                        prev += (
+                            self._running_balance(
+                                church,
+                                ledger,
+                                prev_to,
+                                inclusive=True,
+                            )
+                            if prev_to
+                            else 0.0
+                        )
+
                     elif is_opening:
-                        cur += float(led.op_balance or 0)
+                        # Opening cash and other opening ledgers.
+                        cur += self._running_balance(
+                            church,
+                            ledger,
+                            date_from,
+                            inclusive=False,
+                        )
+
+                        prev += (
+                            self._running_balance(
+                                church,
+                                ledger,
+                                prev_from,
+                                inclusive=False,
+                            )
+                            if prev_from
+                            else 0.0
+                        )
+
                     else:
-                        cur += self._ledger_amount(church, led, date_from, date_to, side)
-                        prev += self._ledger_amount(church, led, prev_from, prev_to, side) if (prev_from or prev_to) else 0.0
+                        cur += self._ledger_amount(
+                            church,
+                            ledger,
+                            date_from,
+                            date_to,
+                            side,
+                        )
 
-            # ---------------------------------------------
-            # CUSTOM TOTALS MATHEMATICS
-            # ---------------------------------------------
-            if name == "Total of Opening Balances":
-                cur = section_totals.get("I", [0.0])[0]
-                prev = section_totals.get("I", [0.0, 0.0])[1]
-            elif name == "Total of Church Receipts":
-                cur = group_totals.get("2000", [0.0])[0]
-                prev = group_totals.get("2000", [0.0, 0.0])[1]
-            elif name == "Total Donation Receipts":
-                cur = group_totals.get("2300", [0.0])[0]
-                prev = group_totals.get("2300", [0.0, 0.0])[1]
+                        prev += (
+                            self._ledger_amount(
+                                church,
+                                ledger,
+                                prev_from,
+                                prev_to,
+                                side,
+                            )
+                            if (prev_from or prev_to)
+                            else 0.0
+                        )
+
+            # -----------------------------------------
+            # SUBTOTAL CALCULATION
+            # -----------------------------------------
+            if is_subtotal_row:
+                matching_groups = [
+                    group
+                    for group in active_groups
+                    if group["depth"] == depth
+                ]
+
+                if not matching_groups:
+                    matching_groups = [
+                        group
+                        for group in active_groups
+                        if group["depth"] <= depth
+                    ]
+
+                if matching_groups:
+                    subtotal_group = matching_groups[-1]
+
+                    cur = subtotal_group["current"]
+                    prev = subtotal_group["previous"]
+
+            # -----------------------------------------
+            # CUSTOM GROUP TOTALS
+            # -----------------------------------------
+            elif name in group_total_names:
+                totals = group_totals.get(
+                    group_total_names[name],
+                    [0.0, 0.0],
+                )
+
+                cur = totals[0]
+                prev = totals[1]
+
+            elif name in section_total_names:
+                totals = section_totals.get(
+                    section_total_names[name],
+                    [0.0, 0.0],
+                )
+
+                cur = totals[0]
+                prev = totals[1]
+
             elif name == "Total Religious Receipts (A+B)":
-                cur = group_totals.get("2000", [0.0])[0] + group_totals.get("2300", [0.0])[0]
-                prev = group_totals.get("2000", [0.0, 0.0])[1] + group_totals.get("2300", [0.0, 0.0])[1]
-            elif name == "Total of Interest and Income from Investments":
-                cur = group_totals.get("2400", [0.0])[0]
-                prev = group_totals.get("2400", [0.0, 0.0])[1]
-            elif name == "Total of Income from Church Commercial Buildings":
-                cur = group_totals.get("2500", [0.0])[0]
-                prev = group_totals.get("2500", [0.0, 0.0])[1]
-            elif name == "Total of Revenue Receipts (A+B+C+D+E+F+G)":
-                cur = section_totals.get("II", [0.0])[0]
-                prev = section_totals.get("II", [0.0, 0.0])[1]
-            elif name == "Total of Inter Church Receipts":
-                cur = section_totals.get("III", [0.0])[0]
-                prev = section_totals.get("III", [0.0, 0.0])[1]
-            elif name == "Total of Corpus Donations":
-                cur = group_totals.get("3000", [0.0])[0]
-                prev = group_totals.get("3000", [0.0, 0.0])[1]
-            elif name == "Total of Borrowings":
-                cur = group_totals.get("3100", [0.0])[0]
-                prev = group_totals.get("3100", [0.0, 0.0])[1]
-            elif name == "Total of Advances":
-                cur = group_totals.get("3200", [0.0])[0]
-                prev = group_totals.get("3200", [0.0, 0.0])[1]
-            elif name == "Total of Liabilities and Advances":
-                cur = group_totals.get("3300", [0.0])[0]
-                prev = group_totals.get("3300", [0.0, 0.0])[1]
-            elif name == "Total of Security Deposits Returned":
-                cur = group_totals.get("3350", [0.0])[0]
-                prev = group_totals.get("3350", [0.0, 0.0])[1]
-            elif name == "Total of Taxes and Refund":
-                cur = group_totals.get("3650", [0.0])[0]
-                prev = group_totals.get("3650", [0.0, 0.0])[1]
-            elif name == "Total of Capital Receipts (A+B+C+D+E+F+G+H+I)":
-                cur = section_totals.get("IV", [0.0])[0]
-                prev = section_totals.get("IV", [0.0, 0.0])[1]
-            elif name == "Total of Inter Church Payments":
-                cur = section_totals.get("V", [0.0])[0]
-                prev = section_totals.get("V", [0.0, 0.0])[1]
-            elif name == "Total of Religious Payments":
-                cur = group_totals.get("4200", [0.0])[0]
-                prev = group_totals.get("4200", [0.0, 0.0])[1]
-            elif name == "Total Charity Payments":
-                cur = group_totals.get("4300", [0.0])[0]
-                prev = group_totals.get("4300", [0.0, 0.0])[1]
-            elif name == "Total Taxes and Penalties":
-                cur = group_totals.get("4340", [0.0])[0]
-                prev = group_totals.get("4340", [0.0, 0.0])[1]
-            elif name == "Total of Finance Charges":
-                cur = group_totals.get("4500", [0.0])[0]
-                prev = group_totals.get("4500", [0.0, 0.0])[1]
-            elif name == "Total of Administrative Expenses":
-                cur = group_totals.get("4550", [0.0])[0]
-                prev = group_totals.get("4550", [0.0, 0.0])[1]
-            elif name == "Total of Revenue Payments (A+B+C+D+E+F+G+H)":
-                cur = section_totals.get("VI", [0.0])[0]
-                prev = section_totals.get("VI", [0.0, 0.0])[1]
-            elif name == "Total of Fixed Assets Addition":
-                cur = group_totals.get("4600", [0.0])[0]
-                prev = group_totals.get("4600", [0.0, 0.0])[1]
-            elif name == "Total of Investments":
-                cur = group_totals.get("4700", [0.0])[0]
-                prev = group_totals.get("4700", [0.0, 0.0])[1]
-            elif name == "Total of Loans and Advances":
-                cur = group_totals.get("4750", [0.0])[0]
-                prev = group_totals.get("4750", [0.0, 0.0])[1]
-            elif name == "Total of Security Deposits":
-                cur = group_totals.get("4800", [0.0])[0]
-                prev = group_totals.get("4800", [0.0, 0.0])[1]
-            elif name == "Total of Repayment of Loans":
-                cur = group_totals.get("4850", [0.0])[0]
-                prev = group_totals.get("4850", [0.0, 0.0])[1]
-            elif name == "Total of Taxes and Penalty":
-                cur = group_totals.get("4900", [0.0])[0]
-                prev = group_totals.get("4900", [0.0, 0.0])[1]
-            elif name == "Total of Capital Payments (A+B+C+D+E+F+G+H+I)":
-                cur = section_totals.get("VII", [0.0])[0]
-                prev = section_totals.get("VII", [0.0, 0.0])[1]
-            elif name == "Total of Closing Balances":
-                cur = section_totals.get("VIII", [0.0])[0]
-                prev = section_totals.get("VIII", [0.0, 0.0])[1]
-            
-            # ✅ FIX: The "Sub Total" calculation now strictly uses the CURRENT group
-            elif name == "Sub Total":
-                if current_sub_group:
-                    cur = sub_group_totals.get(current_sub_group, [0.0])[0]
-                    prev = sub_group_totals.get(current_sub_group, [0.0, 0.0])[1]
-                elif current_group:
-                    cur = group_totals.get(current_group, [0.0])[0]
-                    prev = group_totals.get(current_group, [0.0, 0.0])[1]
+                a = group_totals.get(
+                    "2000",
+                    [0.0, 0.0],
+                )
 
-            # ---------------------------------------------
-            # EMIT ROW & ACCUMULATE
-            # ---------------------------------------------
-            row_type = "section" if is_section_row else ("group" if is_group else "ledger")
-            if name.startswith("Total"):
-                row_type = "subtotal" if "Sub" in name or "A+B" not in name else "total"
+                b = group_totals.get(
+                    "2300",
+                    [0.0, 0.0],
+                )
+
+                cur = a[0] + b[0]
+                prev = a[1] + b[1]
+
+            elif name == "Total of Inter Church Receipts":
+                totals = section_totals.get(
+                    "III",
+                    [0.0, 0.0],
+                )
+
+                cur = totals[0]
+                prev = totals[1]
+
+            # -----------------------------------------
+            # ROW TYPE
+            # -----------------------------------------
+            if is_section_row:
+                row_type = "section"
+
+            elif is_group:
+                row_type = "group"
+
+            elif is_subtotal_row:
+                row_type = "subtotal"
+
+            elif is_total_row:
+                row_type = (
+                    "total" if "A+B" in name
+                    else "subtotal"
+                )
+
+            else:
+                row_type = "ledger"
 
             rows.append({
-                "section": "", "code": code or "", "name": name, "depth": depth,
+                "section": "",
+                "code": code or "",
+                "name": name,
+                "depth": depth,
                 "row_type": row_type,
-                "current_year": round(cur, 2) if cur is not None else None,
-                "previous_year": round(prev, 2) if prev is not None else None,
+                "current_year": (
+                    round(cur, 2)
+                    if cur is not None
+                    else None
+                ),
+                "previous_year": (
+                    round(prev, 2)
+                    if prev is not None
+                    else None
+                ),
             })
 
+            # Display bank details underneath their schedule row.
             if is_bank_row:
-                for bank in banks_by_type[b_type]:
-                    if bank.ledger:
-                        is_closing = db_key.startswith("BANK_CLOSE")
-                        if is_closing:
-                            b_cur = self._running_balance(church, bank.ledger, date_to, inclusive=True)
-                            b_prev = self._running_balance(church, bank.ledger, prev_to, inclusive=True) if prev_to else 0.0
-                        else:
-                            b_cur = float(bank.opening_balance or 0)
-                            b_prev = 0.0
-                        
-                        rows.append({
-                            "section": "", "code": "", "name": bank.bank_name, "depth": depth + 1,
-                            "row_type": "ledger_child",
-                            "current_year": round(b_cur, 2), "previous_year": round(b_prev, 2),
-                        })
-                
-                rows.append({
-                    "section": "", "code": "", "name": "Sub Total", "depth": 1,
-                    "row_type": "subtotal",
-                    "current_year": round(bank_group_sum_cur, 2), 
-                    "previous_year": round(bank_group_sum_prev, 2),
-                })
+                rows.extend(bank_child_rows)
 
-            # Accumulate math for the NEXT rows
-            if not name.startswith("Total") and name != "Sub Total":
-                calc_cur = cur if cur is not None else 0.0
-                calc_prev = prev if prev is not None else 0.0
+            # -----------------------------------------
+            # ACCUMULATE LEDGER TOTALS
+            # -----------------------------------------
+            if (
+                not is_section_row
+                and not is_group
+                and not is_subtotal_row
+                and not is_total_row
+            ):
+                calc_cur = (
+                    cur if cur is not None else 0.0
+                )
 
-                if is_bank_row:
-                    calc_cur = bank_group_sum_cur
-                    calc_prev = bank_group_sum_prev
+                calc_prev = (
+                    prev if prev is not None else 0.0
+                )
 
-                if current_section and current_section in section_totals:
+                if current_section:
+                    section_totals.setdefault(
+                        current_section,
+                        [0.0, 0.0],
+                    )
+
                     section_totals[current_section][0] += calc_cur
                     section_totals[current_section][1] += calc_prev
-                if current_group and current_group in group_totals:
-                    group_totals[current_group][0] += calc_cur
-                    group_totals[current_group][1] += calc_prev
-                if current_sub_group and current_sub_group in sub_group_totals:
-                    sub_group_totals[current_sub_group][0] += calc_cur
-                    sub_group_totals[current_sub_group][1] += calc_prev
+
+                # Add each ledger amount to all active parent groups.
+                for group in active_groups:
+                    group["current"] += calc_cur
+                    group["previous"] += calc_prev
+
+                    if group["code"]:
+                        group_totals.setdefault(
+                            group["code"],
+                            [0.0, 0.0],
+                        )
+
+                        group_totals[group["code"]][0] += calc_cur
+                        group_totals[group["code"]][1] += calc_prev
+
+            # -----------------------------------------
+            # CLOSE COMPLETED GROUP AFTER SUBTOTAL
+            # -----------------------------------------
+            if is_subtotal_row:
+                active_groups = [
+                    group
+                    for group in active_groups
+                    if group["depth"] < depth
+                ]
 
         return rows
 
-    def _ledger_amount(self, church, ledger, date_from, date_to, side):
-        qs = LedgerEntry.objects.filter(church=church, ledger=ledger, is_cancelled=False, is_reversal=False)
-        if date_from: qs = qs.filter(entry_date__gte=date_from)
-        if date_to: qs = qs.filter(entry_date__lte=date_to)
-        agg = qs.aggregate(debits=Sum("amount", filter=Q(entry_type="DEBIT")), credits=Sum("amount", filter=Q(entry_type="CREDIT")))
-        d, c = float(agg["debits"] or 0), float(agg["credits"] or 0)
-        return max(((c - d) if side == "INCOME" else (d - c)), 0.0)
+    # =================================================
+    # BANK OPENING BALANCE
+    # =================================================
+    def _bank_opening_balance(
+        self,
+        church,
+        ledger,
+        date_from,
+        date_to,
+    ):
+        # Normal balance before the reporting period.
+        balance = (
+            self._running_balance(
+                church,
+                ledger,
+                date_from,
+                inclusive=False,
+            )
+            if date_from
+            else 0.0
+        )
 
-    def _running_balance(self, church, ledger, as_of_date, inclusive=False):
-        qs = ledger.entries.filter(is_cancelled=False, is_reversal=False)
-        if as_of_date:
-            qs = qs.filter(entry_date__lte=as_of_date) if inclusive else qs.filter(entry_date__lt=as_of_date)
-        agg = qs.aggregate(debits=Sum("amount", filter=Q(entry_type="DEBIT")), credits=Sum("amount", filter=Q(entry_type="CREDIT")))
-        d, c = float(agg["debits"] or 0), float(agg["credits"] or 0)
-        opening = float(ledger.op_balance or 0)
-        nature = (ledger.ledger_nature or "ASSET").upper()
-        return (opening + d - c) if nature in ("ASSET", "EXPENSE") else (opening + c - d)
+        # Bank opening entries posted during the selected
+        # period are treated as brought-forward balances.
+        opening_entries = LedgerEntry.objects.filter(
+            church=church,
+            ledger=ledger,
+            entry_type="DEBIT",
+            is_cancelled=False,
+            is_reversal=False,
+            narration__startswith="Opening Balance for ",
+        )
 
-    def _summary(self, church, date_from, date_to):
-        from .models import ReceiptMaster, PaymentMaster
-        rcp_qs = ReceiptMaster.objects.filter(church=church, is_cancelled=False)
-        pay_qs = PaymentMaster.objects.filter(church=church, is_cancelled=False)
         if date_from:
-            rcp_qs = rcp_qs.filter(receipt_date__gte=date_from)
-            pay_qs = pay_qs.filter(payment_date__gte=date_from)
+            opening_entries = opening_entries.filter(
+                entry_date__gte=date_from
+            )
+
         if date_to:
-            rcp_qs = rcp_qs.filter(receipt_date__lte=date_to)
-            pay_qs = pay_qs.filter(payment_date__lte=date_to)
+            opening_entries = opening_entries.filter(
+                entry_date__lte=date_to
+            )
+
+        opening_total = (
+            opening_entries.aggregate(
+                total=Sum("amount")
+            )["total"] or 0
+        )
+
+        return balance + float(opening_total)
+
+
+    # =================================================
+    # RECEIPT / PAYMENT LEDGER AMOUNTS
+    # =================================================
+    def _ledger_amount(
+        self,
+        church,
+        ledger,
+        date_from,
+        date_to,
+        side,
+    ):
+        qs = LedgerEntry.objects.filter(
+            church=church,
+            ledger=ledger,
+            is_cancelled=False,
+            is_reversal=False,
+        )
+
+        if date_from:
+            qs = qs.filter(
+                entry_date__gte=date_from
+            )
+
+        if date_to:
+            qs = qs.filter(
+                entry_date__lte=date_to
+            )
+
+        # Bank opening balances are shown in Opening Balances,
+        # not again as current-period capital receipts.
+        qs = qs.filter(
+            Q(narration__isnull=True)
+            | ~Q(narration__startswith="Opening Balance for ")
+        )
+
+        if side == "INCOME":
+            qs = qs.filter(
+                entry_type="CREDIT"
+            )
+        else:
+            qs = qs.filter(
+                entry_type="DEBIT"
+            )
+
+        total = qs.aggregate(
+            total=Sum("amount")
+        )["total"] or 0
+
+        return float(total)
+
+    # =================================================
+    # RUNNING LEDGER BALANCE
+    # =================================================
+    def _running_balance(
+        self,
+        church,
+        ledger,
+        as_of_date,
+        inclusive=False,
+    ):
+        qs = ledger.entries.filter(
+            is_cancelled=False,
+            is_reversal=False,
+        )
+
+        if as_of_date:
+            if inclusive:
+                qs = qs.filter(
+                    entry_date__lte=as_of_date
+                )
+            else:
+                qs = qs.filter(
+                    entry_date__lt=as_of_date
+                )
+
+        agg = qs.aggregate(
+            debits=Sum(
+                "amount",
+                filter=Q(entry_type="DEBIT"),
+            ),
+            credits=Sum(
+                "amount",
+                filter=Q(entry_type="CREDIT"),
+            ),
+        )
+
+        debits = float(agg["debits"] or 0)
+        credits = float(agg["credits"] or 0)
+
+        opening = float(ledger.op_balance or 0)
+
+        nature = (
+            ledger.ledger_nature or "ASSET"
+        ).upper()
+
+        if nature in ("ASSET", "EXPENSE"):
+            return opening + debits - credits
+
+        return opening + credits - debits
+
+    # =================================================
+    # REPORT SUMMARY
+    # =================================================
+    def _summary(
+        self,
+        church,
+        date_from,
+        date_to,
+    ):
+        from .models import ReceiptMaster, PaymentMaster
+
+        rcp_qs = ReceiptMaster.objects.filter(
+            church=church,
+            is_cancelled=False,
+        )
+
+        pay_qs = PaymentMaster.objects.filter(
+            church=church,
+            is_cancelled=False,
+        )
+
+        if date_from:
+            rcp_qs = rcp_qs.filter(
+                receipt_date__gte=date_from
+            )
+
+            pay_qs = pay_qs.filter(
+                payment_date__gte=date_from
+            )
+
+        if date_to:
+            rcp_qs = rcp_qs.filter(
+                receipt_date__lte=date_to
+            )
+
+            pay_qs = pay_qs.filter(
+                payment_date__lte=date_to
+            )
+
         return {
             "receipt_count": rcp_qs.count(),
             "payment_count": pay_qs.count(),
-            "total_receipts": float(rcp_qs.aggregate(s=Sum("grand_total"))["s"] or 0),
-            "total_payments": float(pay_qs.aggregate(s=Sum("amount"))["s"] or 0),
+            "total_receipts": float(
+                rcp_qs.aggregate(
+                    s=Sum("grand_total")
+                )["s"] or 0
+            ),
+            "total_payments": float(
+                pay_qs.aggregate(
+                    s=Sum("amount")
+                )["s"] or 0
+            ),
         }
+
 # --------------------------------------------------Dash Board------------------------------------------------
 # registry/views.py
 
@@ -6282,7 +7387,7 @@ class ChurchDashboardMetricsAPIView(APIView):
                 "id": f"rec-{r.id}",
                 "type": "RECEIPT",
                 "title": "Donation received",
-                "description": f"₹{r.grand_total} from {r.member.name if r.member else 'Anonymous'}",
+                "description": f"â‚¹{r.grand_total} from {r.member.name if r.member else 'Anonymous'}",
                 "time": r.created_at.strftime("%b %d, %I:%M %p")
             })
         for p in recent_payments:
@@ -6290,7 +7395,7 @@ class ChurchDashboardMetricsAPIView(APIView):
                 "id": f"pay-{p.id}",
                 "type": "PAYMENT",
                 "title": "Payment made",
-                "description": f"₹{p.amount} to {p.party_name}",
+                "description": f"â‚¹{p.amount} to {p.party_name}",
                 "time": p.created_at.strftime("%b %d, %I:%M %p")
             })
         
@@ -6417,25 +7522,85 @@ class ContraMasterListCreateView(generics.ListCreateAPIView):
         contra.post_to_ledger()
 
 
+
 class ContraMasterDetailView(generics.RetrieveUpdateDestroyAPIView):
+
     permission_classes = [IsAuthenticated, IsChurchUser]
     serializer_class = ContraMasterSerializer
 
+    # DELETE is intentionally disabled.
+    http_method_names = [
+        "get",
+        "put",
+        "patch",
+        "head",
+        "options",
+    ]
+
     def get_queryset(self):
-        return ContraMaster.objects.filter(church=self.request.user.church)
+
+        return ContraMaster.objects.filter(
+            church=self.request.user.church
+        ).select_related(
+            "from_ledger",
+            "to_ledger",
+            "from_bank_account",
+            "to_bank_account",
+        )
 
     def get_serializer_context(self):
+
         ctx = super().get_serializer_context()
         ctx["church"] = self.request.user.church
+
         return ctx
 
     @transaction.atomic
     def perform_update(self, serializer):
-        contra = serializer.save()
-        if any(k in serializer.validated_data for k in
-               ("amount", "from_ledger", "to_ledger", "contra_date")):
+
+        from rest_framework.exceptions import ValidationError
+
+        # Lock the voucher while updating it.
+        contra = ContraMaster.objects.select_for_update().get(
+            pk=serializer.instance.pk,
+            church=self.request.user.church,
+        )
+
+        if contra.is_cancelled:
+            raise ValidationError(
+                "Cancelled contra vouchers cannot be edited."
+            )
+
+        # Use the locked database instance.
+        serializer.instance = contra
+
+        posting_fields = {
+            "amount",
+            "contra_type",
+            "from_ledger",
+            "to_ledger",
+            "from_bank_account",
+            "to_bank_account",
+            "contra_date",
+            "narration",
+        }
+
+        requires_reposting = any(
+            field in serializer.validated_data
+            for field in posting_fields
+        )
+
+        # Reverse the OLD posting before saving new voucher values.
+        if requires_reposting:
             contra.reverse_ledger_entry()
-            contra.post_to_ledger()
+
+        # Save updated voucher details.
+        updated_contra = serializer.save()
+
+        # Post the updated accounting entries.
+        if requires_reposting:
+            updated_contra.post_to_ledger()
+
 
 
 class ContraCancelAPIView(APIView):
@@ -6734,3 +7899,62 @@ class BalanceSheetAPIView(APIView):
             if r["row_type"] == "grand_total":
                 r["current_year"] = round(cur, 2)
                 r["previous_year"] = round(prev, 2)
+
+
+
+class FinancialYearListCreateAPIView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated, IsChurchUser]
+    serializer_class = FinancialYearSerializer
+
+    def get_queryset(self):
+        return FinancialYear.objects.filter(church=self.request.user.church).order_by('-start_date')
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["church"] = self.request.user.church
+        return context
+
+    def perform_create(self, serializer):
+        # Automatically set the "Set By" field to the current user's name/email
+        user_name = self.request.user.get_full_name() or self.request.user.email
+        serializer.save(church=self.request.user.church, set_by=user_name)
+
+
+class FinancialYearDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated, IsChurchUser]
+    serializer_class = FinancialYearSerializer
+
+    def get_queryset(self):
+        return FinancialYear.objects.filter(church=self.request.user.church)
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["church"] = self.request.user.church
+        return context
+
+    def perform_update(self, serializer):
+        instance = self.get_object()
+        if instance.is_closed and not serializer.validated_data.get("is_closed", True):
+            raise ValidationError("A closed financial year cannot be reopened.")
+        serializer.save()
+
+
+class FinancialYearCloseAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsChurchUser]
+
+    def post(self, request, pk):
+        try:
+            year = FinancialYear.objects.get(pk=pk, church=request.user.church)
+        except FinancialYear.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if year.is_closed:
+            return Response({"detail": "Already closed."}, status=status.HTTP_400_BAD_REQUEST)
+
+        year.is_closed = True
+        year.is_current = False
+        year.closed_on = timezone.now()
+        year.closed_by = request.user.get_full_name() or request.user.email
+        year.save()
+
+        return Response({"message": f"Financial Year {year.name} closed successfully."})
