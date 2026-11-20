@@ -19,7 +19,13 @@ row_type:
     grand_total_balanced
 
 The Receipts & Payments schedules use their original five-field tuple
-format and are intentionally kept unchanged.
+format and are intentionally kept unchanged:
+
+    (code, label, depth, key, is_group)
+
+NOTE: the "TOTAL RECEIPTS (I+II+III+IV)" and "TOTAL PAYMENTS
+(V+VI+VII+VIII)" rows are appended by ReceiptPaymentStatutoryAPIView,
+so they are NOT part of these schedules.
 """
 
 INCOME_SCHEDULE = [
@@ -71,12 +77,13 @@ INCOME_SCHEDULE = [
     ("A", None, "Sub Total", 2, "subtotal", "Receipts for Spiritual Organizations"),
 
     # Members Subscriptions
+    # 2211 is a heading (group) - the real lines are 2212 onwards.
     ("A", "2210", "Members Subscriptions", 1, "group", "Members Subscriptions"),
-    ("A", "2211", "Monthly subscription", 2, "ledger", "Monthly subscription"),
-    ("A", "2212", "Current year receipts", 2, "ledger", "Current year receipts"),
-    ("A", "2214", "Less: Advance for next year", 2, "adjustment", "Advance for next year"),
-    ("A", "2215", "Add: Subscription Receivable", 2, "adjustment", "Subscription Receivable"),
-    ("A", "2216", "Other subscriptions", 2, "ledger", "Other subscriptions"),
+    ("A", "2211", "Monthly subscription", 2, "group", "Monthly subscription"),
+    ("A", "2212", "Current year receipts", 3, "ledger", "Current year receipts"),
+    ("A", "2214", "Less: Advance for next year", 3, "adjustment", "Advance for next year"),
+    ("A", "2215", "Add: Subscription Receivable", 3, "adjustment", "Subscription Receivable"),
+    ("A", "2216", "Other subscriptions", 3, "ledger", "Other subscriptions"),
     ("A", None, "Sub Total", 2, "subtotal", "Members Subscriptions"),
 
     # Income from Church Buildings
@@ -84,7 +91,6 @@ INCOME_SCHEDULE = [
     ("A", "2221", "Rental income of Parish Hall", 2, "group", "Rental income of Parish Hall"),
     ("A", None, "a) GST Applicable Income", 3, "ledger", "a) GST Applicable Income"),
     ("A", None, "b) GST not Applicable Income", 3, "ledger", "b) GST not Applicable Income"),
-    ("A", None, "Sub Total", 3, "subtotal", "Rental income of Parish Hall"),
     ("A", None, "Sub Total", 2, "subtotal", "Income from Church Buildings"),
 
     # Miscellaneous Income
@@ -142,7 +148,6 @@ INCOME_SCHEDULE = [
     ("E", "2501", "Rental income from Commercial Building", 2, "group", "Rental income from Commercial Building"),
     ("E", None, "a) GST Applicable Income", 3, "ledger", "a) GST Applicable Income"),
     ("E", None, "b) GST not Applicable Income", 3, "ledger", "b) GST not Applicable Income"),
-    ("E", None, "Sub Total", 3, "subtotal", "Rental income from Commercial Building"),
     ("E", None, "Total Income from Church Commercial Buildings", 1, "total", "E. Income from Commercial Buildings"),
 
     # =============================================================
@@ -160,32 +165,21 @@ INCOME_SCHEDULE = [
     # =============================================================
     ("H", None, "Inter Church / unit Accounts", 0, "section", "H. Inter Church / Unit Accounts"),
 
+    # Heading only - the individual collections (2801-2809) are
+    # shown in the Receipts statement, not here.
     ("H", "2800", "Special Collection Received", 1, "group", "Special collections"),
-    ("H", "2801", "Catholicate Day collection", 2, "ledger", "Catholicate Day collection"),
-    ("H", "2802", "Recceessa", 2, "ledger", "Recceessa"),
-    ("H", "2803", "Vivaha Kaimuthu", 2, "ledger", "Vivaha Kaimuthu"),
-    ("H", "2804", "Mission Sunday collection", 2, "ledger", "Mission Sunday collection"),
-    ("H", "2805", "Sunday school day collection", 2, "ledger", "Sunday school day collection"),
-    ("H", "2806", "Seminary day collection", 2, "ledger", "Seminary day collection"),
-    ("H", "2807", "Diocesan day collection", 2, "ledger", "Diocesan day collection"),
-    ("H", "2808", "Garbo Sunday Collection", 2, "ledger", "Garbo Sunday Collection"),
-    ("H", "2809", "Other collections", 2, "ledger", "Other collections"),
-    ("H", None, "Sub Total", 2, "subtotal", "Special collections"),
 
     ("H", "2900", "Grant and Assistance (Inter Accounts)", 1, "group", "Grant and Assistance (Inter Accounts)"),
 
     ("H", "2910", "Grant from Catholicate Office", 2, "group", "Grant from Catholicate Office"),
     ("H", "2911", "Capital Expenses", 3, "ledger", "Capital Expenses"),
     ("H", "2912", "Grant for Revenue Expenditure", 3, "ledger", "Grant for Revenue Expenditure"),
-    ("H", None, "Sub Total", 3, "subtotal", "Grant from Catholicate Office"),
 
     ("H", "2920", "Grant From Diocese", 2, "group", "Grant From Diocese"),
     ("H", "2921", "Capital Expenses", 3, "ledger", "Capital Expenses"),
     ("H", "2922", "Grant for Revenue Expenditure", 3, "ledger", "Grant for Revenue Expenditure"),
     ("H", "2923", "Salary Fund", 3, "ledger", "Salary Fund"),
-    ("H", None, "Sub Total", 3, "subtotal", "Grant From Diocese"),
 
-    ("H", None, "Sub Total", 2, "subtotal", "Grant and Assistance (Inter Accounts)"),
     ("H", None, "Total Grant and Assistances", 2, "total", "Grant and Assistance (Inter Accounts)"),
     ("H", None, "Total Inter Church Accounts", 1, "total", "H. Inter Church / Unit Accounts"),
 
@@ -223,7 +217,10 @@ EXPENDITURE_SCHEDULE = [
     # M. Payments on Inter Church / Unit Accounts
     # =============================================================
     ("M", None, "Payments on Inter Church / Units Accounts", 0, "section", None),
-    ("M", "4000", "Special Collection Paid / Excess Paid", 1, "ledger", "Special Collection Paid /Excess Paid"),
+
+    # Heading only - the individual payments (4001-4013) are
+    # shown in the Payments statement, not here.
+    ("M", "4000", "Special Collection Paid / Excess Paid", 1, "group", "Special Collection Paid /Excess Paid"),
 
     ("M", "4030", "Inter Accounts Payment to Diocese", 1, "group", "Inter Accounts Payments to Diocese"),
     ("M", "4031", "Priest salary Paid to Diocese", 2, "ledger", "Priest salary Paid to Diocese"),
@@ -318,7 +315,6 @@ EXPENDITURE_SCHEDULE = [
     ("O", "4307", "OVBS", 2, "ledger", "OVBS"),
     ("O", "4308", "MGOCSM", 2, "ledger", "MGOCSM"),
     ("O", "4309", "Other Spiritual organisations", 2, "ledger", "Other Spiritual organisations"),
-    ("O", None, "Sub Total", 2, "subtotal", "B1 Spiritual Organisations Expenses"),
 
     ("O", "4310", "O2 Charity Expenses", 1, "group", "B2 Charity Expenses"),
     ("O", "4311", "Medical Aid", 2, "ledger", "Medical Aid"),
@@ -331,7 +327,6 @@ EXPENDITURE_SCHEDULE = [
     ("O", "4318", "Annadhanam Expenses", 2, "ledger", "Annadhanam Expenses"),
     ("O", "4319", "Gifts and Compliments", 2, "ledger", "Gifts and Compliments"),
     ("O", "4320", "Scholarships", 2, "ledger", "Scholarships"),
-    ("O", None, "Sub Total", 2, "subtotal", "B2 Charity Expenses"),
 
     ("O", None, "Total Charity Payments", 1, "total", "O. Charity Payments"),
 
@@ -416,7 +411,6 @@ EXPENDITURE_SCHEDULE = [
     ("", None, "TOTAL", 0, "grand_total_balanced", None),
 ]
 
-# registry/statutory_schedule.py
 
 RECEIPTS_SCHEDULE_RP = [
     ("I", "Opening Balances", 0, None, False),
@@ -471,12 +465,13 @@ RECEIPTS_SCHEDULE_RP = [
     ("2188", "Other spiritual organisations", 3, "Other spiritual organisations", False),
     ("", "Sub Total", 2, None, False),
 
+    # 2211 is a heading (group); its lines are one level deeper.
     ("2210", "Members Subscriptions", 2, None, True),
-    ("2211", "Monthly subscription", 3, "Monthly subscription", False),
-    ("2212", "For the current year", 3, "Current year receipts", False),
-    ("2213", "Outstanding from previous year", 3, "Outstanding from previous year", False),
-    ("2214", "Advance for next year", 3, "Advance for next year", False),
-    ("2216", "Other subscriptions", 3, "Other subscriptions", False),
+    ("2211", "Monthly subscription", 3, None, True),
+    ("2212", "For the current year", 4, "Current year receipts", False),
+    ("2213", "Outstanding from previous year", 4, "Outstanding from previous year", False),
+    ("2214", "Advance for next year", 4, "Advance for next year", False),
+    ("2216", "Other subscriptions", 4, "Other subscriptions", False),
     ("", "Sub Total", 2, None, False),
 
     ("2220", "Income from Church Buildings", 2, None, True),
@@ -529,7 +524,6 @@ RECEIPTS_SCHEDULE_RP = [
     ("2501", "Rental income from Commercial Building", 2, None, True),
     ("", "a) GST Applicable Income", 3, "a) GST Applicable Income", False),
     ("", "b) GST not Applicable Income", 3, "b) GST not Applicable Income", False),
-    ("", "Sub Total", 2, None, False),
     ("", "Total of Income from Church Commercial Buildings", 1, "TOTAL_GROUP_2500", False),
 
     ("2600", "F  Hospital Collections", 1, "Hospital Collections", False),
@@ -554,7 +548,6 @@ RECEIPTS_SCHEDULE_RP = [
     ("2910", "Grant from Catholicate Office", 2, None, True),
     ("2911", "Capital Expenses", 3, "Capital Expenses", False),
     ("2912", "Grant for Revenue Expenditure", 3, "Grant for Revenue Expenditure", False),
-    
 
     ("2920", "Grant From Diocese", 2, None, True),
     ("2921", "Capital Expenses", 3, "Capital Expenses", False),
@@ -620,7 +613,7 @@ PAYMENTS_SCHEDULE_RP = [
     ("4002", "Recceessa", 3, "Recceessa", False),
     ("", "Sub Total", 2, None, False),
 
-    ("", "To Diocesan Office", 2, None, True),
+    ("", "To Diocession Office", 2, None, True),
     ("4003", "Diocesan day collection", 3, "Diocesan day collection", False),
     ("4004", "Vivaha Kaimuthu", 3, "Vivaha Kaimuthu", False),
     ("4005", "Hossana Kanikka", 3, "Hossana Kanikka", False),
@@ -632,7 +625,7 @@ PAYMENTS_SCHEDULE_RP = [
     ("4009", "Mission Sunday collection", 3, "Mission Sunday collection", False),
     ("4010", "Sunday school day collection", 3, "Sunday school day collection", False),
     ("4011", "Seminary day collection", 3, "Seminary day collection", False),
-    ("4012", "Garbo Sunday Collection", 3, "Gerbo Sunday Collection", False),
+    ("4012", "Gerbo Sunday Collection", 3, "Gerbo Sunday Collection", False),
     ("4013", "Other collections", 3, "Other collections", False),
     ("", "Sub Total", 2, None, False),
 
@@ -856,3 +849,465 @@ PAYMENTS_SCHEDULE_RP = [
     ("6400", "Cash in hand as per Schedule 8", 1, "Cash in Hand", False),
     ("", "Total of Closing Balances", 1, "TOTAL_SECTION_VIII", False),
 ]
+
+
+
+# =============================================================
+# MOSC STATUTORY SCHEDULE KEY CORRECTIONS
+# =============================================================
+#
+# Purpose:
+# Different statutory ledger codes must have different internal
+# keys, even when their displayed names are identical.
+#
+# Official statutory codes, labels, row order and tuple structures
+# are preserved.
+#
+# Income / Expenditure tuple:
+# (section, code, name, depth, row_type, key)
+#
+# Receipts / Payments tuple:
+# (code, label, depth, key, is_group)
+# =============================================================
+
+
+def _correct_six_field_schedule_keys(schedule, key_map):
+    """
+    Correct internal keys in Income and Expenditure schedules.
+    """
+    corrected = []
+
+    for row in schedule:
+        section, code, name, depth, row_type, key = row
+
+        new_key = key_map.get(str(code), key) if code is not None else key
+
+        corrected.append(
+            (section, code, name, depth, row_type, new_key)
+        )
+
+    return corrected
+
+
+def _correct_five_field_schedule_keys(schedule, key_map):
+    """
+    Correct internal keys in Receipts and Payments schedules.
+    """
+    corrected = []
+
+    for row in schedule:
+        code, label, depth, key, is_group = row
+
+        new_key = key_map.get(str(code), key) if code else key
+
+        corrected.append(
+            (code, label, depth, new_key, is_group)
+        )
+
+    return corrected
+
+
+# =============================================================
+# 1. INCOME SCHEDULE
+# =============================================================
+
+INCOME_KEY_CORRECTIONS = {
+
+    # Bhandaram
+    "2101": "Bhandaram - Church",
+    "2102": "Bhandaram - Kurishinthotti",
+    "2103": "Bhandaram - Others",
+
+    # Qurbana
+    "2110": "Qurbana Income",
+
+    # Offerings
+    "2121": "Offerings - Church",
+    "2122": "Offerings - Kurishinthotti",
+    "2123": "Offerings - Baptism",
+    "2124": "Offerings - Funeral",
+    "2125": "Offerings - Birthday Contributions",
+    "2126": "Offerings - Other Offerings",
+    "2127": "Offerings - Ritual Articles",
+
+    # Festivals
+    "2161": "Festivals - July 3rd Festival",
+    "2162": "Festivals - August 15 Festival",
+    "2163": "Festivals - Church Festival",
+    "2164": "Festivals - Parumala Festival",
+    "2165": "Festivals - Others",
+
+    # Pilgrimage
+    "2171": "Pilgrimage - Parumala",
+    "2172": "Pilgrimage - Others",
+
+    # Spiritual organisations
+    "2181": "Spiritual Organisations - Sunday School",
+    "2182": "Spiritual Organisations - Youth Movement",
+    "2183": "Spiritual Organisations - Vanitha Samajam",
+    "2184": "Spiritual Organisations - Prarthanayogam",
+    "2185": "Spiritual Organisations - Bala Samajam",
+    "2186": "Spiritual Organisations - OVBS",
+    "2187": "Spiritual Organisations - MGOCSM",
+    "2188": "Spiritual Organisations - Others",
+
+    # Church building GST income
+    "2221": "Parish Hall Rental",
+
+    # Miscellaneous income
+    "2231": "Miscellaneous - Publications",
+    "2232": "Miscellaneous - Own Institutions",
+    "2233": "Miscellaneous - Ambulance Charges",
+    "2234": "Miscellaneous - Tomb Charges",
+    "2235": "Miscellaneous - Other Receipts",
+
+    # Donations
+    "2301": "Donations - General",
+    "2302": "Donations - House Building Assistance",
+    "2303": "Donations - Marriage Assistance",
+    "2304": "Donations - Poor Fund Charity",
+    "2305": "Donations - Medical Assistance",
+    "2306": "Donations - Education Assistance",
+    "2307": "Donations - Dhyanam Suvishshayogam",
+    "2308": "Donations - Church Celebrations",
+    "2309": "Donations - Meetings and Conventions",
+    "2310": "Donations - Christmas Karol",
+    "2311": "Donations - Parish Day",
+    "2312": "Donations - Lent and Passion Week",
+    "2313": "Donations - Marriage Receipts",
+    "2314": "Donations - Harvest Festival",
+    "2315": "Donations - Annadhanam",
+    "2316": "Donations - Agricultural Produces",
+    "2317": "Donations - Other Donations",
+
+    # Interest
+    "2401": "Interest - Bank SB",
+    "2402": "Interest - Bank FD",
+    "2403": "Interest - Other Investments",
+
+    # Commercial building
+    "2501": "Commercial Building Rental",
+
+    # Inter-account grants
+    "2911": "Catholicate Office - Capital Expenses",
+    "2912": "Catholicate Office - Revenue Expenditure",
+
+    "2921": "Diocese - Capital Expenses",
+    "2922": "Diocese - Revenue Expenditure",
+    "2923": "Diocese - Salary Fund",
+}
+
+
+INCOME_SCHEDULE = _correct_six_field_schedule_keys(
+    INCOME_SCHEDULE,
+    INCOME_KEY_CORRECTIONS,
+)
+
+
+# GST rows have no statutory code, so correct them by their
+# parent group and position.
+
+def _correct_income_gst_keys(schedule):
+    corrected = []
+    current_section = None
+    current_group = None
+
+    for row in schedule:
+        section, code, name, depth, row_type, key = row
+
+        if section:
+            current_section = section
+
+        if row_type == "group":
+            current_group = name
+
+        if row_type == "ledger" and name in (
+            "a) GST Applicable Income",
+            "b) GST not Applicable Income",
+        ):
+            if current_section == "A":
+                prefix = "Parish Hall"
+
+            elif current_section == "E":
+                prefix = "Commercial Building"
+
+            else:
+                prefix = current_group or "Building"
+
+            suffix = (
+                "GST Applicable Income"
+                if name.startswith("a)")
+                else "GST Not Applicable Income"
+            )
+
+            key = f"{prefix} - {suffix}"
+
+        corrected.append(
+            (section, code, name, depth, row_type, key)
+        )
+
+    return corrected
+
+
+INCOME_SCHEDULE = _correct_income_gst_keys(INCOME_SCHEDULE)
+
+
+# =============================================================
+# 2. EXPENDITURE SCHEDULE
+# =============================================================
+
+EXPENDITURE_KEY_CORRECTIONS = {
+
+    # Church expenses
+    "4213": "Church Expenses - Others",
+
+    # Miscellaneous expenses
+    "4258": "Miscellaneous Expenses - Others",
+
+    # Perunnal expenses
+    "4265": "Perunnal Expenses - Others",
+
+    # Repairs and maintenance
+    "4275": "Repairs and Maintenance - Others",
+
+    # Other expenses
+    "4285": "Other Payments - Others",
+
+    # Taxes and penalty
+    "4345": "Taxes and Penalty - Others",
+
+    # Charity and spiritual organisations
+    "4302": "Spiritual Organisations Expenses - Sunday School",
+    "4303": "Spiritual Organisations Expenses - Youth Movement",
+    "4304": "Spiritual Organisations Expenses - Vanitha Samajam",
+    "4305": "Spiritual Organisations Expenses - Prarthanayogam",
+    "4306": "Spiritual Organisations Expenses - Bala Samajam",
+    "4307": "Spiritual Organisations Expenses - OVBS",
+    "4308": "Spiritual Organisations Expenses - MGOCSM",
+    "4309": "Spiritual Organisations Expenses - Others",
+
+    "4311": "Charity Expenses - Medical Aid",
+    "4312": "Charity Expenses - Marriage Aid",
+    "4313": "Charity Expenses - Housing Aid",
+    "4314": "Charity Expenses - Education",
+    "4315": "Charity Expenses - Rice Distribution",
+    "4316": "Charity Expenses - Deaddiction",
+    "4317": "Charity Expenses - Other Charity",
+    "4318": "Charity Expenses - Annadhanam",
+    "4319": "Charity Expenses - Gifts",
+    "4320": "Charity Expenses - Scholarships",
+}
+
+
+EXPENDITURE_SCHEDULE = _correct_six_field_schedule_keys(
+    EXPENDITURE_SCHEDULE,
+    EXPENDITURE_KEY_CORRECTIONS,
+)
+
+
+# =============================================================
+# 3. RECEIPTS SCHEDULE
+# =============================================================
+
+RECEIPTS_KEY_CORRECTIONS = {
+
+    # Bhandaram
+    "2101": "Bhandaram - Church",
+    "2102": "Bhandaram - Kurishinthotti",
+    "2103": "Bhandaram - Others",
+
+    # Qurbana
+    "2110": "Qurbana Income",
+
+    # Offerings
+    "2121": "Offerings - Church",
+    "2122": "Offerings - Kurishinthotti",
+    "2123": "Offerings - Baptism",
+    "2124": "Offerings - Funeral",
+    "2125": "Offerings - Birthday Contributions",
+    "2126": "Offerings - Other Offerings",
+    "2127": "Offerings - Ritual Articles",
+
+    # Festivals
+    "2161": "Festivals - July 3rd Festival",
+    "2162": "Festivals - August 15 Festival",
+    "2163": "Festivals - Church Festival",
+    "2164": "Festivals - Parumala Festival",
+    "2165": "Festivals - Others",
+
+    # Pilgrimage
+    "2171": "Pilgrimage - Parumala",
+    "2172": "Pilgrimage - Others",
+
+    # Grants
+    "2911": "Catholicate Office - Capital Expenses",
+    "2912": "Catholicate Office - Revenue Expenditure",
+
+    "2921": "Diocese - Capital Expenses",
+    "2922": "Diocese - Revenue Expenditure",
+    "2923": "Diocese - Salary Fund",
+}
+
+
+RECEIPTS_SCHEDULE_RP = _correct_five_field_schedule_keys(
+    RECEIPTS_SCHEDULE_RP,
+    RECEIPTS_KEY_CORRECTIONS,
+)
+
+
+# GST rows in the RP schedule have no statutory code.
+def _correct_receipts_gst_keys(schedule):
+    corrected = []
+    current_group = None
+
+    for row in schedule:
+        code, label, depth, key, is_group = row
+
+        if code == "2500":
+            current_group = "Commercial Building"
+
+        elif code == "2220":
+            current_group = "Parish Hall"
+
+        if label in (
+            "a) GST Applicable Income",
+            "b) GST not Applicable Income",
+        ):
+            prefix = current_group or "Building"
+
+            suffix = (
+                "GST Applicable Income"
+                if label.startswith("a)")
+                else "GST Not Applicable Income"
+            )
+
+            key = f"{prefix} - {suffix}"
+
+        corrected.append(
+            (code, label, depth, key, is_group)
+        )
+
+    return corrected
+
+
+RECEIPTS_SCHEDULE_RP = _correct_receipts_gst_keys(
+    RECEIPTS_SCHEDULE_RP
+)
+
+
+# =============================================================
+# 4. PAYMENTS SCHEDULE
+# =============================================================
+
+PAYMENTS_KEY_CORRECTIONS = {
+
+    # Church expenses
+    "4213": "Church Expenses - Others",
+
+    # Miscellaneous expenses
+    "4258": "Miscellaneous Expenses - Others",
+
+    # Perunnal
+    "4265": "Perunnal Expenses - Others",
+
+    # Repairs
+    "4275": "Repairs and Maintenance - Others",
+
+    # Other payments
+    "4285": "Other Payments - Others",
+
+    # Taxes
+    "4345": "Taxes and Penalty - Others",
+
+    # Spiritual organisations
+    "4302": "Spiritual Organisations Expenses - Sunday School",
+    "4303": "Spiritual Organisations Expenses - Youth Movement",
+    "4304": "Spiritual Organisations Expenses - Vanitha Samajam",
+    "4305": "Spiritual Organisations Expenses - Prarthanayogam",
+    "4306": "Spiritual Organisations Expenses - Bala Samajam",
+    "4307": "Spiritual Organisations Expenses - OVBS",
+    "4308": "Spiritual Organisations Expenses - MGOCSM",
+    "4309": "Spiritual Organisations Expenses - Others",
+
+    # Charity
+    "4311": "Charity Expenses - Medical Aid",
+    "4312": "Charity Expenses - Marriage Aid",
+    "4313": "Charity Expenses - Housing Aid",
+    "4314": "Charity Expenses - Education",
+    "4315": "Charity Expenses - Rice Distribution",
+    "4316": "Charity Expenses - Deaddiction",
+    "4317": "Charity Expenses - Other Charity",
+    "4318": "Charity Expenses - Annadhanam",
+    "4319": "Charity Expenses - Gifts",
+    "4320": "Charity Expenses - Scholarships",
+}
+
+
+PAYMENTS_SCHEDULE_RP = _correct_five_field_schedule_keys(
+    PAYMENTS_SCHEDULE_RP,
+    PAYMENTS_KEY_CORRECTIONS,
+)
+
+
+# =============================================================
+# 5. VALIDATION
+# =============================================================
+
+def validate_statutory_schedule_keys():
+    """
+    Check that ledger keys are not accidentally reused within
+    each individual statutory schedule.
+
+    Group/subtotal keys are excluded because they intentionally
+    refer to the same parent group.
+    """
+
+    schedules = {
+        "INCOME": INCOME_SCHEDULE,
+        "EXPENDITURE": EXPENDITURE_SCHEDULE,
+    }
+
+    errors = []
+
+    for schedule_name, schedule in schedules.items():
+        seen = {}
+
+        for section, code, name, depth, row_type, key in schedule:
+            if row_type != "ledger" or not key:
+                continue
+
+            if key in seen:
+                errors.append(
+                    f"{schedule_name}: duplicate key '{key}' "
+                    f"for codes {seen[key]} and {code}"
+                )
+            else:
+                seen[key] = code
+
+    rp_schedules = {
+        "RECEIPTS": RECEIPTS_SCHEDULE_RP,
+        "PAYMENTS": PAYMENTS_SCHEDULE_RP,
+    }
+
+    for schedule_name, schedule in rp_schedules.items():
+        seen = {}
+
+        for code, label, depth, key, is_group in schedule:
+            if is_group or not key or not code:
+                continue
+
+            if key in seen:
+                errors.append(
+                    f"{schedule_name}: duplicate key '{key}' "
+                    f"for codes {seen[key]} and {code}"
+                )
+            else:
+                seen[key] = code
+
+    if errors:
+        raise ValueError(
+            "MOSC statutory schedule key validation failed:\n"
+            + "\n".join(errors)
+        )
+
+    return True

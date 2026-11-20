@@ -6160,6 +6160,20 @@ class ReceiptMasterSerializer(serializers.ModelSerializer):
                         f"Line {idx + 1}: ledger does not belong to this church."
                 })
 
+            # Legacy ledger is retained for historical records only.
+            # It must not be used for new receipt postings.
+            if (
+                (ledger.ledger_name or "").strip().casefold()
+                == "monthly subscription (legacy ledger)"
+            ):
+                raise serializers.ValidationError({
+                    "lines": (
+                        f"Line {idx + 1}: this is a legacy ledger and "
+                        "cannot be used for new receipt postings. "
+                        "Select a ledger under the Monthly subscription group."
+                    )
+                })
+
             # Only INCOME ledgers can be posted to a receipt line
             if (ledger.ledger_nature or "").upper() != "INCOME":
                 raise serializers.ValidationError({

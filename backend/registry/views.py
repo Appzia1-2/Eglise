@@ -5300,6 +5300,8 @@ class IncomeExpenditureStatutoryAPIView(APIView):
             "previous_deficit": previous_deficit,
         })
 
+    
+    
     # ======================================================
     # BUILD STATUTORY SCHEDULE
     # ======================================================
@@ -5316,12 +5318,11 @@ class IncomeExpenditureStatutoryAPIView(APIView):
         from django.db.models import Sum, Q
         from .models import LedgerEntry
 
-        # --------------------------------------------------
+        # ==================================================
         # LEDGER MOVEMENT
-        # Supports four-digit and six-digit ledger codes.
-        # Example: 2101 matches 2101 and 210100.
-        # --------------------------------------------------
+        # ==================================================
         def movement(code, db_key, d1, d2, parent_group_code=None):
+
             try:
                 code_int = int(code)
             except (ValueError, TypeError):
@@ -5334,6 +5335,9 @@ class IncomeExpenditureStatutoryAPIView(APIView):
                 ledger__ledger_nature=side,
             )
 
+            # ----------------------------------------------
+            # MATCH LEDGER CODE
+            # ----------------------------------------------
             if code_int is not None:
 
                 if len(str(abs(code_int))) == 4:
@@ -5346,27 +5350,59 @@ class IncomeExpenditureStatutoryAPIView(APIView):
                         ledger__ledger_code=code_int
                     )
 
+            # ----------------------------------------------
+            # MATCH LEDGER NAME AND PARENT GROUP
+            # ----------------------------------------------
             elif db_key:
+
                 qs = qs.filter(
                     ledger__ledger_name=db_key
                 )
 
                 if parent_group_code is not None:
-                    qs = qs.filter(
-                        ledger__account_group__account_code=parent_group_code
-                    )
+
+                    try:
+                        parent_code_int = int(parent_group_code)
+                    except (ValueError, TypeError):
+                        parent_code_int = None
+
+                    if (
+                        parent_code_int is not None
+                        and len(str(abs(parent_code_int))) == 4
+                    ):
+                        qs = qs.filter(
+                            Q(
+                                ledger__account_group__account_code=parent_code_int
+                            )
+                            |
+                            Q(
+                                ledger__account_group__account_code=parent_code_int * 100
+                            )
+                        )
+                    else:
+                        qs = qs.filter(
+                            ledger__account_group__account_code=parent_group_code
+                        )
 
             else:
                 return 0.0
 
-            # Date filters
+            # ----------------------------------------------
+            # DATE FILTERS
+            # ----------------------------------------------
             if d1:
-                qs = qs.filter(entry_date__gte=d1)
+                qs = qs.filter(
+                    entry_date__gte=d1
+                )
 
             if d2:
-                qs = qs.filter(entry_date__lte=d2)
+                qs = qs.filter(
+                    entry_date__lte=d2
+                )
 
-            # Debit / Credit totals
+            # ----------------------------------------------
+            # CALCULATE MOVEMENT
+            # ----------------------------------------------
             agg = qs.aggregate(
                 debits=Sum(
                     "amount",
@@ -5378,17 +5414,27 @@ class IncomeExpenditureStatutoryAPIView(APIView):
                 ),
             )
 
-            debits = float(agg["debits"] or 0)
-            credits = float(agg["credits"] or 0)
+            debits = float(agg.get("debits") or 0)
+            credits = float(agg.get("credits") or 0)
 
             if side == "INCOME":
                 return round(credits - debits, 2)
 
             return round(debits - credits, 2)
 
-        # --------------------------------------------------
-        # INITIALISE TOTALS
-        # --------------------------------------------------
+        # ==================================================
+        # GST SCHEDULE KEY MAPPING
+        # ==================================================
+        gst_schedule_keys = {
+            "Parish Hall - GST Applicable Income",
+            "Parish Hall - GST Not Applicable Income",
+            "Commercial Building - GST Applicable Income",
+            "Commercial Building - GST Not Applicable Income",
+        }
+
+        # ==================================================
+        # PROCESS SCHEDULE
+        # ==================================================
         rows = []
 
         section_cur = {}
@@ -5398,15 +5444,13 @@ class IncomeExpenditureStatutoryAPIView(APIView):
         group_prev = {}
 
         active_groups = []
-
-        # --------------------------------------------------
-        # PROCESS SCHEDULE
-        # --------------------------------------------------
         previous_letter = None
 
         for letter, code, name, depth, rtype, key in schedule:
 
-            # Prevent groups from carrying into another section.
+            # ----------------------------------------------
+            # RESET GROUPS WHEN SECTION CHANGES
+            # ----------------------------------------------
             if letter and letter != previous_letter:
                 active_groups = []
 
@@ -5417,16 +5461,21 @@ class IncomeExpenditureStatutoryAPIView(APIView):
             prev = 0.0
 
             # ----------------------------------------------
-            # GROUP HEADER
+            # GROUP
             # ----------------------------------------------
             if rtype == "group":
 
                 active_groups = [
-                    group for group in active_groups
+                    group
+                    for group in active_groups
                     if group["depth"] < depth
                 ]
 
-                group_id = (letter, key or name, code)
+                group_id = (
+                    letter,
+                    key or name,
+                    code,
+                )
 
                 group_cur[group_id] = 0.0
                 group_prev[group_id] = 0.0
@@ -5443,29 +5492,45 @@ class IncomeExpenditureStatutoryAPIView(APIView):
             # ----------------------------------------------
             elif rtype in ("ledger", "adjustment"):
 
-                if code in ("2999", "4999"):
+                if str(code) in ("2999", "4999"):
+
                     cur = 0.0
                     prev = 0.0
 
                 else:
+
                     parent_group_code = (
                         active_groups[-1]["code"]
                         if active_groups
                         else None
                     )
 
+                    # --------------------------------------
+                    # RESOLVE DATABASE LEDGER NAME
+                    # --------------------------------------
+                    movement_key = key
+
+                    if key in gst_schedule_keys:
+                        movement_key = name
+
+                    # --------------------------------------
+                    # CURRENT YEAR MOVEMENT
+                    # --------------------------------------
                     cur = movement(
                         code,
-                        key,
+                        movement_key,
                         date_from,
                         date_to,
                         parent_group_code,
                     )
 
+                    # --------------------------------------
+                    # PREVIOUS YEAR MOVEMENT
+                    # --------------------------------------
                     prev = (
                         movement(
                             code,
-                            key,
+                            movement_key,
                             prev_from,
                             prev_to,
                             parent_group_code,
@@ -5474,31 +5539,64 @@ class IncomeExpenditureStatutoryAPIView(APIView):
                         else 0.0
                     )
 
-                    # Subscription advance deduction.
-                    if code == "2214":
-                        cur = -cur
-                        prev = -prev
+                    cur = float(cur or 0)
+                    prev = float(prev or 0)
 
-                    # Add movement to enclosing groups.
+                    # --------------------------------------
+                    # SPECIAL ADJUSTMENT
+                    # --------------------------------------
+                    if str(code) == "2214":
+
+                        cur = (
+                            0.0
+                            if round(cur, 2) == 0
+                            else -cur
+                        )
+
+                        prev = (
+                            0.0
+                            if round(prev, 2) == 0
+                            else -prev
+                        )
+
+                    # --------------------------------------
+                    # ACCUMULATE GROUP TOTALS
+                    # --------------------------------------
                     for group in active_groups:
+
                         group_id = group["id"]
 
                         group_cur[group_id] = (
-                            group_cur.get(group_id, 0.0) + cur
+                            float(
+                                group_cur.get(group_id, 0.0) or 0
+                            )
+                            + cur
                         )
 
                         group_prev[group_id] = (
-                            group_prev.get(group_id, 0.0) + prev
+                            float(
+                                group_prev.get(group_id, 0.0) or 0
+                            )
+                            + prev
                         )
 
-                    # Add movement once to section total.
+                    # --------------------------------------
+                    # ACCUMULATE SECTION TOTALS
+                    # --------------------------------------
                     if letter:
+
                         section_cur[letter] = (
-                            section_cur.get(letter, 0.0) + cur
+                            float(
+                                section_cur.get(letter, 0.0) or 0
+                            )
+                            + cur
                         )
 
                         section_prev[letter] = (
-                            section_prev.get(letter, 0.0) + prev
+                            float(
+                                section_prev.get(letter, 0.0) or 0
+                            )
+                            + prev
                         )
 
             # ----------------------------------------------
@@ -5508,71 +5606,142 @@ class IncomeExpenditureStatutoryAPIView(APIView):
 
                 matching_group = next(
                     (
-                        group for group in reversed(active_groups)
+                        group
+                        for group in reversed(active_groups)
                         if group["name"] == key
                     ),
                     None,
                 )
 
                 if matching_group:
+
                     group_id = matching_group["id"]
 
-                    cur = group_cur.get(group_id, 0.0)
-                    prev = group_prev.get(group_id, 0.0)
+                    cur = float(
+                        group_cur.get(group_id, 0.0) or 0
+                    )
+
+                    prev = float(
+                        group_prev.get(group_id, 0.0) or 0
+                    )
 
                     closing_depth = matching_group["depth"]
 
                     active_groups = [
-                        group for group in active_groups
+                        group
+                        for group in active_groups
                         if group["depth"] < closing_depth
                     ]
 
                 else:
-                    cur = section_cur.get(letter, 0.0)
-                    prev = section_prev.get(letter, 0.0)
+
+                    cur = float(
+                        section_cur.get(letter, 0.0) or 0
+                    )
+
+                    prev = float(
+                        section_prev.get(letter, 0.0) or 0
+                    )
 
             # ----------------------------------------------
-            # SECTION / GROUP TOTAL
+            # TOTAL
             # ----------------------------------------------
             elif rtype == "total":
 
-                matching_group = next(
-                    (
-                        group for group in reversed(active_groups)
-                        if group["name"] == key
-                    ),
-                    None,
-                )
+                matching_group = None
 
+                # ------------------------------------------
+                # TOTAL_GROUP_XXXX KEY
+                # ------------------------------------------
+                if key and str(key).startswith("TOTAL_GROUP_"):
+
+                    target_code = str(key).replace(
+                        "TOTAL_GROUP_", "",
+                        1,
+                    )
+
+                    matching_group = next(
+                        (
+                            group
+                            for group in reversed(active_groups)
+                            if str(group["code"]) == target_code
+                        ),
+                        None,
+                    )
+
+                # ------------------------------------------
+                # NAME-BASED GROUP MATCH
+                # ------------------------------------------
+                if matching_group is None:
+
+                    matching_group = next(
+                        (
+                            group
+                            for group in reversed(active_groups)
+                            if group["name"] == key
+                        ),
+                        None,
+                    )
+
+                # ------------------------------------------
+                # GROUP TOTAL OR SECTION TOTAL
+                # ------------------------------------------
                 if matching_group:
+
                     group_id = matching_group["id"]
 
-                    cur = group_cur.get(group_id, 0.0)
-                    prev = group_prev.get(group_id, 0.0)
+                    cur = float(
+                        group_cur.get(group_id, 0.0) or 0
+                    )
+
+                    prev = float(
+                        group_prev.get(group_id, 0.0) or 0
+                    )
 
                 else:
-                    cur = section_cur.get(letter, 0.0)
-                    prev = section_prev.get(letter, 0.0)
+
+                    cur = float(
+                        section_cur.get(letter, 0.0) or 0
+                    )
+
+                    prev = float(
+                        section_prev.get(letter, 0.0) or 0
+                    )
 
             # ----------------------------------------------
             # GRAND TOTAL
             # ----------------------------------------------
             elif rtype == "grand_total":
 
-                cur = round(sum(section_cur.values()), 2)
-                prev = round(sum(section_prev.values()), 2)
+                cur = round(
+                    sum(
+                        float(value or 0)
+                        for value in section_cur.values()
+                    ),
+                    2,
+                )
+
+                prev = round(
+                    sum(
+                        float(value or 0)
+                        for value in section_prev.values()
+                    ),
+                    2,
+                )
 
             # ----------------------------------------------
             # BALANCED GRAND TOTAL
             # ----------------------------------------------
             elif rtype == "grand_total_balanced":
+
                 cur = 0.0
                 prev = 0.0
 
             # ----------------------------------------------
-            # OTHER HEADINGS
+            # OTHER ROW TYPES
             # ----------------------------------------------
             else:
+
                 cur = 0.0
                 prev = 0.0
 
@@ -5585,8 +5754,14 @@ class IncomeExpenditureStatutoryAPIView(APIView):
                 "name": name,
                 "depth": depth,
                 "row_type": rtype,
-                "current_year": round(cur, 2),
-                "previous_year": round(prev, 2),
+                "current_year": round(
+                    float(cur or 0),
+                    2,
+                ),
+                "previous_year": round(
+                    float(prev or 0),
+                    2,
+                ),
             })
 
         return rows
@@ -6274,7 +6449,6 @@ from .statutory_schedule import RECEIPTS_SCHEDULE_RP, PAYMENTS_SCHEDULE_RP
 from django.db.models import Sum, Q
 from .models import LedgerEntry, BankAccount, AccountLedgerMaster
 
-
 class ReceiptPaymentStatutoryAPIView(APIView):
     permission_classes = [IsAuthenticated, IsChurchUser]
 
@@ -6308,6 +6482,16 @@ class ReceiptPaymentStatutoryAPIView(APIView):
             prev_to,
             side="EXPENSE",
         )
+        # -----------------------------------------
+# PREVIOUS YEAR NOT APPLICABLE
+# Church started using the system this year.
+# Keep the column, but show zero in every row.
+# -----------------------------------------
+        for row in receipts_rows:
+            row["previous_year"] = 0.0
+
+        for row in payments_rows:
+            row["previous_year"] = 0.0
 
         def _sum_by_codes(rows, code_set, include=True):
             return round(
@@ -6492,7 +6676,7 @@ class ReceiptPaymentStatutoryAPIView(APIView):
             .select_related("ledger")
         )
 
-                # All active bank accounts must be classified
+        # All active bank accounts must be classified
         # under Savings Account in the statutory report.
         banks_by_type = {
             "1000": [],
@@ -6614,8 +6798,9 @@ class ReceiptPaymentStatutoryAPIView(APIView):
             bank_group_sum_cur = 0.0
             bank_group_sum_prev = 0.0
 
-            # -----------------------------------------
             bank_child_rows = []
+
+            # -----------------------------------------
             # BANK ACCOUNT ROWS
             # -----------------------------------------
             if is_bank_row:
@@ -6654,11 +6839,11 @@ class ReceiptPaymentStatutoryAPIView(APIView):
                         )
 
                     else:
-                        # Include opening entries posted during the
-                        # reporting period as brought-forward balances.
+                        # Opening balance, including the fallback
+                        # for banks without opening ledger entries.
                         b_cur = self._bank_opening_balance(
                             church,
-                            bank.ledger,
+                            bank,
                             date_from,
                             date_to,
                         )
@@ -6666,7 +6851,7 @@ class ReceiptPaymentStatutoryAPIView(APIView):
                         b_prev = (
                             self._bank_opening_balance(
                                 church,
-                                bank.ledger,
+                                bank,
                                 prev_from,
                                 prev_to,
                             )
@@ -6717,6 +6902,7 @@ class ReceiptPaymentStatutoryAPIView(APIView):
                                 date_to,
                                 inclusive=True,
                             )
+
                             savings_prev = (
                                 self._running_balance(
                                     church,
@@ -6724,8 +6910,10 @@ class ReceiptPaymentStatutoryAPIView(APIView):
                                     prev_to,
                                     inclusive=True,
                                 )
-                                if prev_to else 0.0
+                                if prev_to
+                                else 0.0
                             )
+
                         else:
                             savings_cur = (
                                 self._running_balance(
@@ -6734,8 +6922,10 @@ class ReceiptPaymentStatutoryAPIView(APIView):
                                     date_from,
                                     inclusive=False,
                                 )
-                                if date_from else 0.0
+                                if date_from
+                                else 0.0
                             )
+
                             savings_prev = (
                                 self._running_balance(
                                     church,
@@ -6743,7 +6933,8 @@ class ReceiptPaymentStatutoryAPIView(APIView):
                                     prev_from,
                                     inclusive=False,
                                 )
-                                if prev_from else 0.0
+                                if prev_from
+                                else 0.0
                             )
 
                         bank_group_sum_cur += savings_cur
@@ -6797,9 +6988,10 @@ class ReceiptPaymentStatutoryAPIView(APIView):
 
                     if side == "EXPENSE":
                         payment_ledger_code_map = {
-                            4851: 3101,  # Loan from Banks repayment
-                            4857: 3103,  # Loan from Church Members repayment
-                            6400: 1300,  # Closing cash balance
+                            4851: 3101,  # Loan from Banks
+                            4852: 3102,  # Loan from Others
+                            4857: 3103,  # Loan from Church Members
+                            6400: 1300,  # Cash in Hand closing balance
                         }
 
                         ledger_code_to_match = (
@@ -6824,8 +7016,13 @@ class ReceiptPaymentStatutoryAPIView(APIView):
                     # Blank-code rows, such as GST entries,
                     # must match both ledger name and the
                     # currently active statutory parent group.
+                    # The schedule db_key can be a descriptive label
+                    # such as "Parish Hall - GST Applicable Income".
+                    # The actual database ledger uses the row name.
+                    # The active parent group distinguishes identical
+                    # ledger names belonging to different schedules.
                     ledgers = ledger_queryset.filter(
-                        ledger_name__iexact=db_key
+                        ledger_name__iexact=name
                     ).exclude(
                         id__in=used_ledger_ids
                     )
@@ -7113,11 +7310,25 @@ class ReceiptPaymentStatutoryAPIView(APIView):
     def _bank_opening_balance(
         self,
         church,
-        ledger,
+        bank,
         date_from,
         date_to,
     ):
-        # Normal balance before the reporting period.
+        from django.utils.dateparse import parse_date
+        from django.utils import timezone
+
+        ledger = bank.ledger
+
+        if not ledger:
+            return 0.0
+
+        date_to_obj = (
+            parse_date(date_to)
+            if date_to
+            else None
+        )
+
+        # 1. Normal ledger balance before the reporting period.
         balance = (
             self._running_balance(
                 church,
@@ -7129,8 +7340,7 @@ class ReceiptPaymentStatutoryAPIView(APIView):
             else 0.0
         )
 
-        # Bank opening entries posted during the selected
-        # period are treated as brought-forward balances.
+        # 2. Find valid opening entries up to the report end date.
         opening_entries = LedgerEntry.objects.filter(
             church=church,
             ledger=ledger,
@@ -7140,23 +7350,53 @@ class ReceiptPaymentStatutoryAPIView(APIView):
             narration__startswith="Opening Balance for ",
         )
 
-        if date_from:
-            opening_entries = opening_entries.filter(
-                entry_date__gte=date_from
-            )
-
         if date_to:
             opening_entries = opening_entries.filter(
                 entry_date__lte=date_to
             )
 
+        has_opening_entry = opening_entries.exists()
+
+        # 3. Preserve existing treatment of opening entries
+        #    posted during the selected reporting period.
+        period_opening_entries = opening_entries
+
+        if date_from:
+            period_opening_entries = period_opening_entries.filter(
+                entry_date__gte=date_from
+            )
+
         opening_total = (
-            opening_entries.aggregate(
+            period_opening_entries.aggregate(
                 total=Sum("amount")
             )["total"] or 0
         )
 
-        return balance + float(opening_total)
+        balance += float(opening_total)
+
+        # 4. Fallback for bank records without opening ledger entries.
+        if (
+            not has_opening_entry
+            and not ledger.op_balance
+            and bank.opening_balance
+            and bank.created_at
+        ):
+            bank_created_date = timezone.localtime(
+                bank.created_at
+            ).date()
+
+            # Do not include the bank opening balance in a
+            # reporting period ending before bank creation.
+            if (
+                not date_to
+                or (
+                    date_to_obj is not None
+                    and bank_created_date <= date_to_obj
+                )
+            ):
+                balance += float(bank.opening_balance)
+
+        return balance
 
 
     # =================================================

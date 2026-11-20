@@ -46,6 +46,7 @@ const RECEIPT_EXCLUDE_LEDGER_NAMES = [
   "balance in savings account",
   "balance in deposit account",
   "balance in other accounts",
+  "monthly subscription (legacy ledger)",
 ];
 
 const isReceiptLedger = (ledger) => {

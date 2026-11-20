@@ -157,8 +157,7 @@ const StatutoryRow = ({ row, mode = "screen" }) => {
   const color =
     isSection || isTotal
       ? DARK_RED
-      : isAdj
-      ? PRIMARY_RED
+      
       : TEXT_COLOR;
 
   const bg =

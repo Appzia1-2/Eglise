@@ -186,6 +186,7 @@ DEFAULT_GROUPS = [
     ("Receipts for Piligrimage",                           "A. Religious Income",                               "2170"),
     ("Receipts for Spiritual Organizations",               "A. Religious Income",                               "2180"),
     ("Members Subscriptions",                              "A. Religious Income",                               "2210"),
+    ("Monthly subscription",                               "Members Subscriptions",                             "2211"),
     ("Income from Church Buildings",                       "A. Religious Income",                               "2220"),
     ("Rental income of Parish Hall",                       "Income from Church Buildings",                      "2221"),
     ("Miscellaneous income",                               "A. Religious Income",                               "2230"),
@@ -223,7 +224,7 @@ DEFAULT_GROUPS = [
     ("To Diocession Office",                               "Payment of Special Collections (Inter Accounts)",   "4000-DO"),
     ("To Other Offices",                                   "Payment of Special Collections (Inter Accounts)",   "4000-OO"),
     ("Inter Accounts Payments to Diocese",                 "V. Inter Church / Unit Payments",                   "4030"),
-    ("Grant and Assistance (Inter Accounts)",   "V. Inter Church / Unit Payments",   "4100"),
+    ("Grant and Assistance (Inter Accounts)",              "V. Inter Church / Unit Payments",                   "4100"),
 
     # ----- VI. REVENUE PAYMENTS -----
     ("VI. Revenue Payments",                               None,                                                "4200"),
@@ -324,16 +325,15 @@ DEFAULT_LEDGERS = [
     ("MGOCSM",                                             "Receipts for Spiritual Organizations",              "2187",     "INCOME",    0),
     ("Other spiritual organisations",                      "Receipts for Spiritual Organizations",              "2188",     "INCOME",    0),
 
-    ("Monthly subscription",                               "Members Subscriptions",                             "2211",     "INCOME",    0),
-    ("Current year receipts",                              "Members Subscriptions",                             "2212",     "INCOME",    0),
-    ("Outstanding from previous year",                     "Members Subscriptions",                             "2213",     "INCOME",    0),
-    ("Advance for next year",                              "Members Subscriptions",                             "2214",     "LIABILITY", 0),
-    ("Subscription Receivable",                            "Members Subscriptions",                             "2215",     "ASSET",     0),
+    ("Current year receipts",                              "Monthly subscription",                              "2212",     "INCOME",    0),
+    ("Outstanding from previous year",                     "Monthly subscription",                              "2213",     "INCOME",    0),
+    ("Advance for next year",                              "Monthly subscription",                              "2214",     "LIABILITY", 0),
+    ("Subscription Receivable",                            "Monthly subscription",                              "2215",     "ASSET",     0),
     ("Other subscriptions",                                "Members Subscriptions",                             "2216",     "INCOME",    0),
 
-    ("Rental income of Parish Hall",   "Rental income of Parish Hall",   "2221",   "INCOME", 0),
-    ("a) GST Applicable Income",       "Rental income of Parish Hall",   "2221-A", "INCOME", 0),
-    ("b) GST not Applicable Income",   "Rental income of Parish Hall",   "2221-B", "INCOME", 0),
+    ("Rental income of Parish Hall",                       "Rental income of Parish Hall",                      "2221",     "INCOME",    0),
+    ("a) GST Applicable Income",                           "Rental income of Parish Hall",                      "2221-A",   "INCOME",    0),
+    ("b) GST not Applicable Income",                       "Rental income of Parish Hall",                      "2221-B",   "INCOME",    0),
 
     ("Income from publications",                           "Miscellaneous income",                              "2231",     "INCOME",    0),
     ("Income from own institutions",                       "Miscellaneous income",                              "2232",     "INCOME",    0),
@@ -367,9 +367,9 @@ DEFAULT_LEDGERS = [
 
     # ----- II.D–G -----
     ("Agricultural Income",                                "D. Agricultural Income",                            "2450",     "INCOME",    0),
-    ("Rental income from Commercial Building", "Rental income from Commercial Building", "2501",   "INCOME", 0),
-("a) GST Applicable Income",              "Rental income from Commercial Building", "2501-A", "INCOME", 0),
-("b) GST not Applicable Income",          "Rental income from Commercial Building", "2501-B", "INCOME", 0),
+    ("Rental income from Commercial Building",             "Rental income from Commercial Building",            "2501",     "INCOME",    0),
+    ("a) GST Applicable Income",                           "Rental income from Commercial Building",            "2501-A",   "INCOME",    0),
+    ("b) GST not Applicable Income",                       "Rental income from Commercial Building",            "2501-B",   "INCOME",    0),
     ("Hospital Collections",                               "F. Hospital Collections",                           "2600",     "INCOME",    0),
     ("School/College Collections",                         "G. School/College Collections",                     "2700",     "INCOME",    0),
 
@@ -424,6 +424,7 @@ DEFAULT_LEDGERS = [
     ("Other Capital Receipts",                             "I. Other Capital Receipts",                         "3700",     "INCOME",    0),
     ("Profit on Sale/redemption of investment",            "I. Other Capital Receipts",                         "2980",     "INCOME",    0),
     ("Profit on Sale of Fixed Assets",                     "I. Other Capital Receipts",                         "2981",     "INCOME",    0),
+
     # ----- V. INTER CHURCH PAYMENTS -----
     ("Special Collection Paid /Excess Paid",               "V. Inter Church / Unit Payments",                   "4000",     "EXPENSE",   0),
     ("Catholicate Day Collection",                         "To Malankara Metropolitan",                         "4001",     "EXPENSE",   0),
@@ -440,12 +441,12 @@ DEFAULT_LEDGERS = [
     ("Seminary day collection",                            "To Other Offices",                                  "4011",     "EXPENSE",   0),
     ("Gerbo Sunday Collection",                            "To Other Offices",                                  "4012",     "EXPENSE",   0),
     ("Other collections",                                  "To Other Offices",                                  "4013",     "EXPENSE",   0),
-   
+
     ("Priest salary Paid to Diocese",                      "Inter Accounts Payments to Diocese",                "4031",     "EXPENSE",   0),
     ("Methrasana Vihitham",                                "Inter Accounts Payments to Diocese",                "4032",     "EXPENSE",   0),
 
-    ("Grant to Spiritual Organisations",   "Grant and Assistance (Inter Accounts)",   "4102",   "EXPENSE",   0),
-    ("Other grants",                       "Grant and Assistance (Inter Accounts)",   "4103",   "EXPENSE",   0),
+    ("Grant to Spiritual Organisations",                   "Grant and Assistance (Inter Accounts)",             "4102",     "EXPENSE",   0),
+    ("Other grants",                                       "Grant and Assistance (Inter Accounts)",             "4103",     "EXPENSE",   0),
 
     # ----- VI.A RELIGIOUS PAYMENTS -----
     ("Holy Qurbana Allowances",                            "Church Expenses",                                   "4202",     "EXPENSE",   0),
@@ -547,6 +548,7 @@ DEFAULT_LEDGERS = [
     ("Expenses Payable",                                   "H. Administrative Expenses",                        "4561",     "LIABILITY", 0),
     ("Income Tax",                                         "H. Administrative Expenses",                        "4563",     "EXPENSE",   0),
     ("Depreciation",                                       "H. Administrative Expenses",                        "5628",     "EXPENSE",   0),
+
     # ----- VII. CAPITAL PAYMENTS -----
     ("Land",                                               "A. Fixed Assets",                                   "4601",     "ASSET",     0),
     ("Land Development",                                   "A. Fixed Assets",                                   "4602",     "ASSET",     0),
@@ -562,8 +564,7 @@ DEFAULT_LEDGERS = [
     ("Kodimaram",                                          "A. Fixed Assets",                                   "4612",     "ASSET",     0),
     ("Commercial Building",                                "A. Fixed Assets",                                   "4613",     "ASSET",     0),
     ("Other Buildings",                                    "A. Fixed Assets",                                   "4614",     "ASSET",     0),
-    
-        ("Furniture and Fixtures",   "A. Fixed Assets",   "4615",  "ASSET", 0),
+    ("Furniture and Fixtures",                             "A. Fixed Assets",                                   "4615",     "ASSET",     0),
     ("Church Equipments",                                  "A. Fixed Assets",                                   "4616",     "ASSET",     0),
     ("Other Equipments",                                   "A. Fixed Assets",                                   "4617",     "ASSET",     0),
     ("Motor Vehicles",                                     "A. Fixed Assets",                                   "4618",     "ASSET",     0),
@@ -611,7 +612,7 @@ DEFAULT_LEDGERS = [
     ("Other Capital Payments",                             "I. Other Capital Payments",                         "4955",     "LIABILITY", 0),
     ("Loss on Sale/redemption of investment",              "I. Other Capital Payments",                         "4980",     "EXPENSE",   0),
     ("Loss on Sale of Fixed Assets",                       "I. Other Capital Payments",                         "4981",     "EXPENSE",   0),
-    
+
     # ----- BALANCE SHEET — LIABILITIES / EQUITY -----
     ("Balance as per last Balance Sheet",                  "A. Capital Fund",                                   "5001",     "EQUITY",    0),
     ("Add: General Capital fund Additions",                "A. Capital Fund",                                   "3550",     "EQUITY",    0),
@@ -680,69 +681,234 @@ DEFAULT_LEDGERS = [
 ]
 
 
+
 # ============================================================
 # SEEDER
 # ============================================================
 
 def _code_to_int(code):
     """
-    Convert '2101', '2221-A', '5400-BS', '4552-P' style codes to a unique integer.
-    Strategy: base_numeric * 100 + suffix_index. Guarantees no collisions.
+    Convert account codes such as:
+    2101, 2221-A, 5400-BS, 4552-P
+    into integer values.
     """
     if not code:
         return None
+
     code = str(code)
+
     if "-" in code:
         base_str, suffix = code.split("-", 1)
     else:
         base_str, suffix = code, ""
+
     digits = "".join(c for c in base_str if c.isdigit())
+
     if not digits:
         return None
+
     try:
         base = int(digits)
     except ValueError:
         return None
+
     suffix_map = {
         "": 0,
-        "A": 1, "B": 2, "BS": 3, "P": 4,
-        "SC": 5, "PS": 6, "MM": 7, "DO": 8,
-        "OO": 9, "CD": 10, "FA": 11, "RP": 12,
+        "A": 1,
+        "B": 2,
+        "BS": 3,
+        "P": 4,
+        "SC": 5,
+        "PS": 6,
+        "MM": 7,
+        "DO": 8,
+        "OO": 9,
+        "CD": 10,
+        "FA": 11,
+        "RP": 12,
     }
+
     return base * 100 + suffix_map.get(suffix.upper(), 99)
+
 
 
 def seed_default_accounts(church, verbose=False):
     """
-    Idempotent, duplicate-proof MOSC chart-of-accounts seeder.
+    Idempotent MOSC chart-of-accounts seeder.
 
-    Match order for ledgers:
-      1. (church, ledger_name, account_group)
-      2. (church, ledger_code integer)  — legacy rescue
-      3. create new.
+    Subscription hierarchy:
 
-    Match order for groups:
-      1. (church, group_name)
-      2. create new.
+        Members Subscriptions                 GROUP
+            |
+            |-- Monthly subscription         SUBGROUP
+            |       |
+            |       |-- Current year receipts
+            |       |-- Outstanding from previous year
+            |       |-- Advance for next year
+            |       |-- Subscription Receivable
+            |
+            |-- Other subscriptions           LEDGER
+
+    Safety:
+        1. Never delete an existing ledger.
+        2. Never recreate an existing ledger unnecessarily.
+        3. Preserve existing ledger IDs and transactions.
+        4. Rename eligible legacy ledgers in place.
+        5. Never rename a ledger that has related records.
+        6. Never change subscription ledger nature silently.
+        7. Preserve the existing Members Subscriptions parent.
+        8. Rename the old Monthly subscription ledger separately.
+        9. Each church is processed transactionally.
     """
+
     from django.db import transaction
     from .models import AccountGroupMaster, AccountLedgerMaster
 
-    stats = {"groups_created": 0, "groups_existing": 0,
-             "ledgers_created": 0, "ledgers_existing": 0}
+    stats = {
+        "groups_created": 0,
+        "groups_existing": 0,
+        "ledgers_created": 0,
+        "ledgers_existing": 0,
+        "ledgers_renamed": 0,
+        "legacy_ledgers_renamed": 0,
+    }
+
+    # Canonical subscription ledgers and their expected nature.
+    subscription_natures = {
+        "Current year receipts": "INCOME",
+        "Outstanding from previous year": "INCOME",
+        "Advance for next year": "LIABILITY",
+        "Subscription Receivable": "ASSET",
+        "Other subscriptions": "INCOME",
+    }
+
+    # Old names used by previous versions of the chart.
+    legacy_subscription_names = {
+        "Current year receipts": [
+            "Subscription - Current Year",
+        ],
+        "Outstanding from previous year": [
+            "Subscription - Outstanding Prior Year",
+            "Outstanding Prior Year",
+        ],
+        "Advance for next year": [
+            "Subscription - Advance Next Year",
+        ],
+        "Other subscriptions": [
+            "Subscription - Others",
+        ],
+    }
+
+    def has_related_records(ledger):
+        """
+        Check all reverse model relationships dynamically.
+
+        If any reference exists, the ledger cannot be renamed.
+        If a relationship cannot be checked, stop rather than
+        assuming that the ledger is unused.
+        """
+
+        for relation in AccountLedgerMaster._meta.related_objects:
+
+            related_model = relation.related_model
+            field_name = relation.field.name
+
+            try:
+                exists = related_model._base_manager.filter(
+                    **{field_name: ledger.pk}
+                ).exists()
+
+            except Exception as exc:
+                raise RuntimeError(
+                    "Unable to verify ledger references. "
+                    f"Ledger ID: {ledger.pk}, "
+                    f"Ledger name: {ledger.ledger_name}, "
+                    f"Related model: {related_model.__name__}, "
+                    f"Error: {exc}"
+                ) from exc
+
+            if exists:
+                return True
+
+        return False
+
+    def rename_ledger_safely(ledger, new_name):
+        """
+        Rename an existing ledger without changing its ID.
+
+        The ledger must have no related records.
+        """
+
+        if ledger.ledger_name == new_name:
+            return False
+
+        duplicate = AccountLedgerMaster.objects.filter(
+            church=church,
+            ledger_name=new_name,
+            account_group_id=ledger.account_group_id,
+        ).exclude(
+            pk=ledger.pk
+        ).exists()
+
+        if duplicate:
+            raise ValueError(
+                f"Cannot rename ledger ID {ledger.pk} "
+                f"from '{ledger.ledger_name}' to '{new_name}'. "
+                "A ledger with the new name already exists "
+                f"in account group {ledger.account_group_id}."
+            )
+
+        if has_related_records(ledger):
+            raise ValueError(
+                f"Cannot rename ledger ID {ledger.pk} "
+                f"('{ledger.ledger_name}') to '{new_name}'. "
+                "Related accounting records exist. "
+                "Manual review required."
+            )
+
+        old_name = ledger.ledger_name
+
+        ledger.ledger_name = new_name
+        ledger.save(update_fields=["ledger_name"])
+
+        stats["ledgers_renamed"] += 1
+
+        if verbose:
+            print(
+                f"  ~ Ledger renamed: {old_name} "
+                f"-> {new_name} (ID: {ledger.pk})"
+            )
+
+        return True
 
     with transaction.atomic():
 
-        # ---------- GROUPS ----------
+        # ====================================================
+        # 1. CREATE / IDENTIFY ACCOUNT GROUPS
+        # ====================================================
+
         groups = {}
+
         for name, parent_name, code in DEFAULT_GROUPS:
+
             parent = groups.get(parent_name) if parent_name else None
 
-            group = AccountGroupMaster.objects.filter(
-                church=church, group_name=name,
-            ).first()
+            matching_groups = AccountGroupMaster.objects.filter(
+                church=church,
+                group_name=name,
+            )
+
+            if matching_groups.count() > 1:
+                raise ValueError(
+                    f"Multiple account groups named '{name}' "
+                    f"exist in church {church.id}. "
+                    "Manual review required."
+                )
+
+            group = matching_groups.first()
 
             if not group:
+
                 group = AccountGroupMaster.objects.create(
                     church=church,
                     group_name=name,
@@ -751,60 +917,255 @@ def seed_default_accounts(church, verbose=False):
                     reserved=True,
                     status=True,
                 )
+
                 stats["groups_created"] += 1
+
                 if verbose:
-                    print(f"  + Group: {name}")
+                    print(f"  + Group created: {name}")
+
             else:
+
                 stats["groups_existing"] += 1
+
                 changed = False
+
                 expected_parent_id = parent.id if parent else None
-                if group.under_group_id != expected_parent_id:
+
+                # Preserve the existing parent of Members Subscriptions.
+                if (
+                    group.group_name != "Members Subscriptions"
+                    and group.under_group_id != expected_parent_id
+                ):
                     group.under_group = parent
                     changed = True
+
                 if not group.reserved:
                     group.reserved = True
                     changed = True
+
                 if changed:
-                    group.save(update_fields=["under_group", "reserved"])
+                    group.save(
+                        update_fields=[
+                            "under_group",
+                            "reserved",
+                        ]
+                    )
 
             groups[name] = group
 
-        # ---------- LEDGERS ----------
+        members_group = groups.get("Members Subscriptions")
+        monthly_group = groups.get("Monthly subscription")
+
+        if not members_group or not monthly_group:
+            raise ValueError(
+                "Required subscription groups were not created "
+                "or found."
+            )
+
+        # ====================================================
+        # 2. HANDLE OLD MONTHLY SUBSCRIPTION LEDGER
+        # ====================================================
+        #
+        # Older installations incorrectly had a ledger named
+        # "Monthly subscription".
+        #
+        # The correct structure now requires this name to be
+        # an AccountGroupMaster subgroup.
+        #
+        # Do not delete the old ledger.
+        # Do not move it into the subgroup.
+        # Rename it and preserve its original parent.
+        # ====================================================
+
+        old_monthly_ledgers = AccountLedgerMaster.objects.filter(
+            church=church,
+            ledger_name="Monthly subscription",
+            account_group=members_group,
+        )
+
+        if old_monthly_ledgers.count() > 1:
+            raise ValueError(
+                "Multiple old 'Monthly subscription' ledgers "
+                f"found in church {church.id}. "
+                "Manual review required."
+            )
+
+        old_monthly_ledger = old_monthly_ledgers.first()
+
+        if old_monthly_ledger:
+
+            legacy_monthly_name = "Monthly subscription (legacy ledger)"
+
+            rename_ledger_safely(
+                old_monthly_ledger,
+                legacy_monthly_name,
+            )
+
+            stats["legacy_ledgers_renamed"] += 1
+
+        # ====================================================
+        # 3. CREATE / IDENTIFY ACCOUNT LEDGERS
+        # ====================================================
+
         for ledger_name, group_name, code, nature, opening in DEFAULT_LEDGERS:
+
             group = groups.get(group_name)
+
             if not group:
-                if verbose:
-                    print(f"  ! Skipped '{ledger_name}' (group '{group_name}' missing)")
-                continue
+                raise ValueError(
+                    f"Required group '{group_name}' "
+                    f"not found for ledger '{ledger_name}'."
+                )
 
             ledger_code_int = _code_to_int(code)
 
-            # 1. Match by (name, group)
-            ledger = AccountLedgerMaster.objects.filter(
-                church=church,
-                ledger_name=ledger_name,
-                account_group=group,
-            ).first()
+            is_subscription = ledger_name in subscription_natures
 
-            # 2. Fall back to code match
-            if not ledger:
+            ledger = None
+
+            # ------------------------------------------------
+            # MATCH 1: Find canonical name across the church.
+            # ------------------------------------------------
+
+            if is_subscription:
+
+                canonical_candidates = AccountLedgerMaster.objects.filter(
+                    church=church,
+                    ledger_name=ledger_name,
+                )
+
+                candidate_count = canonical_candidates.count()
+
+                if candidate_count > 1:
+                    raise ValueError(
+                        f"Multiple canonical subscription ledgers "
+                        f"named '{ledger_name}' found in church "
+                        f"{church.id}. "
+                        f"Candidates: {list(canonical_candidates.values(
+                            'id',
+                            'ledger_code',
+                            'ledger_nature',
+                            'account_group_id',
+                        ))}"
+                    )
+
+                ledger = canonical_candidates.first()
+
+            else:
+
                 ledger = AccountLedgerMaster.objects.filter(
                     church=church,
-                    ledger_code=ledger_code_int,
+                    ledger_name=ledger_name,
+                    account_group=group,
                 ).first()
+
+            # ------------------------------------------------
+            # MATCH 2: Rename an eligible legacy subscription
+            # ledger only when no canonical ledger exists.
+            # ------------------------------------------------
+
+            if is_subscription and not ledger:
+
+                legacy_names = legacy_subscription_names.get(
+                    ledger_name,
+                    [],
+                )
+
+                legacy_candidates = AccountLedgerMaster.objects.filter(
+                    church=church,
+                    account_group=members_group,
+                    ledger_name__in=legacy_names,
+                )
+
+                if legacy_candidates.count() > 1:
+                    raise ValueError(
+                        f"Multiple legacy ledgers found for "
+                        f"'{ledger_name}' in church {church.id}. "
+                        f"Candidates: {list(legacy_candidates.values(
+                            'id',
+                            'ledger_name',
+                            'ledger_code',
+                            'ledger_nature',
+                            'account_group_id',
+                        ))}"
+                    )
+
+                legacy_ledger = legacy_candidates.first()
+
+                if legacy_ledger:
+
+                    rename_ledger_safely(
+                        legacy_ledger,
+                        ledger_name,
+                    )
+
+                    ledger = legacy_ledger
+
+            # ------------------------------------------------
+            # MATCH 3: Legacy code matching for non-subscription
+            # ledgers only.
+            # ------------------------------------------------
+
+            if not ledger and not is_subscription:
+
+                code_candidates = AccountLedgerMaster.objects.filter(
+                    church=church,
+                    ledger_code=ledger_code_int,
+                )
+
+                if code_candidates.count() > 1:
+                    raise ValueError(
+                        f"Multiple ledgers found with code "
+                        f"{ledger_code_int} in church {church.id}. "
+                        f"Required ledger: '{ledger_name}'. "
+                        "Manual review required."
+                    )
+
+                ledger = code_candidates.first()
+
                 if ledger:
+
+                    if ledger.ledger_name != ledger_name:
+
+                        duplicate = AccountLedgerMaster.objects.filter(
+                            church=church,
+                            ledger_name=ledger_name,
+                            account_group=group,
+                        ).exclude(
+                            pk=ledger.pk
+                        ).exists()
+
+                        if duplicate:
+                            raise ValueError(
+                                f"Cannot rename ledger ID {ledger.pk} "
+                                f"to '{ledger_name}'. "
+                                "A duplicate exists."
+                            )
+
                     changed_legacy = False
+
                     if ledger.ledger_name != ledger_name:
                         ledger.ledger_name = ledger_name
                         changed_legacy = True
+
                     if ledger.account_group_id != group.id:
                         ledger.account_group = group
                         changed_legacy = True
-                    if changed_legacy:
-                        ledger.save(update_fields=["ledger_name", "account_group"])
 
-            # 3. Create if missing
+                    if changed_legacy:
+                        ledger.save(
+                            update_fields=[
+                                "ledger_name",
+                                "account_group",
+                            ]
+                        )
+
+            # ------------------------------------------------
+            # CREATE: No existing ledger was found.
+            # ------------------------------------------------
+
             if not ledger:
+
                 ledger = AccountLedgerMaster.objects.create(
                     church=church,
                     ledger_code=ledger_code_int,
@@ -815,60 +1176,183 @@ def seed_default_accounts(church, verbose=False):
                     reserved=True,
                     status=True,
                 )
+
                 stats["ledgers_created"] += 1
+
                 if verbose:
-                    print(f"  + Ledger: {ledger_name} -> {group_name} ({nature})")
-            else:
-                stats["ledgers_existing"] += 1
-                changed = False
-                if not ledger.reserved:
-                    ledger.reserved = True
-                    changed = True
-                if ledger.ledger_nature != nature:
-                    ledger.ledger_nature = nature
-                    changed = True
-                if ledger.account_group_id != group.id:
-                    ledger.account_group = group
-                    changed = True
-                if ledger.ledger_name != ledger_name:
-                    ledger.ledger_name = ledger_name
-                    changed = True
-                if changed:
-                    ledger.save(update_fields=[
-                        "reserved", "ledger_nature", "account_group", "ledger_name",
-                    ])
+                    print(
+                        f"  + Ledger created: {ledger_name} "
+                        f"-> {group_name} ({nature})"
+                    )
+
+                continue
+
+            # ------------------------------------------------
+            # UPDATE: Preserve existing ledger ID and records.
+            # ------------------------------------------------
+
+            stats["ledgers_existing"] += 1
+
+            changed = False
+
+            # Never silently change subscription ledger nature.
+            if ledger.ledger_nature != nature:
+
+                if is_subscription:
+                    raise ValueError(
+                        "Subscription ledger nature mismatch. "
+                        f"Church: {church.id}, "
+                        f"Ledger ID: {ledger.id}, "
+                        f"Ledger: '{ledger_name}', "
+                        f"Existing nature: {ledger.ledger_nature}, "
+                        f"Expected nature: {nature}. "
+                        "Manual review required."
+                    )
+
+                ledger.ledger_nature = nature
+                changed = True
+
+            if not ledger.reserved:
+                ledger.reserved = True
+                changed = True
+
+            # Move posting ledgers into the correct group.
+            # Their IDs and related records remain unchanged.
+            if ledger.account_group_id != group.id:
+                ledger.account_group = group
+                changed = True
+
+            if ledger.ledger_name != ledger_name:
+                ledger.ledger_name = ledger_name
+                changed = True
+
+            if changed:
+
+                ledger.save(
+                    update_fields=[
+                        "reserved",
+                        "ledger_nature",
+                        "account_group",
+                        "ledger_name",
+                    ]
+                )
+
+            if verbose:
+                print(
+                    f"  = Existing ledger preserved: "
+                    f"{ledger_name} (ID: {ledger.id})"
+                )
+
+        # ====================================================
+        # 4. FINAL SUBSCRIPTION HIERARCHY VALIDATION
+        # ====================================================
+
+        if monthly_group.under_group_id != members_group.id:
+            raise ValueError(
+                "Monthly subscription group is not under "
+                "Members Subscriptions."
+            )
+
+        required_monthly_ledgers = [
+            "Current year receipts",
+            "Outstanding from previous year",
+            "Advance for next year",
+            "Subscription Receivable",
+        ]
+
+        for name in required_monthly_ledgers:
+
+            matches = AccountLedgerMaster.objects.filter(
+                church=church,
+                ledger_name=name,
+                account_group=monthly_group,
+            )
+
+            if matches.count() != 1:
+                raise ValueError(
+                    f"Final validation failed for '{name}' "
+                    f"in church {church.id}. "
+                    "Expected exactly one ledger under "
+                    "Monthly subscription."
+                )
+
+        other_subscriptions = AccountLedgerMaster.objects.filter(
+            church=church,
+            ledger_name="Other subscriptions",
+            account_group=members_group,
+        )
+
+        if other_subscriptions.count() != 1:
+            raise ValueError(
+                "Final validation failed for Other subscriptions "
+                f"in church {church.id}. "
+                "Expected exactly one ledger directly under "
+                "Members Subscriptions."
+            )
+
+    if verbose:
+        print(
+            f"\n  Subscription hierarchy validated "
+            f"for church {church.id}."
+        )
 
     return stats
 
 
+
 def seed_all_churches(verbose=False):
-    """Seed every church in the system."""
+    """
+    Seed the default chart of accounts for all churches.
+
+    Each church is processed independently by
+    seed_default_accounts() using its own transaction.
+
+    If one church fails, its changes are rolled back.
+    Other churches are not automatically modified.
+    """
+
     from .models import Church
 
-    total = {
-        "churches": 0,
-        "groups_created": 0,
-        "groups_existing": 0,
-        "ledgers_created": 0,
-        "ledgers_existing": 0,
-    }
+    for key in (
+        "groups_created",
+        "groups_existing",
+        "ledgers_created",
+        "ledgers_existing",
+        "ledgers_renamed",
+        "legacy_ledgers_renamed",
+    ):
+        total[key] += stats[key]
 
-    for church in Church.objects.all():
+    for church in Church.objects.all().order_by("id"):
+
         if verbose:
-            print(f"\nSeeding church: {church.name} (#{church.id})")
+            print(
+                f"\nSeeding church: {church.name} "
+                f"(#{church.id})"
+            )
 
-        stats = seed_default_accounts(church, verbose=verbose)
+        stats = seed_default_accounts(
+            church,
+            verbose=verbose,
+        )
 
         total["churches"] += 1
-        for k in (
+
+        for key in (
             "groups_created",
             "groups_existing",
             "ledgers_created",
             "ledgers_existing",
         ):
-            total[k] += stats[k]
+            total[key] += stats[key]
+
+    if verbose:
+        print("\n========== SEEDING SUMMARY ==========")
+        for key, value in total.items():
+            print(f"{key}: {value}")
 
     return total
+
 
 
 # ============================================================
